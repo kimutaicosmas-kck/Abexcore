@@ -1,12 +1,17 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { FileSpreadsheet, FileText } from 'lucide-react';
+import { FileSpreadsheet, FileText, Plus } from 'lucide-react';
 import { financeApi } from '../services/api';
 import { PageHeader, Table, Badge, Card, Button, formatCurrency, formatDate, getStatusBadge } from '../components/ui';
+import { Modal } from '../components/ui/Modal';
+import { InvoiceForm } from '../components/forms/InvoiceForm';
+import { PaymentForm } from '../components/forms/PaymentForm';
 import { downloadFile } from '../utils/download';
 
 export function FinancePage() {
   const [downloading, setDownloading] = useState<string | null>(null);
+  const [invoiceModalOpen, setInvoiceModalOpen] = useState(false);
+  const [paymentModalOpen, setPaymentModalOpen] = useState(false);
 
   const { data: invoices, isLoading } = useQuery({
     queryKey: ['invoices'],
@@ -102,7 +107,22 @@ export function FinancePage() {
 
   return (
     <div>
-      <PageHeader title="Finance" subtitle="Invoices, payments, accounts, and financial management" />
+      <PageHeader
+        title="Finance"
+        subtitle="Invoices, payments, accounts, and financial management"
+        action={
+          <div className="flex gap-2">
+            <Button variant="secondary" onClick={() => setPaymentModalOpen(true)}>
+              <Plus className="h-4 w-4 mr-2" />
+              Record Payment
+            </Button>
+            <Button onClick={() => setInvoiceModalOpen(true)}>
+              <Plus className="h-4 w-4 mr-2" />
+              Create Invoice
+            </Button>
+          </div>
+        }
+      />
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
         <Card>
@@ -143,6 +163,14 @@ export function FinancePage() {
           </Card>
         </div>
       </div>
+
+      <Modal open={invoiceModalOpen} onClose={() => setInvoiceModalOpen(false)} title="Create Invoice" size="xl">
+        <InvoiceForm onSuccess={() => setInvoiceModalOpen(false)} onCancel={() => setInvoiceModalOpen(false)} />
+      </Modal>
+
+      <Modal open={paymentModalOpen} onClose={() => setPaymentModalOpen(false)} title="Record Payment" size="md">
+        <PaymentForm onSuccess={() => setPaymentModalOpen(false)} onCancel={() => setPaymentModalOpen(false)} />
+      </Modal>
     </div>
   );
 }

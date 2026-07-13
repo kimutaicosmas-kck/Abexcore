@@ -1,18 +1,70 @@
-import { useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus } from 'lucide-react';
 import { inventoryApi } from '../services/api';
 import { PageHeader, Table, Badge, Button, formatCurrency, formatDate, getStatusBadge } from '../components/ui';
+import { Modal } from '../components/ui/Modal';
+import { PurchaseOrderForm } from '../components/forms/PurchaseOrderForm';
+import { RequisitionForm } from '../components/forms/RequisitionForm';
+import { GoodsReceiptForm } from '../components/forms/GoodsReceiptForm';
+import { SupplierForm } from '../components/forms/SupplierForm';
+import { Supplier } from '../types';
+
+const tabs = ['Purchase Orders', 'Requisitions', 'Goods Receipts', 'Suppliers'];
+
+type ModalType = 'po' | 'requisition' | 'gr' | 'supplier' | null;
 
 export function ProcurementPage() {
-  const { data: purchaseOrders, isLoading } = useQuery({
+  const queryClient = useQueryClient();
+  const [activeTab, setActiveTab] = useState(0);
+  const [modalType, setModalType] = useState<ModalType>(null);
+  const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null);
+
+  const { data: purchaseOrders, isLoading: poLoading } = useQuery({
     queryKey: ['purchase-orders'],
     queryFn: () => inventoryApi.purchaseOrders().then((r) => r.data),
+    enabled: activeTab === 0,
   });
 
-  const { data: suppliers } = useQuery({
+  const { data: requisitions, isLoading: reqLoading } = useQuery({
+    queryKey: ['requisitions'],
+    queryFn: () => inventoryApi.requisitions().then((r) => r.data),
+    enabled: activeTab === 1,
+  });
+
+  const { data: goodsReceipts, isLoading: grLoading } = useQuery({
+    queryKey: ['goods-receipts'],
+    queryFn: () => inventoryApi.goodsReceipts().then((r) => r.data),
+    enabled: activeTab === 2,
+  });
+
+  const { data: suppliers, isLoading: supLoading } = useQuery({
     queryKey: ['suppliers'],
     queryFn: () => inventoryApi.suppliers().then((r) => r.data),
+    enabled: activeTab === 3,
   });
+
+  const approveMutation = useMutation({
+    mutationFn: (id: string) => inventoryApi.approveRequisition(id, 'APPROVED'),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['requisitions'] }),
+  });
+
+  const openModal = (type: ModalType, supplier?: Supplier | null) => {
+    setEditingSupplier(supplier ?? null);
+    setModalType(type);
+  };
+
+  const closeModal = () => {
+    setModalType(null);
+    setEditingSupplier(null);
+  };
+
+  const tabActions: Record<number, { label: string; type: ModalType }> = {
+    0: { label: 'New Purchase Order', type: 'po' },
+    1: { label: 'New Requisition', type: 'requisition' },
+    2: { label: 'New Goods Receipt', type: 'gr' },
+    3: { label: 'Add Supplier', type: 'supplier' },
+  };
 
   const poColumns = [
     { key: 'poNumber', label: 'PO Number' },
@@ -41,6 +93,72 @@ export function ProcurementPage() {
     },
   ];
 
+  const requisitionColumns = [
+    { key: 'requisitionNo', label: 'Req #' },
+    { key: 'department', label: 'Department' },
+    { key: 'priority', label: 'Priority' },
+    {
+      key: 'requiredDate',
+      label: 'Required',
+      render: (val: unknown) => (val ? formatDate(val as string) : '-'),
+    },
+    {
+      key: 'status',
+      label: 'Status',
+      render: (val: unknown) => (
+        <Badge variant={getStatusBadge(val as string)}>{(val as string).replace(/_/g, ' ')}</Badge>
+      ),
+    },
+    {
+      key: 'actions',
+      label: 'Actions',
+      render: (_: unknown, row: Record<string, unknown>) => {
+        if (row.status !== 'PENDING') return null;
+        return (
+          <Button
+            size="sm"
+            loading={approveMutation.isPending}
+            onClick={(e) => {
+              e.stopPropagation();
+              approveMutation.mutate(row.id as string);
+            }}
+          >
+            Approve
+          </Button>
+        );
+      },
+    },
+  ];
+
+  const grColumns = [
+    { key: 'grnNumber', label: 'GRN #' },
+    {
+      key: 'supplier',
+      label: 'Supplier',
+      render: (_: unknown, row: Record<string, unknown>) =>
+        (row.supplier as { name: string })?.name || '-',
+    },
+    {
+      key: 'receiptDate',
+      label: 'Date',
+      render: (val: unknown) => formatDate(val as string),
+    },
+    {
+      key: 'status',
+      label: 'Status',
+      render: (val: unknown) => (
+        <Badge variant={getStatusBadge(val as string)}>{(val as string).replace(/_/g, ' ')}</Badge>
+      ),
+    },
+    {
+      key: 'inspectionStatus',
+      label: 'Inspection',
+      render: (val: unknown) => (
+        <Badge variant={getStatusBadge(val as string)}>{(val as string).replace(/_/g, ' ')}</Badge>
+      ),
+    },
+  ];
+
   const supplierColumns = [
     { key: 'code', label: 'Code' },
     { key: 'name', label: 'Supplier Name' },
@@ -58,32 +176,86 @@ export function ProcurementPage() {
     },
   ];
 
+  const modalTitles: Record<Exclude<ModalType, null>, string> = {
+    po: 'New Purchase Order',
+    requisition: 'New Requisition',
+    gr: 'New Goods Receipt',
+    supplier: editingSupplier ? 'Edit Supplier' : 'Add Supplier',
+  };
+
   return (
     <div>
       <PageHeader
         title="Procurement"
         subtitle="Purchase requisitions, RFQs, purchase orders, and supplier management"
         action={
-          <Button>
-            <Plus className="h-4 w-4 mr-2" />
-            New Purchase Order
-          </Button>
+          tabActions[activeTab] ? (
+            <Button onClick={() => openModal(tabActions[activeTab].type)}>
+              <Plus className="h-4 w-4 mr-2" />
+              {tabActions[activeTab].label}
+            </Button>
+          ) : undefined
         }
       />
 
-      <div className="mb-8">
-        <h2 className="text-lg font-semibold mb-4">Purchase Orders</h2>
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200">
-          <Table columns={poColumns} data={purchaseOrders?.data || []} loading={isLoading} />
-        </div>
+      <div className="flex gap-2 mb-6 flex-wrap">
+        {tabs.map((tab, i) => (
+          <button
+            key={tab}
+            onClick={() => setActiveTab(i)}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              activeTab === i
+                ? 'bg-primary-600 text-white'
+                : 'bg-white text-gray-600 hover:bg-gray-100 border border-gray-200'
+            }`}
+          >
+            {tab}
+          </button>
+        ))}
       </div>
 
-      <div>
-        <h2 className="text-lg font-semibold mb-4">Suppliers</h2>
+      {activeTab === 0 && (
         <div className="bg-white rounded-xl shadow-sm border border-gray-200">
-          <Table columns={supplierColumns} data={suppliers?.data || []} />
+          <Table columns={poColumns} data={purchaseOrders?.data || []} loading={poLoading} />
         </div>
-      </div>
+      )}
+
+      {activeTab === 1 && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200">
+          <Table columns={requisitionColumns} data={requisitions?.data || []} loading={reqLoading} />
+        </div>
+      )}
+
+      {activeTab === 2 && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200">
+          <Table columns={grColumns} data={goodsReceipts?.data || []} loading={grLoading} />
+        </div>
+      )}
+
+      {activeTab === 3 && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200">
+          <Table
+            columns={supplierColumns}
+            data={suppliers?.data || []}
+            loading={supLoading}
+            onRowClick={(row) => openModal('supplier', row as unknown as Supplier)}
+          />
+        </div>
+      )}
+
+      <Modal
+        open={modalType !== null}
+        onClose={closeModal}
+        title={modalType ? modalTitles[modalType] : ''}
+        size={modalType === 'po' || modalType === 'gr' ? 'xl' : 'lg'}
+      >
+        {modalType === 'po' && <PurchaseOrderForm onSuccess={closeModal} onCancel={closeModal} />}
+        {modalType === 'requisition' && <RequisitionForm onSuccess={closeModal} onCancel={closeModal} />}
+        {modalType === 'gr' && <GoodsReceiptForm onSuccess={closeModal} onCancel={closeModal} />}
+        {modalType === 'supplier' && (
+          <SupplierForm supplier={editingSupplier} onSuccess={closeModal} onCancel={closeModal} />
+        )}
+      </Modal>
     </div>
   );
 }

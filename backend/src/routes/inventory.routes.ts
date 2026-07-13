@@ -2,7 +2,7 @@ import { Router, Response } from 'express';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { validate } from '../middleware/validate';
 import { asyncHandler, AppError } from '../middleware/errorHandler';
-import { createRawMaterialSchema, createSupplierSchema, paginationSchema } from '../validators/schemas';
+import { createRawMaterialSchema, createSupplierSchema, createRequisitionSchema, createGoodsReceiptSchema, createPurchaseOrderSchema, stockAdjustSchema, paginationSchema } from '../validators/schemas';
 import { createCrudService } from '../utils/crud';
 import prisma from '../config/database';
 import { generateNumber } from '../utils/date';
@@ -90,7 +90,7 @@ router.get('/stock-levels', validate(paginationSchema, 'query'), asyncHandler(as
   res.json({ success: true, data, pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } });
 }));
 
-router.post('/adjust', asyncHandler(async (req: AuthRequest, res: Response) => {
+router.post('/adjust', validate(stockAdjustSchema), asyncHandler(async (req: AuthRequest, res: Response) => {
   const { warehouseId, productId, rawMaterialId, quantity, type, notes, batchNumber } = req.body;
 
   const transaction = await prisma.$transaction(async (tx) => {
@@ -161,7 +161,7 @@ router.get('/purchase-orders', validate(paginationSchema, 'query'), asyncHandler
   res.json({ success: true, data, pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } });
 }));
 
-router.post('/purchase-orders', asyncHandler(async (req: AuthRequest, res: Response) => {
+router.post('/purchase-orders', validate(createPurchaseOrderSchema), asyncHandler(async (req: AuthRequest, res: Response) => {
   const { supplierId, expectedDate, notes, items } = req.body;
   const count = await prisma.purchaseOrder.count();
   const poNumber = generateNumber('PO', count + 1);
@@ -194,6 +194,136 @@ router.post('/purchase-orders', asyncHandler(async (req: AuthRequest, res: Respo
   });
 
   res.status(201).json({ success: true, data: po });
+}));
+
+// Purchase Requisitions
+router.get('/requisitions', asyncHandler(async (_req: AuthRequest, res: Response) => {
+  const data = await prisma.purchaseRequisition.findMany({
+    include: {
+      requestedBy: { select: { firstName: true, lastName: true } },
+      approvedBy: { select: { firstName: true, lastName: true } },
+      items: true,
+    },
+    orderBy: { createdAt: 'desc' },
+  });
+  res.json({ success: true, data });
+}));
+
+router.post('/requisitions', validate(createRequisitionSchema), asyncHandler(async (req: AuthRequest, res: Response) => {
+  const { department, priority, requiredDate, notes, items } = req.body;
+  const count = await prisma.purchaseRequisition.count();
+  const requisitionNo = generateNumber('PR', count + 1);
+
+  const req_ = await prisma.purchaseRequisition.create({
+    data: {
+      requisitionNo,
+      requestedById: req.user!.id,
+      department,
+      priority,
+      requiredDate: requiredDate ? new Date(requiredDate) : undefined,
+      notes,
+      items: { create: items },
+    },
+    include: { items: true, requestedBy: { select: { firstName: true, lastName: true } } },
+  });
+  res.status(201).json({ success: true, data: req_ });
+}));
+
+router.patch('/requisitions/:id/approve', asyncHandler(async (req: AuthRequest, res: Response) => {
+  const { status } = req.body;
+  const data = await prisma.purchaseRequisition.update({
+    where: { id: getParam(req.params.id) },
+    data: {
+      status: status || 'APPROVED',
+      approvedById: req.user!.id,
+      approvedAt: new Date(),
+    },
+  });
+  res.json({ success: true, data });
+}));
+
+// Goods Receipts
+router.get('/goods-receipts', asyncHandler(async (_req: AuthRequest, res: Response) => {
+  const data = await prisma.goodsReceipt.findMany({
+    include: { supplier: true, items: true, purchaseOrder: { select: { poNumber: true } } },
+    orderBy: { createdAt: 'desc' },
+  });
+  res.json({ success: true, data });
+}));
+
+router.post('/goods-receipts', validate(createGoodsReceiptSchema), asyncHandler(async (req: AuthRequest, res: Response) => {
+  const { purchaseOrderId, supplierId, warehouseId, notes, items } = req.body;
+  const count = await prisma.goodsReceipt.count();
+  const grnNumber = generateNumber('GRN', count + 1);
+
+  const receipt = await prisma.$transaction(async (tx) => {
+    const gr = await tx.goodsReceipt.create({
+      data: {
+        grnNumber,
+        purchaseOrderId,
+        supplierId,
+        warehouseId,
+        notes,
+        status: 'APPROVED',
+        inspectionStatus: 'PASSED',
+        items: { create: items },
+      },
+      include: { items: true, supplier: true },
+    });
+
+    for (const item of items) {
+      const existing = await tx.stockLevel.findFirst({
+        where: {
+          warehouseId,
+          rawMaterialId: item.rawMaterialId || null,
+          batchNumber: item.batchNumber || null,
+        },
+      });
+
+      if (existing) {
+        await tx.stockLevel.update({
+          where: { id: existing.id },
+          data: { quantity: { increment: item.quantity }, unitCost: item.unitCost },
+        });
+      } else {
+        await tx.stockLevel.create({
+          data: {
+            warehouseId,
+            rawMaterialId: item.rawMaterialId,
+            batchNumber: item.batchNumber,
+            quantity: item.quantity,
+            unitCost: item.unitCost,
+            expiryDate: item.expiryDate ? new Date(item.expiryDate) : undefined,
+          },
+        });
+      }
+
+      await tx.inventoryTransaction.create({
+        data: {
+          warehouseId,
+          type: 'RECEIPT',
+          rawMaterialId: item.rawMaterialId,
+          batchNumber: item.batchNumber,
+          quantity: item.quantity,
+          unitCost: item.unitCost,
+          referenceType: 'goods_receipt',
+          referenceId: gr.id,
+          createdById: req.user!.id,
+        },
+      });
+    }
+
+    if (purchaseOrderId) {
+      await tx.purchaseOrder.update({
+        where: { id: purchaseOrderId },
+        data: { status: 'COMPLETED' },
+      });
+    }
+
+    return gr;
+  });
+
+  res.status(201).json({ success: true, data: receipt });
 }));
 
 export default router;

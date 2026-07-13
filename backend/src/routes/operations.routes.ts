@@ -2,7 +2,7 @@ import { Router, Response } from 'express';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { validate } from '../middleware/validate';
 import { asyncHandler, AppError } from '../middleware/errorHandler';
-import { createSalesOrderSchema, createProductionOrderSchema, paginationSchema } from '../validators/schemas';
+import { createSalesOrderSchema, createProductionOrderSchema, createQuotationSchema, paginationSchema } from '../validators/schemas';
 import prisma from '../config/database';
 import { generateNumber } from '../utils/date';
 import { getParam, getQuery } from '../utils/request';
@@ -93,6 +93,90 @@ router.get('/quotations', validate(paginationSchema, 'query'), asyncHandler(asyn
   ]);
 
   res.json({ success: true, data, pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } });
+}));
+
+router.post('/quotations', validate(createQuotationSchema), asyncHandler(async (req: AuthRequest, res: Response) => {
+  const { customerId, validUntil, notes, items } = req.body;
+  const count = await prisma.salesQuotation.count();
+  const quotationNo = generateNumber('QT', count + 1);
+
+  const subtotal = items.reduce(
+    (sum: number, item: { quantity: number; unitPrice: number; discount?: number }) =>
+      sum + item.quantity * item.unitPrice * (1 - (item.discount || 0) / 100),
+    0
+  );
+  const taxAmount = subtotal * 0.16;
+  const totalAmount = subtotal + taxAmount;
+
+  const quotation = await prisma.salesQuotation.create({
+    data: {
+      quotationNo,
+      customerId,
+      validUntil: validUntil ? new Date(validUntil) : undefined,
+      notes,
+      subtotal,
+      taxAmount,
+      totalAmount,
+      items: {
+        create: items.map((item: { productId: string; quantity: number; unitPrice: number; discount?: number }) => ({
+          ...item,
+          totalPrice: item.quantity * item.unitPrice * (1 - (item.discount || 0) / 100),
+        })),
+      },
+    },
+    include: { customer: true, items: { include: { product: true } } },
+  });
+
+  res.status(201).json({ success: true, data: quotation });
+}));
+
+router.post('/quotations/:id/convert', asyncHandler(async (req: AuthRequest, res: Response) => {
+  const quotation = await prisma.salesQuotation.findUnique({
+    where: { id: getParam(req.params.id) },
+    include: { items: true },
+  });
+  if (!quotation) throw new AppError('Quotation not found', 404);
+
+  const count = await prisma.salesOrder.count();
+  const orderNumber = generateNumber('SO', count + 1);
+
+  const order = await prisma.$transaction(async (tx) => {
+    const so = await tx.salesOrder.create({
+      data: {
+        orderNumber,
+        customerId: quotation.customerId,
+        quotationId: quotation.id,
+        createdById: req.user!.id,
+        subtotal: quotation.subtotal,
+        taxAmount: quotation.taxAmount,
+        totalAmount: quotation.totalAmount,
+        items: {
+          create: quotation.items.map((item) => ({
+            productId: item.productId,
+            quantity: item.quantity,
+            unitPrice: item.unitPrice,
+            discount: item.discount,
+            totalPrice: item.totalPrice,
+          })),
+        },
+      },
+      include: { customer: true, items: { include: { product: true } } },
+    });
+
+    await tx.salesQuotation.update({
+      where: { id: quotation.id },
+      data: { status: 'APPROVED' },
+    });
+
+    return so;
+  });
+
+  res.status(201).json({ success: true, data: order });
+}));
+
+router.get('/machines', asyncHandler(async (_req: AuthRequest, res: Response) => {
+  const data = await prisma.machine.findMany({ where: { isActive: true } });
+  res.json({ success: true, data });
 }));
 
 // Production Orders

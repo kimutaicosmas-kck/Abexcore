@@ -3,6 +3,10 @@ import bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient();
 
+function invNumber(seq: number) {
+  return `INV-${new Date().getFullYear()}-${String(seq).padStart(5, '0')}`;
+}
+
 const ROLES = [
   'Super Admin',
   'Managing Director',
@@ -327,6 +331,28 @@ async function main() {
     update: {},
     create: { registration: 'KCA 123A', make: 'Isuzu', model: 'NQR', capacity: '3 tons' },
   });
+
+  // Sample sales invoice for finance/export demo
+  const customer = await prisma.customer.findFirst();
+  if (customer) {
+    const invCount = await prisma.invoice.count();
+    await prisma.invoice.create({
+      data: {
+        invoiceNumber: invNumber(invCount + 1),
+        type: 'SALES',
+        customerId: customer.id,
+        subtotal: 15000,
+        taxAmount: 2400,
+        totalAmount: 17400,
+        status: 'UNPAID',
+        items: {
+          create: [
+            { description: 'Oil Filter KFI-101 x 100', quantity: 100, unitPrice: 150, taxRate: 16, totalPrice: 15000 },
+          ],
+        },
+      },
+    });
+  }
 
   console.log('Seed completed successfully!');
   console.log('Login: admin@filtererp.co.ke / Admin@123');

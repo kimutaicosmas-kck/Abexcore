@@ -1,11 +1,17 @@
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { financeApi } from '../services/api';
-import { PageHeader, Table, Badge, getStatusBadge } from '../components/ui';
+import { Plus } from 'lucide-react';
+import { qualityApi } from '../services/api';
+import { PageHeader, Table, Badge, Button, getStatusBadge } from '../components/ui';
+import { Modal } from '../components/ui/Modal';
+import { QualityForm } from '../components/forms/QualityForm';
 
 export function QualityPage() {
+  const [modalOpen, setModalOpen] = useState(false);
+
   const { data, isLoading } = useQuery({
     queryKey: ['quality'],
-    queryFn: () => financeApi.quality().then((r) => r.data),
+    queryFn: () => qualityApi.list().then((r) => r.data),
   });
 
   const columns = [
@@ -22,7 +28,7 @@ export function QualityPage() {
     {
       key: 'inspectedAt',
       label: 'Inspected',
-      render: (val: unknown) => val ? new Date(val as string).toLocaleDateString() : 'Pending',
+      render: (val: unknown) => (val ? new Date(val as string).toLocaleDateString() : 'Pending'),
     },
   ];
 
@@ -31,10 +37,20 @@ export function QualityPage() {
       <PageHeader
         title="Quality Control"
         subtitle="Incoming, production, and finished product inspections"
+        action={
+          <Button onClick={() => setModalOpen(true)}>
+            <Plus className="h-4 w-4 mr-2" />
+            Add Inspection
+          </Button>
+        }
       />
       <div className="bg-white rounded-xl shadow-sm border border-gray-200">
         <Table columns={columns} data={data?.data || []} loading={isLoading} />
       </div>
+
+      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title="Add Inspection" size="lg">
+        <QualityForm onSuccess={() => setModalOpen(false)} onCancel={() => setModalOpen(false)} />
+      </Modal>
     </div>
   );
 }

@@ -2,7 +2,7 @@ import { Router, Response } from 'express';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { validate } from '../middleware/validate';
 import { asyncHandler } from '../middleware/errorHandler';
-import { companySettingsSchema, paginationSchema } from '../validators/schemas';
+import { companySettingsSchema, paginationSchema, createInvoiceSchema, createPaymentSchema } from '../validators/schemas';
 import prisma from '../config/database';
 import { generateNumber } from '../utils/date';
 import { getParam, getQuery } from '../utils/request';
@@ -78,7 +78,7 @@ router.get('/invoices', validate(paginationSchema, 'query'), asyncHandler(async 
   res.json({ success: true, data, pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } });
 }));
 
-router.post('/invoices', asyncHandler(async (req: AuthRequest, res: Response) => {
+router.post('/invoices', validate(createInvoiceSchema), asyncHandler(async (req: AuthRequest, res: Response) => {
   const { type, customerId, supplierId, salesOrderId, purchaseOrderId, dueDate, items, notes } = req.body;
   const count = await prisma.invoice.count();
   const invoiceNumber = generateNumber(type === 'SALES' ? 'INV' : 'PINV', count + 1);
@@ -111,7 +111,7 @@ router.post('/invoices', asyncHandler(async (req: AuthRequest, res: Response) =>
   res.status(201).json({ success: true, data: invoice });
 }));
 
-router.post('/payments', asyncHandler(async (req: AuthRequest, res: Response) => {
+router.post('/payments', validate(createPaymentSchema), asyncHandler(async (req: AuthRequest, res: Response) => {
   const { invoiceId, amount, method, reference, notes } = req.body;
   const count = await prisma.payment.count();
   const paymentNumber = generateNumber('PAY', count + 1);
@@ -239,6 +239,50 @@ router.get('/reports/summary', asyncHandler(async (_req: AuthRequest, res: Respo
       totalSuppliers: supplierCount,
     },
   });
+}));
+
+router.get('/journal-entries', asyncHandler(async (_req: AuthRequest, res: Response) => {
+  const data = await prisma.journalEntry.findMany({
+    include: { lines: { include: { account: true } } },
+    orderBy: { createdAt: 'desc' },
+    take: 50,
+  });
+  res.json({ success: true, data });
+}));
+
+router.post('/journal-entries', asyncHandler(async (req: AuthRequest, res: Response) => {
+  const { date, description, reference, lines } = req.body;
+  const count = await prisma.journalEntry.count();
+  const entryNumber = generateNumber('JE', count + 1);
+
+  const entry = await prisma.$transaction(async (tx) => {
+    const je = await tx.journalEntry.create({
+      data: {
+        entryNumber,
+        date: date ? new Date(date) : new Date(),
+        description,
+        reference,
+        isPosted: true,
+        lines: { create: lines },
+      },
+      include: { lines: { include: { account: true } } },
+    });
+
+    for (const line of lines) {
+      const account = await tx.account.findUnique({ where: { id: line.accountId } });
+      if (account) {
+        const change = Number(line.debit) - Number(line.credit);
+        await tx.account.update({
+          where: { id: line.accountId },
+          data: { balance: { increment: change } },
+        });
+      }
+    }
+
+    return je;
+  });
+
+  res.status(201).json({ success: true, data: entry });
 }));
 
 export default router;

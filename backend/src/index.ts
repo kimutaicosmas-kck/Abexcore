@@ -19,11 +19,19 @@ import productsRoutes from './routes/products.routes';
 import inventoryRoutes from './routes/inventory.routes';
 import operationsRoutes from './routes/operations.routes';
 import financeRoutes from './routes/finance.routes';
+import hrRoutes from './routes/hr.routes';
+import deliveryRoutes from './routes/delivery.routes';
+import crmRoutes from './routes/crm.routes';
+import qualityRoutes from './routes/quality.routes';
+import maintenanceRoutes from './routes/maintenance.routes';
 
 const app = express();
 
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
-app.use(cors({ origin: config.frontendUrl, credentials: true }));
+app.use(cors({
+  origin: [config.frontendUrl, 'http://localhost:5173', 'http://localhost:5174'],
+  credentials: true,
+}));
 app.use(compression());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
@@ -72,6 +80,11 @@ apiRouter.use('/products', productsRoutes);
 apiRouter.use('/inventory', inventoryRoutes);
 apiRouter.use('/operations', operationsRoutes);
 apiRouter.use('/finance', financeRoutes);
+apiRouter.use('/hr', hrRoutes);
+apiRouter.use('/delivery', deliveryRoutes);
+apiRouter.use('/crm', crmRoutes);
+apiRouter.use('/quality', qualityRoutes);
+apiRouter.use('/maintenance', maintenanceRoutes);
 
 app.use('/api/v1', apiRouter);
 

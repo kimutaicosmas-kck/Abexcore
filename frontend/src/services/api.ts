@@ -7,9 +7,7 @@ const api = axios.create({
 
 api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   const token = localStorage.getItem('accessToken');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
+  if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
 
@@ -17,11 +15,9 @@ api.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
     const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
-
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
       const refreshToken = localStorage.getItem('refreshToken');
-
       if (refreshToken) {
         try {
           const { data } = await axios.post('/api/v1/auth/refresh', { refreshToken });
@@ -38,7 +34,6 @@ api.interceptors.response.use(
         window.location.href = '/login';
       }
     }
-
     return Promise.reject(error);
   }
 );
@@ -46,10 +41,8 @@ api.interceptors.response.use(
 export default api;
 
 export const authApi = {
-  login: (email: string, password: string) =>
-    api.post('/auth/login', { email, password }),
-  logout: (refreshToken?: string) =>
-    api.post('/auth/logout', { refreshToken }),
+  login: (email: string, password: string) => api.post('/auth/login', { email, password }),
+  logout: (refreshToken?: string) => api.post('/auth/logout', { refreshToken }),
   me: () => api.get('/auth/me'),
   changePassword: (currentPassword: string, newPassword: string) =>
     api.post('/auth/change-password', { currentPassword, newPassword }),
@@ -80,6 +73,16 @@ export const customersApi = {
   orders: (id: string) => api.get(`/customers/${id}/orders`),
 };
 
+export const crmApi = {
+  complaints: (params?: object) => api.get('/crm/complaints', { params }),
+  createComplaint: (data: object) => api.post('/crm/complaints', data),
+  resolveComplaint: (id: string, data: object) => api.patch(`/crm/complaints/${id}/resolve`, data),
+  opportunities: (params?: object) => api.get('/crm/opportunities', { params }),
+  createOpportunity: (data: object) => api.post('/crm/opportunities', data),
+  warranties: () => api.get('/crm/warranties'),
+  createWarranty: (data: object) => api.post('/crm/warranties', data),
+};
+
 export const productsApi = {
   list: (params?: object) => api.get('/products', { params }),
   get: (id: string) => api.get(`/products/${id}`),
@@ -94,13 +97,21 @@ export const inventoryApi = {
   materials: (params?: object) => api.get('/inventory/materials', { params }),
   lowStock: () => api.get('/inventory/materials/low-stock'),
   createMaterial: (data: object) => api.post('/inventory/materials', data),
+  updateMaterial: (id: string, data: object) => api.put(`/inventory/materials/${id}`, data),
   suppliers: (params?: object) => api.get('/inventory/suppliers', { params }),
   createSupplier: (data: object) => api.post('/inventory/suppliers', data),
+  updateSupplier: (id: string, data: object) => api.put(`/inventory/suppliers/${id}`, data),
   warehouses: () => api.get('/inventory/warehouses'),
   stockLevels: (params?: object) => api.get('/inventory/stock-levels', { params }),
   adjustStock: (data: object) => api.post('/inventory/adjust', data),
   purchaseOrders: (params?: object) => api.get('/inventory/purchase-orders', { params }),
   createPurchaseOrder: (data: object) => api.post('/inventory/purchase-orders', data),
+  requisitions: () => api.get('/inventory/requisitions'),
+  createRequisition: (data: object) => api.post('/inventory/requisitions', data),
+  approveRequisition: (id: string, status?: string) =>
+    api.patch(`/inventory/requisitions/${id}/approve`, { status }),
+  goodsReceipts: () => api.get('/inventory/goods-receipts'),
+  createGoodsReceipt: (data: object) => api.post('/inventory/goods-receipts', data),
 };
 
 export const operationsApi = {
@@ -109,11 +120,51 @@ export const operationsApi = {
   updateOrderStatus: (id: string, status: string) =>
     api.patch(`/operations/orders/${id}/status`, { status }),
   quotations: (params?: object) => api.get('/operations/quotations', { params }),
+  createQuotation: (data: object) => api.post('/operations/quotations', data),
+  convertQuotation: (id: string) => api.post(`/operations/quotations/${id}/convert`),
   production: (params?: object) => api.get('/operations/production', { params }),
   createProduction: (data: object) => api.post('/operations/production', data),
   startProduction: (id: string) => api.post(`/operations/production/${id}/start`),
   completeProduction: (id: string, data: object) =>
     api.post(`/operations/production/${id}/complete`, data),
+  machines: () => api.get('/operations/machines'),
+};
+
+export const deliveryApi = {
+  list: (params?: object) => api.get('/delivery', { params }),
+  create: (data: object) => api.post('/delivery', data),
+  updateStatus: (id: string, data: object) => api.patch(`/delivery/${id}/status`, data),
+  vehicles: () => api.get('/delivery/vehicles'),
+  createVehicle: (data: object) => api.post('/delivery/vehicles', data),
+};
+
+export const hrApi = {
+  employees: (params?: object) => api.get('/hr/employees', { params }),
+  createEmployee: (data: object) => api.post('/hr/employees', data),
+  updateEmployee: (id: string, data: object) => api.put(`/hr/employees/${id}`, data),
+  attendance: (params?: object) => api.get('/hr/attendance', { params }),
+  recordAttendance: (data: object) => api.post('/hr/attendance', data),
+  leave: () => api.get('/hr/leave'),
+  createLeave: (data: object) => api.post('/hr/leave', data),
+  approveLeave: (id: string, status: string) => api.patch(`/hr/leave/${id}/approve`, { status }),
+  payroll: () => api.get('/hr/payroll'),
+  createPayroll: (data: object) => api.post('/hr/payroll', data),
+  payPayroll: (id: string) => api.patch(`/hr/payroll/${id}/pay`),
+};
+
+export const qualityApi = {
+  list: (params?: object) => api.get('/quality', { params }),
+  create: (data: object) => api.post('/quality', data),
+  update: (id: string, data: object) => api.patch(`/quality/${id}`, data),
+};
+
+export const maintenanceApi = {
+  machines: () => api.get('/maintenance/machines'),
+  createMachine: (data: object) => api.post('/maintenance/machines', data),
+  requests: () => api.get('/maintenance/requests'),
+  createRequest: (data: object) => api.post('/maintenance/requests', data),
+  completeRequest: (id: string, data: object) =>
+    api.patch(`/maintenance/requests/${id}/complete`, data),
 };
 
 export const financeApi = {
@@ -123,10 +174,8 @@ export const financeApi = {
   createInvoice: (data: object) => api.post('/finance/invoices', data),
   payments: (data: object) => api.post('/finance/payments', data),
   accounts: () => api.get('/finance/accounts'),
-  employees: (params?: object) => api.get('/finance/employees', { params }),
-  machines: () => api.get('/finance/machines'),
-  maintenance: () => api.get('/finance/maintenance'),
-  quality: (params?: object) => api.get('/finance/quality', { params }),
+  journalEntries: () => api.get('/finance/journal-entries'),
+  createJournalEntry: (data: object) => api.post('/finance/journal-entries', data),
   notifications: () => api.get('/finance/notifications'),
   markNotificationRead: (id: string) => api.patch(`/finance/notifications/${id}/read`),
   reportsSummary: () => api.get('/finance/reports/summary'),

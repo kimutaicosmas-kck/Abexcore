@@ -1,13 +1,16 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus } from 'lucide-react';
 import { operationsApi } from '../services/api';
 import { PageHeader, Table, Badge, Button, formatCurrency, formatDate, getStatusBadge } from '../components/ui';
 import { Modal } from '../components/ui/Modal';
 import { SalesOrderForm } from '../components/forms/SalesOrderForm';
+import { QuotationForm } from '../components/forms/QuotationForm';
 
 export function SalesPage() {
-  const [modalOpen, setModalOpen] = useState(false);
+  const queryClient = useQueryClient();
+  const [orderModalOpen, setOrderModalOpen] = useState(false);
+  const [quotationModalOpen, setQuotationModalOpen] = useState(false);
 
   const { data: orders, isLoading } = useQuery({
     queryKey: ['sales-orders'],
@@ -17,6 +20,14 @@ export function SalesPage() {
   const { data: quotations } = useQuery({
     queryKey: ['quotations'],
     queryFn: () => operationsApi.quotations().then((r) => r.data),
+  });
+
+  const convertMutation = useMutation({
+    mutationFn: (id: string) => operationsApi.convertQuotation(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['quotations'] });
+      queryClient.invalidateQueries({ queryKey: ['sales-orders'] });
+    },
   });
 
   const orderColumns = [
@@ -52,10 +63,16 @@ export function SalesPage() {
         title="Sales Management"
         subtitle="Quotations, sales orders, and customer order tracking"
         action={
-          <Button onClick={() => setModalOpen(true)}>
-            <Plus className="h-4 w-4 mr-2" />
-            New Sales Order
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="secondary" onClick={() => setQuotationModalOpen(true)}>
+              <Plus className="h-4 w-4 mr-2" />
+              New Quotation
+            </Button>
+            <Button onClick={() => setOrderModalOpen(true)}>
+              <Plus className="h-4 w-4 mr-2" />
+              New Sales Order
+            </Button>
+          </div>
         }
       />
 
@@ -90,14 +107,38 @@ export function SalesPage() {
                   <Badge variant={getStatusBadge(val as string)}>{(val as string).replace(/_/g, ' ')}</Badge>
                 ),
               },
+              {
+                key: 'actions',
+                label: 'Actions',
+                render: (_: unknown, row: Record<string, unknown>) => {
+                  const status = row.status as string;
+                  if (status === 'CONVERTED' || status === 'CANCELLED') return null;
+                  return (
+                    <Button
+                      size="sm"
+                      loading={convertMutation.isPending}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        convertMutation.mutate(row.id as string);
+                      }}
+                    >
+                      Convert
+                    </Button>
+                  );
+                },
+              },
             ]}
             data={quotations?.data || []}
           />
         </div>
       </div>
 
-      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title="New Sales Order" size="xl">
-        <SalesOrderForm onSuccess={() => setModalOpen(false)} onCancel={() => setModalOpen(false)} />
+      <Modal open={orderModalOpen} onClose={() => setOrderModalOpen(false)} title="New Sales Order" size="xl">
+        <SalesOrderForm onSuccess={() => setOrderModalOpen(false)} onCancel={() => setOrderModalOpen(false)} />
+      </Modal>
+
+      <Modal open={quotationModalOpen} onClose={() => setQuotationModalOpen(false)} title="New Quotation" size="xl">
+        <QuotationForm onSuccess={() => setQuotationModalOpen(false)} onCancel={() => setQuotationModalOpen(false)} />
       </Modal>
     </div>
   );
