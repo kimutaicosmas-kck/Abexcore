@@ -151,3 +151,137 @@ export const companySettingsSchema = z.object({
   currency: z.string().optional(),
   vatRate: z.number().min(0).max(100).optional(),
 });
+
+export const createQuotationSchema = z.object({
+  customerId: z.string().uuid(),
+  validUntil: z.string().optional(),
+  notes: z.string().optional(),
+  items: z.array(z.object({
+    productId: z.string().uuid(),
+    quantity: z.number().int().min(1),
+    unitPrice: z.number().min(0),
+    discount: z.number().min(0).max(100).optional(),
+  })).min(1),
+});
+
+export const createInvoiceSchema = z.object({
+  type: z.enum(['SALES', 'PURCHASE', 'CREDIT_NOTE', 'DEBIT_NOTE']).default('SALES'),
+  customerId: z.string().uuid().optional(),
+  supplierId: z.string().uuid().optional(),
+  salesOrderId: z.string().uuid().optional(),
+  dueDate: z.string().optional(),
+  notes: z.string().optional(),
+  items: z.array(z.object({
+    description: z.string(),
+    quantity: z.number().min(0.001),
+    unitPrice: z.number().min(0),
+    taxRate: z.number().min(0).optional(),
+  })).min(1),
+});
+
+export const createPaymentSchema = z.object({
+  invoiceId: z.string().uuid(),
+  amount: z.number().min(0.01),
+  method: z.enum(['CASH', 'BANK_TRANSFER', 'CHEQUE', 'MPESA', 'CARD', 'CREDIT']).optional(),
+  reference: z.string().optional(),
+  notes: z.string().optional(),
+});
+
+export const createEmployeeSchema = z.object({
+  employeeNo: z.string().min(1),
+  firstName: z.string().min(1),
+  lastName: z.string().min(1),
+  email: z.string().email().optional(),
+  phone: z.string().optional(),
+  departmentId: z.string().uuid().optional(),
+  branchId: z.string().uuid().optional(),
+  position: z.string().optional(),
+  hireDate: z.string(),
+  salary: z.number().min(0).optional(),
+});
+
+export const createDeliverySchema = z.object({
+  salesOrderId: z.string().uuid(),
+  vehicleId: z.string().uuid().optional(),
+  scheduledDate: z.string().optional(),
+  notes: z.string().optional(),
+  items: z.array(z.object({
+    productId: z.string().uuid(),
+    quantity: z.number().int().min(1),
+  })).min(1),
+});
+
+export const createQualityInspectionSchema = z.object({
+  type: z.string().min(1),
+  goodsReceiptId: z.string().uuid().optional(),
+  productionOrderId: z.string().uuid().optional(),
+  status: z.enum(['PENDING', 'PASSED', 'FAILED', 'CONDITIONAL']).optional(),
+  result: z.string().optional(),
+  defectsFound: z.number().int().min(0).optional(),
+  correctiveAction: z.string().optional(),
+});
+
+export const createMaintenanceSchema = z.object({
+  machineId: z.string().uuid(),
+  type: z.string().min(1),
+  description: z.string().min(1),
+  scheduledDate: z.string().optional(),
+  cost: z.number().min(0).optional(),
+  notes: z.string().optional(),
+});
+
+export const createRequisitionSchema = z.object({
+  department: z.string().optional(),
+  priority: z.string().optional(),
+  requiredDate: z.string().optional(),
+  notes: z.string().optional(),
+  items: z.array(z.object({
+    rawMaterialId: z.string().uuid().optional(),
+    description: z.string(),
+    quantity: z.number().min(0.001),
+    unit: z.string().optional(),
+    estimatedCost: z.number().min(0).optional(),
+  })).min(1),
+});
+
+export const createGoodsReceiptSchema = z.object({
+  purchaseOrderId: z.string().uuid().optional(),
+  supplierId: z.string().uuid(),
+  warehouseId: z.string().uuid(),
+  notes: z.string().optional(),
+  items: z.array(z.object({
+    rawMaterialId: z.string().uuid().optional(),
+    batchNumber: z.string().optional(),
+    quantity: z.number().min(0.001),
+    unit: z.string().optional(),
+    unitCost: z.number().min(0),
+    expiryDate: z.string().optional(),
+  })).min(1),
+});
+
+export const createComplaintSchema = z.object({
+  customerId: z.string().uuid(),
+  subject: z.string().min(1),
+  description: z.string().min(1),
+  priority: z.string().optional(),
+});
+
+export const createOpportunitySchema = z.object({
+  customerId: z.string().uuid(),
+  title: z.string().min(1),
+  value: z.number().min(0),
+  stage: z.string().optional(),
+  probability: z.number().int().min(0).max(100).optional(),
+  expectedCloseDate: z.string().optional(),
+  notes: z.string().optional(),
+});
+
+export const stockAdjustSchema = z.object({
+  warehouseId: z.string().uuid(),
+  productId: z.string().uuid().optional(),
+  rawMaterialId: z.string().uuid().optional(),
+  quantity: z.number().min(0.001),
+  type: z.enum(['add', 'remove']),
+  notes: z.string().optional(),
+  batchNumber: z.string().optional(),
+});
