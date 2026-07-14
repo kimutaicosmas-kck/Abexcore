@@ -1,17 +1,22 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { FileSpreadsheet, FileText, Plus } from 'lucide-react';
 import { financeApi } from '../services/api';
 import { PageHeader, Table, Badge, Card, Button, formatCurrency, formatDate, getStatusBadge } from '../components/ui';
 import { Modal } from '../components/ui/Modal';
 import { InvoiceForm } from '../components/forms/InvoiceForm';
 import { PaymentForm } from '../components/forms/PaymentForm';
+import { JournalEntryForm } from '../components/forms/JournalEntryForm';
 import { downloadFile } from '../utils/download';
 
 export function FinancePage() {
+  const queryClient = useQueryClient();
   const [downloading, setDownloading] = useState<string | null>(null);
   const [invoiceModalOpen, setInvoiceModalOpen] = useState(false);
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
+  const [journalModalOpen, setJournalModalOpen] = useState(false);
+  const [showReconciliation, setShowReconciliation] = useState(false);
+  const [showJournalEntries, setShowJournalEntries] = useState(false);
 
   const { data: invoices, isLoading } = useQuery({
     queryKey: ['invoices'],
@@ -23,9 +28,26 @@ export function FinancePage() {
     queryFn: () => financeApi.accounts().then((r) => r.data.data),
   });
 
+  const { data: journalEntries } = useQuery({
+    queryKey: ['journal-entries'],
+    queryFn: () => financeApi.journalEntries().then((r) => r.data.data),
+    enabled: showJournalEntries,
+  });
+
   const { data: summary } = useQuery({
     queryKey: ['reports-summary'],
     queryFn: () => financeApi.reportsSummary().then((r) => r.data.data),
+  });
+
+  const { data: reconciliation } = useQuery({
+    queryKey: ['bank-reconciliation'],
+    queryFn: () => financeApi.bankReconciliation().then((r) => r.data.data),
+    enabled: showReconciliation,
+  });
+
+  const reconcileMutation = useMutation({
+    mutationFn: (id: string) => financeApi.reconcilePayment(id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['bank-reconciliation'] }),
   });
 
   const handleExport = async (id: string, type: 'pdf' | 'excel', invoiceNumber: string) => {
@@ -112,6 +134,16 @@ export function FinancePage() {
         subtitle="Invoices, payments, accounts, and financial management"
         action={
           <div className="flex gap-2">
+            <Button variant="secondary" onClick={() => setShowJournalEntries(!showJournalEntries)}>
+              Journal Entries
+            </Button>
+            <Button variant="secondary" onClick={() => setJournalModalOpen(true)}>
+              <Plus className="h-4 w-4 mr-2" />
+              Post Journal
+            </Button>
+            <Button variant="secondary" onClick={() => setShowReconciliation(!showReconciliation)}>
+              Bank Reconciliation
+            </Button>
             <Button variant="secondary" onClick={() => setPaymentModalOpen(true)}>
               <Plus className="h-4 w-4 mr-2" />
               Record Payment
@@ -140,6 +172,83 @@ export function FinancePage() {
           </p>
         </Card>
       </div>
+
+      {showJournalEntries && (
+        <div className="mb-6">
+          <h2 className="text-lg font-semibold mb-4">Journal Entries</h2>
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200">
+            <Table
+              columns={[
+                { key: 'entryNumber', label: 'Entry #' },
+                { key: 'date', label: 'Date', render: (v: unknown) => formatDate(v as string) },
+                { key: 'description', label: 'Description' },
+                { key: 'reference', label: 'Reference' },
+                {
+                  key: 'lines',
+                  label: 'Lines',
+                  render: (val: unknown) => {
+                    const lines = val as Array<{ account: { code: string }; debit: number; credit: number }>;
+                    return lines?.length || 0;
+                  },
+                },
+                {
+                  key: 'isPosted',
+                  label: 'Status',
+                  render: (val: unknown) => (
+                    <Badge variant={val ? 'success' : 'warning'}>{val ? 'Posted' : 'Draft'}</Badge>
+                  ),
+                },
+              ]}
+              data={journalEntries || []}
+            />
+          </div>
+        </div>
+      )}
+
+      {showReconciliation && reconciliation && (
+        <div className="mb-6">
+          <h2 className="text-lg font-semibold mb-4">Bank Reconciliation</h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+            <Card>
+              <p className="text-sm text-gray-500">Bank Balance (GL)</p>
+              <p className="text-xl font-bold">{formatCurrency(reconciliation.bankBalance)}</p>
+            </Card>
+            <Card>
+              <p className="text-sm text-gray-500">Unreconciled Payments</p>
+              <p className="text-xl font-bold text-amber-600">{formatCurrency(reconciliation.unreconciledTotal)}</p>
+            </Card>
+            <Card>
+              <p className="text-sm text-gray-500">Pending Items</p>
+              <p className="text-xl font-bold">{reconciliation.unreconciled?.length || 0}</p>
+            </Card>
+          </div>
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200">
+            <Table
+              columns={[
+                { key: 'paymentNumber', label: 'Payment #' },
+                { key: 'method', label: 'Method' },
+                { key: 'paymentDate', label: 'Date', render: (v: unknown) => formatDate(v as string) },
+                { key: 'amount', label: 'Amount', render: (v: unknown) => formatCurrency(v as number) },
+                { key: 'reference', label: 'Reference' },
+                {
+                  key: 'actions',
+                  label: '',
+                  render: (_: unknown, row: Record<string, unknown>) => (
+                    <Button
+                      size="sm"
+                      loading={reconcileMutation.isPending}
+                      onClick={() => reconcileMutation.mutate(row.id as string)}
+                    >
+                      Reconcile
+                    </Button>
+                  ),
+                },
+              ]}
+              data={reconciliation.unreconciled || []}
+            />
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
         <div className="lg:col-span-2">
@@ -170,6 +279,16 @@ export function FinancePage() {
 
       <Modal open={paymentModalOpen} onClose={() => setPaymentModalOpen(false)} title="Record Payment" size="md">
         <PaymentForm onSuccess={() => setPaymentModalOpen(false)} onCancel={() => setPaymentModalOpen(false)} />
+      </Modal>
+
+      <Modal open={journalModalOpen} onClose={() => setJournalModalOpen(false)} title="Post Journal Entry" size="xl">
+        <JournalEntryForm
+          onSuccess={() => {
+            setJournalModalOpen(false);
+            setShowJournalEntries(true);
+          }}
+          onCancel={() => setJournalModalOpen(false)}
+        />
       </Modal>
     </div>
   );

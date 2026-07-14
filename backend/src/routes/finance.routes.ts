@@ -285,4 +285,77 @@ router.post('/journal-entries', asyncHandler(async (req: AuthRequest, res: Respo
   res.status(201).json({ success: true, data: entry });
 }));
 
+// Financial Statements (v2.0)
+router.get('/reports/profit-loss', asyncHandler(async (req: AuthRequest, res: Response) => {
+  const { FinancialReportsService } = await import('../services/financial-reports.service');
+  const start = req.query.start ? new Date(String(req.query.start)) : undefined;
+  const end = req.query.end ? new Date(String(req.query.end)) : undefined;
+  const data = await FinancialReportsService.getProfitAndLoss(start, end);
+  res.json({ success: true, data });
+}));
+
+router.get('/reports/balance-sheet', asyncHandler(async (req: AuthRequest, res: Response) => {
+  const { FinancialReportsService } = await import('../services/financial-reports.service');
+  const asOf = req.query.asOf ? new Date(String(req.query.asOf)) : undefined;
+  const data = await FinancialReportsService.getBalanceSheet(asOf);
+  res.json({ success: true, data });
+}));
+
+router.get('/reports/cash-flow', asyncHandler(async (req: AuthRequest, res: Response) => {
+  const { FinancialReportsService } = await import('../services/financial-reports.service');
+  const months = req.query.months ? parseInt(String(req.query.months), 10) : 6;
+  const data = await FinancialReportsService.getCashFlow(months);
+  res.json({ success: true, data });
+}));
+
+router.get('/reports/vat', asyncHandler(async (req: AuthRequest, res: Response) => {
+  const { FinancialReportsService } = await import('../services/financial-reports.service');
+  const start = req.query.start ? new Date(String(req.query.start)) : undefined;
+  const end = req.query.end ? new Date(String(req.query.end)) : undefined;
+  const data = await FinancialReportsService.getVatReport(start, end);
+  res.json({ success: true, data });
+}));
+
+// Bank reconciliation (v2.0)
+router.get('/bank-reconciliation', asyncHandler(async (_req: AuthRequest, res: Response) => {
+  const [unreconciled, reconciled, bankAccount] = await Promise.all([
+    prisma.payment.findMany({
+      where: { isReconciled: false, method: { in: ['BANK_TRANSFER', 'CHEQUE', 'MPESA'] } },
+      include: { invoice: { select: { invoiceNumber: true, type: true } } },
+      orderBy: { paymentDate: 'desc' },
+      take: 100,
+    }),
+    prisma.payment.findMany({
+      where: { isReconciled: true },
+      include: { invoice: { select: { invoiceNumber: true } } },
+      orderBy: { reconciledAt: 'desc' },
+      take: 50,
+    }),
+    prisma.account.findFirst({ where: { code: '1100' } }),
+  ]);
+
+  res.json({
+    success: true,
+    data: {
+      bankBalance: Number(bankAccount?.balance || 0),
+      unreconciled,
+      reconciled,
+      unreconciledTotal: unreconciled.reduce((s, p) => s + Number(p.amount), 0),
+    },
+  });
+}));
+
+router.patch('/payments/:id/reconcile', asyncHandler(async (req: AuthRequest, res: Response) => {
+  const { bankReference } = req.body;
+  const payment = await prisma.payment.update({
+    where: { id: getParam(req.params.id) },
+    data: {
+      isReconciled: true,
+      reconciledAt: new Date(),
+      bankReference: bankReference || undefined,
+    },
+  });
+  res.json({ success: true, data: payment });
+}));
+
 export default router;

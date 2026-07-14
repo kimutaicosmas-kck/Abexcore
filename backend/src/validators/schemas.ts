@@ -96,21 +96,29 @@ export const createSupplierSchema = z.object({
 export const paginationSchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(20),
-  search: z.string().optional(),
-  sortBy: z.string().optional(),
-  sortOrder: z.enum(['asc', 'desc']).default('desc'),
+  search: z.preprocess((v) => (v === '' ? undefined : v), z.string().optional()),
+  sortBy: z.preprocess((v) => (v === '' ? undefined : v), z.string().optional()),
+  sortOrder: z.preprocess(
+    (v) => (v === '' || v === undefined ? undefined : v),
+    z.enum(['asc', 'desc']).default('desc')
+  ),
 });
+
+const optionalDateString = z.preprocess(
+  (v) => (v === '' || v === null || v === undefined ? undefined : v),
+  z.string().optional()
+);
 
 export const createSalesOrderSchema = z.object({
   customerId: z.string().uuid(),
   quotationId: z.string().uuid().optional(),
-  requiredDate: z.string().datetime().optional(),
+  requiredDate: optionalDateString,
   notes: z.string().optional(),
   items: z.array(z.object({
     productId: z.string().uuid(),
-    quantity: z.number().int().min(1),
-    unitPrice: z.number().min(0),
-    discount: z.number().min(0).max(100).optional(),
+    quantity: z.coerce.number().int().min(1),
+    unitPrice: z.coerce.number().min(0),
+    discount: z.coerce.number().min(0).max(100).optional(),
   })).min(1),
 });
 
@@ -284,4 +292,26 @@ export const stockAdjustSchema = z.object({
   type: z.enum(['add', 'remove']),
   notes: z.string().optional(),
   batchNumber: z.string().optional(),
+});
+
+export const stockTransferSchema = z.object({
+  fromWarehouseId: z.string().uuid(),
+  toWarehouseId: z.string().uuid(),
+  productId: z.string().uuid().optional(),
+  rawMaterialId: z.string().uuid().optional(),
+  quantity: z.coerce.number().min(0.001),
+  notes: z.string().optional(),
+  batchNumber: z.string().optional(),
+}).refine((d) => d.rawMaterialId || d.productId, {
+  message: 'Select either a raw material or a product',
+  path: ['rawMaterialId'],
+}).refine((d) => d.fromWarehouseId !== d.toWarehouseId, {
+  message: 'Source and destination warehouses must differ',
+  path: ['toWarehouseId'],
+});
+
+export const updateSupplierQuotationSchema = z.object({
+  totalAmount: z.coerce.number().min(0),
+  notes: z.string().optional(),
+  validUntil: optionalDateString,
 });

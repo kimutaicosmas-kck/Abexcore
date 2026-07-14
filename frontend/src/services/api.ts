@@ -91,6 +91,13 @@ export const productsApi = {
   delete: (id: string) => api.delete(`/products/${id}`),
   categories: () => api.get('/products/categories/list'),
   saveBOM: (id: string, data: object) => api.post(`/products/${id}/bom`, data),
+  uploadImage: (id: string, file: File) => {
+    const form = new FormData();
+    form.append('image', file);
+    return api.post(`/products/${id}/image`, form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
 };
 
 export const inventoryApi = {
@@ -104,6 +111,8 @@ export const inventoryApi = {
   warehouses: () => api.get('/inventory/warehouses'),
   stockLevels: (params?: object) => api.get('/inventory/stock-levels', { params }),
   adjustStock: (data: object) => api.post('/inventory/adjust', data),
+  transfers: () => api.get('/inventory/transfers'),
+  transferStock: (data: object) => api.post('/inventory/transfers', data),
   purchaseOrders: (params?: object) => api.get('/inventory/purchase-orders', { params }),
   createPurchaseOrder: (data: object) => api.post('/inventory/purchase-orders', data),
   requisitions: () => api.get('/inventory/requisitions'),
@@ -112,6 +121,17 @@ export const inventoryApi = {
     api.patch(`/inventory/requisitions/${id}/approve`, { status }),
   goodsReceipts: () => api.get('/inventory/goods-receipts'),
   createGoodsReceipt: (data: object) => api.post('/inventory/goods-receipts', data),
+  rfqs: () => api.get('/inventory/rfqs'),
+  createRfq: (requisitionId: string, data: object) =>
+    api.post(`/inventory/requisitions/${requisitionId}/rfq`, data),
+  awardRfq: (id: string, quotationId: string) =>
+    api.patch(`/inventory/rfqs/${id}/award`, { quotationId }),
+  updateQuotation: (id: string, data: object) =>
+    api.patch(`/inventory/quotations/${id}`, data),
+};
+
+export const searchApi = {
+  search: (q: string) => api.get('/search', { params: { q } }),
 };
 
 export const operationsApi = {
@@ -179,4 +199,11 @@ export const financeApi = {
   notifications: () => api.get('/finance/notifications'),
   markNotificationRead: (id: string) => api.patch(`/finance/notifications/${id}/read`),
   reportsSummary: () => api.get('/finance/reports/summary'),
+  profitLoss: (params?: object) => api.get('/finance/reports/profit-loss', { params }),
+  balanceSheet: (params?: object) => api.get('/finance/reports/balance-sheet', { params }),
+  cashFlow: (params?: object) => api.get('/finance/reports/cash-flow', { params }),
+  vatReport: (params?: object) => api.get('/finance/reports/vat', { params }),
+  bankReconciliation: () => api.get('/finance/bank-reconciliation'),
+  reconcilePayment: (id: string, bankReference?: string) =>
+    api.patch(`/finance/payments/${id}/reconcile`, { bankReference }),
 };

@@ -1,6 +1,19 @@
-# Filter Manufacturing ERP System
+# ApexCore ERP v2.1 — Designed by ApexCore Technologies
 
-Enterprise-grade ERP for a filter manufacturing company in Kenya. Manages the complete business lifecycle from raw material procurement through production, inventory, sales, finance, distribution, CRM, HR, and maintenance.
+Enterprise-grade ERP for manufacturing and distribution. Manages the complete business lifecycle from raw material procurement through production, inventory, sales, finance, distribution, CRM, HR, and maintenance.
+
+## What's New in v2.0
+
+- **Financial statements** — P&L, Balance Sheet, Cash Flow, and VAT reports (API + UI)
+- **Global search** — Search customers, products, orders, and suppliers from the top nav
+- **RFQ workflow** — Requisition → Approve → Create RFQ → Supplier quotes
+- **Email notifications** — Nodemailer integration for approvals and low-stock alerts
+- **Bank reconciliation** — Match bank payments against GL
+- **BOM editor** — Visual bill-of-materials editor on Products page
+- **Product images** — Upload product photos via Multer
+- **Automated tests** — Vitest + Supertest API tests
+- **CI/CD** — GitHub Actions pipeline (build + test)
+- **Production Docker** — Health checks, Prisma migrations on startup
 
 ## Technology Stack
 
@@ -137,4 +150,4 @@ erp-system/
 
 ## License
 
-Proprietary - Kenya Filter Industries Ltd
+Proprietary — ApexCore Technologies

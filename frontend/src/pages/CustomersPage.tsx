@@ -6,6 +6,8 @@ import { PageHeader, Table, Badge, Button, formatCurrency, formatDate, getStatus
 import { Modal } from '../components/ui/Modal';
 import { CustomerForm } from '../components/forms/CustomerForm';
 import { ComplaintForm } from '../components/forms/ComplaintForm';
+import { OpportunityForm } from '../components/forms/OpportunityForm';
+import { ComplaintResolveForm } from '../components/forms/ComplaintResolveForm';
 import { Customer } from '../types';
 
 const tabs = ['Customers', 'Complaints', 'Opportunities'];
@@ -14,6 +16,9 @@ export function CustomersPage() {
   const [activeTab, setActiveTab] = useState(0);
   const [customerModalOpen, setCustomerModalOpen] = useState(false);
   const [complaintModalOpen, setComplaintModalOpen] = useState(false);
+  const [opportunityModalOpen, setOpportunityModalOpen] = useState(false);
+  const [resolveModalOpen, setResolveModalOpen] = useState(false);
+  const [resolvingComplaint, setResolvingComplaint] = useState<{ id: string; subject: string } | null>(null);
   const [editing, setEditing] = useState<Customer | null>(null);
 
   const { data: customers, isLoading: custLoading } = useQuery({
@@ -47,6 +52,16 @@ export function CustomersPage() {
   const closeCustomerModal = () => {
     setCustomerModalOpen(false);
     setEditing(null);
+  };
+
+  const openResolve = (id: string, subject: string) => {
+    setResolvingComplaint({ id, subject });
+    setResolveModalOpen(true);
+  };
+
+  const closeResolveModal = () => {
+    setResolveModalOpen(false);
+    setResolvingComplaint(null);
   };
 
   const customerColumns = [
@@ -111,6 +126,24 @@ export function CustomersPage() {
       label: 'Date',
       render: (val: unknown) => formatDate(val as string),
     },
+    {
+      key: 'actions',
+      label: 'Actions',
+      render: (_: unknown, row: Record<string, unknown>) => {
+        if (row.status === 'APPROVED' || row.resolvedAt) return null;
+        return (
+          <Button
+            size="sm"
+            onClick={(e) => {
+              e.stopPropagation();
+              openResolve(row.id as string, row.subject as string);
+            }}
+          >
+            Resolve
+          </Button>
+        );
+      },
+    },
   ];
 
   const opportunityColumns = [
@@ -143,7 +176,7 @@ export function CustomersPage() {
     <div>
       <PageHeader
         title="Customer Management"
-        subtitle="Manage dealers, retail shops, industries, and other customers"
+        subtitle="Manage customers, complaints, and sales opportunities"
         action={
           activeTab === 0 ? (
             <Button onClick={openCreate}>
@@ -155,7 +188,12 @@ export function CustomersPage() {
               <Plus className="h-4 w-4 mr-2" />
               Add Complaint
             </Button>
-          ) : undefined
+          ) : (
+            <Button onClick={() => setOpportunityModalOpen(true)}>
+              <Plus className="h-4 w-4 mr-2" />
+              Add Opportunity
+            </Button>
+          )
         }
       />
 
@@ -209,6 +247,21 @@ export function CustomersPage() {
 
       <Modal open={complaintModalOpen} onClose={() => setComplaintModalOpen(false)} title="Add Complaint" size="lg">
         <ComplaintForm onSuccess={() => setComplaintModalOpen(false)} onCancel={() => setComplaintModalOpen(false)} />
+      </Modal>
+
+      <Modal open={opportunityModalOpen} onClose={() => setOpportunityModalOpen(false)} title="Add Opportunity" size="lg">
+        <OpportunityForm onSuccess={() => setOpportunityModalOpen(false)} onCancel={() => setOpportunityModalOpen(false)} />
+      </Modal>
+
+      <Modal open={resolveModalOpen} onClose={closeResolveModal} title="Resolve Complaint" size="md">
+        {resolvingComplaint && (
+          <ComplaintResolveForm
+            complaintId={resolvingComplaint.id}
+            subject={resolvingComplaint.subject}
+            onSuccess={closeResolveModal}
+            onCancel={closeResolveModal}
+          />
+        )}
       </Modal>
     </div>
   );

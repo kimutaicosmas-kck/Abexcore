@@ -15,10 +15,11 @@ import {
   BarChart3,
   Settings,
   ChevronLeft,
-  Filter,
+  Layers,
 } from 'lucide-react';
 import clsx from 'clsx';
 import { useAuth } from '../../contexts/AuthContext';
+import { APP_NAME, APP_VERSION, DESIGNER } from '../../constants/brand';
 
 const navigation = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
@@ -60,10 +61,10 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
       <div className="flex h-16 items-center justify-between px-4 border-b border-gray-700">
         {!collapsed && (
           <div className="flex items-center gap-2">
-            <Filter className="h-8 w-8 text-primary-400" />
+            <Layers className="h-8 w-8 text-primary-400" />
             <div>
-              <span className="text-white font-bold text-lg">Filter ERP</span>
-              <p className="text-xs text-gray-400">Kenya Filter Industries</p>
+              <span className="text-white font-bold text-lg">{APP_NAME}</span>
+              <p className="text-xs text-gray-400">{DESIGNER}</p>
             </div>
           </div>
         )}
@@ -98,7 +99,8 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
 
       {!collapsed && (
         <div className="p-4 border-t border-gray-700">
-          <p className="text-xs text-gray-500 text-center">v1.0.0 &copy; 2026</p>
+          <p className="text-xs text-gray-500 text-center">v{APP_VERSION} &copy; 2026</p>
+          <p className="text-xs text-gray-600 text-center mt-1">Designed by {DESIGNER}</p>
         </div>
       )}
     </aside>

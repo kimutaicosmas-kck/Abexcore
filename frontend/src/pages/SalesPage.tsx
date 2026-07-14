@@ -30,6 +30,22 @@ export function SalesPage() {
     },
   });
 
+  const statusMutation = useMutation({
+    mutationFn: ({ id, status }: { id: string; status: string }) =>
+      operationsApi.updateOrderStatus(id, status),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['sales-orders'] }),
+  });
+
+  const NEXT_STATUS: Record<string, { status: string; label: string }> = {
+    DRAFT: { status: 'CONFIRMED', label: 'Confirm' },
+    PENDING: { status: 'CONFIRMED', label: 'Confirm' },
+    CONFIRMED: { status: 'IN_PRODUCTION', label: 'Start Production' },
+    IN_PRODUCTION: { status: 'READY', label: 'Mark Ready' },
+    READY: { status: 'DISPATCHED', label: 'Dispatch' },
+    DISPATCHED: { status: 'DELIVERED', label: 'Mark Delivered' },
+    DELIVERED: { status: 'COMPLETED', label: 'Complete' },
+  };
+
   const orderColumns = [
     { key: 'orderNumber', label: 'Order #' },
     {
@@ -54,6 +70,27 @@ export function SalesPage() {
       render: (val: unknown) => (
         <Badge variant={getStatusBadge(val as string)}>{(val as string).replace(/_/g, ' ')}</Badge>
       ),
+    },
+    {
+      key: 'actions',
+      label: 'Actions',
+      render: (_: unknown, row: Record<string, unknown>) => {
+        const status = row.status as string;
+        const next = NEXT_STATUS[status];
+        if (!next || status === 'COMPLETED' || status === 'CANCELLED') return null;
+        return (
+          <Button
+            size="sm"
+            loading={statusMutation.isPending}
+            onClick={(e) => {
+              e.stopPropagation();
+              statusMutation.mutate({ id: row.id as string, status: next.status });
+            }}
+          >
+            {next.label}
+          </Button>
+        );
+      },
     },
   ];
 

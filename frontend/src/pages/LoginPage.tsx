@@ -3,9 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Filter } from 'lucide-react';
+import { Layers } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { Button, Input } from '../components/ui';
+import { APP_NAME, APP_TAGLINE, DESIGNER } from '../constants/brand';
 
 const loginSchema = z.object({
   email: z.string().email('Invalid email'),
@@ -43,21 +44,19 @@ export function LoginPage() {
     <div className="min-h-screen flex">
       <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-primary-600 to-primary-900 items-center justify-center p-12">
         <div className="text-white max-w-md">
-          <Filter className="h-16 w-16 mb-6" />
-          <h1 className="text-4xl font-bold mb-4">Filter Manufacturing ERP</h1>
-          <p className="text-primary-100 text-lg">
-            Complete enterprise resource planning for Kenya Filter Industries.
-            Manage procurement, production, inventory, sales, and finance in one platform.
-          </p>
+          <Layers className="h-16 w-16 mb-6" />
+          <h1 className="text-4xl font-bold mb-4">{APP_NAME}</h1>
+          <p className="text-primary-100 text-lg mb-6">{APP_TAGLINE}</p>
+          <p className="text-primary-200 text-sm">Designed by {DESIGNER}</p>
         </div>
       </div>
 
       <div className="flex-1 flex items-center justify-center p-8">
         <div className="w-full max-w-md">
           <div className="text-center mb-8">
-            <Filter className="h-12 w-12 text-primary-600 mx-auto mb-4" />
+            <Layers className="h-12 w-12 text-primary-600 mx-auto mb-4" />
             <h2 className="text-2xl font-bold text-gray-900">Welcome back</h2>
-            <p className="text-gray-500 mt-1">Sign in to your account</p>
+            <p className="text-gray-500 mt-1">Sign in to {APP_NAME}</p>
           </div>
 
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
@@ -83,6 +82,9 @@ export function LoginPage() {
 
           <p className="mt-6 text-center text-sm text-gray-500">
             Demo: admin@filtererp.co.ke / Admin@123
+          </p>
+          <p className="mt-2 text-center text-xs text-gray-400">
+            Designed by {DESIGNER}
           </p>
         </div>
       </div>

@@ -511,6 +511,7 @@ model Supplier {
   goodsReceipts     GoodsReceipt[]
   supplierInvoices  Invoice[] @relation("SupplierInvoices")
   contracts         SupplierContract[]
+  quotations        SupplierQuotation[]
 
   @@map("suppliers")
 }
@@ -767,6 +768,7 @@ model SupplierQuotation {
   createdAt  DateTime       @default(now()) @map("created_at")
 
   rfq      RequestForQuotation @relation(fields: [rfqId], references: [id])
+  supplier Supplier            @relation(fields: [supplierId], references: [id])
   purchaseOrders PurchaseOrder[]
 
   @@map("supplier_quotations")
@@ -1180,6 +1182,9 @@ model Payment {
   reference     String?
   paymentDate   DateTime      @default(now()) @map("payment_date")
   notes         String?       @db.Text
+  isReconciled  Boolean       @default(false) @map("is_reconciled")
+  reconciledAt  DateTime?     @map("reconciled_at")
+  bankReference String?       @map("bank_reference")
   createdAt     DateTime      @default(now()) @map("created_at")
 
   invoice Invoice? @relation(fields: [invoiceId], references: [id])

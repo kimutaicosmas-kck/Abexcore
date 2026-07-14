@@ -5,14 +5,19 @@ import { hrApi } from '../services/api';
 import { PageHeader, Table, Badge, Button, formatCurrency, formatDate, getStatusBadge } from '../components/ui';
 import { Modal } from '../components/ui/Modal';
 import { EmployeeForm } from '../components/forms/EmployeeForm';
+import { AttendanceForm } from '../components/forms/AttendanceForm';
+import { LeaveForm } from '../components/forms/LeaveForm';
+import { PayrollForm } from '../components/forms/PayrollForm';
 import { Employee } from '../types';
 
 const tabs = ['Employees', 'Attendance', 'Leave', 'Payroll'];
 
+type HrModal = 'employee' | 'attendance' | 'leave' | 'payroll' | null;
+
 export function HRPage() {
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState(0);
-  const [modalOpen, setModalOpen] = useState(false);
+  const [modal, setModal] = useState<HrModal>(null);
   const [editing, setEditing] = useState<Employee | null>(null);
 
   const { data: employees, isLoading: empLoading } = useQuery({
@@ -49,19 +54,33 @@ export function HRPage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['payroll'] }),
   });
 
-  const openCreate = () => {
+  const openCreateEmployee = () => {
     setEditing(null);
-    setModalOpen(true);
+    setModal('employee');
   };
 
   const openEdit = (employee: Employee) => {
     setEditing(employee);
-    setModalOpen(true);
+    setModal('employee');
   };
 
   const closeModal = () => {
-    setModalOpen(false);
+    setModal(null);
     setEditing(null);
+  };
+
+  const tabActions: Record<number, { label: string; modal: HrModal }> = {
+    0: { label: 'Add Employee', modal: 'employee' },
+    1: { label: 'Record Attendance', modal: 'attendance' },
+    2: { label: 'Request Leave', modal: 'leave' },
+    3: { label: 'Create Payroll', modal: 'payroll' },
+  };
+
+  const modalTitles: Record<Exclude<HrModal, null>, string> = {
+    employee: editing ? 'Edit Employee' : 'Add Employee',
+    attendance: 'Record Attendance',
+    leave: 'Request Leave',
+    payroll: 'Create Payroll',
   };
 
   const employeeColumns = [
@@ -248,10 +267,10 @@ export function HRPage() {
         title="Human Resources"
         subtitle="Employee records, attendance, leave, and payroll"
         action={
-          activeTab === 0 ? (
-            <Button onClick={openCreate}>
+          tabActions[activeTab] ? (
+            <Button onClick={() => setModal(tabActions[activeTab].modal)}>
               <Plus className="h-4 w-4 mr-2" />
-              Add Employee
+              {tabActions[activeTab].label}
             </Button>
           ) : undefined
         }
@@ -303,12 +322,23 @@ export function HRPage() {
       )}
 
       <Modal
-        open={modalOpen}
+        open={modal !== null}
         onClose={closeModal}
-        title={editing ? 'Edit Employee' : 'Add Employee'}
+        title={modal ? modalTitles[modal] : ''}
         size="lg"
       >
-        <EmployeeForm employee={editing} onSuccess={closeModal} onCancel={closeModal} />
+        {modal === 'employee' && (
+          <EmployeeForm employee={editing} onSuccess={closeModal} onCancel={closeModal} />
+        )}
+        {modal === 'attendance' && (
+          <AttendanceForm onSuccess={closeModal} onCancel={closeModal} />
+        )}
+        {modal === 'leave' && (
+          <LeaveForm onSuccess={closeModal} onCancel={closeModal} />
+        )}
+        {modal === 'payroll' && (
+          <PayrollForm onSuccess={closeModal} onCancel={closeModal} />
+        )}
       </Modal>
     </div>
   );

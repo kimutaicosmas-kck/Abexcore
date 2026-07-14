@@ -6,6 +6,7 @@ import { createProductSchema, paginationSchema } from '../validators/schemas';
 import { createCrudService } from '../utils/crud';
 import { getParam, getQuery } from '../utils/request';
 import prisma from '../config/database';
+import { productImageUpload } from '../middleware/upload';
 
 const router = Router();
 router.use(authenticate);
@@ -74,6 +75,21 @@ router.post('/:id/bom', asyncHandler(async (req: AuthRequest, res: Response) => 
   });
 
   res.json({ success: true, data: bom });
+}));
+
+router.post('/:id/image', productImageUpload.single('image'), asyncHandler(async (req: AuthRequest, res: Response) => {
+  if (!req.file) {
+    res.status(400).json({ success: false, message: 'No image uploaded' });
+    return;
+  }
+
+  const imageUrl = `/uploads/products/${req.file.filename}`;
+  const data = await prisma.product.update({
+    where: { id: getParam(req.params.id) },
+    data: { imageUrl },
+  });
+
+  res.json({ success: true, data });
 }));
 
 export default router;

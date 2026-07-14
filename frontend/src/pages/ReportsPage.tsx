@@ -4,9 +4,11 @@ import { financeApi } from '../services/api';
 import { PageHeader, Card, Button, formatCurrency } from '../components/ui';
 import { BarChart3, Users, Factory, Truck, Download } from 'lucide-react';
 import { downloadFile } from '../utils/download';
+import { FinancialStatementsPanel } from '../components/reports/FinancialStatementsPanel';
 
 export function ReportsPage() {
   const [downloading, setDownloading] = useState<string | null>(null);
+  const [activeSection, setActiveSection] = useState<'overview' | 'financial'>('overview');
 
   const { data: summary } = useQuery({
     queryKey: ['reports-summary'],
@@ -49,9 +51,21 @@ export function ReportsPage() {
     <div>
       <PageHeader
         title="Reports & Analytics"
-        subtitle="Business intelligence and exportable reports"
+        subtitle="Business intelligence and exportable reports (v2.0)"
         action={
           <div className="flex gap-2">
+            <Button
+              variant={activeSection === 'overview' ? 'primary' : 'secondary'}
+              onClick={() => setActiveSection('overview')}
+            >
+              Overview
+            </Button>
+            <Button
+              variant={activeSection === 'financial' ? 'primary' : 'secondary'}
+              onClick={() => setActiveSection('financial')}
+            >
+              Financial Statements
+            </Button>
             <Button
               variant="secondary"
               loading={downloading === 'sales'}
@@ -71,6 +85,11 @@ export function ReportsPage() {
           </div>
         }
       />
+
+      {activeSection === 'financial' ? (
+        <FinancialStatementsPanel />
+      ) : (
+        <>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
         <Card>
@@ -117,6 +136,8 @@ export function ReportsPage() {
           </Card>
         ))}
       </div>
+        </>
+      )}
     </div>
   );
 }

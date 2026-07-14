@@ -88,13 +88,20 @@ export class ExportService {
         doc.fontSize(9).fillColor('#666').text(`Notes: ${invoice.notes}`);
       }
 
+      doc.fontSize(8).fillColor('#9ca3af').text(
+        'Powered by ApexCore ERP — Designed by ApexCore Technologies',
+        50,
+        doc.page.height - 50,
+        { align: 'center' }
+      );
+
       doc.end();
     });
   }
 
   static async generateInvoiceExcel(invoice: NonNullable<InvoiceWithRelations>): Promise<Buffer> {
     const workbook = new ExcelJS.Workbook();
-    workbook.creator = 'Filter ERP';
+    workbook.creator = 'ApexCore ERP';
     const sheet = workbook.addWorksheet('Invoice');
 
     sheet.mergeCells('A1:E1');
@@ -161,7 +168,7 @@ export class ExportService {
     const sheet = workbook.addWorksheet('Sales Report');
 
     sheet.mergeCells('A1:F1');
-    sheet.getCell('A1').value = 'Sales Report - Kenya Filter Industries';
+    sheet.getCell('A1').value = 'Sales Report — ApexCore ERP';
     sheet.getCell('A1').font = { bold: true, size: 14 };
     sheet.getCell('A2').value = `Generated: ${new Date().toLocaleString('en-KE')}`;
 

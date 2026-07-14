@@ -131,7 +131,7 @@ export class AuthService {
   }
 
   static async setup2FA(userId: string) {
-    const secret = speakeasy.generateSecret({ name: 'Filter ERP' });
+    const secret = speakeasy.generateSecret({ name: 'ApexCore ERP' });
     await prisma.user.update({
       where: { id: userId },
       data: { twoFactorSecret: secret.base32 },

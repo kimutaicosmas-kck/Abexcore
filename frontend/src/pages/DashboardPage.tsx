@@ -10,6 +10,7 @@ import {
   Tooltip,
   Legend,
   ArcElement,
+  Filler,
 } from 'chart.js';
 import { Line, Doughnut } from 'react-chartjs-2';
 import {
@@ -24,7 +25,7 @@ import { dashboardApi } from '../services/api';
 import { StatCard, Card, Badge, formatCurrency, formatDate, getStatusBadge, PageHeader } from '../components/ui';
 import { DashboardKPIs } from '../types';
 
-ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, Title, Tooltip, Legend, ArcElement);
+ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, Title, Tooltip, Legend, ArcElement, Filler);
 
 export function DashboardPage() {
   const { data: kpis, isLoading } = useQuery({

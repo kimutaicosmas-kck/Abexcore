@@ -20,6 +20,12 @@ export function subDays(date: Date, days: number): Date {
   return d;
 }
 
+export function subMonths(date: Date, months: number): Date {
+  const d = new Date(date);
+  d.setMonth(d.getMonth() - months);
+  return d;
+}
+
 export function generateNumber(prefix: string, sequence: number): string {
   const year = new Date().getFullYear();
   return `${prefix}-${year}-${String(sequence).padStart(5, '0')}`;

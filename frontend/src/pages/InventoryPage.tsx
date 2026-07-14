@@ -6,14 +6,16 @@ import { PageHeader, Table, Badge, Card, Button, formatCurrency } from '../compo
 import { Modal } from '../components/ui/Modal';
 import { RawMaterialForm } from '../components/forms/RawMaterialForm';
 import { StockAdjustForm } from '../components/forms/StockAdjustForm';
+import { StockTransferForm } from '../components/forms/StockTransferForm';
 import { RawMaterial } from '../types';
 
-const tabs = ['Stock Levels', 'Raw Materials', 'Warehouses', 'Low Stock', 'Stock Adjust'];
+const tabs = ['Stock Levels', 'Raw Materials', 'Warehouses', 'Low Stock', 'Stock Adjust', 'Transfers'];
 
 export function InventoryPage() {
   const [activeTab, setActiveTab] = useState(0);
   const [materialModalOpen, setMaterialModalOpen] = useState(false);
   const [adjustModalOpen, setAdjustModalOpen] = useState(false);
+  const [transferModalOpen, setTransferModalOpen] = useState(false);
   const [editingMaterial, setEditingMaterial] = useState<RawMaterial | null>(null);
 
   const { data: stockLevels, isLoading: stockLoading } = useQuery({
@@ -38,6 +40,12 @@ export function InventoryPage() {
     queryKey: ['low-stock'],
     queryFn: () => inventoryApi.lowStock().then((r) => r.data.data),
     enabled: activeTab === 3,
+  });
+
+  const { data: transfers, isLoading: transferLoading } = useQuery({
+    queryKey: ['transfers'],
+    queryFn: () => inventoryApi.transfers().then((r) => r.data.data),
+    enabled: activeTab === 5,
   });
 
   const openCreateMaterial = () => {
@@ -139,6 +147,11 @@ export function InventoryPage() {
               <Plus className="h-4 w-4 mr-2" />
               Adjust Stock
             </Button>
+          ) : activeTab === 5 ? (
+            <Button onClick={() => setTransferModalOpen(true)}>
+              <Plus className="h-4 w-4 mr-2" />
+              Transfer Stock
+            </Button>
           ) : undefined
         }
       />
@@ -222,6 +235,30 @@ export function InventoryPage() {
         </div>
       )}
 
+      {activeTab === 5 && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200">
+          <Table
+            columns={[
+              {
+                key: 'warehouse',
+                label: 'To Warehouse',
+                render: (_: unknown, row: Record<string, unknown>) =>
+                  (row.warehouse as { name: string })?.name || '-',
+              },
+              { key: 'quantity', label: 'Qty', render: (v: unknown) => Number(v).toLocaleString() },
+              { key: 'notes', label: 'Notes' },
+              {
+                key: 'createdAt',
+                label: 'Date',
+                render: (v: unknown) => new Date(v as string).toLocaleDateString(),
+              },
+            ]}
+            data={transfers || []}
+            loading={transferLoading}
+          />
+        </div>
+      )}
+
       <Modal
         open={materialModalOpen}
         onClose={closeMaterialModal}
@@ -233,6 +270,10 @@ export function InventoryPage() {
 
       <Modal open={adjustModalOpen} onClose={() => setAdjustModalOpen(false)} title="Stock Adjustment" size="lg">
         <StockAdjustForm onSuccess={() => setAdjustModalOpen(false)} onCancel={() => setAdjustModalOpen(false)} />
+      </Modal>
+
+      <Modal open={transferModalOpen} onClose={() => setTransferModalOpen(false)} title="Stock Transfer" size="lg">
+        <StockTransferForm onSuccess={() => setTransferModalOpen(false)} onCancel={() => setTransferModalOpen(false)} />
       </Modal>
     </div>
   );

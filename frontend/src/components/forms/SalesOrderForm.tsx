@@ -91,11 +91,13 @@ export function SalesOrderForm({ onSuccess, onCancel }: SalesOrderFormProps) {
     },
   });
 
+  const apiError = mutation.error as { response?: { data?: { message?: string } } } | null;
+
   return (
     <form onSubmit={handleSubmit((data) => mutation.mutate(data))} className="space-y-4">
       {mutation.isError && (
         <div className="p-3 rounded-lg bg-red-50 text-red-700 text-sm">
-          Failed to create order. Please check all fields.
+          {apiError?.response?.data?.message || 'Failed to create order. Please check all fields.'}
         </div>
       )}
 
