@@ -55,7 +55,7 @@ export class DeliveryService {
     const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
     const todayStart = new Date(new Date().setHours(0, 0, 0, 0));
 
-    const [pending, inTransit, deliveredToday, deliveredMonth, activeVehicles] =
+    const [pending, inTransit, deliveredToday, deliveredMonth, activeVehicles, motorcycles, trucks, lorries] =
       await Promise.all([
         prisma.deliveryNote.count({ where: { status: { in: ['PENDING', 'ASSIGNED'] } } }),
         prisma.deliveryNote.count({ where: { status: 'IN_TRANSIT' } }),
@@ -66,6 +66,9 @@ export class DeliveryService {
           where: { status: 'DELIVERED', deliveredAt: { gte: monthStart } },
         }),
         prisma.vehicle.count({ where: { isActive: true } }),
+        prisma.vehicle.count({ where: { isActive: true, type: 'MOTORCYCLE' } }),
+        prisma.vehicle.count({ where: { isActive: true, type: 'TRUCK' } }),
+        prisma.vehicle.count({ where: { isActive: true, type: 'LORRY' } }),
       ]);
 
     return {
@@ -74,6 +77,9 @@ export class DeliveryService {
       deliveredToday,
       deliveredMonth,
       activeVehicles,
+      motorcycles,
+      trucks,
+      lorries,
     };
   }
 }

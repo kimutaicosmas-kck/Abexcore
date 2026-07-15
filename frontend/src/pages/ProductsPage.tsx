@@ -1,6 +1,17 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plus, Pencil, Trash2, Layers, Upload, Package, Box, FileText } from 'lucide-react';
+import {
+  Plus,
+  Pencil,
+  Trash2,
+  Layers,
+  Upload,
+  Package,
+  Box,
+  FileText,
+  AlertTriangle,
+  ChevronRight,
+} from 'lucide-react';
 import { productsApi } from '../services/api';
 import {
   PageHeader,
@@ -12,13 +23,21 @@ import {
   Card,
   StatCard,
   Alert,
+  EmptyState,
+  DataPanel,
+  QuickActionCard,
+  QuickActionGrid,
+  TablePagination,
   formatCurrency,
+  PageToolbar,
 } from '../components/ui';
 import { Modal } from '../components/ui/Modal';
 import { ProductForm } from '../components/forms/ProductForm';
 import { BOMForm } from '../components/forms/BOMForm';
 import { useAuth } from '../contexts/AuthContext';
 import { Product, ProductStats } from '../types';
+
+const tabs = ['Overview', 'Catalog'];
 
 const CATEGORY_OPTIONS = [
   { value: '', label: 'All categories' },
@@ -41,6 +60,7 @@ const STATUS_OPTIONS = [
 export function ProductsPage() {
   const queryClient = useQueryClient();
   const { hasPermission } = useAuth();
+  const [activeTab, setActiveTab] = useState(0);
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [searchInput, setSearchInput] = useState('');
@@ -76,6 +96,7 @@ export function ProductsPage() {
           isActive: isActive === '' ? undefined : isActive === 'true',
         })
         .then((r) => r.data),
+    enabled: activeTab === 0 || activeTab === 1,
   });
 
   const { data: productDetail, isLoading: detailLoading } = useQuery({
@@ -101,10 +122,23 @@ export function ProductsPage() {
     if (selected?.id === product.id) queryClient.invalidateQueries({ queryKey: ['product-detail', product.id] });
   };
 
+  const goToTab = (index: number) => {
+    setActiveTab(index);
+  };
+
   const openDetail = (product: Product) => {
     setSelected(product);
     setDetailOpen(true);
   };
+
+  const openAddProduct = () => {
+    setEditing(null);
+    setFormOpen(true);
+  };
+
+  const products = (productsRes?.data as Product[]) || [];
+  const recentProducts = activeTab === 0 ? products.slice(0, 6) : [];
+  const missingBomProducts = activeTab === 0 ? products.filter((p) => !p.bom).slice(0, 5) : [];
 
   const columns = [
     {
@@ -158,10 +192,15 @@ export function ProductsPage() {
                 </Button>
                 <label className="cursor-pointer p-2 rounded hover:bg-surface-muted" title="Upload image">
                   <Upload className="h-4 w-4 text-slate-600" />
-                  <input type="file" accept="image/*" className="hidden" onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) handleImageUpload(product, file);
-                  }} />
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) handleImageUpload(product, file);
+                    }}
+                  />
                 </label>
                 <Button size="sm" variant="ghost" onClick={() => { setEditing(product); setFormOpen(true); }}>
                   <Pencil className="h-4 w-4" />
@@ -174,58 +213,269 @@ export function ProductsPage() {
     },
   ];
 
-  const pagination = productsRes?.pagination;
+  const toolbarActions =
+    canCreate &&
+    (activeTab === 0 || activeTab === 1 ? (
+      <Button size="sm" onClick={openAddProduct}>
+        <Plus className="h-4 w-4 mr-1.5" />
+        Add Product
+      </Button>
+    ) : undefined);
 
   return (
-    <div>
+    <div className="space-y-1">
       <PageHeader
+        title="Products"
         subtitle="Product catalog with BOM, pricing, and image support"
-        action={canCreate ? (
-          <Button onClick={() => { setEditing(null); setFormOpen(true); }}>
-            <Plus className="h-4 w-4 mr-2" />Add Product
-          </Button>
-        ) : undefined}
+        action={
+          stats && stats.withoutBom > 0 ? (
+            <Button variant="secondary" size="sm" onClick={() => goToTab(1)}>
+              <AlertTriangle className="h-4 w-4 mr-1.5 text-amber-500" />
+              {stats.withoutBom} missing BOM
+            </Button>
+          ) : undefined
+        }
       />
 
       {stats && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
-          <StatCard title="Total Products" value={stats.total} icon={<Package className="h-5 w-5 text-white" />} color="from-primary-500 to-indigo-600" />
-          <StatCard title="Active" value={stats.active} icon={<Box className="h-5 w-5 text-white" />} color="from-emerald-500 to-teal-600" />
-          <StatCard title="With BOM" value={stats.withBom} icon={<FileText className="h-5 w-5 text-white" />} color="from-violet-500 to-purple-600" />
-          <StatCard title="FG in Stock" value={stats.finishedGoodsQty.toLocaleString()} icon={<Layers className="h-5 w-5 text-white" />} color="from-orange-500 to-amber-600" />
+          <StatCard
+            title="Total Products"
+            value={stats.total}
+            icon={<Package className="h-5 w-5 text-white" />}
+            color="from-primary-500 to-indigo-600"
+          />
+          <StatCard
+            title="Active"
+            value={stats.active}
+            icon={<Box className="h-5 w-5 text-white" />}
+            color="from-emerald-500 to-teal-600"
+          />
+          <StatCard
+            title="With BOM"
+            value={stats.withBom}
+            icon={<FileText className="h-5 w-5 text-white" />}
+            color="from-violet-500 to-purple-600"
+          />
+          <StatCard
+            title="FG in Stock"
+            value={stats.finishedGoodsQty.toLocaleString()}
+            icon={<Layers className="h-5 w-5 text-white" />}
+            color="from-orange-500 to-amber-600"
+          />
         </div>
       )}
 
-      <div className="flex flex-wrap items-end gap-3 mb-4">
-        <form className="flex-1 min-w-[200px] max-w-sm" onSubmit={(e) => { e.preventDefault(); setSearch(searchInput); setPage(1); }}>
-          <Input placeholder="Search SKU or name…" value={searchInput} onChange={(e) => setSearchInput(e.target.value)} />
-        </form>
-        <Select options={CATEGORY_OPTIONS} value={category} onChange={(e) => { setCategory(e.target.value); setPage(1); }} className="w-44" />
-        <Select options={STATUS_OPTIONS} value={isActive} onChange={(e) => { setIsActive(e.target.value); setPage(1); }} className="w-36" />
-        <Button variant="secondary" size="sm" onClick={() => { setSearchInput(''); setSearch(''); setCategory(''); setIsActive(''); setPage(1); }}>Clear</Button>
-      </div>
+      <PageToolbar tabs={tabs} activeTab={activeTab} onTabChange={setActiveTab} actions={toolbarActions} />
 
-      {isError && (
-        <Alert variant="error" className="mb-4">
-          Failed to load products. <button type="button" className="underline" onClick={() => refetch()}>Retry</button>
-        </Alert>
-      )}
+      {activeTab === 0 && (
+        <div className="space-y-4">
+          {canCreate && (
+            <QuickActionGrid>
+              <QuickActionCard
+                label="Add product"
+                desc="Register new catalog SKU"
+                icon={Plus}
+                color="bg-emerald-50 text-emerald-600 border-emerald-100"
+                onClick={openAddProduct}
+              />
+              <QuickActionCard
+                label="Missing BOM"
+                desc="Products needing bill of materials"
+                icon={FileText}
+                color="bg-amber-50 text-amber-600 border-amber-100"
+                onClick={() => goToTab(1)}
+              />
+              <QuickActionCard
+                label="Full catalog"
+                desc="Browse all products"
+                icon={ChevronRight}
+                color="bg-violet-50 text-violet-600 border-violet-100"
+                onClick={() => goToTab(1)}
+              />
+            </QuickActionGrid>
+          )}
 
-      <Table
-        columns={columns}
-        data={(productsRes?.data as Product[]) || []}
-        loading={isLoading}
-        onRowClick={(row) => openDetail(row as unknown as Product)}
-      />
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+            <Card
+              title="Missing BOM"
+              action={
+                missingBomProducts.length > 0 ? (
+                  <Button variant="ghost" size="sm" onClick={() => goToTab(1)}>
+                    View all
+                  </Button>
+                ) : undefined
+              }
+              padding={false}
+            >
+              {missingBomProducts.length === 0 ? (
+                <div className="p-6">
+                  <EmptyState title="All products have BOM" description="Every active product has a bill of materials defined." />
+                </div>
+              ) : (
+                <ul className="divide-y divide-slate-100">
+                  {missingBomProducts.map((product) => (
+                    <li
+                      key={product.id}
+                      className="flex items-center gap-3 px-4 py-3 hover:bg-amber-50/30 cursor-pointer"
+                      onClick={() => openDetail(product)}
+                    >
+                      <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-100 text-amber-600">
+                        <AlertTriangle className="h-4 w-4" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-slate-900 truncate">{product.name}</p>
+                        <p className="text-xs text-slate-500">{product.sku}</p>
+                      </div>
+                      <Badge variant="warning">Missing</Badge>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Card>
 
-      {pagination && pagination.totalPages > 1 && (
-        <div className="flex items-center justify-between mt-4 text-sm text-slate-600">
-          <span>Page {pagination.page} of {pagination.totalPages} ({pagination.total} products)</span>
-          <div className="flex gap-2">
-            <Button variant="secondary" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>Previous</Button>
-            <Button variant="secondary" size="sm" disabled={page >= pagination.totalPages} onClick={() => setPage((p) => p + 1)}>Next</Button>
+            <Card title="By category" padding={false}>
+              {(stats?.byCategory?.length || 0) === 0 ? (
+                <div className="p-6">
+                  <EmptyState title="No category data" description="Product categories will appear here once catalog is populated." />
+                </div>
+              ) : (
+                <ul className="divide-y divide-slate-100">
+                  {(stats?.byCategory || []).slice(0, 6).map((item) => (
+                    <li
+                      key={item.category}
+                      className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 cursor-pointer"
+                      onClick={() => { setCategory(item.category); setPage(1); goToTab(1); }}
+                    >
+                      <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-indigo-100 text-indigo-600">
+                        <Package className="h-4 w-4" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-slate-900">{item.category.replace(/_/g, ' ')}</p>
+                      </div>
+                      <span className="text-sm font-semibold tabular-nums text-slate-700">{item.count}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Card>
           </div>
+
+          <Card
+            title="Catalog snapshot"
+            action={
+              <Button variant="ghost" size="sm" onClick={() => goToTab(1)}>
+                View all
+              </Button>
+            }
+            padding={false}
+          >
+            {recentProducts.length === 0 && !isLoading ? (
+              <div className="p-6">
+                <EmptyState
+                  title="No products yet"
+                  description="Add products to build your filter catalog."
+                  action={
+                    canCreate ? (
+                      <Button onClick={openAddProduct}>
+                        <Plus className="h-4 w-4 mr-2" />
+                        Add product
+                      </Button>
+                    ) : undefined
+                  }
+                />
+              </div>
+            ) : (
+              <Table
+                columns={columns.filter((c) => c.key !== 'actions')}
+                data={recentProducts}
+                loading={isLoading}
+                onRowClick={(row) => openDetail(row as unknown as Product)}
+                embedded
+              />
+            )}
+          </Card>
         </div>
+      )}
+
+      {activeTab === 1 && (
+        <DataPanel>
+          <div className="p-4 pb-0 flex flex-col sm:flex-row flex-wrap items-end gap-3">
+            <form
+              className="flex-1 min-w-[200px] sm:max-w-md"
+              onSubmit={(e) => { e.preventDefault(); setSearch(searchInput); setPage(1); }}
+            >
+              <Input
+                placeholder="Search SKU or name…"
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+              />
+            </form>
+            <Select
+              options={CATEGORY_OPTIONS}
+              value={category}
+              onChange={(e) => { setCategory(e.target.value); setPage(1); }}
+              className="sm:w-44"
+            />
+            <Select
+              options={STATUS_OPTIONS}
+              value={isActive}
+              onChange={(e) => { setIsActive(e.target.value); setPage(1); }}
+              className="sm:w-36"
+            />
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => { setSearchInput(''); setSearch(''); setCategory(''); setIsActive(''); setPage(1); }}
+            >
+              Clear
+            </Button>
+          </div>
+
+          {isError && (
+            <div className="px-4 pt-4">
+              <Alert variant="error">
+                Failed to load products.{' '}
+                <button type="button" className="underline font-medium" onClick={() => refetch()}>
+                  Retry
+                </button>
+              </Alert>
+            </div>
+          )}
+
+          {(products.length || 0) === 0 && !isLoading && !isError ? (
+            <div className="p-6">
+              <EmptyState
+                title="No products found"
+                description="Try different filters or add a new product."
+                action={
+                  canCreate ? (
+                    <Button onClick={openAddProduct}>
+                      <Plus className="h-4 w-4 mr-2" />
+                      Add product
+                    </Button>
+                  ) : undefined
+                }
+              />
+            </div>
+          ) : (
+            <Table
+              columns={columns}
+              data={products}
+              loading={isLoading}
+              onRowClick={(row) => openDetail(row as unknown as Product)}
+              embedded
+            />
+          )}
+          <div className="px-4 pb-4">
+            <TablePagination
+              pagination={productsRes?.pagination}
+              page={page}
+              onPageChange={setPage}
+              label="products"
+            />
+          </div>
+        </DataPanel>
       )}
 
       <Modal open={formOpen} onClose={() => { setFormOpen(false); setEditing(null); }} title={editing ? 'Edit Product' : 'Add Product'} size="lg">

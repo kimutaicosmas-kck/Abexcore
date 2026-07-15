@@ -10,6 +10,9 @@ import {
   Shield,
   ChevronRight,
   ArrowRight,
+  UserPlus,
+  MessageSquarePlus,
+  Target,
 } from 'lucide-react';
 import { customersApi, crmApi } from '../services/api';
 import {
@@ -22,6 +25,11 @@ import {
   Card,
   StatCard,
   Alert,
+  EmptyState,
+  DataPanel,
+  QuickActionCard,
+  QuickActionGrid,
+  TablePagination,
   formatCurrency,
   formatDate,
   getStatusBadge,
@@ -37,7 +45,7 @@ import { ContactForm } from '../components/forms/ContactForm';
 import { useAuth } from '../contexts/AuthContext';
 import { Complaint, CrmStats, Customer, Opportunity, Warranty } from '../types';
 
-const tabs = ['Customers', 'Complaints', 'Opportunities', 'Warranties'];
+const tabs = ['Overview', 'Customers', 'Complaints', 'Opportunities', 'Warranties'];
 
 const CUSTOMER_TYPE_OPTIONS = [
   { value: '', label: 'All types' },
@@ -140,7 +148,7 @@ export function CustomersPage() {
           isActive: custActive === '' ? undefined : custActive === 'true',
         })
         .then((r) => r.data),
-    enabled: activeTab === 0,
+    enabled: activeTab === 0 || activeTab === 1,
   });
 
   const { data: complaintsRes, isLoading: compLoading } = useQuery({
@@ -154,7 +162,7 @@ export function CustomersPage() {
           status: compStatus || undefined,
         })
         .then((r) => r.data),
-    enabled: activeTab === 1,
+    enabled: activeTab === 0 || activeTab === 2,
   });
 
   const { data: opportunitiesRes, isLoading: oppLoading } = useQuery({
@@ -168,7 +176,7 @@ export function CustomersPage() {
           status: oppStatus || undefined,
         })
         .then((r) => r.data),
-    enabled: activeTab === 2,
+    enabled: activeTab === 0 || activeTab === 3,
   });
 
   const { data: warrantiesRes, isLoading: warrLoading } = useQuery({
@@ -177,7 +185,7 @@ export function CustomersPage() {
       crmApi
         .warranties({ page: warrPage, limit: 15, search: warrSearch || undefined })
         .then((r) => r.data),
-    enabled: activeTab === 3,
+    enabled: activeTab === 0 || activeTab === 4,
   });
 
   const { data: customerDetail, isLoading: detailLoading } = useQuery({
@@ -219,10 +227,20 @@ export function CustomersPage() {
     },
   });
 
+  const goToTab = (index: number) => setActiveTab(index);
+
   const openCreate = () => { setEditing(null); setCustomerModalOpen(true); };
   const openEdit = (customer: Customer) => { setEditing(customer); setCustomerModalOpen(true); setDetailModalOpen(false); };
   const openDetail = (customer: Customer) => { setSelectedCustomer(customer); setDetailModalOpen(true); };
   const openEditOpportunity = (opp: Opportunity) => { setEditingOpportunity(opp); setOpportunityModalOpen(true); };
+
+  const recentCustomers = activeTab === 0 ? ((customersRes?.data as Customer[]) || []).slice(0, 6) : [];
+  const openComplaints = activeTab === 0
+    ? ((complaintsRes?.data as Complaint[]) || []).filter((c) => !c.resolvedAt).slice(0, 5)
+    : [];
+  const pipelineOpps = activeTab === 0
+    ? ((opportunitiesRes?.data as Opportunity[]) || []).filter((o) => !isClosedStage(o.stage)).slice(0, 5)
+    : [];
 
   const customerColumns = [
     { key: 'code', label: 'Code' },
@@ -407,24 +425,44 @@ export function CustomersPage() {
     },
   ];
 
-  const renderPagination = (
-    pagination: { page: number; totalPages: number; total: number } | undefined,
-    page: number,
-    setPage: (fn: (p: number) => number) => void
-  ) =>
-    pagination && pagination.totalPages > 1 ? (
-      <div className="flex items-center justify-between mt-4 text-sm text-slate-600">
-        <span>Page {pagination.page} of {pagination.totalPages} ({pagination.total} records)</span>
-        <div className="flex gap-2">
-          <Button variant="secondary" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>Previous</Button>
-          <Button variant="secondary" size="sm" disabled={page >= pagination.totalPages} onClick={() => setPage((p) => p + 1)}>Next</Button>
-        </div>
-      </div>
-    ) : null;
+  const toolbarActions = canCreate
+    ? activeTab === 0 || activeTab === 1 ? (
+        <Button size="sm" onClick={openCreate}>
+          <Plus className="h-4 w-4 mr-1.5" />
+          Add Customer
+        </Button>
+      ) : activeTab === 2 ? (
+        <Button size="sm" onClick={() => setComplaintModalOpen(true)}>
+          <Plus className="h-4 w-4 mr-1.5" />
+          Add Complaint
+        </Button>
+      ) : activeTab === 3 ? (
+        <Button size="sm" onClick={() => { setEditingOpportunity(null); setOpportunityModalOpen(true); }}>
+          <Plus className="h-4 w-4 mr-1.5" />
+          Add Opportunity
+        </Button>
+      ) : activeTab === 4 ? (
+        <Button size="sm" onClick={() => setWarrantyModalOpen(true)}>
+          <Plus className="h-4 w-4 mr-1.5" />
+          Register Warranty
+        </Button>
+      ) : undefined
+    : undefined;
 
   return (
-    <div>
-      <PageHeader subtitle="Customer relationships, complaints, pipeline, and warranties" />
+    <div className="space-y-1">
+      <PageHeader
+        title="Customers"
+        subtitle="Customer relationships, complaints, pipeline, and warranties"
+        action={
+          stats && stats.complaints.open > 0 ? (
+            <Button variant="secondary" size="sm" onClick={() => goToTab(2)}>
+              <AlertCircle className="h-4 w-4 mr-1.5 text-red-500" />
+              {stats.complaints.open} open complaints
+            </Button>
+          ) : undefined
+        }
+      />
 
       {stats && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
@@ -445,28 +483,143 @@ export function CustomersPage() {
           setOppPage(1);
           setWarrPage(1);
         }}
-        actions={
-          canCreate ? (
-            activeTab === 0 ? (
-              <Button onClick={openCreate}><Plus className="h-4 w-4 mr-2" />Add Customer</Button>
-            ) : activeTab === 1 ? (
-              <Button onClick={() => setComplaintModalOpen(true)}><Plus className="h-4 w-4 mr-2" />Add Complaint</Button>
-            ) : activeTab === 2 ? (
-              <Button onClick={() => { setEditingOpportunity(null); setOpportunityModalOpen(true); }}>
-                <Plus className="h-4 w-4 mr-2" />Add Opportunity
-              </Button>
-            ) : (
-              <Button onClick={() => setWarrantyModalOpen(true)}><Plus className="h-4 w-4 mr-2" />Register Warranty</Button>
-            )
-          ) : undefined
-        }
+        actions={toolbarActions}
       />
 
       {activeTab === 0 && (
-        <>
-          <div className="flex flex-wrap items-end gap-3 mb-4">
+        <div className="space-y-4">
+          {canCreate && (
+            <QuickActionGrid>
+              <QuickActionCard
+                label="Add customer"
+                desc="Register a new account"
+                icon={UserPlus}
+                color="bg-emerald-50 text-emerald-600 border-emerald-100"
+                onClick={openCreate}
+              />
+              <QuickActionCard
+                label="Log complaint"
+                desc="Record a customer issue"
+                icon={MessageSquarePlus}
+                color="bg-red-50 text-red-600 border-red-100"
+                onClick={() => setComplaintModalOpen(true)}
+              />
+              <QuickActionCard
+                label="Add opportunity"
+                desc="Track sales pipeline"
+                icon={Target}
+                color="bg-violet-50 text-violet-600 border-violet-100"
+                onClick={() => { setEditingOpportunity(null); setOpportunityModalOpen(true); }}
+              />
+            </QuickActionGrid>
+          )}
+
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+            <Card
+              title="Open complaints"
+              action={
+                openComplaints.length > 0 ? (
+                  <Button variant="ghost" size="sm" onClick={() => goToTab(2)}>
+                    View all
+                  </Button>
+                ) : undefined
+              }
+              padding={false}
+            >
+              {openComplaints.length === 0 ? (
+                <div className="p-6">
+                  <EmptyState title="No open complaints" description="Customer issues will appear here for resolution." />
+                </div>
+              ) : (
+                <ul className="divide-y divide-slate-100">
+                  {openComplaints.map((c) => (
+                    <li key={c.id} className="flex items-center gap-3 px-4 py-3 hover:bg-red-50/30">
+                      <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-red-100 text-red-600">
+                        <AlertCircle className="h-4 w-4" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-slate-900 truncate">{c.subject}</p>
+                        <p className="text-xs text-slate-500">{c.customer?.name || '—'} · {formatDate(c.createdAt)}</p>
+                      </div>
+                      <Badge variant={c.priority === 'high' || c.priority === 'urgent' ? 'danger' : 'info'}>
+                        {c.priority}
+                      </Badge>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Card>
+
+            <Card
+              title="Pipeline opportunities"
+              action={
+                <Button variant="ghost" size="sm" onClick={() => goToTab(3)}>
+                  Full pipeline
+                  <ChevronRight className="h-4 w-4 ml-1" />
+                </Button>
+              }
+              padding={false}
+            >
+              {pipelineOpps.length === 0 ? (
+                <div className="p-6">
+                  <EmptyState title="No open opportunities" description="Add deals to track your sales pipeline." />
+                </div>
+              ) : (
+                <ul className="divide-y divide-slate-100">
+                  {pipelineOpps.map((o) => (
+                    <li key={o.id} className="flex items-center gap-3 px-4 py-3">
+                      <Badge variant="info">{o.stage.replace(/_/g, ' ')}</Badge>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-slate-800 truncate">{o.title}</p>
+                        <p className="text-xs text-slate-400">{o.customer?.name || '—'}</p>
+                      </div>
+                      <span className="text-sm font-semibold tabular-nums text-emerald-600">
+                        {formatCurrency(Number(o.value))}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Card>
+          </div>
+
+          <Card
+            title="Customer snapshot"
+            action={<Button variant="ghost" size="sm" onClick={() => goToTab(1)}>View all</Button>}
+            padding={false}
+          >
+            {recentCustomers.length === 0 ? (
+              <div className="p-6">
+                <EmptyState
+                  title="No customers yet"
+                  description="Add your first customer to start managing relationships."
+                  action={
+                    canCreate ? (
+                      <Button onClick={openCreate}>
+                        <Plus className="h-4 w-4 mr-2" />
+                        Add customer
+                      </Button>
+                    ) : undefined
+                  }
+                />
+              </div>
+            ) : (
+              <Table
+                columns={customerColumns.filter((c) => c.key !== 'actions')}
+                data={recentCustomers}
+                onRowClick={(row) => openDetail(row as unknown as Customer)}
+                embedded
+              />
+            )}
+          </Card>
+        </div>
+      )}
+
+      {activeTab === 1 && (
+        <DataPanel>
+          <div className="p-4 pb-0 flex flex-wrap items-end gap-3">
             <form
-              className="flex-1 min-w-[200px] max-w-sm"
+              className="flex-1 min-w-[200px] sm:max-w-md"
               onSubmit={(e) => { e.preventDefault(); setCustSearch(custSearchInput); setCustPage(1); }}
             >
               <Input placeholder="Search customers…" value={custSearchInput} onChange={(e) => setCustSearchInput(e.target.value)} />
@@ -476,50 +629,136 @@ export function CustomersPage() {
             <Button variant="secondary" size="sm" onClick={() => { setCustSearchInput(''); setCustSearch(''); setCustType(''); setCustActive(''); setCustPage(1); }}>Clear</Button>
           </div>
           {custError && (
-            <Alert variant="error" className="mb-4">
-              Failed to load customers. <button type="button" className="underline" onClick={() => refetchCustomers()}>Retry</button>
-            </Alert>
+            <div className="px-4">
+              <Alert variant="error" className="mb-4">
+                Failed to load customers.{' '}
+                <button type="button" className="underline font-medium" onClick={() => refetchCustomers()}>Retry</button>
+              </Alert>
+            </div>
           )}
-          <Table columns={customerColumns} data={(customersRes?.data as Customer[]) || []} loading={custLoading} onRowClick={(row) => openDetail(row as unknown as Customer)} />
-          {renderPagination(customersRes?.pagination, custPage, setCustPage)}
-        </>
-      )}
-
-      {activeTab === 1 && (
-        <>
-          <div className="flex flex-wrap gap-3 mb-4">
-            <Input placeholder="Search complaints…" className="max-w-sm" value={compSearch} onChange={(e) => { setCompSearch(e.target.value); setCompPage(1); }} />
-            <Select options={COMPLAINT_STATUS_OPTIONS} value={compStatus} onChange={(e) => { setCompStatus(e.target.value); setCompPage(1); }} className="w-40" />
+          {(customersRes?.data?.length || 0) === 0 && !custLoading ? (
+            <div className="p-6">
+              <EmptyState
+                title="No customers found"
+                description="Try a different search or add a new customer."
+                action={
+                  canCreate ? (
+                    <Button onClick={openCreate}>
+                      <Plus className="h-4 w-4 mr-2" />
+                      Add customer
+                    </Button>
+                  ) : undefined
+                }
+              />
+            </div>
+          ) : (
+            <Table
+              columns={customerColumns}
+              data={(customersRes?.data as Customer[]) || []}
+              loading={custLoading}
+              onRowClick={(row) => openDetail(row as unknown as Customer)}
+              embedded
+            />
+          )}
+          <div className="px-4 pb-4">
+            <TablePagination pagination={customersRes?.pagination} page={custPage} onPageChange={setCustPage} label="customers" />
           </div>
-          <Table
-            columns={complaintColumns}
-            data={(complaintsRes?.data as Complaint[]) || []}
-            loading={compLoading}
-            onRowClick={(row) => { setSelectedComplaint(row as unknown as Complaint); setComplaintDetailOpen(true); }}
-          />
-          {renderPagination(complaintsRes?.pagination, compPage, setCompPage)}
-        </>
+        </DataPanel>
       )}
 
       {activeTab === 2 && (
-        <>
-          <div className="flex flex-wrap gap-3 mb-4">
-            <Input placeholder="Search opportunities…" className="max-w-sm" value={oppSearch} onChange={(e) => { setOppSearch(e.target.value); setOppPage(1); }} />
-            <Select options={OPPORTUNITY_STATUS_OPTIONS} value={oppStatus} onChange={(e) => { setOppStatus(e.target.value); setOppPage(1); }} className="w-44" />
+        <DataPanel>
+          <div className="p-4 pb-0 flex flex-wrap gap-3">
+            <Input placeholder="Search complaints…" className="sm:max-w-md" value={compSearch} onChange={(e) => { setCompSearch(e.target.value); setCompPage(1); }} />
+            <Select options={COMPLAINT_STATUS_OPTIONS} value={compStatus} onChange={(e) => { setCompStatus(e.target.value); setCompPage(1); }} className="w-40" />
           </div>
-          <Table columns={opportunityColumns} data={(opportunitiesRes?.data as Opportunity[]) || []} loading={oppLoading} />
-          {renderPagination(opportunitiesRes?.pagination, oppPage, setOppPage)}
-        </>
+          {(complaintsRes?.data?.length || 0) === 0 && !compLoading ? (
+            <div className="p-6">
+              <EmptyState
+                title="No complaints found"
+                description="Customer complaints will appear here for tracking and resolution."
+                action={
+                  canCreate ? (
+                    <Button onClick={() => setComplaintModalOpen(true)}>
+                      <Plus className="h-4 w-4 mr-2" />
+                      Add complaint
+                    </Button>
+                  ) : undefined
+                }
+              />
+            </div>
+          ) : (
+            <Table
+              columns={complaintColumns}
+              data={(complaintsRes?.data as Complaint[]) || []}
+              loading={compLoading}
+              onRowClick={(row) => { setSelectedComplaint(row as unknown as Complaint); setComplaintDetailOpen(true); }}
+              embedded
+            />
+          )}
+          <div className="px-4 pb-4">
+            <TablePagination pagination={complaintsRes?.pagination} page={compPage} onPageChange={setCompPage} label="complaints" />
+          </div>
+        </DataPanel>
       )}
 
       {activeTab === 3 && (
-        <>
-          <div className="mb-4 max-w-sm">
+        <DataPanel>
+          <div className="p-4 pb-0 flex flex-wrap gap-3">
+            <Input placeholder="Search opportunities…" className="sm:max-w-md" value={oppSearch} onChange={(e) => { setOppSearch(e.target.value); setOppPage(1); }} />
+            <Select options={OPPORTUNITY_STATUS_OPTIONS} value={oppStatus} onChange={(e) => { setOppStatus(e.target.value); setOppPage(1); }} className="w-44" />
+          </div>
+          {(opportunitiesRes?.data?.length || 0) === 0 && !oppLoading ? (
+            <div className="p-6">
+              <EmptyState
+                title="No opportunities found"
+                description="Track sales deals through your pipeline stages."
+                action={
+                  canCreate ? (
+                    <Button onClick={() => { setEditingOpportunity(null); setOpportunityModalOpen(true); }}>
+                      <Plus className="h-4 w-4 mr-2" />
+                      Add opportunity
+                    </Button>
+                  ) : undefined
+                }
+              />
+            </div>
+          ) : (
+            <Table columns={opportunityColumns} data={(opportunitiesRes?.data as Opportunity[]) || []} loading={oppLoading} embedded />
+          )}
+          <div className="px-4 pb-4">
+            <TablePagination pagination={opportunitiesRes?.pagination} page={oppPage} onPageChange={setOppPage} label="opportunities" />
+          </div>
+        </DataPanel>
+      )}
+
+      {activeTab === 4 && (
+        <DataPanel>
+          <div className="p-4 pb-0 sm:max-w-md">
             <Input placeholder="Search warranties…" value={warrSearch} onChange={(e) => { setWarrSearch(e.target.value); setWarrPage(1); }} />
           </div>
-          <Table columns={warrantyColumns} data={(warrantiesRes?.data as Warranty[]) || []} loading={warrLoading} />
-          {renderPagination(warrantiesRes?.pagination, warrPage, setWarrPage)}
-        </>
+          {(warrantiesRes?.data?.length || 0) === 0 && !warrLoading ? (
+            <div className="p-6">
+              <EmptyState
+                title="No warranties found"
+                description="Register product warranties for your customers."
+                action={
+                  canCreate ? (
+                    <Button onClick={() => setWarrantyModalOpen(true)}>
+                      <Plus className="h-4 w-4 mr-2" />
+                      Register warranty
+                    </Button>
+                  ) : undefined
+                }
+              />
+            </div>
+          ) : (
+            <Table columns={warrantyColumns} data={(warrantiesRes?.data as Warranty[]) || []} loading={warrLoading} embedded />
+          )}
+          <div className="px-4 pb-4">
+            <TablePagination pagination={warrantiesRes?.pagination} page={warrPage} onPageChange={setWarrPage} label="warranties" />
+          </div>
+        </DataPanel>
       )}
 
       <Modal open={customerModalOpen} onClose={() => { setCustomerModalOpen(false); setEditing(null); }} title={editing ? 'Edit Customer' : 'Add Customer'} size="lg">

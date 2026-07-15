@@ -476,8 +476,16 @@ export const updateDeliveryStatusSchema = z.object({
   proofOfDelivery: z.string().optional(),
 });
 
+export const vehicleListQuerySchema = paginationSchema.extend({
+  type: z.preprocess(
+    (v) => (v === '' || v === undefined ? undefined : v),
+    z.enum(['MOTORCYCLE', 'TRUCK', 'LORRY']).optional()
+  ),
+});
+
 export const createVehicleSchema = z.object({
   registration: z.string().min(1),
+  type: z.enum(['MOTORCYCLE', 'TRUCK', 'LORRY']).default('TRUCK'),
   make: z.string().optional(),
   model: z.string().optional(),
   capacity: z.string().optional(),

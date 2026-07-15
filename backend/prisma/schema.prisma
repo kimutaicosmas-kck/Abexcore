@@ -170,6 +170,12 @@ enum DeliveryStatus {
   RETURNED
 }
 
+enum VehicleType {
+  MOTORCYCLE
+  TRUCK
+  LORRY
+}
+
 enum NotificationType {
   APPROVAL
   LOW_STOCK
@@ -1060,13 +1066,14 @@ model SalesOrderItem {
 // ==================== DELIVERY ====================
 
 model Vehicle {
-  id           String   @id @default(uuid())
-  registration String   @unique
+  id           String      @id @default(uuid())
+  registration String      @unique
+  type         VehicleType @default(TRUCK)
   make         String?
   model        String?
   capacity     String?
-  isActive     Boolean  @default(true) @map("is_active")
-  createdAt    DateTime @default(now()) @map("created_at")
+  isActive     Boolean     @default(true) @map("is_active")
+  createdAt    DateTime    @default(now()) @map("created_at")
 
   deliveries DeliveryNote[]
 

@@ -1,6 +1,14 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Plus, ClipboardCheck, CheckCircle, XCircle, Percent } from 'lucide-react';
+import {
+  Plus,
+  ClipboardCheck,
+  CheckCircle,
+  XCircle,
+  Percent,
+  AlertTriangle,
+  ChevronRight,
+} from 'lucide-react';
 import { qualityApi } from '../services/api';
 import {
   PageHeader,
@@ -11,14 +19,23 @@ import {
   Select,
   StatCard,
   Card,
+  Alert,
+  EmptyState,
+  DataPanel,
+  QuickActionCard,
+  QuickActionGrid,
+  TablePagination,
   formatDate,
   getStatusBadge,
+  PageToolbar,
 } from '../components/ui';
 import { Modal } from '../components/ui/Modal';
 import { QualityForm } from '../components/forms/QualityForm';
 import { QualityUpdatePanel } from '../components/forms/QualityUpdatePanel';
 import { useAuth } from '../contexts/AuthContext';
 import { QualityInspection, QualityStats } from '../types';
+
+const tabs = ['Overview', 'Inspections'];
 
 const TYPE_OPTIONS = [
   { value: '', label: 'All types' },
@@ -37,6 +54,7 @@ const STATUS_OPTIONS = [
 
 export function QualityPage() {
   const { hasPermission } = useAuth();
+  const [activeTab, setActiveTab] = useState(0);
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('');
@@ -60,7 +78,22 @@ export function QualityPage() {
       qualityApi
         .list({ page, limit: 15, search: search || undefined, status: status || undefined, type: type || undefined })
         .then((r) => r.data),
+    enabled: activeTab === 0 || activeTab === 1,
   });
+
+  const goToTab = (index: number) => {
+    setActiveTab(index);
+  };
+
+  const openDetail = (inspection: QualityInspection) => {
+    setSelected(inspection);
+    setDetailOpen(true);
+  };
+
+  const inspections = (data?.data as QualityInspection[]) || [];
+  const recentInspections = activeTab === 0 ? inspections.slice(0, 6) : [];
+  const pendingInspections = activeTab === 0 ? inspections.filter((i) => i.status === 'PENDING').slice(0, 5) : [];
+  const failedInspections = activeTab === 0 ? inspections.filter((i) => i.status === 'FAILED').slice(0, 5) : [];
 
   const columns = [
     { key: 'inspectionNo', label: 'Inspection #' },
@@ -75,7 +108,7 @@ export function QualityPage() {
       render: (_: unknown, row: Record<string, unknown>) => {
         const gr = row.goodsReceipt as { grnNumber: string } | undefined;
         const po = row.productionOrder as { orderNumber: string } | undefined;
-        return gr?.grnNumber || po?.orderNumber || '-';
+        return gr?.grnNumber || po?.orderNumber || '—';
       },
     },
     {
@@ -93,26 +126,30 @@ export function QualityPage() {
     },
   ];
 
-  const renderPagination = () =>
-    data?.pagination && data.pagination.totalPages > 1 ? (
-      <div className="flex items-center justify-between mt-4 text-sm text-slate-600">
-        <span>Page {data.pagination.page} of {data.pagination.totalPages}</span>
-        <div className="flex gap-2">
-          <Button variant="secondary" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>Previous</Button>
-          <Button variant="secondary" size="sm" disabled={page >= data.pagination.totalPages} onClick={() => setPage((p) => p + 1)}>Next</Button>
-        </div>
-      </div>
-    ) : null;
+  const toolbarActions =
+    canCreate &&
+    (activeTab === 0 || activeTab === 1 ? (
+      <Button size="sm" onClick={() => setModalOpen(true)}>
+        <Plus className="h-4 w-4 mr-1.5" />
+        Add Inspection
+      </Button>
+    ) : undefined);
 
   return (
-    <div>
+    <div className="space-y-1">
       <PageHeader
+        title="Quality"
         subtitle="Incoming, production, and finished product inspections"
         action={
-          canCreate ? (
-            <Button onClick={() => setModalOpen(true)}>
-              <Plus className="h-4 w-4 mr-2" />
-              Add Inspection
+          stats && stats.pending > 0 ? (
+            <Button variant="secondary" size="sm" onClick={() => { setStatus('PENDING'); setPage(1); goToTab(1); }}>
+              <ClipboardCheck className="h-4 w-4 mr-1.5 text-amber-500" />
+              {stats.pending} pending
+            </Button>
+          ) : stats && stats.failed > 0 ? (
+            <Button variant="secondary" size="sm" onClick={() => { setStatus('FAILED'); setPage(1); goToTab(1); }}>
+              <XCircle className="h-4 w-4 mr-1.5 text-red-500" />
+              {stats.failed} failed
             </Button>
           ) : undefined
         }
@@ -120,34 +157,240 @@ export function QualityPage() {
 
       {stats && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
-          <StatCard title="Pending" value={stats.pending} icon={<ClipboardCheck className="h-5 w-5 text-white" />} color="from-amber-500 to-orange-600" />
-          <StatCard title="Passed" value={stats.passed} icon={<CheckCircle className="h-5 w-5 text-white" />} color="from-emerald-500 to-teal-600" />
-          <StatCard title="Failed" value={stats.failed} icon={<XCircle className="h-5 w-5 text-white" />} color="from-red-500 to-rose-600" />
-          <StatCard title="Pass Rate" value={`${stats.passRate}%`} icon={<Percent className="h-5 w-5 text-white" />} color="from-primary-500 to-indigo-600" />
+          <StatCard
+            title="Pending"
+            value={stats.pending}
+            icon={<ClipboardCheck className="h-5 w-5 text-white" />}
+            color="from-amber-500 to-orange-600"
+          />
+          <StatCard
+            title="Passed"
+            value={stats.passed}
+            icon={<CheckCircle className="h-5 w-5 text-white" />}
+            color="from-emerald-500 to-teal-600"
+          />
+          <StatCard
+            title="Failed"
+            value={stats.failed}
+            icon={<XCircle className="h-5 w-5 text-white" />}
+            color="from-red-500 to-rose-600"
+          />
+          <StatCard
+            title="Pass Rate"
+            value={`${stats.passRate}%`}
+            icon={<Percent className="h-5 w-5 text-white" />}
+            color="from-primary-500 to-indigo-600"
+          />
         </div>
       )}
 
-      <div className="flex flex-wrap gap-3 mb-4">
-        <Input placeholder="Search inspections…" className="max-w-sm" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} />
-        <Select options={TYPE_OPTIONS} value={type} onChange={(e) => { setType(e.target.value); setPage(1); }} className="w-40" />
-        <Select options={STATUS_OPTIONS} value={status} onChange={(e) => { setStatus(e.target.value); setPage(1); }} className="w-40" />
-      </div>
+      <PageToolbar tabs={tabs} activeTab={activeTab} onTabChange={setActiveTab} actions={toolbarActions} />
 
-      {isError ? (
-        <Card>
-          <p className="text-red-600 text-sm mb-3">Failed to load inspections.</p>
-          <Button size="sm" onClick={() => refetch()}>Retry</Button>
-        </Card>
-      ) : (
-        <>
-          <Table
-            columns={columns}
-            data={(data?.data as QualityInspection[]) || []}
-            loading={isLoading}
-            onRowClick={(row) => { setSelected(row as unknown as QualityInspection); setDetailOpen(true); }}
-          />
-          {renderPagination()}
-        </>
+      {activeTab === 0 && (
+        <div className="space-y-4">
+          {canCreate && (
+            <QuickActionGrid>
+              <QuickActionCard
+                label="Add inspection"
+                desc="Record incoming or production QC"
+                icon={Plus}
+                color="bg-emerald-50 text-emerald-600 border-emerald-100"
+                onClick={() => setModalOpen(true)}
+              />
+              <QuickActionCard
+                label="Pending queue"
+                desc="Inspections awaiting results"
+                icon={ClipboardCheck}
+                color="bg-amber-50 text-amber-600 border-amber-100"
+                onClick={() => { setStatus('PENDING'); setPage(1); goToTab(1); }}
+              />
+              <QuickActionCard
+                label="All inspections"
+                desc="Full inspection register"
+                icon={ChevronRight}
+                color="bg-violet-50 text-violet-600 border-violet-100"
+                onClick={() => goToTab(1)}
+              />
+            </QuickActionGrid>
+          )}
+
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+            <Card
+              title="Pending inspections"
+              action={
+                pendingInspections.length > 0 ? (
+                  <Button variant="ghost" size="sm" onClick={() => { setStatus('PENDING'); setPage(1); goToTab(1); }}>
+                    View all
+                  </Button>
+                ) : undefined
+              }
+              padding={false}
+            >
+              {pendingInspections.length === 0 ? (
+                <div className="p-6">
+                  <EmptyState title="No pending inspections" description="All inspections have been completed." />
+                </div>
+              ) : (
+                <ul className="divide-y divide-slate-100">
+                  {pendingInspections.map((item) => (
+                    <li
+                      key={item.id}
+                      className="flex items-center gap-3 px-4 py-3 hover:bg-amber-50/30 cursor-pointer"
+                      onClick={() => openDetail(item)}
+                    >
+                      <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-100 text-amber-600">
+                        <ClipboardCheck className="h-4 w-4" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-slate-900 truncate">{item.inspectionNo}</p>
+                        <p className="text-xs text-slate-500 capitalize">{item.type}</p>
+                      </div>
+                      <Badge variant="warning">Pending</Badge>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Card>
+
+            <Card
+              title="Failed inspections"
+              action={
+                failedInspections.length > 0 ? (
+                  <Button variant="ghost" size="sm" onClick={() => { setStatus('FAILED'); setPage(1); goToTab(1); }}>
+                    View all
+                  </Button>
+                ) : undefined
+              }
+              padding={false}
+            >
+              {failedInspections.length === 0 ? (
+                <div className="p-6">
+                  <EmptyState title="No failed inspections" description="Quality checks are passing." />
+                </div>
+              ) : (
+                <ul className="divide-y divide-slate-100">
+                  {failedInspections.map((item) => (
+                    <li
+                      key={item.id}
+                      className="flex items-center gap-3 px-4 py-3 hover:bg-red-50/30 cursor-pointer"
+                      onClick={() => openDetail(item)}
+                    >
+                      <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-red-100 text-red-600">
+                        <AlertTriangle className="h-4 w-4" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-slate-900 truncate">{item.inspectionNo}</p>
+                        <p className="text-xs text-slate-500">
+                          {item.defectsFound} defect{item.defectsFound !== 1 ? 's' : ''}
+                        </p>
+                      </div>
+                      <Badge variant="danger">Failed</Badge>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Card>
+          </div>
+
+          <Card
+            title="Inspection snapshot"
+            action={
+              <Button variant="ghost" size="sm" onClick={() => goToTab(1)}>
+                View all
+              </Button>
+            }
+            padding={false}
+          >
+            {recentInspections.length === 0 && !isLoading ? (
+              <div className="p-6">
+                <EmptyState
+                  title="No inspections yet"
+                  description="Record incoming, production, or finished goods inspections."
+                  action={
+                    canCreate ? (
+                      <Button onClick={() => setModalOpen(true)}>
+                        <Plus className="h-4 w-4 mr-2" />
+                        Add inspection
+                      </Button>
+                    ) : undefined
+                  }
+                />
+              </div>
+            ) : (
+              <Table
+                columns={columns}
+                data={recentInspections}
+                loading={isLoading}
+                onRowClick={(row) => openDetail(row as unknown as QualityInspection)}
+                embedded
+              />
+            )}
+          </Card>
+        </div>
+      )}
+
+      {activeTab === 1 && (
+        <DataPanel>
+          <div className="p-4 pb-0 flex flex-col sm:flex-row gap-3">
+            <Input
+              placeholder="Search inspections…"
+              className="sm:max-w-md"
+              value={search}
+              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+            />
+            <Select
+              options={TYPE_OPTIONS}
+              value={type}
+              onChange={(e) => { setType(e.target.value); setPage(1); }}
+              className="sm:w-40"
+            />
+            <Select
+              options={STATUS_OPTIONS}
+              value={status}
+              onChange={(e) => { setStatus(e.target.value); setPage(1); }}
+              className="sm:w-40"
+            />
+          </div>
+
+          {isError && (
+            <div className="px-4 pt-4">
+              <Alert variant="error">
+                Failed to load inspections.{' '}
+                <button type="button" className="underline font-medium" onClick={() => refetch()}>
+                  Retry
+                </button>
+              </Alert>
+            </div>
+          )}
+
+          {(inspections.length || 0) === 0 && !isLoading && !isError ? (
+            <div className="p-6">
+              <EmptyState
+                title="No inspections found"
+                description="Try different filters or add a new inspection."
+                action={
+                  canCreate ? (
+                    <Button onClick={() => setModalOpen(true)}>
+                      <Plus className="h-4 w-4 mr-2" />
+                      Add inspection
+                    </Button>
+                  ) : undefined
+                }
+              />
+            </div>
+          ) : (
+            <Table
+              columns={columns}
+              data={inspections}
+              loading={isLoading}
+              onRowClick={(row) => openDetail(row as unknown as QualityInspection)}
+              embedded
+            />
+          )}
+          <div className="px-4 pb-4">
+            <TablePagination pagination={data?.pagination} page={page} onPageChange={setPage} label="inspections" />
+          </div>
+        </DataPanel>
       )}
 
       <Modal open={modalOpen} onClose={() => setModalOpen(false)} title="Add Inspection" size="lg">

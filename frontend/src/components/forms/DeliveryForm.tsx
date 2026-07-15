@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { deliveryApi, operationsApi } from '../../services/api';
 import { Button, Input, Select } from '../ui';
-import { SalesOrder } from '../../types';
+import { SalesOrder, Vehicle, vehicleTypeLabel } from '../../types';
 
 const deliveryItemSchema = z.object({
   productId: z.string().min(1, 'Product is required'),
@@ -21,13 +21,6 @@ const deliverySchema = z.object({
 });
 
 type DeliveryFormData = z.infer<typeof deliverySchema>;
-
-interface Vehicle {
-  id: string;
-  registration: string;
-  make?: string;
-  model?: string;
-}
 
 interface DeliveryFormProps {
   onSuccess: () => void;
@@ -62,10 +55,10 @@ export function DeliveryForm({ onSuccess, onCancel }: DeliveryFormProps) {
   ];
 
   const vehicleOptions = [
-    { value: '', label: 'None' },
+    { value: '', label: 'Unassigned — assign motorcycle, truck, or lorry later' },
     ...(vehiclesData || []).map((v) => ({
       value: v.id,
-      label: v.registration + (v.make ? ` (${v.make}${v.model ? ` ${v.model}` : ''})` : ''),
+      label: `${vehicleTypeLabel(v.type)} · ${v.registration}${v.make ? ` (${v.make}${v.model ? ` ${v.model}` : ''})` : ''}`,
     })),
   ];
 

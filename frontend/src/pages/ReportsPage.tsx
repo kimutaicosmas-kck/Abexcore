@@ -1,7 +1,15 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { reportsApi } from '../services/api';
-import { PageHeader, Card, Button, StatCard, TabGroup, formatCurrency } from '../components/ui';
+import {
+  PageHeader,
+  Button,
+  StatCard,
+  EmptyState,
+  QuickActionCard,
+  formatCurrency,
+  PageToolbar,
+} from '../components/ui';
 import { BarChart3, Users, Factory, Truck, Download, FileSpreadsheet, ClipboardCheck } from 'lucide-react';
 import { downloadFile } from '../utils/download';
 import { FinancialStatementsPanel } from '../components/reports/FinancialStatementsPanel';
@@ -18,7 +26,7 @@ export function ReportsPage() {
 
   const canExport = hasPermission('reports:read');
 
-  const { data: summary } = useQuery({
+  const { data: summary, isLoading } = useQuery({
     queryKey: ['reports-summary'],
     queryFn: () => reportsApi.summary().then((r) => r.data.data as ReportsOverview),
   });
@@ -33,19 +41,80 @@ export function ReportsPage() {
   };
 
   const reportTypes = [
-    { name: 'Sales Report', description: 'Sales by period, customer, product', icon: BarChart3, exportType: 'sales' as const, filename: 'sales-report.xlsx' },
-    { name: 'Inventory Report', description: 'Stock levels, movements, valuation', icon: Factory, exportType: 'inventory' as const, filename: 'inventory-report.xlsx' },
-    { name: 'Purchase Report', description: 'Purchases by supplier, material', icon: Truck, detailKey: 'purchase' },
-    { name: 'Production Report', description: 'Output, consumption, efficiency', icon: Factory, detailKey: 'production' },
-    { name: 'Financial Statements', description: 'P&L, Balance Sheet, Cash Flow', icon: FileSpreadsheet, onClick: () => setActiveSection(1) },
-    { name: 'Customer Report', description: 'Customer activity, credit, aging', icon: Users, detailKey: 'customer' },
-    { name: 'VAT Report', description: 'VAT input/output summary', icon: BarChart3, onClick: () => setActiveSection(1) },
-    { name: 'Quality Report', description: 'Inspection results, defect trends', icon: ClipboardCheck, detailKey: 'quality' },
+    {
+      name: 'Sales Report',
+      description: 'Sales by period, customer, product',
+      icon: BarChart3,
+      color: 'bg-emerald-50 text-emerald-600 border-emerald-100',
+      exportType: 'sales' as const,
+      filename: 'sales-report.xlsx',
+    },
+    {
+      name: 'Inventory Report',
+      description: 'Stock levels, movements, valuation',
+      icon: Factory,
+      color: 'bg-violet-50 text-violet-600 border-violet-100',
+      exportType: 'inventory' as const,
+      filename: 'inventory-report.xlsx',
+    },
+    {
+      name: 'Purchase Report',
+      description: 'Purchases by supplier, material',
+      icon: Truck,
+      color: 'bg-red-50 text-red-600 border-red-100',
+      detailKey: 'purchase',
+    },
+    {
+      name: 'Production Report',
+      description: 'Output, consumption, efficiency',
+      icon: Factory,
+      color: 'bg-orange-50 text-orange-600 border-orange-100',
+      detailKey: 'production',
+    },
+    {
+      name: 'Financial Statements',
+      description: 'P&L, Balance Sheet, Cash Flow',
+      icon: FileSpreadsheet,
+      color: 'bg-primary-50 text-primary-600 border-primary-100',
+      onClick: () => setActiveSection(1),
+    },
+    {
+      name: 'Customer Report',
+      description: 'Customer activity, credit, aging',
+      icon: Users,
+      color: 'bg-sky-50 text-sky-600 border-sky-100',
+      detailKey: 'customer',
+    },
+    {
+      name: 'VAT Report',
+      description: 'VAT input/output summary',
+      icon: BarChart3,
+      color: 'bg-amber-50 text-amber-600 border-amber-100',
+      onClick: () => setActiveSection(1),
+    },
+    {
+      name: 'Quality Report',
+      description: 'Inspection results, defect trends',
+      icon: ClipboardCheck,
+      color: 'bg-teal-50 text-teal-600 border-teal-100',
+      detailKey: 'quality',
+    },
   ];
 
+  const handleReportClick = (report: (typeof reportTypes)[number]) => {
+    if ('exportType' in report && report.exportType && canExport) {
+      handleExport(report.exportType, report.filename!);
+    } else if ('onClick' in report && report.onClick) {
+      report.onClick();
+    } else if ('detailKey' in report && report.detailKey) {
+      setDetailModal(report.detailKey);
+    }
+  };
+
   return (
-    <div>
+    <div className="space-y-1">
       <PageHeader
+        title="Reports"
         subtitle="Business intelligence and exportable reports"
         action={canExport ? (
           <div className="flex flex-wrap gap-2">
@@ -59,46 +128,37 @@ export function ReportsPage() {
         ) : undefined}
       />
 
-      <TabGroup tabs={sections} activeIndex={activeSection} onChange={setActiveSection} className="mb-4" />
+      {summary && (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+          <StatCard title="Total Sales" value={formatCurrency(summary.totalSales || 0)} icon={<BarChart3 className="h-5 w-5 text-white" />} color="from-emerald-500 to-teal-600" />
+          <StatCard title="Total Purchases" value={formatCurrency(summary.totalPurchases || 0)} icon={<Truck className="h-5 w-5 text-white" />} color="from-red-500 to-rose-600" />
+          <StatCard title="Customers" value={summary.totalCustomers || 0} icon={<Users className="h-5 w-5 text-white" />} color="from-primary-500 to-indigo-600" />
+          <StatCard title="Production Done" value={summary.completedProduction || 0} icon={<Factory className="h-5 w-5 text-white" />} color="from-violet-500 to-purple-600" />
+        </div>
+      )}
+
+      <PageToolbar tabs={sections} activeTab={activeSection} onTabChange={setActiveSection} />
 
       {activeSection === 1 ? (
         <FinancialStatementsPanel />
+      ) : !summary && !isLoading ? (
+        <EmptyState
+          title="No report data available"
+          description="Summary metrics will appear once your business has activity."
+        />
       ) : (
-        <>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
-            <StatCard title="Total Sales" value={formatCurrency(summary?.totalSales || 0)} icon={<BarChart3 className="h-5 w-5 text-white" />} color="from-emerald-500 to-teal-600" />
-            <StatCard title="Total Purchases" value={formatCurrency(summary?.totalPurchases || 0)} icon={<Truck className="h-5 w-5 text-white" />} color="from-red-500 to-rose-600" />
-            <StatCard title="Customers" value={summary?.totalCustomers || 0} icon={<Users className="h-5 w-5 text-white" />} color="from-primary-500 to-indigo-600" />
-            <StatCard title="Production Done" value={summary?.completedProduction || 0} icon={<Factory className="h-5 w-5 text-white" />} color="from-violet-500 to-purple-600" />
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-            {reportTypes.map((report) => (
-              <Card key={report.name} className="hover:shadow-md transition-shadow">
-                <div className="flex items-start gap-3">
-                  <div className="p-2 bg-primary-50 rounded-lg shrink-0">
-                    <report.icon className="h-4 w-4 text-primary-600" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-semibold text-sm text-slate-900">{report.name}</h3>
-                    <p className="text-xs text-slate-500 mt-0.5">{report.description}</p>
-                    {'exportType' in report && report.exportType && canExport && (
-                      <Button size="sm" variant="ghost" className="mt-1 -ml-2 h-7" loading={downloading === report.exportType} onClick={() => handleExport(report.exportType!, report.filename!)}>
-                        <Download className="h-3 w-3 mr-1" /> Excel
-                      </Button>
-                    )}
-                    {'onClick' in report && report.onClick && (
-                      <Button size="sm" variant="ghost" className="mt-1 -ml-2 h-7" onClick={report.onClick}>Open</Button>
-                    )}
-                    {'detailKey' in report && report.detailKey && (
-                      <Button size="sm" variant="ghost" className="mt-1 -ml-2 h-7" onClick={() => setDetailModal(report.detailKey!)}>View</Button>
-                    )}
-                  </div>
-                </div>
-              </Card>
-            ))}
-          </div>
-        </>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          {reportTypes.map((report) => (
+            <QuickActionCard
+              key={report.name}
+              label={report.name}
+              desc={report.description}
+              icon={report.icon}
+              color={report.color}
+              onClick={() => handleReportClick(report)}
+            />
+          ))}
+        </div>
       )}
 
       <Modal open={detailModal !== null} onClose={() => setDetailModal(null)} title={

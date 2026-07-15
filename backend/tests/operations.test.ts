@@ -97,7 +97,11 @@ describe('Delivery schema validation', () => {
   });
 
   it('validates vehicle creation', () => {
-    const result = createVehicleSchema.safeParse({ registration: 'KCA 999Z', make: 'Isuzu' });
+    const result = createVehicleSchema.safeParse({
+      registration: 'KCA 999Z',
+      type: 'TRUCK',
+      make: 'Isuzu',
+    });
     expect(result.success).toBe(true);
   });
 

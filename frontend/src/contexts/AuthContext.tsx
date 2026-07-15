@@ -36,19 +36,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    const token = localStorage.getItem('accessToken');
-    if (token) {
-      authApi
-        .me()
-        .then(({ data }) => setUser(data.data))
-        .catch(() => {
-          localStorage.removeItem('accessToken');
-          localStorage.removeItem('refreshToken');
-        })
-        .finally(() => setIsLoading(false));
-    } else {
-      setIsLoading(false);
-    }
+    const loadSession = async () => {
+      const token = localStorage.getItem('accessToken');
+      const refreshToken = localStorage.getItem('refreshToken');
+
+      if (!token && !refreshToken) {
+        setIsLoading(false);
+        return;
+      }
+
+      try {
+        const { data } = await authApi.me();
+        setUser(data.data);
+      } catch {
+        localStorage.removeItem('accessToken');
+        localStorage.removeItem('refreshToken');
+        setUser(null);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadSession();
   }, []);
 
   const login = async (email: string, password: string, totpCode?: string) => {

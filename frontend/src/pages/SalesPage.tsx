@@ -1,7 +1,17 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plus, ShoppingCart, FileText, TrendingUp, CalendarDays, Truck, Receipt } from 'lucide-react';
+import {
+  Plus,
+  ShoppingCart,
+  FileText,
+  TrendingUp,
+  CalendarDays,
+  Truck,
+  Receipt,
+  AlertTriangle,
+  ChevronRight,
+} from 'lucide-react';
 import { financeApi, operationsApi } from '../services/api';
 import {
   PageHeader,
@@ -12,6 +22,12 @@ import {
   Select,
   StatCard,
   Card,
+  Alert,
+  EmptyState,
+  DataPanel,
+  QuickActionCard,
+  QuickActionGrid,
+  TablePagination,
   formatCurrency,
   formatDate,
   getStatusBadge,
@@ -23,7 +39,7 @@ import { QuotationForm } from '../components/forms/QuotationForm';
 import { useAuth } from '../contexts/AuthContext';
 import { SalesOrder, SalesQuotation, SalesStats } from '../types';
 
-const tabs = ['Sales Orders', 'Quotations'];
+const tabs = ['Overview', 'Sales Orders', 'Quotations'];
 
 const ORDER_STATUS_OPTIONS = [
   { value: '', label: 'All statuses' },
@@ -53,6 +69,19 @@ const NEXT_STATUS: Record<string, { status: string; label: string }> = {
   DELIVERED: { status: 'COMPLETED', label: 'Complete' },
 };
 
+const STATUS_HINTS: Record<string, string> = {
+  PENDING: 'Confirming reserves finished goods stock. Ensure enough inventory is on hand.',
+  CONFIRMED: 'Start production when manufacturing should begin. Create production orders in Production if needed.',
+  IN_PRODUCTION: 'Complete production with a passed QC inspection in Quality. The order moves to Ready automatically.',
+  READY: 'Create a delivery note in Delivery to dispatch goods and trigger invoicing.',
+  PARTIALLY_DELIVERED: 'Finish remaining deliveries, then the order can be completed.',
+};
+
+function getApiErrorMessage(err: unknown): string {
+  const axiosErr = err as { response?: { data?: { message?: string } } };
+  return axiosErr.response?.data?.message || 'Unable to update order status';
+}
+
 export function SalesPage() {
   const queryClient = useQueryClient();
   const { hasPermission } = useAuth();
@@ -69,6 +98,7 @@ export function SalesPage() {
   const [selectedQuote, setSelectedQuote] = useState<SalesQuotation | null>(null);
   const [orderDetailOpen, setOrderDetailOpen] = useState(false);
   const [quoteDetailOpen, setQuoteDetailOpen] = useState(false);
+  const [statusFeedback, setStatusFeedback] = useState<string | null>(null);
 
   const canCreate = hasPermission('sales:create');
   const canUpdate = hasPermission('sales:update');
@@ -94,7 +124,7 @@ export function SalesPage() {
       operationsApi
         .salesOrders({ page: orderPage, limit: 15, search: orderSearch || undefined, status: orderStatus || undefined })
         .then((r) => r.data),
-    enabled: activeTab === 0,
+    enabled: activeTab === 0 || activeTab === 1,
   });
 
   const { data: quotations, isLoading: quotesLoading } = useQuery({
@@ -103,7 +133,7 @@ export function SalesPage() {
       operationsApi
         .quotations({ page: quotePage, limit: 15, search: quoteSearch || undefined, status: quoteStatus || undefined })
         .then((r) => r.data),
-    enabled: activeTab === 1,
+    enabled: activeTab === 0 || activeTab === 2,
   });
 
   const convertMutation = useMutation({
@@ -119,10 +149,12 @@ export function SalesPage() {
     mutationFn: ({ id, status }: { id: string; status: string }) =>
       operationsApi.updateOrderStatus(id, status),
     onSuccess: () => {
+      setStatusFeedback(null);
       queryClient.invalidateQueries({ queryKey: ['sales-orders'] });
       queryClient.invalidateQueries({ queryKey: ['sales-stats'] });
       queryClient.invalidateQueries({ queryKey: ['sales-order'] });
     },
+    onError: (err) => setStatusFeedback(getApiErrorMessage(err)),
   });
 
   const invoiceMutation = useMutation({
@@ -133,6 +165,27 @@ export function SalesPage() {
       queryClient.invalidateQueries({ queryKey: ['finance-stats'] });
     },
   });
+
+  const goToTab = (index: number) => setActiveTab(index);
+
+  const openOrderDetail = (order: SalesOrder) => {
+    setStatusFeedback(null);
+    setSelectedOrder(order);
+    setOrderDetailOpen(true);
+  };
+
+  const openQuoteDetail = (quote: SalesQuotation) => {
+    setSelectedQuote(quote);
+    setQuoteDetailOpen(true);
+  };
+
+  const recentOrders = activeTab === 0 ? ((orders?.data as SalesOrder[]) || []).slice(0, 6) : [];
+  const pendingQuotes = activeTab === 0
+    ? ((quotations?.data as SalesQuotation[]) || []).filter((q) => ['DRAFT', 'PENDING'].includes(q.status)).slice(0, 5)
+    : [];
+  const openOrders = activeTab === 0
+    ? ((orders?.data as SalesOrder[]) || []).filter((o) => !['COMPLETED', 'CANCELLED'].includes(o.status)).slice(0, 5)
+    : [];
 
   const orderColumns = [
     { key: 'orderNumber', label: 'Order #' },
@@ -171,6 +224,7 @@ export function SalesPage() {
           <Button
             size="sm"
             loading={statusMutation.isPending}
+            disabled={statusMutation.isPending}
             onClick={(e) => {
               e.stopPropagation();
               statusMutation.mutate({ id: row.id as string, status: next.status });
@@ -231,24 +285,39 @@ export function SalesPage() {
     },
   ];
 
-  const renderPagination = (
-    pagination: { page: number; totalPages: number } | undefined,
-    page: number,
-    setPage: (fn: (p: number) => number) => void
-  ) =>
-    pagination && pagination.totalPages > 1 ? (
-      <div className="flex items-center justify-between mt-4 text-sm text-slate-600">
-        <span>Page {pagination.page} of {pagination.totalPages}</span>
-        <div className="flex gap-2">
-          <Button variant="secondary" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>Previous</Button>
-          <Button variant="secondary" size="sm" disabled={page >= pagination.totalPages} onClick={() => setPage((p) => p + 1)}>Next</Button>
-        </div>
-      </div>
-    ) : null;
+  const toolbarActions =
+    canCreate &&
+    (activeTab === 1 ? (
+      <Button size="sm" onClick={() => setOrderModalOpen(true)}>
+        <Plus className="h-4 w-4 mr-1.5" />
+        New Sales Order
+      </Button>
+    ) : activeTab === 2 ? (
+      <Button size="sm" onClick={() => setQuotationModalOpen(true)}>
+        <Plus className="h-4 w-4 mr-1.5" />
+        New Quotation
+      </Button>
+    ) : undefined);
 
   return (
-    <div>
-      <PageHeader subtitle="Quotations, sales orders, and customer order tracking" />
+    <div className="space-y-1">
+      <PageHeader
+        title="Sales"
+        subtitle="Quotations, sales orders, and customer order tracking"
+        action={
+          stats && stats.pendingQuotations > 0 ? (
+            <Button variant="secondary" size="sm" onClick={() => goToTab(2)}>
+              <FileText className="h-4 w-4 mr-1.5 text-amber-500" />
+              {stats.pendingQuotations} pending quotes
+            </Button>
+          ) : stats && stats.openOrders > 0 ? (
+            <Button variant="secondary" size="sm" onClick={() => goToTab(1)}>
+              <ShoppingCart className="h-4 w-4 mr-1.5 text-primary-500" />
+              {stats.openOrders} open orders
+            </Button>
+          ) : undefined
+        }
+      />
 
       {stats && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
@@ -267,56 +336,226 @@ export function SalesPage() {
           setOrderPage(1);
           setQuotePage(1);
         }}
-        actions={
-          canCreate ? (
-            <div className="flex gap-2">
-              {activeTab === 1 && (
-                <Button variant="secondary" onClick={() => setQuotationModalOpen(true)}>
-                  <Plus className="h-4 w-4 mr-2" />
-                  New Quotation
-                </Button>
-              )}
-              {activeTab === 0 && (
-                <Button onClick={() => setOrderModalOpen(true)}>
-                  <Plus className="h-4 w-4 mr-2" />
-                  New Sales Order
-                </Button>
-              )}
-            </div>
-          ) : undefined
-        }
+        actions={toolbarActions}
       />
 
       {activeTab === 0 && (
-        <>
-          <div className="flex flex-wrap gap-3 mb-4">
-            <Input placeholder="Search orders…" className="max-w-sm" value={orderSearch} onChange={(e) => { setOrderSearch(e.target.value); setOrderPage(1); }} />
-            <Select options={ORDER_STATUS_OPTIONS} value={orderStatus} onChange={(e) => { setOrderStatus(e.target.value); setOrderPage(1); }} className="w-44" />
+        <div className="space-y-4">
+          {canCreate && (
+            <QuickActionGrid>
+              <QuickActionCard
+                label="New sales order"
+                desc="Create a customer order"
+                icon={ShoppingCart}
+                color="bg-primary-50 text-primary-600 border-primary-100"
+                onClick={() => setOrderModalOpen(true)}
+              />
+              <QuickActionCard
+                label="New quotation"
+                desc="Send a price proposal"
+                icon={FileText}
+                color="bg-amber-50 text-amber-600 border-amber-100"
+                onClick={() => setQuotationModalOpen(true)}
+              />
+              <QuickActionCard
+                label="Open orders"
+                desc="Track active sales pipeline"
+                icon={TrendingUp}
+                color="bg-emerald-50 text-emerald-600 border-emerald-100"
+                onClick={() => goToTab(1)}
+              />
+            </QuickActionGrid>
+          )}
+
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+            <Card
+              title="Open orders"
+              action={
+                openOrders.length > 0 ? (
+                  <Button variant="ghost" size="sm" onClick={() => goToTab(1)}>
+                    View all
+                  </Button>
+                ) : undefined
+              }
+              padding={false}
+            >
+              {openOrders.length === 0 ? (
+                <div className="p-6">
+                  <EmptyState title="No open orders" description="All sales orders are completed or cancelled." />
+                </div>
+              ) : (
+                <ul className="divide-y divide-slate-100">
+                  {openOrders.map((order) => (
+                    <li
+                      key={order.id}
+                      className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 cursor-pointer"
+                      onClick={() => openOrderDetail(order)}
+                    >
+                      <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary-100 text-primary-600">
+                        <ShoppingCart className="h-4 w-4" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-slate-900 truncate">{order.orderNumber}</p>
+                        <p className="text-xs text-slate-500">{order.customer?.name || '—'}</p>
+                      </div>
+                      <Badge variant={getStatusBadge(order.status)}>{order.status.replace(/_/g, ' ')}</Badge>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Card>
+
+            <Card
+              title="Pending quotations"
+              action={
+                <Button variant="ghost" size="sm" onClick={() => goToTab(2)}>
+                  All quotes
+                  <ChevronRight className="h-4 w-4 ml-1" />
+                </Button>
+              }
+              padding={false}
+            >
+              {pendingQuotes.length === 0 ? (
+                <div className="p-6">
+                  <EmptyState title="No pending quotes" description="Draft and pending quotations appear here." />
+                </div>
+              ) : (
+                <ul className="divide-y divide-slate-100">
+                  {pendingQuotes.map((quote) => (
+                    <li
+                      key={quote.id}
+                      className="flex items-center gap-3 px-4 py-3 hover:bg-amber-50/30 cursor-pointer"
+                      onClick={() => openQuoteDetail(quote)}
+                    >
+                      <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-100 text-amber-600">
+                        <AlertTriangle className="h-4 w-4" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-slate-900 truncate">{quote.quotationNo}</p>
+                        <p className="text-xs text-slate-500">{quote.customer?.name || '—'}</p>
+                      </div>
+                      <span className="text-sm font-semibold tabular-nums text-slate-700">
+                        {formatCurrency(Number(quote.totalAmount))}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Card>
           </div>
-          <Table
-            columns={orderColumns}
-            data={(orders?.data as SalesOrder[]) || []}
-            loading={ordersLoading}
-            onRowClick={(row) => { setSelectedOrder(row as unknown as SalesOrder); setOrderDetailOpen(true); }}
-          />
-          {renderPagination(orders?.pagination, orderPage, setOrderPage)}
-        </>
+
+          {recentOrders.length > 0 && (
+            <Card
+              title="Orders snapshot"
+              action={<Button variant="ghost" size="sm" onClick={() => goToTab(1)}>View all</Button>}
+              padding={false}
+            >
+              <Table
+                columns={orderColumns.filter((c) => c.key !== 'actions')}
+                data={recentOrders}
+                embedded
+                onRowClick={(row) => openOrderDetail(row as unknown as SalesOrder)}
+              />
+            </Card>
+          )}
+        </div>
       )}
 
       {activeTab === 1 && (
-        <>
-          <div className="flex flex-wrap gap-3 mb-4">
-            <Input placeholder="Search quotations…" className="max-w-sm" value={quoteSearch} onChange={(e) => { setQuoteSearch(e.target.value); setQuotePage(1); }} />
-            <Select options={QUOTE_STATUS_OPTIONS} value={quoteStatus} onChange={(e) => { setQuoteStatus(e.target.value); setQuotePage(1); }} className="w-44" />
+        <DataPanel>
+          <div className="p-4 pb-0 flex flex-col sm:flex-row gap-3">
+            <Input
+              placeholder="Search orders…"
+              className="sm:max-w-md"
+              value={orderSearch}
+              onChange={(e) => { setOrderSearch(e.target.value); setOrderPage(1); }}
+            />
+            <Select
+              options={ORDER_STATUS_OPTIONS}
+              value={orderStatus}
+              onChange={(e) => { setOrderStatus(e.target.value); setOrderPage(1); }}
+              className="sm:w-44"
+            />
           </div>
-          <Table
-            columns={quoteColumns}
-            data={(quotations?.data as SalesQuotation[]) || []}
-            loading={quotesLoading}
-            onRowClick={(row) => { setSelectedQuote(row as unknown as SalesQuotation); setQuoteDetailOpen(true); }}
-          />
-          {renderPagination(quotations?.pagination, quotePage, setQuotePage)}
-        </>
+          {statusFeedback && (
+            <div className="px-4 pt-3">
+              <Alert variant="error">{statusFeedback}</Alert>
+            </div>
+          )}
+          {(orders?.data?.length || 0) === 0 && !ordersLoading ? (
+            <div className="p-6">
+              <EmptyState
+                title="No sales orders found"
+                description="Create a sales order or convert an approved quotation."
+                action={
+                  canCreate ? (
+                    <Button onClick={() => setOrderModalOpen(true)}>
+                      <Plus className="h-4 w-4 mr-2" />
+                      New Sales Order
+                    </Button>
+                  ) : undefined
+                }
+              />
+            </div>
+          ) : (
+            <Table
+              columns={orderColumns}
+              data={(orders?.data as SalesOrder[]) || []}
+              loading={ordersLoading}
+              onRowClick={(row) => openOrderDetail(row as unknown as SalesOrder)}
+              embedded
+            />
+          )}
+          <div className="px-4 pb-4">
+            <TablePagination pagination={orders?.pagination} page={orderPage} onPageChange={setOrderPage} label="orders" />
+          </div>
+        </DataPanel>
+      )}
+
+      {activeTab === 2 && (
+        <DataPanel>
+          <div className="p-4 pb-0 flex flex-col sm:flex-row gap-3">
+            <Input
+              placeholder="Search quotations…"
+              className="sm:max-w-md"
+              value={quoteSearch}
+              onChange={(e) => { setQuoteSearch(e.target.value); setQuotePage(1); }}
+            />
+            <Select
+              options={QUOTE_STATUS_OPTIONS}
+              value={quoteStatus}
+              onChange={(e) => { setQuoteStatus(e.target.value); setQuotePage(1); }}
+              className="sm:w-44"
+            />
+          </div>
+          {(quotations?.data?.length || 0) === 0 && !quotesLoading ? (
+            <div className="p-6">
+              <EmptyState
+                title="No quotations found"
+                description="Create a quotation to send pricing to customers."
+                action={
+                  canCreate ? (
+                    <Button onClick={() => setQuotationModalOpen(true)}>
+                      <Plus className="h-4 w-4 mr-2" />
+                      New Quotation
+                    </Button>
+                  ) : undefined
+                }
+              />
+            </div>
+          ) : (
+            <Table
+              columns={quoteColumns}
+              data={(quotations?.data as SalesQuotation[]) || []}
+              loading={quotesLoading}
+              onRowClick={(row) => openQuoteDetail(row as unknown as SalesQuotation)}
+              embedded
+            />
+          )}
+          <div className="px-4 pb-4">
+            <TablePagination pagination={quotations?.pagination} page={quotePage} onPageChange={setQuotePage} label="quotations" />
+          </div>
+        </DataPanel>
       )}
 
       <Modal open={orderModalOpen} onClose={() => setOrderModalOpen(false)} title="New Sales Order" size="xl">
@@ -327,9 +566,10 @@ export function SalesPage() {
         <QuotationForm onSuccess={() => setQuotationModalOpen(false)} onCancel={() => setQuotationModalOpen(false)} />
       </Modal>
 
-      <Modal open={orderDetailOpen} onClose={() => { setOrderDetailOpen(false); setSelectedOrder(null); }} title="Sales Order Details" size="lg">
+      <Modal open={orderDetailOpen} onClose={() => { setOrderDetailOpen(false); setSelectedOrder(null); setStatusFeedback(null); }} title="Sales Order Details" size="lg">
         {activeOrder && (
           <div className="space-y-4 text-sm">
+            {statusFeedback && <Alert variant="error">{statusFeedback}</Alert>}
             <div className="grid grid-cols-2 gap-4">
               <div><p className="text-slate-500">Order #</p><p className="font-semibold">{activeOrder.orderNumber}</p></div>
               <div><p className="text-slate-500">Customer</p><p className="font-semibold">{activeOrder.customer?.name}</p></div>
@@ -370,6 +610,11 @@ export function SalesPage() {
                 ))}
               </Card>
             )}
+            {STATUS_HINTS[activeOrder.status] && (
+              <Alert variant={activeOrder.status === 'IN_PRODUCTION' ? 'info' : 'warning'}>
+                {STATUS_HINTS[activeOrder.status]}
+              </Alert>
+            )}
             <div className="flex flex-wrap justify-end gap-2 pt-2">
               {canInvoice && !activeOrder.invoices?.length && !activeOrder.deliveries?.length && ['CONFIRMED', 'IN_PRODUCTION', 'READY'].includes(activeOrder.status) && (
                 <Button
@@ -392,10 +637,16 @@ export function SalesPage() {
               {canUpdate && NEXT_STATUS[activeOrder.status] && (
                 <Button
                   loading={statusMutation.isPending}
+                  disabled={statusMutation.isPending}
                   onClick={() => statusMutation.mutate({ id: activeOrder.id, status: NEXT_STATUS[activeOrder.status].status })}
                 >
                   {NEXT_STATUS[activeOrder.status].label}
                 </Button>
+              )}
+              {activeOrder.status === 'IN_PRODUCTION' && (
+                <Link to="/production">
+                  <Button variant="secondary">Open Production</Button>
+                </Link>
               )}
             </div>
             {activeOrder.status === 'READY' && (

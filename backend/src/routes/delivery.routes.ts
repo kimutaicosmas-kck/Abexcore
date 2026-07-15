@@ -18,6 +18,8 @@ import {
 
   createVehicleSchema,
 
+  vehicleListQuerySchema,
+
   paginationSchema,
 
 } from '../validators/schemas';
@@ -74,11 +76,16 @@ router.get(
 
   authorize('delivery:read'),
 
-  validate(paginationSchema, 'query'),
+  validate(vehicleListQuerySchema, 'query'),
 
   asyncHandler(async (req: AuthRequest, res: Response) => {
 
-    const { page, limit, search } = getQuery<{ page: number; limit: number; search?: string }>(
+    const { page, limit, search, type } = getQuery<{
+      page: number;
+      limit: number;
+      search?: string;
+      type?: 'MOTORCYCLE' | 'TRUCK' | 'LORRY';
+    }>(
 
       req.query
 
@@ -89,6 +96,8 @@ router.get(
 
 
     const where: Prisma.VehicleWhereInput = { isActive: true };
+
+    if (type) where.type = type;
 
     if (search) {
 

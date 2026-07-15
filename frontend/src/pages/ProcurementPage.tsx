@@ -1,7 +1,17 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plus, ClipboardList, FileText, Users, ShoppingCart, PackageCheck, ShieldCheck } from 'lucide-react';
+import {
+  Plus,
+  ClipboardList,
+  FileText,
+  Users,
+  ShoppingCart,
+  PackageCheck,
+  ShieldCheck,
+  ChevronRight,
+  Truck,
+} from 'lucide-react';
 import { inventoryApi, financeApi } from '../services/api';
 import {
   PageHeader,
@@ -12,6 +22,11 @@ import {
   Select,
   StatCard,
   Card,
+  EmptyState,
+  DataPanel,
+  QuickActionCard,
+  QuickActionGrid,
+  TablePagination,
   formatCurrency,
   formatDate,
   getStatusBadge,
@@ -27,7 +42,7 @@ import { RfqDetailPanel } from '../components/forms/RfqDetailPanel';
 import { useAuth } from '../contexts/AuthContext';
 import { ProcurementStats, PurchaseOrder, Supplier, GoodsReceipt } from '../types';
 
-const tabs = ['Purchase Orders', 'Requisitions', 'RFQs', 'Goods Receipts', 'Suppliers'];
+const tabs = ['Overview', 'Purchase Orders', 'Requisitions', 'RFQs', 'Goods Receipts', 'Suppliers'];
 
 const STATUS_FILTER = [
   { value: '', label: 'All statuses' },
@@ -79,32 +94,32 @@ export function ProcurementPage() {
   const { data: purchaseOrders, isLoading: poLoading } = useQuery({
     queryKey: ['purchase-orders', poPage, poSearch],
     queryFn: () => inventoryApi.purchaseOrders({ page: poPage, limit: 15, search: poSearch || undefined }).then((r) => r.data),
-    enabled: activeTab === 0,
+    enabled: activeTab === 0 || activeTab === 1,
   });
 
   const { data: requisitions, isLoading: reqLoading } = useQuery({
     queryKey: ['requisitions', reqPage, reqSearch, reqStatus],
     queryFn: () =>
       inventoryApi.requisitions({ page: reqPage, limit: 15, search: reqSearch || undefined, status: reqStatus || undefined }).then((r) => r.data),
-    enabled: activeTab === 1,
+    enabled: activeTab === 0 || activeTab === 2,
   });
 
   const { data: rfqs, isLoading: rfqLoading } = useQuery({
     queryKey: ['rfqs', rfqPage, rfqSearch],
     queryFn: () => inventoryApi.rfqs({ page: rfqPage, limit: 15, search: rfqSearch || undefined }).then((r) => r.data),
-    enabled: activeTab === 2,
+    enabled: activeTab === 0 || activeTab === 3,
   });
 
   const { data: goodsReceipts, isLoading: grLoading } = useQuery({
     queryKey: ['goods-receipts', grPage, grSearch],
     queryFn: () => inventoryApi.goodsReceipts({ page: grPage, limit: 15, search: grSearch || undefined }).then((r) => r.data),
-    enabled: activeTab === 3,
+    enabled: activeTab === 0 || activeTab === 4,
   });
 
   const { data: suppliers, isLoading: supLoading } = useQuery({
     queryKey: ['suppliers', supPage, supSearch],
     queryFn: () => inventoryApi.suppliers({ page: supPage, limit: 15, search: supSearch || undefined }).then((r) => r.data),
-    enabled: activeTab === 4,
+    enabled: activeTab === 0 || activeTab === 5,
   });
 
   const approveMutation = useMutation({
@@ -159,6 +174,8 @@ export function ProcurementPage() {
     },
   });
 
+  const goToTab = (index: number) => setActiveTab(index);
+
   const openModal = (type: ModalType, supplier?: Supplier | null) => {
     setEditingSupplier(supplier ?? null);
     setModalType(type);
@@ -176,11 +193,17 @@ export function ProcurementPage() {
   };
 
   const tabActions: Record<number, { label: string; type: ModalType }> = {
-    0: { label: 'New Purchase Order', type: 'po' },
-    1: { label: 'New Requisition', type: 'requisition' },
-    3: { label: 'New Goods Receipt', type: 'gr' },
-    4: { label: 'Add Supplier', type: 'supplier' },
+    1: { label: 'New Purchase Order', type: 'po' },
+    2: { label: 'New Requisition', type: 'requisition' },
+    4: { label: 'New Goods Receipt', type: 'gr' },
+    5: { label: 'Add Supplier', type: 'supplier' },
   };
+
+  const recentPos = activeTab === 0 ? ((purchaseOrders?.data as PurchaseOrder[]) || []).slice(0, 6) : [];
+  const pendingReqs = activeTab === 0
+    ? (requisitions?.data || []).filter((r: { status: string }) => r.status === 'PENDING' || r.status === 'DRAFT').slice(0, 5)
+    : [];
+  const openRfqs = activeTab === 0 ? (rfqs?.data || []).slice(0, 5) : [];
 
   const poColumns = [
     { key: 'poNumber', label: 'PO Number' },
@@ -376,24 +399,38 @@ export function ProcurementPage() {
     rfq: 'Create Request for Quotation',
   };
 
-  const renderPagination = (
-    pagination: { page: number; totalPages: number } | undefined,
-    page: number,
-    setPage: (fn: (p: number) => number) => void
-  ) =>
-    pagination && pagination.totalPages > 1 ? (
-      <div className="flex items-center justify-between mt-4 text-sm text-slate-600">
-        <span>Page {pagination.page} of {pagination.totalPages}</span>
-        <div className="flex gap-2">
-          <Button variant="secondary" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>Previous</Button>
-          <Button variant="secondary" size="sm" disabled={page >= pagination.totalPages} onClick={() => setPage((p) => p + 1)}>Next</Button>
-        </div>
-      </div>
-    ) : null;
+  const toolbarActions =
+    canCreate &&
+    (activeTab === 0 || activeTab === 1
+      ? (
+          <Button size="sm" onClick={() => openModal('po')}>
+            <Plus className="h-4 w-4 mr-1.5" />
+            New Purchase Order
+          </Button>
+        )
+      : tabActions[activeTab]
+        ? (
+            <Button size="sm" onClick={() => openModal(tabActions[activeTab].type)}>
+              <Plus className="h-4 w-4 mr-1.5" />
+              {tabActions[activeTab].label}
+            </Button>
+          )
+        : undefined);
 
   return (
-    <div>
-      <PageHeader subtitle="Requisition → RFQ → PO → goods receipt workflow" />
+    <div className="space-y-1">
+      <PageHeader
+        title="Procurement"
+        subtitle="Requisition → RFQ → PO → goods receipt workflow"
+        action={
+          stats && stats.pendingRequisitions > 0 ? (
+            <Button variant="secondary" size="sm" onClick={() => goToTab(2)}>
+              <ClipboardList className="h-4 w-4 mr-1.5 text-amber-500" />
+              {stats.pendingRequisitions} pending requisitions
+            </Button>
+          ) : undefined
+        }
+      />
 
       {stats && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
@@ -415,84 +452,290 @@ export function ProcurementPage() {
           setGrPage(1);
           setSupPage(1);
         }}
-        actions={
-          canCreate && tabActions[activeTab] ? (
-            <Button onClick={() => openModal(tabActions[activeTab].type)}>
-              <Plus className="h-4 w-4 mr-2" />
-              {tabActions[activeTab].label}
-            </Button>
-          ) : undefined
-        }
+        actions={toolbarActions}
       />
 
       {activeTab === 0 && (
-        <>
-          <div className="mb-4 max-w-sm">
-            <Input placeholder="Search purchase orders…" value={poSearch} onChange={(e) => { setPoSearch(e.target.value); setPoPage(1); }} />
+        <div className="space-y-4">
+          {canCreate && (
+            <QuickActionGrid>
+              <QuickActionCard
+                label="New requisition"
+                desc="Request materials or supplies"
+                icon={ClipboardList}
+                color="bg-amber-50 text-amber-600 border-amber-100"
+                onClick={() => openModal('requisition')}
+              />
+              <QuickActionCard
+                label="New purchase order"
+                desc="Issue PO to supplier"
+                icon={ShoppingCart}
+                color="bg-emerald-50 text-emerald-600 border-emerald-100"
+                onClick={() => openModal('po')}
+              />
+              <QuickActionCard
+                label="Goods receipt"
+                desc="Record incoming delivery"
+                icon={Truck}
+                color="bg-violet-50 text-violet-600 border-violet-100"
+                onClick={() => openModal('gr')}
+              />
+            </QuickActionGrid>
+          )}
+
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+            <Card
+              title="Pending requisitions"
+              action={
+                pendingReqs.length > 0 ? (
+                  <Button variant="ghost" size="sm" onClick={() => goToTab(2)}>
+                    View all
+                  </Button>
+                ) : undefined
+              }
+              padding={false}
+            >
+              {pendingReqs.length === 0 ? (
+                <div className="p-6">
+                  <EmptyState title="No pending requisitions" description="All requisitions have been processed." />
+                </div>
+              ) : (
+                <ul className="divide-y divide-slate-100">
+                  {pendingReqs.map((req: { id: string; requisitionNo: string; department: string; priority: string; status: string }) => (
+                    <li key={req.id} className="flex items-center gap-3 px-4 py-3 hover:bg-amber-50/30">
+                      <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-100 text-amber-600">
+                        <ClipboardList className="h-4 w-4" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-slate-900 truncate">{req.requisitionNo}</p>
+                        <p className="text-xs text-slate-500">{req.department} · {req.priority} priority</p>
+                      </div>
+                      <Badge variant={getStatusBadge(req.status)}>{req.status.replace(/_/g, ' ')}</Badge>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Card>
+
+            <Card
+              title="Open RFQs"
+              action={
+                <Button variant="ghost" size="sm" onClick={() => goToTab(3)}>
+                  View all
+                  <ChevronRight className="h-4 w-4 ml-1" />
+                </Button>
+              }
+              padding={false}
+            >
+              {openRfqs.length === 0 ? (
+                <div className="p-6">
+                  <EmptyState title="No open RFQs" description="Create an RFQ from an approved requisition." />
+                </div>
+              ) : (
+                <ul className="divide-y divide-slate-100">
+                  {openRfqs.map((rfq: { id: string; rfqNo: string; status: string; dueDate?: string; quotations?: unknown[] }) => (
+                    <li key={rfq.id} className="flex items-center gap-3 px-4 py-3">
+                      <Badge variant={getStatusBadge(rfq.status)}>{rfq.status.replace(/_/g, ' ')}</Badge>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-slate-800 truncate">{rfq.rfqNo}</p>
+                        <p className="text-xs text-slate-400">
+                          {rfq.dueDate ? `Due ${formatDate(rfq.dueDate)}` : '—'} · {rfq.quotations?.length || 0} quote(s)
+                        </p>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Card>
           </div>
-          <Table
-            columns={poColumns}
-            data={(purchaseOrders?.data as PurchaseOrder[]) || []}
-            loading={poLoading}
-            onRowClick={(row) => { setSelectedPo(row as unknown as PurchaseOrder); setPoDetailOpen(true); }}
-          />
-          {renderPagination(purchaseOrders?.pagination, poPage, setPoPage)}
-        </>
+
+          <Card
+            title="Purchase order snapshot"
+            action={<Button variant="ghost" size="sm" onClick={() => goToTab(1)}>View all</Button>}
+            padding={false}
+          >
+            {recentPos.length === 0 ? (
+              <div className="p-6">
+                <EmptyState
+                  title="No purchase orders"
+                  description="Create a PO to start the procurement cycle."
+                  action={
+                    canCreate ? (
+                      <Button onClick={() => openModal('po')}>
+                        <Plus className="h-4 w-4 mr-2" />
+                        New purchase order
+                      </Button>
+                    ) : undefined
+                  }
+                />
+              </div>
+            ) : (
+              <Table
+                columns={poColumns}
+                data={recentPos}
+                onRowClick={(row) => { setSelectedPo(row as unknown as PurchaseOrder); setPoDetailOpen(true); }}
+                embedded
+              />
+            )}
+          </Card>
+        </div>
       )}
 
       {activeTab === 1 && (
-        <>
-          <div className="flex flex-wrap gap-3 mb-4">
-            <Input placeholder="Search requisitions…" className="max-w-sm" value={reqSearch} onChange={(e) => { setReqSearch(e.target.value); setReqPage(1); }} />
-            <Select options={STATUS_FILTER} value={reqStatus} onChange={(e) => { setReqStatus(e.target.value); setReqPage(1); }} className="w-40" />
+        <DataPanel>
+          <div className="p-4 pb-0 sm:max-w-md">
+            <Input placeholder="Search purchase orders…" value={poSearch} onChange={(e) => { setPoSearch(e.target.value); setPoPage(1); }} />
           </div>
-          <Table columns={requisitionColumns} data={requisitions?.data || []} loading={reqLoading} />
-          {renderPagination(requisitions?.pagination, reqPage, setReqPage)}
-        </>
+          {(purchaseOrders?.data?.length || 0) === 0 && !poLoading ? (
+            <div className="p-6">
+              <EmptyState
+                title="No purchase orders found"
+                description="Create a purchase order from an approved RFQ or directly."
+                action={
+                  canCreate ? (
+                    <Button onClick={() => openModal('po')}>
+                      <Plus className="h-4 w-4 mr-2" />
+                      New purchase order
+                    </Button>
+                  ) : undefined
+                }
+              />
+            </div>
+          ) : (
+            <Table
+              columns={poColumns}
+              data={(purchaseOrders?.data as PurchaseOrder[]) || []}
+              loading={poLoading}
+              onRowClick={(row) => { setSelectedPo(row as unknown as PurchaseOrder); setPoDetailOpen(true); }}
+              embedded
+            />
+          )}
+          <div className="px-4 pb-4">
+            <TablePagination pagination={purchaseOrders?.pagination} page={poPage} onPageChange={setPoPage} label="orders" />
+          </div>
+        </DataPanel>
       )}
 
       {activeTab === 2 && (
-        <>
-          <div className="mb-4 max-w-sm">
-            <Input placeholder="Search RFQs…" value={rfqSearch} onChange={(e) => { setRfqSearch(e.target.value); setRfqPage(1); }} />
+        <DataPanel>
+          <div className="p-4 pb-0 flex flex-wrap gap-3">
+            <Input placeholder="Search requisitions…" className="sm:max-w-md" value={reqSearch} onChange={(e) => { setReqSearch(e.target.value); setReqPage(1); }} />
+            <Select options={STATUS_FILTER} value={reqStatus} onChange={(e) => { setReqStatus(e.target.value); setReqPage(1); }} className="w-40" />
           </div>
-          <Table columns={rfqColumns} data={rfqs?.data || []} loading={rfqLoading} onRowClick={(row) => setSelectedRfq(row as Record<string, unknown>)} />
-          {renderPagination(rfqs?.pagination, rfqPage, setRfqPage)}
-        </>
+          {(requisitions?.data?.length || 0) === 0 && !reqLoading ? (
+            <div className="p-6">
+              <EmptyState
+                title="No requisitions found"
+                description="Submit a requisition to request materials or supplies."
+                action={
+                  canCreate ? (
+                    <Button onClick={() => openModal('requisition')}>
+                      <Plus className="h-4 w-4 mr-2" />
+                      New requisition
+                    </Button>
+                  ) : undefined
+                }
+              />
+            </div>
+          ) : (
+            <Table columns={requisitionColumns} data={requisitions?.data || []} loading={reqLoading} embedded />
+          )}
+          <div className="px-4 pb-4">
+            <TablePagination pagination={requisitions?.pagination} page={reqPage} onPageChange={setReqPage} label="requisitions" />
+          </div>
+        </DataPanel>
       )}
 
       {activeTab === 3 && (
-        <>
-          <div className="mb-4 max-w-sm">
-            <Input placeholder="Search goods receipts…" value={grSearch} onChange={(e) => { setGrSearch(e.target.value); setGrPage(1); }} />
+        <DataPanel>
+          <div className="p-4 pb-0 sm:max-w-md">
+            <Input placeholder="Search RFQs…" value={rfqSearch} onChange={(e) => { setRfqSearch(e.target.value); setRfqPage(1); }} />
           </div>
-          <Table
-            columns={grColumns}
-            data={(goodsReceipts?.data as GoodsReceipt[]) || []}
-            loading={grLoading}
-            onRowClick={(row) => {
-              setSelectedGr(row as unknown as GoodsReceipt);
-              setPostGrError(null);
-              setGrDetailOpen(true);
-            }}
-          />
-          {renderPagination(goodsReceipts?.pagination, grPage, setGrPage)}
-        </>
+          {(rfqs?.data?.length || 0) === 0 && !rfqLoading ? (
+            <div className="p-6">
+              <EmptyState title="No RFQs found" description="Create an RFQ from an approved requisition to collect supplier quotes." />
+            </div>
+          ) : (
+            <Table columns={rfqColumns} data={rfqs?.data || []} loading={rfqLoading} onRowClick={(row) => setSelectedRfq(row as Record<string, unknown>)} embedded />
+          )}
+          <div className="px-4 pb-4">
+            <TablePagination pagination={rfqs?.pagination} page={rfqPage} onPageChange={setRfqPage} label="RFQs" />
+          </div>
+        </DataPanel>
       )}
 
       {activeTab === 4 && (
-        <>
-          <div className="mb-4 max-w-sm">
+        <DataPanel>
+          <div className="p-4 pb-0 sm:max-w-md">
+            <Input placeholder="Search goods receipts…" value={grSearch} onChange={(e) => { setGrSearch(e.target.value); setGrPage(1); }} />
+          </div>
+          {(goodsReceipts?.data?.length || 0) === 0 && !grLoading ? (
+            <div className="p-6">
+              <EmptyState
+                title="No goods receipts found"
+                description="Record incoming deliveries against purchase orders."
+                action={
+                  canCreate ? (
+                    <Button onClick={() => openModal('gr')}>
+                      <Plus className="h-4 w-4 mr-2" />
+                      New goods receipt
+                    </Button>
+                  ) : undefined
+                }
+              />
+            </div>
+          ) : (
+            <Table
+              columns={grColumns}
+              data={(goodsReceipts?.data as GoodsReceipt[]) || []}
+              loading={grLoading}
+              onRowClick={(row) => {
+                setSelectedGr(row as unknown as GoodsReceipt);
+                setPostGrError(null);
+                setGrDetailOpen(true);
+              }}
+              embedded
+            />
+          )}
+          <div className="px-4 pb-4">
+            <TablePagination pagination={goodsReceipts?.pagination} page={grPage} onPageChange={setGrPage} label="receipts" />
+          </div>
+        </DataPanel>
+      )}
+
+      {activeTab === 5 && (
+        <DataPanel>
+          <div className="p-4 pb-0 sm:max-w-md">
             <Input placeholder="Search suppliers…" value={supSearch} onChange={(e) => { setSupSearch(e.target.value); setSupPage(1); }} />
           </div>
-          <Table
-            columns={supplierColumns}
-            data={suppliers?.data || []}
-            loading={supLoading}
-            onRowClick={(row) => openModal('supplier', row as unknown as Supplier)}
-          />
-          {renderPagination(suppliers?.pagination, supPage, setSupPage)}
-        </>
+          {(suppliers?.data?.length || 0) === 0 && !supLoading ? (
+            <div className="p-6">
+              <EmptyState
+                title="No suppliers found"
+                description="Add suppliers to manage your procurement network."
+                action={
+                  canCreate ? (
+                    <Button onClick={() => openModal('supplier')}>
+                      <Plus className="h-4 w-4 mr-2" />
+                      Add supplier
+                    </Button>
+                  ) : undefined
+                }
+              />
+            </div>
+          ) : (
+            <Table
+              columns={supplierColumns}
+              data={suppliers?.data || []}
+              loading={supLoading}
+              onRowClick={(row) => openModal('supplier', row as unknown as Supplier)}
+              embedded
+            />
+          )}
+          <div className="px-4 pb-4">
+            <TablePagination pagination={suppliers?.pagination} page={supPage} onPageChange={setSupPage} label="suppliers" />
+          </div>
+        </DataPanel>
       )}
 
       <Modal open={modalType !== null} onClose={closeModal} title={modalType ? modalTitles[modalType] : ''} size={modalType === 'po' || modalType === 'gr' ? 'xl' : 'lg'}>

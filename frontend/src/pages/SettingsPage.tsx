@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Building2, MapPin, Percent, Shield, ChevronRight } from 'lucide-react';
 import { settingsApi, authApi } from '../services/api';
-import { PageHeader, Card, Button, Input, Alert, PageToolbar } from '../components/ui';
+import { PageHeader, Card, Button, Input, Alert, PageToolbar, EmptyState, Badge } from '../components/ui';
 import { useAuth } from '../contexts/AuthContext';
 import { CompanySettings } from '../types';
 
-const tabs = ['Company Profile', 'Branches & Tax', 'Security'];
+const tabs = ['Overview', 'Company Profile', 'Branches & Tax', 'Security'];
 
 interface CompanyFormData {
   name: string;
@@ -22,7 +23,7 @@ interface CompanyFormData {
 
 export function SettingsPage() {
   const queryClient = useQueryClient();
-  const { hasPermission } = useAuth();
+  const { hasPermission, user } = useAuth();
   const [activeTab, setActiveTab] = useState(0);
   const [successMessage, setSuccessMessage] = useState('');
   const [twoFaQr, setTwoFaQr] = useState<string | null>(null);
@@ -30,6 +31,7 @@ export function SettingsPage() {
   const [twoFaMessage, setTwoFaMessage] = useState('');
 
   const canUpdate = hasPermission('settings:update');
+  const twoFaEnabled = !!(user as { twoFactorEnabled?: boolean } | null)?.twoFactorEnabled;
 
   const { data: company, isLoading } = useQuery({
     queryKey: ['company'],
@@ -63,13 +65,115 @@ export function SettingsPage() {
     },
   });
 
+  const goToTab = (index: number) => setActiveTab(index);
+
   return (
-    <div>
-      <PageHeader subtitle="Company profile, branches, and tax configuration" />
+    <div className="space-y-1">
+      <PageHeader
+        title="Settings"
+        subtitle="Company profile, branches, and tax configuration"
+      />
 
       <PageToolbar tabs={tabs} activeTab={activeTab} onTabChange={setActiveTab} />
 
       {activeTab === 0 && (
+        <div className="space-y-4">
+          {isLoading ? (
+            <Card title="Company summary">
+              <p className="text-sm text-slate-500">Loading…</p>
+            </Card>
+          ) : company ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              <button
+                type="button"
+                onClick={() => goToTab(1)}
+                className="flex items-center gap-4 p-4 rounded-xl border border-slate-200 bg-white text-left transition-all hover:shadow-md hover:-translate-y-0.5"
+              >
+                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary-50 text-primary-600">
+                  <Building2 className="h-5 w-5" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs text-slate-500">Company</p>
+                  <p className="font-semibold text-slate-900 truncate">{company.name}</p>
+                  {company.legalName && (
+                    <p className="text-xs text-slate-500 mt-0.5 truncate">{company.legalName}</p>
+                  )}
+                </div>
+                <ChevronRight className="h-4 w-4 text-slate-400 shrink-0" />
+              </button>
+
+              <button
+                type="button"
+                onClick={() => goToTab(2)}
+                className="flex items-center gap-4 p-4 rounded-xl border border-slate-200 bg-white text-left transition-all hover:shadow-md hover:-translate-y-0.5"
+              >
+                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-violet-50 text-violet-600">
+                  <MapPin className="h-5 w-5" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs text-slate-500">Branches</p>
+                  <p className="font-semibold text-slate-900">{company.branches?.length || 0}</p>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    {(company.branches?.length || 0) === 1 ? 'location configured' : 'locations configured'}
+                  </p>
+                </div>
+                <ChevronRight className="h-4 w-4 text-slate-400 shrink-0" />
+              </button>
+
+              <button
+                type="button"
+                onClick={() => goToTab(2)}
+                className="flex items-center gap-4 p-4 rounded-xl border border-slate-200 bg-white text-left transition-all hover:shadow-md hover:-translate-y-0.5"
+              >
+                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
+                  <Percent className="h-5 w-5" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs text-slate-500">VAT rate</p>
+                  <p className="font-semibold text-slate-900">{Number(company.vatRate) || 16}%</p>
+                  <p className="text-xs text-slate-500 mt-0.5">{company.currency || 'KES'} · default tax</p>
+                </div>
+                <ChevronRight className="h-4 w-4 text-slate-400 shrink-0" />
+              </button>
+
+              <button
+                type="button"
+                onClick={() => goToTab(3)}
+                className="flex items-center gap-4 p-4 rounded-xl border border-slate-200 bg-white text-left transition-all hover:shadow-md hover:-translate-y-0.5"
+              >
+                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
+                  <Shield className="h-5 w-5" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs text-slate-500">Two-factor auth</p>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <p className="font-semibold text-slate-900">{twoFaEnabled ? 'Enabled' : 'Not enabled'}</p>
+                    <Badge variant={twoFaEnabled ? 'success' : 'warning'}>
+                      {twoFaEnabled ? 'Active' : 'Off'}
+                    </Badge>
+                  </div>
+                  <p className="text-xs text-slate-500 mt-0.5">Account security</p>
+                </div>
+                <ChevronRight className="h-4 w-4 text-slate-400 shrink-0" />
+              </button>
+            </div>
+          ) : (
+            <EmptyState title="Company not configured" description="Set up your company profile to get started." />
+          )}
+
+          {company && (
+            <Card title="Quick links" padding>
+              <div className="flex flex-wrap gap-2">
+                <Button variant="secondary" size="sm" onClick={() => goToTab(1)}>Edit company profile</Button>
+                <Button variant="secondary" size="sm" onClick={() => goToTab(2)}>Branches & tax</Button>
+                <Button variant="secondary" size="sm" onClick={() => goToTab(3)}>Security settings</Button>
+              </div>
+            </Card>
+          )}
+        </div>
+      )}
+
+      {activeTab === 1 && (
         <Card title="Company Profile">
           {isLoading ? (
             <p className="text-sm text-slate-500">Loading…</p>
@@ -95,7 +199,7 @@ export function SettingsPage() {
         </Card>
       )}
 
-      {activeTab === 1 && (
+      {activeTab === 2 && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <Card title="Branches">
             {company?.branches?.length ? company.branches.map((branch) => (
@@ -105,7 +209,9 @@ export function SettingsPage() {
                   <p className="text-xs text-slate-500">{branch.code} · {branch.city}</p>
                 </div>
               </div>
-            )) : <p className="text-slate-500 text-sm">No branches configured</p>}
+            )) : (
+              <EmptyState title="No branches configured" description="Branches are set up during system seeding or by your administrator." />
+            )}
           </Card>
 
           <Card title="Tax Rates">
@@ -114,12 +220,14 @@ export function SettingsPage() {
                 <span className="text-slate-700">{tax.name}</span>
                 <span className="font-medium text-slate-900">{tax.rate}% {tax.isDefault && '(Default)'}</span>
               </div>
-            )) : <p className="text-slate-500 text-sm">No tax rates configured</p>}
+            )) : (
+              <EmptyState title="No tax rates configured" description="Tax rates are defined during company setup." />
+            )}
           </Card>
         </div>
       )}
 
-      {activeTab === 2 && (
+      {activeTab === 3 && (
         <Card title="Two-Factor Authentication">
           <p className="text-sm text-slate-600 mb-4">
             Protect your account with an authenticator app (Google Authenticator, Authy, etc.).

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Chart as ChartJS,
@@ -27,11 +27,14 @@ import {
   HeartHandshake,
   ClipboardList,
   Wallet,
-  ChevronRight,
   Bell,
+  Plus,
+  Truck,
+  FileText,
 } from 'lucide-react';
 import { dashboardApi } from '../services/api';
 import {
+  PageHeader,
   StatCard,
   Card,
   Badge,
@@ -39,13 +42,19 @@ import {
   Select,
   Alert,
   EmptyState,
+  QuickActionCard,
+  QuickActionGrid,
+  DataPanel,
   formatCurrency,
   getStatusBadge,
   LoadingSpinner,
+  PageToolbar,
 } from '../components/ui';
 import { DashboardCharts, DashboardKPIs } from '../types';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, Title, Tooltip, Legend, ArcElement, Filler);
+
+const tabs = ['Overview', 'Analytics', 'Alerts'];
 
 const chartDefaults = {
   responsive: true,
@@ -69,6 +78,13 @@ const CHART_DAYS_OPTIONS = [
   { value: '90', label: 'Last 90 days' },
 ];
 
+const MODULE_SNAPSHOT_COLORS: Record<string, string> = {
+  hr: 'from-violet-500 to-purple-600',
+  crm: 'from-pink-500 to-rose-600',
+  procurement: 'from-blue-500 to-indigo-600',
+  finance: 'from-emerald-500 to-teal-600',
+};
+
 function formatLastUpdated(iso?: string) {
   if (!iso) return '';
   return new Date(iso).toLocaleString('en-KE', {
@@ -80,8 +96,12 @@ function formatLastUpdated(iso?: string) {
 }
 
 export function DashboardPage() {
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const [activeTab, setActiveTab] = useState(0);
   const [chartDays, setChartDays] = useState('30');
+
+  const goToTab = (index: number) => setActiveTab(index);
 
   const {
     data: kpis,
@@ -103,9 +123,11 @@ export function DashboardPage() {
   } = useQuery({
     queryKey: ['dashboard-charts', chartDays],
     queryFn: () => dashboardApi.getCharts(Number(chartDays)).then((r) => r.data.data as DashboardCharts),
+    enabled: activeTab === 0 || activeTab === 1,
   });
 
   const isRefreshing = kpisFetching || chartsFetching;
+  const pendingTotal = kpis?.pendingActions?.reduce((s, a) => s + a.count, 0) ?? 0;
 
   const handleRefresh = () => {
     refetchKpis();
@@ -115,25 +137,36 @@ export function DashboardPage() {
   };
 
   if (kpisLoading) {
-    return <LoadingSpinner className="h-64" size="md" />;
+    return (
+      <div className="space-y-1">
+        <PageHeader title="Dashboard" subtitle="Business overview, analytics, and items needing attention" />
+        <DataPanel>
+          <LoadingSpinner className="h-64 py-16" size="md" />
+        </DataPanel>
+      </div>
+    );
   }
 
-  if (kpisError) {
+  if (kpisError || !kpis) {
     return (
-      <Alert variant="error">
-        Failed to load dashboard data.{' '}
-        <button type="button" onClick={() => refetchKpis()} className="underline font-medium">
-          Retry
-        </button>
-      </Alert>
+      <div className="space-y-1">
+        <PageHeader title="Dashboard" subtitle="Business overview, analytics, and items needing attention" />
+        <Alert variant="error">
+          Failed to load dashboard data.{' '}
+          <button type="button" onClick={() => refetchKpis()} className="underline font-medium">
+            Retry
+          </button>
+        </Alert>
+      </div>
     );
   }
 
   const salesTotal = charts?.salesTrend?.reduce((s, d) => s + d.amount, 0) || 0;
   const hasSalesTrend = salesTotal > 0;
   const hasCategories = (charts?.productCategories?.length || 0) > 0;
-  const hasProductionStatus = (kpis?.productionStatus?.length || 0) > 0;
-  const hasTopSellers = (kpis?.topSellingFilters?.length || 0) > 0;
+  const hasProductionStatus = (kpis.productionStatus?.length || 0) > 0;
+  const hasTopSellers = (kpis.topSellingFilters?.length || 0) > 0;
+  const snapshots = kpis.moduleSnapshots;
 
   const salesChartData = {
     labels: charts?.salesTrend?.map((d) => d.date.slice(5)) || [],
@@ -165,390 +198,475 @@ export function DashboardPage() {
   };
 
   const productionChartData = {
-    labels: kpis?.productionStatus?.map((p) => p.status.replace(/_/g, ' ')) || [],
+    labels: kpis.productionStatus?.map((p) => p.status.replace(/_/g, ' ')) || [],
     datasets: [
       {
         label: 'Orders',
-        data: kpis?.productionStatus?.map((p) => p.count) || [],
-        backgroundColor: kpis?.productionStatus?.map((p) => PRODUCTION_COLORS[p.status] || '#6366f1') || [],
+        data: kpis.productionStatus?.map((p) => p.count) || [],
+        backgroundColor: kpis.productionStatus?.map((p) => PRODUCTION_COLORS[p.status] || '#6366f1') || [],
         borderRadius: 6,
         borderSkipped: false,
       },
     ],
   };
 
-  const snapshots = kpis?.moduleSnapshots;
+  const toolbarActions = (
+    <div className="flex flex-wrap items-center gap-2">
+      {activeTab === 1 && (
+        <Select
+          options={CHART_DAYS_OPTIONS}
+          value={chartDays}
+          onChange={(e) => setChartDays(e.target.value)}
+          className="w-36"
+        />
+      )}
+      {kpis.lastUpdated && activeTab !== 2 && (
+        <span className="hidden sm:inline text-xs text-slate-500">
+          Updated {formatLastUpdated(kpis.lastUpdated)}
+        </span>
+      )}
+      <Button variant="secondary" size="sm" onClick={handleRefresh} loading={isRefreshing}>
+        <RefreshCw className="h-4 w-4 mr-1.5" />
+        Refresh
+      </Button>
+    </div>
+  );
 
   return (
-    <div>
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-        <div className="flex items-center gap-3">
-          <Select
-            options={CHART_DAYS_OPTIONS}
-            value={chartDays}
-            onChange={(e) => setChartDays(e.target.value)}
-            className="w-40"
-          />
-          {kpis?.lastUpdated && (
-            <span className="text-xs text-slate-500">Updated {formatLastUpdated(kpis.lastUpdated)}</span>
-          )}
-        </div>
-        <Button variant="secondary" size="sm" onClick={handleRefresh} loading={isRefreshing}>
-          <RefreshCw className="h-4 w-4 mr-1.5" />
-          Refresh
-        </Button>
-      </div>
+    <div className="space-y-1">
+      <PageHeader
+        title="Dashboard"
+        subtitle="Business overview, analytics, and items needing attention"
+        action={
+          pendingTotal > 0 ? (
+            <Button variant="secondary" size="sm" onClick={() => goToTab(2)}>
+              <Bell className="h-4 w-4 mr-1.5 text-amber-500" />
+              {pendingTotal} pending
+            </Button>
+          ) : undefined
+        }
+      />
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-4">
         <StatCard
-          title="Sales Today"
-          value={formatCurrency(kpis?.salesToday || 0)}
+          title="Sales today"
+          value={formatCurrency(kpis.salesToday)}
           icon={<DollarSign className="h-5 w-5 text-white" />}
           color="from-emerald-500 to-teal-600"
         />
         <StatCard
-          title="Monthly Revenue"
-          value={formatCurrency(kpis?.monthlyRevenue || 0)}
+          title="Monthly revenue"
+          value={formatCurrency(kpis.monthlyRevenue)}
           icon={<TrendingUp className="h-5 w-5 text-white" />}
           color="from-primary-500 to-indigo-600"
         />
         <StatCard
-          title="Production Orders"
-          value={kpis?.productionOrders || 0}
+          title="Production orders"
+          value={kpis.productionOrders}
           icon={<Factory className="h-5 w-5 text-white" />}
           color="from-violet-500 to-purple-600"
         />
-        <Link to="/inventory" className="block">
-          <StatCard
-            title="Inventory Value"
-            value={formatCurrency(kpis?.inventoryValue || 0)}
-            icon={<Package className="h-5 w-5 text-white" />}
-            color="from-orange-500 to-amber-600"
-          />
-        </Link>
-      </div>
-
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
-        <Link to="/procurement" className="block">
-          <StatCard
-            title="Purchase Orders"
-            value={kpis?.purchaseOrders || 0}
-            icon={<ShoppingCart className="h-5 w-5 text-white" />}
-            color="from-indigo-500 to-blue-600"
-          />
-        </Link>
-        <Link to="/production" className="block">
-          <StatCard
-            title="Orders Awaiting Production"
-            value={kpis?.ordersAwaitingProduction || 0}
-            icon={<Factory className="h-5 w-5 text-white" />}
-            color="from-amber-500 to-orange-600"
-          />
-        </Link>
         <StatCard
-          title="Finished Goods"
-          value={kpis?.finishedGoods?.toLocaleString() || 0}
+          title="Inventory value"
+          value={formatCurrency(kpis.inventoryValue)}
           icon={<Package className="h-5 w-5 text-white" />}
-          color="from-cyan-500 to-sky-600"
+          color="from-orange-500 to-amber-600"
         />
-        <Link to="/inventory" className="block">
-          <StatCard
-            title="Low Stock Alerts"
-            value={kpis?.rawMaterialsLow || 0}
-            icon={<AlertTriangle className="h-5 w-5 text-white" />}
-            color="from-red-500 to-rose-600"
-          />
-        </Link>
+        <StatCard
+          title="Low stock"
+          value={kpis.rawMaterialsLow}
+          icon={<AlertTriangle className="h-5 w-5 text-white" />}
+          color="from-red-500 to-rose-600"
+        />
       </div>
 
-      {snapshots && (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
-          <Link to="/hr">
-            <Card className="hover:ring-2 hover:ring-primary-100 transition-all cursor-pointer h-full">
-              <div className="flex items-start gap-3">
-                <div className="h-9 w-9 rounded-xl bg-violet-100 flex items-center justify-center">
-                  <Users className="h-4 w-4 text-violet-600" />
+      <PageToolbar tabs={tabs} activeTab={activeTab} onTabChange={setActiveTab} actions={toolbarActions} />
+
+      {activeTab === 0 && (
+        <div className="space-y-4">
+          <QuickActionGrid>
+            <QuickActionCard
+              label="New sales order"
+              desc="Create a customer order"
+              icon={Plus}
+              color="bg-emerald-50 text-emerald-600 border-emerald-100"
+              onClick={() => navigate('/sales')}
+            />
+            <QuickActionCard
+              label="Production schedule"
+              desc="View and manage manufacturing"
+              icon={Factory}
+              color="bg-orange-50 text-orange-600 border-orange-100"
+              onClick={() => navigate('/production')}
+            />
+            <QuickActionCard
+              label="Inventory & stock"
+              desc="Monitor materials and warehouses"
+              icon={Package}
+              color="bg-violet-50 text-violet-600 border-violet-100"
+              onClick={() => navigate('/inventory')}
+            />
+          </QuickActionGrid>
+
+          {snapshots && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+              {[
+                {
+                  key: 'hr',
+                  path: '/hr',
+                  icon: Users,
+                  label: 'HR',
+                  headline: `${snapshots.hr.attendanceToday} present`,
+                  sub: `${snapshots.hr.pendingLeave} leave pending · ${snapshots.hr.activeEmployees} staff`,
+                },
+                {
+                  key: 'crm',
+                  path: '/customers',
+                  icon: HeartHandshake,
+                  label: 'CRM',
+                  headline: `${snapshots.crm.openComplaints} complaints`,
+                  sub: `${snapshots.crm.openOpportunities} deals · ${formatCurrency(snapshots.crm.pipelineValue)} pipeline`,
+                },
+                {
+                  key: 'procurement',
+                  path: '/procurement',
+                  icon: ClipboardList,
+                  label: 'Procurement',
+                  headline: `${snapshots.procurement.pendingRequisitions} requisitions`,
+                  sub: `${snapshots.procurement.openRfqs} RFQs · ${snapshots.procurement.activePurchaseOrders} active POs`,
+                },
+                {
+                  key: 'finance',
+                  path: '/finance',
+                  icon: Wallet,
+                  label: 'Finance',
+                  headline: `${snapshots.finance.overdueInvoices} overdue`,
+                  sub: `${formatCurrency(snapshots.finance.accountsReceivable)} receivable · ${formatCurrency(snapshots.finance.monthlyProfit)} profit`,
+                },
+              ].map((mod) => (
+                <Link key={mod.key} to={mod.path} className="block group">
+                  <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden shadow-sm hover:shadow-md transition-shadow h-full">
+                    <div className={`h-1.5 bg-gradient-to-r ${MODULE_SNAPSHOT_COLORS[mod.key]}`} />
+                    <div className="p-4 flex items-start gap-3">
+                      <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br ${MODULE_SNAPSHOT_COLORS[mod.key]} text-white shadow-sm`}>
+                        <mod.icon className="h-5 w-5" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">{mod.label}</p>
+                        <p className="text-base font-bold text-slate-900 mt-0.5">{mod.headline}</p>
+                        <p className="text-xs text-slate-500 mt-0.5">{mod.sub}</p>
+                      </div>
+                    </div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+            <Card
+              title="Recent orders"
+              action={
+                <Button variant="ghost" size="sm" onClick={() => navigate('/sales')}>
+                  View all
+                </Button>
+              }
+              padding={false}
+            >
+              {kpis.recentOrders?.length ? (
+                <ul className="divide-y divide-slate-100">
+                  {kpis.recentOrders.slice(0, 6).map((order) => (
+                    <li key={order.id}>
+                      <Link
+                        to="/sales"
+                        className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50/80 transition-colors"
+                      >
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary-50 text-primary-600">
+                          <ShoppingCart className="h-4 w-4" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-slate-900 truncate">{order.orderNumber}</p>
+                          <p className="text-xs text-slate-500">{order.customer}</p>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <p className="text-sm font-semibold tabular-nums">{formatCurrency(order.total)}</p>
+                          <Badge variant={getStatusBadge(order.status)}>{order.status.replace(/_/g, ' ')}</Badge>
+                        </div>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <div className="p-6">
+                  <EmptyState
+                    title="No recent orders"
+                    description="Sales orders will appear here once created."
+                    action={
+                      <Button variant="secondary" size="sm" onClick={() => navigate('/sales')}>
+                        Go to Sales
+                      </Button>
+                    }
+                  />
                 </div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">HR</p>
-                  <p className="text-lg font-bold text-slate-900 mt-0.5">{snapshots.hr.attendanceToday} present</p>
-                  <p className="text-xs text-slate-500">{snapshots.hr.pendingLeave} leave pending · {snapshots.hr.activeEmployees} staff</p>
+              )}
+            </Card>
+
+            <Card title="Financial snapshot" padding={false}>
+              <div className="p-4 space-y-3">
+                <div className="flex justify-between items-center rounded-xl bg-emerald-50/80 px-4 py-3 ring-1 ring-emerald-100">
+                  <span className="text-sm text-emerald-800">Monthly revenue</span>
+                  <span className="font-bold text-emerald-700">{formatCurrency(kpis.monthlyRevenue)}</span>
                 </div>
-                <ChevronRight className="h-4 w-4 text-slate-300 shrink-0" />
+                <div className="flex justify-between items-center rounded-xl bg-red-50/80 px-4 py-3 ring-1 ring-red-100">
+                  <span className="text-sm text-red-800">Monthly expenses</span>
+                  <span className="font-bold text-red-700">{formatCurrency(kpis.monthlyExpenses)}</span>
+                </div>
+                <div className="rounded-xl bg-primary-50 px-4 py-4 ring-1 ring-primary-100">
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-900 font-semibold">Net profit</span>
+                    <span className="font-bold text-xl text-primary-700">{formatCurrency(kpis.monthlyProfit)}</span>
+                  </div>
+                  <p className="text-xs text-slate-500 mt-1">Sales minus purchases (month to date)</p>
+                </div>
+              </div>
+              <div className="px-4 pb-4 grid grid-cols-2 gap-2">
+                <Link to="/procurement" className="block">
+                  <div className="rounded-lg border border-slate-100 bg-slate-50/80 px-3 py-2 text-center">
+                    <p className="text-lg font-bold text-slate-900">{kpis.purchaseOrders}</p>
+                    <p className="text-[10px] uppercase tracking-wide text-slate-500">Purchase orders</p>
+                  </div>
+                </Link>
+                <Link to="/production" className="block">
+                  <div className="rounded-lg border border-slate-100 bg-slate-50/80 px-3 py-2 text-center">
+                    <p className="text-lg font-bold text-slate-900">{kpis.ordersAwaitingProduction}</p>
+                    <p className="text-[10px] uppercase tracking-wide text-slate-500">Awaiting production</p>
+                  </div>
+                </Link>
               </div>
             </Card>
-          </Link>
-          <Link to="/customers">
-            <Card className="hover:ring-2 hover:ring-primary-100 transition-all cursor-pointer h-full">
-              <div className="flex items-start gap-3">
-                <div className="h-9 w-9 rounded-xl bg-pink-100 flex items-center justify-center">
-                  <HeartHandshake className="h-4 w-4 text-pink-600" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">CRM</p>
-                  <p className="text-lg font-bold text-slate-900 mt-0.5">{snapshots.crm.openComplaints} complaints</p>
-                  <p className="text-xs text-slate-500">{snapshots.crm.openOpportunities} deals · {formatCurrency(snapshots.crm.pipelineValue)} pipeline</p>
-                </div>
-                <ChevronRight className="h-4 w-4 text-slate-300 shrink-0" />
-              </div>
-            </Card>
-          </Link>
-          <Link to="/procurement">
-            <Card className="hover:ring-2 hover:ring-primary-100 transition-all cursor-pointer h-full">
-              <div className="flex items-start gap-3">
-                <div className="h-9 w-9 rounded-xl bg-blue-100 flex items-center justify-center">
-                  <ClipboardList className="h-4 w-4 text-blue-600" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Procurement</p>
-                  <p className="text-lg font-bold text-slate-900 mt-0.5">{snapshots.procurement.pendingRequisitions} requisitions</p>
-                  <p className="text-xs text-slate-500">{snapshots.procurement.openRfqs} RFQs · {snapshots.procurement.activePurchaseOrders} active POs</p>
-                </div>
-                <ChevronRight className="h-4 w-4 text-slate-300 shrink-0" />
-              </div>
-            </Card>
-          </Link>
-          <Link to="/finance">
-            <Card className="hover:ring-2 hover:ring-primary-100 transition-all cursor-pointer h-full">
-              <div className="flex items-start gap-3">
-                <div className="h-9 w-9 rounded-xl bg-emerald-100 flex items-center justify-center">
-                  <Wallet className="h-4 w-4 text-emerald-600" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Finance</p>
-                  <p className="text-lg font-bold text-slate-900 mt-0.5">{snapshots.finance.overdueInvoices} overdue</p>
-                  <p className="text-xs text-slate-500">{formatCurrency(snapshots.finance.accountsReceivable)} receivable · {formatCurrency(snapshots.finance.monthlyProfit)} profit</p>
-                </div>
-                <ChevronRight className="h-4 w-4 text-slate-300 shrink-0" />
-              </div>
-            </Card>
-          </Link>
+          </div>
         </div>
       )}
 
-      {kpis?.pendingActions && kpis.pendingActions.length > 0 && (
-        <Card
-          title="Pending Actions"
-          className="mb-4"
-          action={
-            <span className="flex items-center gap-1 text-xs text-amber-600 font-medium">
-              <Bell className="h-3.5 w-3.5" />
-              {kpis.pendingActions.reduce((s, a) => s + a.count, 0)} items need attention
-            </span>
-          }
-        >
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-            {kpis.pendingActions.map((action) => (
-              <Link
-                key={action.type}
-                to={action.path}
-                className="flex items-center justify-between px-3 py-2.5 rounded-xl bg-amber-50/80 ring-1 ring-amber-100 hover:bg-amber-100/80 transition-colors"
-              >
-                <span className="text-sm text-amber-900">{action.label}</span>
-                <Badge variant="warning">{action.count}</Badge>
-              </Link>
-            ))}
+      {activeTab === 1 && (
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <Card title={`Sales trend (${chartDays} days)`} className="lg:col-span-2">
+              {chartsLoading ? (
+                <LoadingSpinner className="h-52" size="sm" />
+              ) : chartsError ? (
+                <Alert variant="error">
+                  Failed to load chart.{' '}
+                  <button type="button" onClick={() => refetchCharts()} className="underline">
+                    Retry
+                  </button>
+                </Alert>
+              ) : hasSalesTrend ? (
+                <Line
+                  data={salesChartData}
+                  options={{
+                    ...chartDefaults,
+                    plugins: { ...chartDefaults.plugins, legend: { display: false } },
+                    scales: {
+                      x: { grid: { display: false }, ticks: { color: '#64748b', maxTicksLimit: 10 } },
+                      y: { beginAtZero: true, grid: { color: '#f1f5f9' }, ticks: { color: '#64748b' } },
+                    },
+                  }}
+                />
+              ) : (
+                <EmptyState title="No sales in this period" description="Sales invoices will appear here once recorded." />
+              )}
+            </Card>
+
+            <Card title="Sales mix by category">
+              {chartsLoading ? (
+                <LoadingSpinner className="h-52" size="sm" />
+              ) : chartsError ? (
+                <Alert variant="error">Chart unavailable</Alert>
+              ) : hasCategories ? (
+                <div className="h-52 flex items-center justify-center">
+                  <Doughnut
+                    data={categoryData}
+                    options={{
+                      ...chartDefaults,
+                      maintainAspectRatio: false,
+                      plugins: { ...chartDefaults.plugins, legend: { position: 'bottom' } },
+                    }}
+                  />
+                </div>
+              ) : (
+                <EmptyState title="No products yet" description="Add products to see category breakdown." />
+              )}
+            </Card>
           </div>
-        </Card>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <Card title="Production status">
+              {hasProductionStatus ? (
+                <div className="h-48">
+                  <Bar
+                    data={productionChartData}
+                    options={{
+                      ...chartDefaults,
+                      indexAxis: 'y' as const,
+                      plugins: { ...chartDefaults.plugins, legend: { display: false } },
+                      scales: {
+                        x: { beginAtZero: true, grid: { color: '#f1f5f9' }, ticks: { stepSize: 1 } },
+                        y: { grid: { display: false } },
+                      },
+                    }}
+                  />
+                </div>
+              ) : (
+                <EmptyState
+                  title="No production orders"
+                  description="Production orders will show status breakdown here."
+                  action={
+                    <Button variant="secondary" size="sm" onClick={() => navigate('/production')}>
+                      Go to Production
+                    </Button>
+                  }
+                />
+              )}
+            </Card>
+
+            <Card title="Top delivered products" padding={false}>
+              {hasTopSellers ? (
+                <ul className="divide-y divide-slate-100">
+                  {kpis.topSellingFilters.map((product, idx) => (
+                    <li key={product.id} className="flex items-center gap-3 px-4 py-3">
+                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary-50 text-xs font-bold text-primary-700">
+                        {idx + 1}
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-slate-900 truncate">{product.name}</p>
+                        <p className="text-xs text-slate-500">{product.sku}</p>
+                      </div>
+                      <span className="text-sm font-semibold tabular-nums text-slate-700 shrink-0">
+                        {product.quantitySold.toLocaleString()} sold
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <div className="p-6">
+                  <EmptyState
+                    title="No sales data yet"
+                    description="Top sellers appear after orders are fulfilled."
+                    action={
+                      <Button variant="secondary" size="sm" onClick={() => navigate('/sales')}>
+                        Create sales order
+                      </Button>
+                    }
+                  />
+                </div>
+              )}
+            </Card>
+          </div>
+        </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
-        <Card
-          title={`Sales Trend (${chartDays} Days)`}
-          className="lg:col-span-2"
-        >
-          {chartsLoading ? (
-            <LoadingSpinner className="h-52" size="sm" />
-          ) : chartsError ? (
-            <Alert variant="error">
-              Failed to load chart.{' '}
-              <button type="button" onClick={() => refetchCharts()} className="underline">
-                Retry
-              </button>
-            </Alert>
-          ) : hasSalesTrend ? (
-            <Line
-              data={salesChartData}
-              options={{
-                ...chartDefaults,
-                plugins: { ...chartDefaults.plugins, legend: { display: false } },
-                scales: {
-                  x: { grid: { display: false }, ticks: { color: '#64748b', maxTicksLimit: 10 } },
-                  y: { beginAtZero: true, grid: { color: '#f1f5f9' }, ticks: { color: '#64748b' } },
-                },
-              }}
-            />
-          ) : (
-            <EmptyState
-              title="No sales in this period"
-              description="Sales invoices will appear here once recorded."
-            />
-          )}
-        </Card>
-
-        <Card title="Sales Mix by Category">
-          {chartsLoading ? (
-            <LoadingSpinner className="h-52" size="sm" />
-          ) : chartsError ? (
-            <Alert variant="error">Chart unavailable</Alert>
-          ) : hasCategories ? (
-            <div className="h-52 flex items-center justify-center">
-              <Doughnut
-                data={categoryData}
-                options={{
-                  ...chartDefaults,
-                  maintainAspectRatio: false,
-                  plugins: { ...chartDefaults.plugins, legend: { position: 'bottom' } },
-                }}
-              />
-            </div>
-          ) : (
-            <EmptyState title="No products yet" description="Add products to see category breakdown." />
-          )}
-        </Card>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
-        <Card title="Production Status">
-          {hasProductionStatus ? (
-            <div className="h-48">
-              <Bar
-                data={productionChartData}
-                options={{
-                  ...chartDefaults,
-                  indexAxis: 'y' as const,
-                  plugins: { ...chartDefaults.plugins, legend: { display: false } },
-                  scales: {
-                    x: { beginAtZero: true, grid: { color: '#f1f5f9' }, ticks: { stepSize: 1 } },
-                    y: { grid: { display: false } },
-                  },
-                }}
-              />
-            </div>
-          ) : (
-            <EmptyState
-              title="No production orders"
-              description="Production orders will show status breakdown here."
+      {activeTab === 2 && (
+        <div className="space-y-4">
+          {kpis.pendingActions && kpis.pendingActions.length > 0 ? (
+            <Card
+              title="Pending actions"
               action={
-                <Link to="/production">
-                  <Button variant="secondary" size="sm">Go to Production</Button>
-                </Link>
+                <span className="flex items-center gap-1 text-xs text-amber-600 font-medium">
+                  <Bell className="h-3.5 w-3.5" />
+                  {pendingTotal} items need attention
+                </span>
               }
-            />
-          )}
-        </Card>
-
-        <Card title="Top Delivered Products">
-          {hasTopSellers ? (
-            <div className="space-y-1">
-              {kpis!.topSellingFilters.map((product, idx) => (
-                <div
-                  key={product.id}
-                  className="flex items-center justify-between py-2.5 px-2 rounded-xl hover:bg-surface-muted/60 transition-colors"
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary-50 text-xs font-bold text-primary-700">
-                      {idx + 1}
-                    </span>
-                    <div className="min-w-0">
-                      <p className="font-semibold text-sm text-slate-900 truncate">{product.name}</p>
-                      <p className="text-xs text-slate-500">{product.sku}</p>
-                    </div>
-                  </div>
-                  <span className="text-sm font-semibold text-slate-700 shrink-0 ml-2">
-                    {product.quantitySold.toLocaleString()} sold
-                  </span>
-                </div>
-              ))}
-            </div>
+              padding={false}
+            >
+              <ul className="divide-y divide-slate-100">
+                {kpis.pendingActions.map((action) => (
+                  <li key={action.type}>
+                    <Link
+                      to={action.path}
+                      className="flex items-center justify-between px-4 py-3 hover:bg-amber-50/40 transition-colors"
+                    >
+                      <span className="text-sm font-medium text-slate-800">{action.label}</span>
+                      <Badge variant="warning">{action.count}</Badge>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </Card>
           ) : (
-            <EmptyState
-              title="No sales data yet"
-              description="Top sellers appear after sales orders are fulfilled."
-              action={
-                <Link to="/sales">
-                  <Button variant="secondary" size="sm">Create Sales Order</Button>
-                </Link>
-              }
-            />
-          )}
-        </Card>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <Card
-          title="Recent Orders"
-          action={
-            <Link to="/sales" className="text-xs font-medium text-primary-600 hover:text-primary-700">
-              View all
-            </Link>
-          }
-        >
-          <div className="space-y-1">
-            {kpis?.recentOrders?.length ? (
-              kpis.recentOrders.map((order) => (
-                <Link
-                  key={order.id}
-                  to="/sales"
-                  className="flex items-center justify-between py-3 px-2 rounded-xl hover:bg-surface-muted/60 transition-colors"
-                >
-                  <div>
-                    <p className="font-semibold text-sm text-slate-900">{order.orderNumber}</p>
-                    <p className="text-xs text-slate-500 mt-0.5">{order.customer}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="font-semibold text-sm text-slate-900">{formatCurrency(order.total)}</p>
-                    <Badge variant={getStatusBadge(order.status)}>{order.status.replace(/_/g, ' ')}</Badge>
-                  </div>
-                </Link>
-              ))
-            ) : (
-              <EmptyState title="No recent orders" description="Sales orders will appear here." />
-            )}
-          </div>
-        </Card>
-
-        <Card title="Financial Summary">
-          <div className="space-y-4">
-            <div className="flex justify-between items-center rounded-xl bg-emerald-50/80 px-4 py-3 ring-1 ring-emerald-100">
-              <span className="text-sm text-emerald-800">Monthly Revenue</span>
-              <span className="font-bold text-emerald-700">{formatCurrency(kpis?.monthlyRevenue || 0)}</span>
-            </div>
-            <div className="flex justify-between items-center rounded-xl bg-red-50/80 px-4 py-3 ring-1 ring-red-100">
-              <span className="text-sm text-red-800">Monthly Expenses</span>
-              <span className="font-bold text-red-700">{formatCurrency(kpis?.monthlyExpenses || 0)}</span>
-            </div>
-            <div className="flex justify-between items-center rounded-xl bg-primary-50 px-4 py-4 ring-1 ring-primary-100">
-              <span className="text-slate-900 font-semibold">Net Profit</span>
-              <span className="font-bold text-xl text-primary-700">{formatCurrency(kpis?.monthlyProfit || 0)}</span>
-              <p className="text-xs text-slate-500 mt-1">Sales invoices minus purchase invoices (MTD)</p>
-            </div>
-          </div>
-
-          {kpis?.lowStockItems && kpis.lowStockItems.length > 0 && (
-            <div className="mt-6 pt-4 border-t border-border">
-              <div className="flex items-center justify-between mb-3">
-                <h4 className="text-sm font-semibold text-slate-900">Low Stock Materials</h4>
-                <Link to="/inventory" className="text-xs font-medium text-primary-600 hover:text-primary-700">
-                  View inventory
-                </Link>
+            <DataPanel>
+              <div className="p-6">
+                <EmptyState title="All caught up" description="No pending actions require your attention right now." />
               </div>
-              {kpis.lowStockItems.map((item) => (
-                <Link
-                  key={item.id}
-                  to="/inventory"
-                  className="flex justify-between text-sm py-2 border-b border-border/60 last:border-0 hover:bg-surface-muted/40 px-1 rounded"
-                >
-                  <span className="text-slate-600">{item.name}</span>
-                  <span className="text-red-600 font-semibold">
-                    {item.currentStock} / {item.minLevel}
-                  </span>
-                </Link>
-              ))}
-            </div>
+            </DataPanel>
           )}
-        </Card>
-      </div>
+
+          {kpis.lowStockItems && kpis.lowStockItems.length > 0 ? (
+            <Card
+              title="Low stock materials"
+              action={
+                <Button variant="ghost" size="sm" onClick={() => navigate('/inventory')}>
+                  View inventory
+                </Button>
+              }
+              padding={false}
+            >
+              <ul className="divide-y divide-slate-100">
+                {kpis.lowStockItems.map((item) => (
+                  <li key={item.id}>
+                    <Link
+                      to="/inventory"
+                      className="flex items-center gap-3 px-4 py-3 hover:bg-red-50/30 transition-colors"
+                    >
+                      <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-red-100 text-red-600">
+                        <AlertTriangle className="h-4 w-4" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-slate-900 truncate">{item.name}</p>
+                        <p className="text-xs text-slate-500">{item.code}</p>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <p className="text-sm font-bold text-red-600 tabular-nums">{item.currentStock}</p>
+                        <p className="text-xs text-red-500">min {item.minLevel}</p>
+                      </div>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          ) : (
+            <Card title="Low stock materials" padding={false}>
+              <div className="p-6">
+                <EmptyState title="Stock levels healthy" description="All materials are above minimum thresholds." />
+              </div>
+            </Card>
+          )}
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <QuickActionCard
+              label="Review finance"
+              desc="Invoices, payments, overdue items"
+              icon={Wallet}
+              color="bg-emerald-50 text-emerald-600 border-emerald-100"
+              onClick={() => navigate('/finance')}
+            />
+            <QuickActionCard
+              label="Check procurement"
+              desc="Requisitions, POs, goods receipts"
+              icon={Truck}
+              color="bg-blue-50 text-blue-600 border-blue-100"
+              onClick={() => navigate('/procurement')}
+            />
+            <QuickActionCard
+              label="View reports"
+              desc="Exports and financial statements"
+              icon={FileText}
+              color="bg-violet-50 text-violet-600 border-violet-100"
+              onClick={() => navigate('/reports')}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

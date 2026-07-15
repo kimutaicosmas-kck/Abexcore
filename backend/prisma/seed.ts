@@ -346,11 +346,21 @@ async function main() {
     prisma.employee.upsert({ where: { employeeNo: 'EMP-003' }, update: {}, create: { employeeNo: 'EMP-003', firstName: 'Peter', lastName: 'Ochieng', email: 'peter.ochieng@kenyafilters.co.ke', departmentId: departments[2].id, branchId: branch.id, position: 'Procurement Officer', hireDate: new Date('2021-03-10'), salary: 75000 } }),
   ]);
 
-  // Vehicles
+  // Vehicles — motorcycles, trucks, and lorries
   await prisma.vehicle.upsert({
     where: { registration: 'KCA 123A' },
-    update: {},
-    create: { registration: 'KCA 123A', make: 'Isuzu', model: 'NQR', capacity: '3 tons' },
+    update: { type: 'TRUCK' },
+    create: { registration: 'KCA 123A', type: 'TRUCK', make: 'Isuzu', model: 'NQR', capacity: '3 tons' },
+  });
+  await prisma.vehicle.upsert({
+    where: { registration: 'KDB 456B' },
+    update: { type: 'LORRY' },
+    create: { registration: 'KDB 456B', type: 'LORRY', make: 'Scania', model: 'P-Series', capacity: '10 tons' },
+  });
+  await prisma.vehicle.upsert({
+    where: { registration: 'KCE 789C' },
+    update: { type: 'MOTORCYCLE' },
+    create: { registration: 'KCE 789C', type: 'MOTORCYCLE', make: 'Bajaj', model: 'Boxer', capacity: '50 kg' },
   });
 
   // Dashboard demo data (sales history, pending actions, production)

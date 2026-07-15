@@ -1,5 +1,6 @@
 import { useId } from 'react';
 import clsx from 'clsx';
+import { ChevronRight } from 'lucide-react';
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: 'primary' | 'secondary' | 'danger' | 'ghost';
@@ -350,7 +351,7 @@ export function Textarea({ label, error, className, ...props }: TextareaProps) {
 
 interface AlertProps {
   children: React.ReactNode;
-  variant?: 'success' | 'error' | 'info';
+  variant?: 'success' | 'error' | 'info' | 'warning';
   className?: string;
 }
 
@@ -363,6 +364,7 @@ export function Alert({ children, variant = 'info', className }: AlertProps) {
           'bg-emerald-50 text-emerald-800 ring-emerald-200': variant === 'success',
           'bg-red-50 text-red-800 ring-red-200': variant === 'error',
           'bg-sky-50 text-sky-800 ring-sky-200': variant === 'info',
+          'bg-amber-50 text-amber-900 ring-amber-200': variant === 'warning',
         },
         className
       )}
@@ -396,6 +398,69 @@ export function EmptyState({ title, description, action }: EmptyStateProps) {
       {action && <div className="mt-4">{action}</div>}
     </div>
   );
+}
+
+interface TablePaginationProps {
+  pagination?: { page: number; totalPages: number; total?: number };
+  page: number;
+  onPageChange: (fn: (p: number) => number) => void;
+  label?: string;
+}
+
+export function TablePagination({ pagination, page, onPageChange, label = 'records' }: TablePaginationProps) {
+  if (!pagination || pagination.totalPages <= 1) return null;
+  return (
+    <div className="flex items-center justify-between px-1 pt-4 text-sm text-slate-600 border-t border-slate-100 mt-4">
+      <span>
+        Page {pagination.page} of {pagination.totalPages}
+        {pagination.total != null && ` · ${pagination.total} ${label}`}
+      </span>
+      <div className="flex gap-2">
+        <Button variant="secondary" size="sm" disabled={page <= 1} onClick={() => onPageChange((p) => p - 1)}>
+          Previous
+        </Button>
+        <Button
+          variant="secondary"
+          size="sm"
+          disabled={page >= pagination.totalPages}
+          onClick={() => onPageChange((p) => p + 1)}
+        >
+          Next
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+interface QuickActionCardProps {
+  label: string;
+  desc: string;
+  icon: React.ComponentType<{ className?: string }>;
+  color: string;
+  onClick: () => void;
+}
+
+export function QuickActionCard({ label, desc, icon: Icon, color, onClick }: QuickActionCardProps) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex items-center gap-4 p-4 rounded-xl border text-left transition-all hover:shadow-md hover:-translate-y-0.5 ${color}`}
+    >
+      <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/80">
+        <Icon className="h-5 w-5" />
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="font-semibold text-slate-900">{label}</p>
+        <p className="text-xs text-slate-500 mt-0.5">{desc}</p>
+      </div>
+      <ChevronRight className="h-4 w-4 text-slate-400 shrink-0" />
+    </button>
+  );
+}
+
+export function QuickActionGrid({ children }: { children: React.ReactNode }) {
+  return <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">{children}</div>;
 }
 
 export function FormActions({ onCancel, submitLabel = 'Save', loading, cancelLabel = 'Cancel' }: {

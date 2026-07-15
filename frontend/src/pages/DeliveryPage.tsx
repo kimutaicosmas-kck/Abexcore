@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plus, Truck, Package, MapPin, Car } from 'lucide-react';
+import { Plus, Truck, Package, MapPin, Bike, Container, AlertTriangle, ChevronRight } from 'lucide-react';
 import { deliveryApi } from '../services/api';
 import {
   PageHeader,
@@ -11,6 +11,11 @@ import {
   Select,
   StatCard,
   Card,
+  EmptyState,
+  DataPanel,
+  QuickActionCard,
+  QuickActionGrid,
+  TablePagination,
   formatDate,
   getStatusBadge,
   PageToolbar,
@@ -19,9 +24,9 @@ import { Modal } from '../components/ui/Modal';
 import { DeliveryForm } from '../components/forms/DeliveryForm';
 import { VehicleForm } from '../components/forms/VehicleForm';
 import { useAuth } from '../contexts/AuthContext';
-import { DeliveryNote, DeliveryStats, Vehicle } from '../types';
+import { DeliveryNote, DeliveryStats, Vehicle, VEHICLE_TYPE_OPTIONS, vehicleTypeLabel, VehicleType } from '../types';
 
-const tabs = ['Deliveries', 'Vehicles'];
+const tabs = ['Overview', 'Deliveries', 'Vehicles'];
 
 const STATUS_OPTIONS = [
   { value: '', label: 'All statuses' },
@@ -32,6 +37,25 @@ const STATUS_OPTIONS = [
   { value: 'FAILED', label: 'Failed' },
   { value: 'RETURNED', label: 'Returned' },
 ];
+
+const VEHICLE_TYPE_COLORS: Record<VehicleType, string> = {
+  MOTORCYCLE: 'from-sky-500 to-cyan-600',
+  TRUCK: 'from-primary-500 to-indigo-600',
+  LORRY: 'from-amber-500 to-orange-600',
+};
+
+function vehicleTypeBadgeVariant(type: string): 'info' | 'success' | 'warning' {
+  if (type === 'MOTORCYCLE') return 'info';
+  if (type === 'LORRY') return 'warning';
+  return 'success';
+}
+
+function formatVehicleLabel(vehicle?: { registration: string; type?: string; make?: string; model?: string }) {
+  if (!vehicle) return 'Unassigned';
+  const type = vehicle.type ? `${vehicleTypeLabel(vehicle.type)} · ` : '';
+  const detail = vehicle.make ? ` (${vehicle.make}${vehicle.model ? ` ${vehicle.model}` : ''})` : '';
+  return `${type}${vehicle.registration}${detail}`;
+}
 
 const NEXT_DELIVERY_STATUS: Record<string, { status: string; label: string }> = {
   PENDING: { status: 'ASSIGNED', label: 'Assign' },
@@ -47,6 +71,7 @@ export function DeliveryPage() {
   const [vehPage, setVehPage] = useState(1);
   const [search, setSearch] = useState('');
   const [vehSearch, setVehSearch] = useState('');
+  const [vehType, setVehType] = useState('');
   const [status, setStatus] = useState('');
   const [deliveryModalOpen, setDeliveryModalOpen] = useState(false);
   const [vehicleModalOpen, setVehicleModalOpen] = useState(false);
@@ -67,16 +92,16 @@ export function DeliveryPage() {
       deliveryApi
         .list({ page, limit: 15, search: search || undefined, status: status || undefined })
         .then((r) => r.data),
-    enabled: activeTab === 0,
+    enabled: activeTab === 0 || activeTab === 1,
   });
 
   const { data: vehicles, isLoading: vehLoading } = useQuery({
-    queryKey: ['vehicles', vehPage, vehSearch],
+    queryKey: ['vehicles', vehPage, vehSearch, vehType],
     queryFn: () =>
       deliveryApi
-        .vehicles({ page: vehPage, limit: 15, search: vehSearch || undefined })
+        .vehicles({ page: vehPage, limit: 15, search: vehSearch || undefined, type: vehType || undefined })
         .then((r) => r.data),
-    enabled: activeTab === 1,
+    enabled: activeTab === 0 || activeTab === 2,
   });
 
   const statusMutation = useMutation({
@@ -90,6 +115,18 @@ export function DeliveryPage() {
       setSelected(null);
     },
   });
+
+  const goToTab = (index: number) => setActiveTab(index);
+
+  const openDetail = (note: DeliveryNote) => {
+    setSelected(note);
+    setDetailOpen(true);
+  };
+
+  const recentDeliveries = activeTab === 0 ? ((deliveries?.data as DeliveryNote[]) || []).slice(0, 6) : [];
+  const activeDeliveries = activeTab === 0
+    ? ((deliveries?.data as DeliveryNote[]) || []).filter((d) => ['PENDING', 'ASSIGNED', 'IN_TRANSIT'].includes(d.status)).slice(0, 5)
+    : [];
 
   const deliveryColumns = [
     { key: 'deliveryNo', label: 'Delivery #' },
@@ -108,8 +145,10 @@ export function DeliveryPage() {
     {
       key: 'vehicle',
       label: 'Vehicle',
-      render: (_: unknown, row: Record<string, unknown>) =>
-        (row.vehicle as { registration: string })?.registration || 'Unassigned',
+      render: (_: unknown, row: Record<string, unknown>) => {
+        const vehicle = row.vehicle as { registration: string; type?: string; make?: string; model?: string } | undefined;
+        return formatVehicleLabel(vehicle);
+      },
     },
     {
       key: 'scheduledDate',
@@ -148,37 +187,61 @@ export function DeliveryPage() {
   ];
 
   const vehicleColumns = [
+    {
+      key: 'type',
+      label: 'Type',
+      render: (val: unknown) => (
+        <Badge variant={vehicleTypeBadgeVariant(val as string)}>{vehicleTypeLabel(val as string)}</Badge>
+      ),
+    },
     { key: 'registration', label: 'Registration' },
     { key: 'make', label: 'Make' },
     { key: 'model', label: 'Model' },
     { key: 'capacity', label: 'Capacity' },
   ];
 
-  const renderPagination = (
-    pagination: { page: number; totalPages: number } | undefined,
-    pg: number,
-    setPg: (fn: (p: number) => number) => void
-  ) =>
-    pagination && pagination.totalPages > 1 ? (
-      <div className="flex items-center justify-between mt-4 text-sm text-slate-600">
-        <span>Page {pagination.page} of {pagination.totalPages}</span>
-        <div className="flex gap-2">
-          <Button variant="secondary" size="sm" disabled={pg <= 1} onClick={() => setPg((p) => p - 1)}>Previous</Button>
-          <Button variant="secondary" size="sm" disabled={pg >= pagination.totalPages} onClick={() => setPg((p) => p + 1)}>Next</Button>
-        </div>
-      </div>
-    ) : null;
+  const toolbarActions =
+    canCreate &&
+    (activeTab === 1 ? (
+      <Button size="sm" onClick={() => setDeliveryModalOpen(true)}>
+        <Plus className="h-4 w-4 mr-1.5" />
+        Add Delivery
+      </Button>
+    ) : activeTab === 2 ? (
+      <Button size="sm" onClick={() => setVehicleModalOpen(true)}>
+        <Plus className="h-4 w-4 mr-1.5" />
+        Add Vehicle
+      </Button>
+    ) : undefined);
 
   return (
-    <div>
-      <PageHeader subtitle="Delivery notes, routes, vehicles, and proof of delivery" />
+    <div className="space-y-1">
+      <PageHeader
+        title="Delivery"
+        subtitle="Dispatch via motorcycles, trucks, and lorries — delivery notes and proof of delivery"
+        action={
+          stats && stats.inTransit > 0 ? (
+            <Button variant="secondary" size="sm" onClick={() => { setStatus('IN_TRANSIT'); setPage(1); goToTab(1); }}>
+              <Truck className="h-4 w-4 mr-1.5 text-primary-500" />
+              {stats.inTransit} in transit
+            </Button>
+          ) : stats && stats.pending > 0 ? (
+            <Button variant="secondary" size="sm" onClick={() => { setStatus('PENDING'); setPage(1); goToTab(1); }}>
+              <Package className="h-4 w-4 mr-1.5 text-amber-500" />
+              {stats.pending} pending
+            </Button>
+          ) : undefined
+        }
+      />
 
       {stats && (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+        <div className="grid grid-cols-2 lg:grid-cols-6 gap-3 mb-4">
           <StatCard title="Pending" value={stats.pending} icon={<Package className="h-5 w-5 text-white" />} color="from-amber-500 to-orange-600" />
           <StatCard title="In Transit" value={stats.inTransit} icon={<Truck className="h-5 w-5 text-white" />} color="from-primary-500 to-indigo-600" />
           <StatCard title="Delivered Today" value={stats.deliveredToday} icon={<MapPin className="h-5 w-5 text-white" />} color="from-emerald-500 to-teal-600" />
-          <StatCard title="Active Vehicles" value={stats.activeVehicles} icon={<Car className="h-5 w-5 text-white" />} color="from-violet-500 to-purple-600" />
+          <StatCard title="Motorcycles" value={stats.motorcycles ?? 0} icon={<Bike className="h-5 w-5 text-white" />} color="from-sky-500 to-cyan-600" />
+          <StatCard title="Trucks" value={stats.trucks ?? 0} icon={<Truck className="h-5 w-5 text-white" />} color="from-violet-500 to-purple-600" />
+          <StatCard title="Lorries" value={stats.lorries ?? 0} icon={<Container className="h-5 w-5 text-white" />} color="from-amber-500 to-orange-600" />
         </div>
       )}
 
@@ -186,40 +249,242 @@ export function DeliveryPage() {
         tabs={tabs}
         activeTab={activeTab}
         onTabChange={(tab) => { setActiveTab(tab); setPage(1); setVehPage(1); }}
-        actions={
-          canCreate ? (
-            <Button onClick={() => (activeTab === 0 ? setDeliveryModalOpen(true) : setVehicleModalOpen(true))}>
-              <Plus className="h-4 w-4 mr-2" />
-              {activeTab === 0 ? 'Add Delivery' : 'Add Vehicle'}
-            </Button>
-          ) : undefined
-        }
+        actions={toolbarActions}
       />
 
       {activeTab === 0 && (
-        <>
-          <div className="flex flex-wrap gap-3 mb-4">
-            <Input placeholder="Search deliveries…" className="max-w-sm" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} />
-            <Select options={STATUS_OPTIONS} value={status} onChange={(e) => { setStatus(e.target.value); setPage(1); }} className="w-44" />
+        <div className="space-y-4">
+          {canCreate && (
+            <QuickActionGrid>
+              <QuickActionCard
+                label="Add delivery"
+                desc="Schedule a customer dispatch"
+                icon={Truck}
+                color="bg-primary-50 text-primary-600 border-primary-100"
+                onClick={() => setDeliveryModalOpen(true)}
+              />
+              <QuickActionCard
+                label="Pending deliveries"
+                desc="Notes awaiting assignment"
+                icon={Package}
+                color="bg-amber-50 text-amber-600 border-amber-100"
+                onClick={() => { setStatus('PENDING'); setPage(1); goToTab(1); }}
+              />
+              <QuickActionCard
+                label="Manage fleet"
+                desc="Motorcycles, trucks & lorries"
+                icon={Container}
+                color="bg-violet-50 text-violet-600 border-violet-100"
+                onClick={() => goToTab(2)}
+              />
+            </QuickActionGrid>
+          )}
+
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+            <Card
+              title="Active deliveries"
+              action={
+                activeDeliveries.length > 0 ? (
+                  <Button variant="ghost" size="sm" onClick={() => goToTab(1)}>
+                    View all
+                  </Button>
+                ) : undefined
+              }
+              padding={false}
+            >
+              {activeDeliveries.length === 0 ? (
+                <div className="p-6">
+                  <EmptyState title="No active deliveries" description="Pending and in-transit notes appear here." />
+                </div>
+              ) : (
+                <ul className="divide-y divide-slate-100">
+                  {activeDeliveries.map((note) => (
+                    <li
+                      key={note.id}
+                      className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 cursor-pointer"
+                      onClick={() => openDetail(note)}
+                    >
+                      <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-100 text-amber-600">
+                        <AlertTriangle className="h-4 w-4" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-slate-900 truncate">{note.deliveryNo}</p>
+                        <p className="text-xs text-slate-500">{note.salesOrder?.customer?.name || '—'}</p>
+                      </div>
+                      <Badge variant={getStatusBadge(note.status)}>{note.status.replace(/_/g, ' ')}</Badge>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Card>
+
+            <Card
+              title="Recent deliveries"
+              action={
+                <Button variant="ghost" size="sm" onClick={() => goToTab(1)}>
+                  Full list
+                  <ChevronRight className="h-4 w-4 ml-1" />
+                </Button>
+              }
+              padding={false}
+            >
+              {recentDeliveries.length === 0 ? (
+                <div className="p-6">
+                  <EmptyState title="No deliveries yet" description="Create a delivery note from a ready sales order." />
+                </div>
+              ) : (
+                <ul className="divide-y divide-slate-100">
+                  {recentDeliveries.map((note) => (
+                    <li
+                      key={note.id}
+                      className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 cursor-pointer"
+                      onClick={() => openDetail(note)}
+                    >
+                      <Badge variant={getStatusBadge(note.status)}>{note.status.replace(/_/g, ' ')}</Badge>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-slate-800 truncate">{note.deliveryNo}</p>
+                        <p className="text-xs text-slate-400">{note.salesOrder?.orderNumber || '—'}</p>
+                      </div>
+                      <span className="text-xs text-slate-500 shrink-0">
+                        {note.scheduledDate ? formatDate(note.scheduledDate) : '—'}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Card>
           </div>
-          <Table
-            columns={deliveryColumns}
-            data={(deliveries?.data as DeliveryNote[]) || []}
-            loading={isLoading}
-            onRowClick={(row) => { setSelected(row as unknown as DeliveryNote); setDetailOpen(true); }}
-          />
-          {renderPagination(deliveries?.pagination, page, setPage)}
-        </>
+
+          {stats && (
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {([
+                { type: 'MOTORCYCLE' as VehicleType, label: 'Motorcycles', count: stats.motorcycles ?? 0, icon: Bike, desc: 'City & express runs' },
+                { type: 'TRUCK' as VehicleType, label: 'Trucks', count: stats.trucks ?? 0, icon: Truck, desc: 'Medium regional loads' },
+                { type: 'LORRY' as VehicleType, label: 'Lorries', count: stats.lorries ?? 0, icon: Container, desc: 'Bulk & long haul' },
+              ]).map((fleet) => (
+                <button
+                  key={fleet.type}
+                  type="button"
+                  onClick={() => { setVehType(fleet.type); setVehPage(1); goToTab(2); }}
+                  className="rounded-2xl border border-slate-200 bg-white overflow-hidden shadow-sm hover:shadow-md transition-shadow text-left"
+                >
+                  <div className={`h-1.5 bg-gradient-to-r ${VEHICLE_TYPE_COLORS[fleet.type]}`} />
+                  <div className="p-4 flex items-start gap-3">
+                    <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br ${VEHICLE_TYPE_COLORS[fleet.type]} text-white`}>
+                      <fleet.icon className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">{fleet.label}</p>
+                      <p className="text-2xl font-bold text-slate-900 tabular-nums">{fleet.count}</p>
+                      <p className="text-xs text-slate-500 mt-0.5">{fleet.desc}</p>
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+
+          {recentDeliveries.length > 0 && (
+            <Card
+              title="Delivery snapshot"
+              action={<Button variant="ghost" size="sm" onClick={() => goToTab(1)}>View all</Button>}
+              padding={false}
+            >
+              <Table
+                columns={deliveryColumns.filter((c) => c.key !== 'actions')}
+                data={recentDeliveries}
+                embedded
+                onRowClick={(row) => openDetail(row as unknown as DeliveryNote)}
+              />
+            </Card>
+          )}
+        </div>
       )}
 
       {activeTab === 1 && (
-        <>
-          <div className="mb-4 max-w-sm">
-            <Input placeholder="Search vehicles…" value={vehSearch} onChange={(e) => { setVehSearch(e.target.value); setVehPage(1); }} />
+        <DataPanel>
+          <div className="p-4 pb-0 flex flex-col sm:flex-row gap-3">
+            <Input
+              placeholder="Search deliveries…"
+              className="sm:max-w-md"
+              value={search}
+              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+            />
+            <Select
+              options={STATUS_OPTIONS}
+              value={status}
+              onChange={(e) => { setStatus(e.target.value); setPage(1); }}
+              className="sm:w-44"
+            />
           </div>
-          <Table columns={vehicleColumns} data={(vehicles?.data as Vehicle[]) || []} loading={vehLoading} />
-          {renderPagination(vehicles?.pagination, vehPage, setVehPage)}
-        </>
+          {(deliveries?.data?.length || 0) === 0 && !isLoading ? (
+            <div className="p-6">
+              <EmptyState
+                title="No deliveries found"
+                description="Create a delivery note from a ready sales order."
+                action={
+                  canCreate ? (
+                    <Button onClick={() => setDeliveryModalOpen(true)}>
+                      <Plus className="h-4 w-4 mr-2" />
+                      Add Delivery
+                    </Button>
+                  ) : undefined
+                }
+              />
+            </div>
+          ) : (
+            <Table
+              columns={deliveryColumns}
+              data={(deliveries?.data as DeliveryNote[]) || []}
+              loading={isLoading}
+              onRowClick={(row) => openDetail(row as unknown as DeliveryNote)}
+              embedded
+            />
+          )}
+          <div className="px-4 pb-4">
+            <TablePagination pagination={deliveries?.pagination} page={page} onPageChange={setPage} label="deliveries" />
+          </div>
+        </DataPanel>
+      )}
+
+      {activeTab === 2 && (
+        <DataPanel>
+          <div className="p-4 pb-0 flex flex-col sm:flex-row gap-3">
+            <Input
+              placeholder="Search vehicles…"
+              className="sm:max-w-md"
+              value={vehSearch}
+              onChange={(e) => { setVehSearch(e.target.value); setVehPage(1); }}
+            />
+            <Select
+              options={VEHICLE_TYPE_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
+              value={vehType}
+              onChange={(e) => { setVehType(e.target.value); setVehPage(1); }}
+              className="sm:w-44"
+            />
+          </div>
+          {(vehicles?.data?.length || 0) === 0 && !vehLoading ? (
+            <div className="p-6">
+              <EmptyState
+                title="No vehicles found"
+                description="Register motorcycles, trucks, or lorries to assign deliveries."
+                action={
+                  canCreate ? (
+                    <Button onClick={() => setVehicleModalOpen(true)}>
+                      <Plus className="h-4 w-4 mr-2" />
+                      Add Vehicle
+                    </Button>
+                  ) : undefined
+                }
+              />
+            </div>
+          ) : (
+            <Table columns={vehicleColumns} data={(vehicles?.data as Vehicle[]) || []} loading={vehLoading} embedded />
+          )}
+          <div className="px-4 pb-4">
+            <TablePagination pagination={vehicles?.pagination} page={vehPage} onPageChange={setVehPage} label="vehicles" />
+          </div>
+        </DataPanel>
       )}
 
       <Modal open={deliveryModalOpen} onClose={() => setDeliveryModalOpen(false)} title="Add Delivery" size="xl">
@@ -237,7 +502,7 @@ export function DeliveryPage() {
               <div><p className="text-slate-500">Delivery #</p><p className="font-semibold">{selected.deliveryNo}</p></div>
               <div><p className="text-slate-500">Customer</p><p className="font-semibold">{selected.salesOrder?.customer?.name}</p></div>
               <div><p className="text-slate-500">Sales Order</p><p className="font-semibold">{selected.salesOrder?.orderNumber}</p></div>
-              <div><p className="text-slate-500">Vehicle</p><p className="font-semibold">{selected.vehicle?.registration || 'Unassigned'}</p></div>
+              <div><p className="text-slate-500">Vehicle</p><p className="font-semibold">{formatVehicleLabel(selected.vehicle)}</p></div>
               <div><p className="text-slate-500">Scheduled</p><p className="font-semibold">{selected.scheduledDate ? formatDate(selected.scheduledDate) : '-'}</p></div>
               <div><p className="text-slate-500">Status</p><Badge variant={getStatusBadge(selected.status)}>{selected.status.replace(/_/g, ' ')}</Badge></div>
               {selected.deliveredAt && (

@@ -42,6 +42,10 @@ import {
   Select,
   Alert,
   EmptyState,
+  DataPanel,
+  QuickActionCard,
+  QuickActionGrid,
+  TablePagination,
   formatCurrency,
   formatDate,
   getStatusBadge,
@@ -252,20 +256,7 @@ export function FinancePage() {
     }
   };
 
-  const renderPagination = (
-    pagination: { page: number; totalPages: number; total: number } | undefined,
-    pg: number,
-    setPg: (fn: (p: number) => number) => void
-  ) =>
-    pagination && pagination.totalPages > 1 ? (
-      <div className="flex items-center justify-between mt-4 text-sm text-slate-600">
-        <span>Page {pagination.page} of {pagination.totalPages} ({pagination.total} records)</span>
-        <div className="flex gap-2">
-          <Button variant="secondary" size="sm" disabled={pg <= 1} onClick={() => setPg((p) => p - 1)}>Previous</Button>
-          <Button variant="secondary" size="sm" disabled={pg >= pagination.totalPages} onClick={() => setPg((p) => p + 1)}>Next</Button>
-        </div>
-      </div>
-    ) : null;
+  const goToTab = (index: number) => setActiveTab(index);
 
   const invoiceColumns = [
     {
@@ -448,8 +439,19 @@ export function FinancePage() {
   ) : undefined;
 
   return (
-    <div>
-      <PageHeader subtitle="Revenue, receivables, payables, payments, and general ledger" />
+    <div className="space-y-1">
+      <PageHeader
+        title="Finance"
+        subtitle="Revenue, receivables, payables, payments, and general ledger"
+        action={
+          stats && stats.overdueInvoices > 0 ? (
+            <Button variant="secondary" size="sm" onClick={() => goToTab(1)}>
+              <AlertCircle className="h-4 w-4 mr-1.5 text-amber-500" />
+              {stats.overdueInvoices} overdue
+            </Button>
+          ) : undefined
+        }
+      />
 
       {stats && (
         <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 mb-4">
@@ -476,7 +478,34 @@ export function FinancePage() {
 
       {/* Overview */}
       {activeTab === 0 && stats && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="space-y-4">
+          {canCreate && (
+            <QuickActionGrid>
+              <QuickActionCard
+                label="New Invoice"
+                desc="Create sales or purchase invoice"
+                icon={Plus}
+                color="bg-emerald-50 text-emerald-600 border-emerald-100"
+                onClick={() => { goToTab(1); setInvoiceModalOpen(true); }}
+              />
+              <QuickActionCard
+                label="Record Payment"
+                desc="Apply payment to an invoice"
+                icon={CreditCard}
+                color="bg-violet-50 text-violet-600 border-violet-100"
+                onClick={() => openPaymentModal()}
+              />
+              <QuickActionCard
+                label="Journal Entry"
+                desc="Post a general ledger entry"
+                icon={BookOpen}
+                color="bg-amber-50 text-amber-600 border-amber-100"
+                onClick={() => { goToTab(3); setJournalModalOpen(true); }}
+              />
+            </QuickActionGrid>
+          )}
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           <div className="lg:col-span-2 space-y-4">
             {/* Cash flow */}
             <Card
@@ -689,27 +718,12 @@ export function FinancePage() {
           </div>
 
           <div className="space-y-4">
-            <Card title="Quick actions" padding>
-              <div className="space-y-2">
-                {canCreate && (
-                  <>
-                    <Button className="w-full justify-start" variant="secondary" onClick={() => { setActiveTab(1); setInvoiceModalOpen(true); }}>
-                      <Plus className="h-4 w-4 mr-2" /> Create invoice
-                    </Button>
-                    <Button className="w-full justify-start" variant="secondary" onClick={() => openPaymentModal()}>
-                      <CreditCard className="h-4 w-4 mr-2" /> Record payment
-                    </Button>
-                    <Button className="w-full justify-start" variant="secondary" onClick={() => { setActiveTab(3); setJournalModalOpen(true); }}>
-                      <BookOpen className="h-4 w-4 mr-2" /> Post journal entry
-                    </Button>
-                  </>
-                )}
-                <Link to="/reports" className="block">
-                  <Button className="w-full justify-start" variant="ghost">
-                    <BarChart3 className="h-4 w-4 mr-2" /> Financial reports
-                  </Button>
-                </Link>
-              </div>
+            <Card title="Reports & links" padding>
+              <Link to="/reports" className="block">
+                <Button className="w-full justify-start" variant="ghost">
+                  <BarChart3 className="h-4 w-4 mr-2" /> Financial reports
+                </Button>
+              </Link>
             </Card>
 
             <Card title="Chart of accounts (summary)" padding>
@@ -728,13 +742,14 @@ export function FinancePage() {
               </div>
             </Card>
           </div>
+          </div>
         </div>
       )}
 
       {/* Invoices */}
       {activeTab === 1 && (
-        <>
-          <div className="flex flex-wrap items-end gap-3 mb-4">
+        <DataPanel>
+          <div className="p-4 pb-0 flex flex-wrap items-end gap-3">
             <form
               className="flex-1 min-w-[200px] max-w-sm"
               onSubmit={(e) => { e.preventDefault(); setSearch(searchInput); setPage(1); }}
@@ -748,56 +763,117 @@ export function FinancePage() {
             </Button>
           </div>
           {invError && (
-            <Alert variant="error" className="mb-4">
-              Failed to load invoices. <button type="button" className="underline" onClick={() => refetchInvoices()}>Retry</button>
-            </Alert>
+            <div className="px-4 pt-4">
+              <Alert variant="error">
+                Failed to load invoices. <button type="button" className="underline" onClick={() => refetchInvoices()}>Retry</button>
+              </Alert>
+            </div>
           )}
-          <Table
-            columns={invoiceColumns}
-            data={(invoices?.data as Invoice[]) || []}
-            loading={invLoading}
-            onRowClick={(row) => openInvoiceDetail(row as unknown as Invoice)}
-          />
-          {renderPagination(invoices?.pagination, page, setPage)}
-        </>
+          {(invoices?.data?.length || 0) === 0 && !invLoading ? (
+            <div className="p-6">
+              <EmptyState
+                title="No invoices found"
+                description="Create a sales or purchase invoice to get started."
+                action={
+                  canCreate ? (
+                    <Button onClick={() => setInvoiceModalOpen(true)}>
+                      <Plus className="h-4 w-4 mr-2" />
+                      New Invoice
+                    </Button>
+                  ) : undefined
+                }
+              />
+            </div>
+          ) : (
+            <Table
+              columns={invoiceColumns}
+              data={(invoices?.data as Invoice[]) || []}
+              loading={invLoading}
+              onRowClick={(row) => openInvoiceDetail(row as unknown as Invoice)}
+              embedded
+            />
+          )}
+          <div className="px-4 pb-4">
+            <TablePagination pagination={invoices?.pagination} page={page} onPageChange={setPage} label="invoices" />
+          </div>
+        </DataPanel>
       )}
 
       {/* Payments */}
       {activeTab === 2 && (
-        <>
-          <div className="mb-4 max-w-sm">
+        <DataPanel>
+          <div className="p-4 pb-0 max-w-sm">
             <Input
               placeholder="Search payments…"
               value={paySearch}
               onChange={(e) => { setPaySearch(e.target.value); setPayPage(1); }}
             />
           </div>
-          <Table columns={paymentColumns} data={payments?.data || []} loading={payLoading} />
-          {renderPagination(payments?.pagination, payPage, setPayPage)}
-        </>
+          {(payments?.data?.length || 0) === 0 && !payLoading ? (
+            <div className="p-6">
+              <EmptyState
+                title="No payments recorded"
+                description="Record a payment against an open invoice."
+                action={
+                  canCreate ? (
+                    <Button onClick={() => openPaymentModal()}>
+                      <CreditCard className="h-4 w-4 mr-2" />
+                      Record Payment
+                    </Button>
+                  ) : undefined
+                }
+              />
+            </div>
+          ) : (
+            <Table columns={paymentColumns} data={payments?.data || []} loading={payLoading} embedded />
+          )}
+          <div className="px-4 pb-4">
+            <TablePagination pagination={payments?.pagination} page={payPage} onPageChange={setPayPage} label="payments" />
+          </div>
+        </DataPanel>
       )}
 
       {/* Journals */}
       {activeTab === 3 && (
-        <>
-          <div className="mb-4 max-w-sm">
+        <DataPanel>
+          <div className="p-4 pb-0 max-w-sm">
             <Input placeholder="Search journals…" value={journalSearch} onChange={(e) => { setJournalSearch(e.target.value); setJournalPage(1); }} />
           </div>
-          <Table
-            columns={[
-              { key: 'entryNumber', label: 'Entry #' },
-              { key: 'date', label: 'Date', render: (v: unknown) => formatDate(v as string) },
-              { key: 'description', label: 'Description' },
-              { key: 'reference', label: 'Reference', render: (v: unknown) => (v as string) || '—' },
-              { key: 'lines', label: 'Lines', render: (v: unknown) => (v as unknown[])?.length || 0 },
-              { key: 'isPosted', label: 'Status', render: (v: unknown) => <Badge variant={v ? 'success' : 'warning'}>{v ? 'Posted' : 'Draft'}</Badge> },
-            ]}
-            data={journalEntries?.data || []}
-            loading={journalLoading}
-            onRowClick={(row) => { setSelectedJournal(row); setJournalDetailOpen(true); }}
-          />
-          {renderPagination(journalEntries?.pagination, journalPage, setJournalPage)}
-        </>
+          {(journalEntries?.data?.length || 0) === 0 && !journalLoading ? (
+            <div className="p-6">
+              <EmptyState
+                title="No journal entries"
+                description="Post manual adjustments and accruals to the general ledger."
+                action={
+                  canCreate ? (
+                    <Button onClick={() => setJournalModalOpen(true)}>
+                      <BookOpen className="h-4 w-4 mr-2" />
+                      Journal Entry
+                    </Button>
+                  ) : undefined
+                }
+              />
+            </div>
+          ) : (
+            <Table
+              columns={[
+                { key: 'entryNumber', label: 'Entry #' },
+                { key: 'date', label: 'Date', render: (v: unknown) => formatDate(v as string) },
+                { key: 'description', label: 'Description' },
+                { key: 'reference', label: 'Reference', render: (v: unknown) => (v as string) || '—' },
+                { key: 'lines', label: 'Lines', render: (v: unknown) => (v as unknown[])?.length || 0 },
+                { key: 'isPosted', label: 'Status', render: (v: unknown) => <Badge variant={v ? 'success' : 'warning'}>{v ? 'Posted' : 'Draft'}</Badge> },
+              ]}
+              data={journalEntries?.data || []}
+              loading={journalLoading}
+              onRowClick={(row) => { setSelectedJournal(row); setJournalDetailOpen(true); }}
+              embedded
+            />
+          )}
+          <div className="px-4 pb-4">
+            <TablePagination pagination={journalEntries?.pagination} page={journalPage} onPageChange={setJournalPage} label="entries" />
+          </div>
+        </DataPanel>
       )}
 
       {/* Accounts */}

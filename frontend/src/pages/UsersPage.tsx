@@ -1,6 +1,18 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plus, Pencil, Trash2, Users, UserCheck, UserX, Shield, Search } from 'lucide-react';
+import {
+  Plus,
+  Pencil,
+  Trash2,
+  Users,
+  UserCheck,
+  UserX,
+  Shield,
+  Search,
+  ChevronRight,
+  UserPlus,
+  ScrollText,
+} from 'lucide-react';
 import { usersApi } from '../services/api';
 import {
   PageHeader,
@@ -12,6 +24,11 @@ import {
   Card,
   StatCard,
   Alert,
+  EmptyState,
+  DataPanel,
+  QuickActionCard,
+  QuickActionGrid,
+  TablePagination,
   formatDate,
   PageToolbar,
 } from '../components/ui';
@@ -20,7 +37,7 @@ import { UserForm } from '../components/forms/UserForm';
 import { useAuth } from '../contexts/AuthContext';
 import { AuditLogEntry, RoleWithPermissions, User, UserStats } from '../types';
 
-const tabs = ['Users', 'Roles & Permissions', 'Audit Log'];
+const tabs = ['Overview', 'Users', 'Roles & Permissions', 'Audit Log'];
 
 const STATUS_OPTIONS = [
   { value: '', label: 'All statuses' },
@@ -60,13 +77,12 @@ export function UsersPage() {
   const { data: stats } = useQuery({
     queryKey: ['user-stats'],
     queryFn: () => usersApi.stats().then((r) => r.data.data as UserStats),
-    enabled: activeTab === 0,
   });
 
   const { data: rolesData } = useQuery({
     queryKey: ['user-roles'],
     queryFn: () => usersApi.roles().then((r) => r.data.data as RoleWithPermissions[]),
-    enabled: activeTab <= 1,
+    enabled: activeTab === 0 || activeTab <= 2,
   });
 
   const roleFilterOptions = [
@@ -86,7 +102,7 @@ export function UsersPage() {
           roleId: roleFilter || undefined,
         })
         .then((r) => r.data),
-    enabled: activeTab === 0,
+    enabled: activeTab === 0 || activeTab === 1,
   });
 
   const { data: userDetail, isLoading: detailLoading } = useQuery({
@@ -101,7 +117,7 @@ export function UsersPage() {
       usersApi
         .auditLogs({ page: auditPage, limit: 20, search: auditSearch || undefined })
         .then((r) => r.data),
-    enabled: activeTab === 2,
+    enabled: activeTab === 0 || activeTab === 3,
   });
 
   const deactivateMutation = useMutation({
@@ -114,6 +130,8 @@ export function UsersPage() {
       setSelectedUser(null);
     },
   });
+
+  const goToTab = (index: number) => setActiveTab(index);
 
   const openCreate = () => {
     setEditing(null);
@@ -141,6 +159,10 @@ export function UsersPage() {
     setSearch(searchInput);
     setPage(1);
   };
+
+  const recentUsers = activeTab === 0 ? ((usersRes?.data as User[]) || []).slice(0, 6) : [];
+  const recentAudit = activeTab === 0 ? ((auditRes?.data as AuditLogEntry[]) || []).slice(0, 5) : [];
+  const topRoles = activeTab === 0 ? (stats?.byRole || []).slice(0, 5) : [];
 
   const userColumns = [
     {
@@ -236,12 +258,38 @@ export function UsersPage() {
     },
   ];
 
-  const pagination = usersRes?.pagination;
-  const auditPagination = auditRes?.pagination;
+  const toolbarActions =
+    canCreate &&
+    (activeTab === 0 || activeTab === 1 ? (
+      <Button size="sm" onClick={openCreate}>
+        <Plus className="h-4 w-4 mr-1.5" />
+        Add User
+      </Button>
+    ) : undefined);
 
   return (
-    <div>
-      <PageHeader subtitle="Manage users, roles, permissions, and audit trail" />
+    <div className="space-y-1">
+      <PageHeader
+        title="Users"
+        subtitle="Manage users, roles, permissions, and audit trail"
+        action={
+          stats && stats.inactive + stats.suspended > 0 ? (
+            <Button variant="secondary" size="sm" onClick={() => { setStatusFilter('INACTIVE'); setPage(1); goToTab(1); }}>
+              <UserX className="h-4 w-4 mr-1.5 text-red-500" />
+              {stats.inactive + stats.suspended} inactive
+            </Button>
+          ) : undefined
+        }
+      />
+
+      {stats && (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+          <StatCard title="Total Users" value={stats.total} icon={<Users className="h-5 w-5 text-white" />} color="from-primary-500 to-indigo-600" />
+          <StatCard title="Active" value={stats.active} icon={<UserCheck className="h-5 w-5 text-white" />} color="from-emerald-500 to-teal-600" />
+          <StatCard title="Inactive / Suspended" value={stats.inactive + stats.suspended} icon={<UserX className="h-5 w-5 text-white" />} color="from-red-500 to-rose-600" />
+          <StatCard title="Logged In (7d)" value={stats.recentLogins} icon={<Shield className="h-5 w-5 text-white" />} color="from-violet-500 to-purple-600" />
+        </div>
+      )}
 
       <PageToolbar
         tabs={tabs}
@@ -251,29 +299,136 @@ export function UsersPage() {
           setPage(1);
           setAuditPage(1);
         }}
-        actions={
-          activeTab === 0 && canCreate ? (
-            <Button onClick={openCreate}>
-              <Plus className="h-4 w-4 mr-2" />
-              Add User
-            </Button>
-          ) : undefined
-        }
+        actions={toolbarActions}
       />
 
-      {activeTab === 0 && stats && (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
-          <StatCard title="Total Users" value={stats.total} icon={<Users className="h-5 w-5 text-white" />} color="from-primary-500 to-indigo-600" />
-          <StatCard title="Active" value={stats.active} icon={<UserCheck className="h-5 w-5 text-white" />} color="from-emerald-500 to-teal-600" />
-          <StatCard title="Inactive / Suspended" value={stats.inactive + stats.suspended} icon={<UserX className="h-5 w-5 text-white" />} color="from-red-500 to-rose-600" />
-          <StatCard title="Logged In (7d)" value={stats.recentLogins} icon={<Shield className="h-5 w-5 text-white" />} color="from-violet-500 to-purple-600" />
+      {activeTab === 0 && (
+        <div className="space-y-4">
+          {canCreate && (
+            <QuickActionGrid>
+              <QuickActionCard
+                label="Add user"
+                desc="Create a new account"
+                icon={UserPlus}
+                color="bg-emerald-50 text-emerald-600 border-emerald-100"
+                onClick={openCreate}
+              />
+              <QuickActionCard
+                label="Roles & permissions"
+                desc="Review access control"
+                icon={Shield}
+                color="bg-violet-50 text-violet-600 border-violet-100"
+                onClick={() => goToTab(2)}
+              />
+              <QuickActionCard
+                label="Audit log"
+                desc="Track system activity"
+                icon={ScrollText}
+                color="bg-slate-50 text-slate-600 border-slate-200"
+                onClick={() => goToTab(3)}
+              />
+            </QuickActionGrid>
+          )}
+
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+            <Card
+              title="Users by role"
+              action={
+                topRoles.length > 0 ? (
+                  <Button variant="ghost" size="sm" onClick={() => goToTab(2)}>
+                    View roles
+                  </Button>
+                ) : undefined
+              }
+              padding={false}
+            >
+              {topRoles.length === 0 ? (
+                <div className="p-6">
+                  <EmptyState title="No role data" description="User counts by role will appear here." />
+                </div>
+              ) : (
+                <ul className="divide-y divide-slate-100">
+                  {topRoles.map((r) => (
+                    <li key={r.roleId} className="flex items-center gap-3 px-4 py-3">
+                      <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-violet-100 text-violet-600">
+                        <Shield className="h-4 w-4" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-slate-900 truncate">{r.roleName}</p>
+                        <p className="text-xs text-slate-500">{r.count} user{r.count !== 1 ? 's' : ''}</p>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Card>
+
+            <Card
+              title="Recent audit activity"
+              action={
+                <Button variant="ghost" size="sm" onClick={() => goToTab(3)}>
+                  Full log
+                  <ChevronRight className="h-4 w-4 ml-1" />
+                </Button>
+              }
+              padding={false}
+            >
+              {recentAudit.length === 0 ? (
+                <div className="p-6">
+                  <EmptyState title="No audit entries" description="System actions will be logged here." />
+                </div>
+              ) : (
+                <ul className="divide-y divide-slate-100">
+                  {recentAudit.map((entry) => (
+                    <li key={entry.id} className="flex items-center gap-3 px-4 py-3">
+                      <Badge variant="info">{entry.module}</Badge>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-slate-800 truncate">{entry.action} · {entry.entityType}</p>
+                        <p className="text-xs text-slate-400">{formatDate(entry.createdAt)}</p>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Card>
+          </div>
+
+          <Card
+            title="User snapshot"
+            action={<Button variant="ghost" size="sm" onClick={() => goToTab(1)}>View all</Button>}
+            padding={false}
+          >
+            {recentUsers.length === 0 ? (
+              <div className="p-6">
+                <EmptyState
+                  title="No users found"
+                  description="Add users to manage access to the system."
+                  action={
+                    canCreate ? (
+                      <Button onClick={openCreate}>
+                        <Plus className="h-4 w-4 mr-2" />
+                        Add user
+                      </Button>
+                    ) : undefined
+                  }
+                />
+              </div>
+            ) : (
+              <Table
+                columns={userColumns.filter((c) => c.key !== 'actions')}
+                data={recentUsers}
+                onRowClick={(row) => openDetail(row as unknown as User)}
+                embedded
+              />
+            )}
+          </Card>
         </div>
       )}
 
-      {activeTab === 0 && (
-        <>
-          <div className="flex flex-wrap items-end gap-3 mb-4">
-            <form onSubmit={handleSearch} className="flex-1 min-w-[200px] max-w-sm">
+      {activeTab === 1 && (
+        <DataPanel>
+          <div className="p-4 pb-0 flex flex-wrap items-end gap-3">
+            <form onSubmit={handleSearch} className="flex-1 min-w-[200px] sm:max-w-md">
               <Input
                 placeholder="Search name or email…"
                 value={searchInput}
@@ -301,84 +456,98 @@ export function UsersPage() {
           </div>
 
           {isError && (
-            <Alert variant="error" className="mb-4">
-              Failed to load users.{' '}
-              <button type="button" onClick={() => refetch()} className="underline font-medium">Retry</button>
-            </Alert>
+            <div className="px-4">
+              <Alert variant="error" className="mb-4">
+                Failed to load users.{' '}
+                <button type="button" onClick={() => refetch()} className="underline font-medium">Retry</button>
+              </Alert>
+            </div>
           )}
 
-          <Table
-            columns={userColumns}
-            data={(usersRes?.data as User[]) || []}
-            loading={isLoading}
-            onRowClick={(row) => openDetail(row as unknown as User)}
-          />
+          {(usersRes?.data?.length || 0) === 0 && !isLoading ? (
+            <div className="p-6">
+              <EmptyState
+                title="No users found"
+                description="Try a different search or add a new user."
+                action={
+                  canCreate ? (
+                    <Button onClick={openCreate}>
+                      <Plus className="h-4 w-4 mr-2" />
+                      Add user
+                    </Button>
+                  ) : undefined
+                }
+              />
+            </div>
+          ) : (
+            <Table
+              columns={userColumns}
+              data={(usersRes?.data as User[]) || []}
+              loading={isLoading}
+              onRowClick={(row) => openDetail(row as unknown as User)}
+              embedded
+            />
+          )}
+          <div className="px-4 pb-4">
+            <TablePagination pagination={usersRes?.pagination} page={page} onPageChange={setPage} label="users" />
+          </div>
+        </DataPanel>
+      )}
 
-          {pagination && pagination.totalPages > 1 && (
-            <div className="flex items-center justify-between mt-4 text-sm text-slate-600">
-              <span>
-                Page {pagination.page} of {pagination.totalPages} ({pagination.total} users)
-              </span>
-              <div className="flex gap-2">
-                <Button variant="secondary" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
-                  Previous
-                </Button>
-                <Button variant="secondary" size="sm" disabled={page >= pagination.totalPages} onClick={() => setPage((p) => p + 1)}>
-                  Next
-                </Button>
-              </div>
+      {activeTab === 2 && (
+        <>
+          {(rolesData?.length || 0) === 0 ? (
+            <EmptyState title="No roles configured" description="Roles are set up during system seeding or in Settings." />
+          ) : (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {(rolesData || []).map((role) => (
+                <Card key={role.id} title={role.name} action={role.isSystem ? <Badge variant="info">System</Badge> : undefined}>
+                  <p className="text-xs text-slate-500 mb-3">
+                    {role.description || 'No description'} · {role._count?.users ?? 0} active users
+                  </p>
+                  <div className="flex flex-wrap gap-1.5 max-h-40 overflow-y-auto">
+                    {role.permissions.length === 0 ? (
+                      <span className="text-xs text-slate-400">No permissions assigned</span>
+                    ) : (
+                      role.permissions.map((rp) => (
+                        <Badge key={rp.permission.id} variant="default">
+                          {rp.permission.module}:{rp.permission.action}
+                        </Badge>
+                      ))
+                    )}
+                  </div>
+                </Card>
+              ))}
             </div>
           )}
         </>
       )}
 
-      {activeTab === 1 && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {(rolesData || []).map((role) => (
-            <Card key={role.id} title={role.name} action={role.isSystem ? <Badge variant="info">System</Badge> : undefined}>
-              <p className="text-xs text-slate-500 mb-3">
-                {role.description || 'No description'} · {role._count?.users ?? 0} active users
-              </p>
-              <div className="flex flex-wrap gap-1.5 max-h-40 overflow-y-auto">
-                {role.permissions.length === 0 ? (
-                  <span className="text-xs text-slate-400">No permissions assigned</span>
-                ) : (
-                  role.permissions.map((rp) => (
-                    <Badge key={rp.permission.id} variant="default">
-                      {rp.permission.module}:{rp.permission.action}
-                    </Badge>
-                  ))
-                )}
-              </div>
-            </Card>
-          ))}
-        </div>
-      )}
-
-      {activeTab === 2 && (
-        <>
-          <div className="mb-4 max-w-sm">
+      {activeTab === 3 && (
+        <DataPanel>
+          <div className="p-4 pb-0 sm:max-w-md">
             <Input
               placeholder="Search audit logs…"
               value={auditSearch}
               onChange={(e) => { setAuditSearch(e.target.value); setAuditPage(1); }}
             />
           </div>
-          <Table
-            columns={auditColumns}
-            data={(auditRes?.data as AuditLogEntry[]) || []}
-            loading={auditLoading}
-          />
-          {auditPagination && auditPagination.totalPages > 1 && (
-            <div className="flex items-center justify-between mt-4 text-sm text-slate-600">
-              <span>Page {auditPagination.page} of {auditPagination.totalPages}</span>
-              <div className="flex gap-2">
-                <Button variant="secondary" size="sm" disabled={auditPage <= 1} onClick={() => setAuditPage((p) => p - 1)}>Previous</Button>
-                <Button variant="secondary" size="sm" disabled={auditPage >= auditPagination.totalPages} onClick={() => setAuditPage((p) => p + 1)}>Next</Button>
-              </div>
+          {(auditRes?.data?.length || 0) === 0 && !auditLoading ? (
+            <div className="p-6">
+              <EmptyState title="No audit entries found" description="System actions and changes will be logged here." />
             </div>
+          ) : (
+            <Table
+              columns={auditColumns}
+              data={(auditRes?.data as AuditLogEntry[]) || []}
+              loading={auditLoading}
+              embedded
+            />
           )}
-        </>
+          <div className="px-4 pb-4">
+            <TablePagination pagination={auditRes?.pagination} page={auditPage} onPageChange={setAuditPage} label="entries" />
+          </div>
+        </DataPanel>
       )}
 
       <Modal open={formModalOpen} onClose={closeFormModal} title={editing ? 'Edit User' : 'Add User'} size="lg">

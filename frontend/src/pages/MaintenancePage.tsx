@@ -1,10 +1,26 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plus, Wrench, Cog, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { Plus, Wrench, Cog, AlertTriangle, CheckCircle2, ChevronRight, Calendar } from 'lucide-react';
 import { maintenanceApi } from '../services/api';
 import {
-  PageHeader, Table, Badge, Button, Input, Select, StatCard, Card,
-  formatCurrency, formatDate, getStatusBadge, PageToolbar,
+  PageHeader,
+  Table,
+  Badge,
+  Button,
+  Input,
+  Select,
+  StatCard,
+  Card,
+  Alert,
+  EmptyState,
+  DataPanel,
+  QuickActionCard,
+  QuickActionGrid,
+  TablePagination,
+  formatCurrency,
+  formatDate,
+  getStatusBadge,
+  PageToolbar,
 } from '../components/ui';
 import { Modal } from '../components/ui/Modal';
 import { MaintenanceForm } from '../components/forms/MaintenanceForm';
@@ -12,7 +28,8 @@ import { MachineForm } from '../components/forms/MachineForm';
 import { useAuth } from '../contexts/AuthContext';
 import { Machine, MaintenanceRequest, MaintenanceStats } from '../types';
 
-const tabs = ['Machines', 'Requests'];
+const tabs = ['Overview', 'Machines', 'Requests'];
+
 const STATUS_FILTER = [
   { value: '', label: 'All statuses' },
   { value: 'SCHEDULED', label: 'Scheduled' },
@@ -44,14 +61,14 @@ export function MaintenancePage() {
   const { data: machines, isLoading: machLoading } = useQuery({
     queryKey: ['maintenance-machines', page, search],
     queryFn: () => maintenanceApi.machines({ page, limit: 12, search: search || undefined }).then((r) => r.data),
-    enabled: activeTab === 0,
+    enabled: activeTab === 0 || activeTab === 1,
   });
 
   const { data: requests, isLoading: reqLoading } = useQuery({
     queryKey: ['maintenance-requests', page, search, status],
     queryFn: () =>
       maintenanceApi.requests({ page, limit: 15, search: search || undefined, status: status || undefined }).then((r) => r.data),
-    enabled: activeTab === 1,
+    enabled: activeTab === 0 || activeTab === 2,
   });
 
   const completeMutation = useMutation({
@@ -63,6 +80,18 @@ export function MaintenancePage() {
       setSelected(null);
     },
   });
+
+  const goToTab = (index: number) => setActiveTab(index);
+
+  const openDetail = (request: MaintenanceRequest) => {
+    setSelected(request);
+    setDetailOpen(true);
+  };
+
+  const recentRequests = activeTab === 0 ? ((requests?.data as MaintenanceRequest[]) || []).slice(0, 6) : [];
+  const openRequests = activeTab === 0
+    ? ((requests?.data as MaintenanceRequest[]) || []).filter((r) => r.status !== 'COMPLETED').slice(0, 5)
+    : [];
 
   const requestColumns = [
     { key: 'machine', label: 'Machine', render: (_: unknown, row: Record<string, unknown>) => (row.machine as { name: string })?.name || '-' },
@@ -83,20 +112,39 @@ export function MaintenancePage() {
     },
   ];
 
-  const renderPagination = (pagination: { page: number; totalPages: number } | undefined) =>
-    pagination && pagination.totalPages > 1 ? (
-      <div className="flex items-center justify-between mt-4 text-sm text-slate-600">
-        <span>Page {pagination.page} of {pagination.totalPages}</span>
-        <div className="flex gap-2">
-          <Button variant="secondary" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>Previous</Button>
-          <Button variant="secondary" size="sm" disabled={page >= pagination.totalPages} onClick={() => setPage((p) => p + 1)}>Next</Button>
-        </div>
-      </div>
-    ) : null;
+  const toolbarActions =
+    canCreate &&
+    (activeTab === 1 ? (
+      <Button size="sm" onClick={() => setMachineModalOpen(true)}>
+        <Plus className="h-4 w-4 mr-1.5" />
+        Add Machine
+      </Button>
+    ) : activeTab === 2 ? (
+      <Button size="sm" onClick={() => setRequestModalOpen(true)}>
+        <Plus className="h-4 w-4 mr-1.5" />
+        Schedule Maintenance
+      </Button>
+    ) : undefined);
 
   return (
-    <div>
-      <PageHeader subtitle="Machines, schedules, and repair requests" />
+    <div className="space-y-1">
+      <PageHeader
+        title="Maintenance"
+        subtitle="Machines, schedules, and repair requests"
+        action={
+          stats && stats.overdueRequests > 0 ? (
+            <Button variant="secondary" size="sm" onClick={() => { setStatus('OVERDUE'); setPage(1); goToTab(2); }}>
+              <AlertTriangle className="h-4 w-4 mr-1.5 text-red-500" />
+              {stats.overdueRequests} overdue
+            </Button>
+          ) : stats && stats.openRequests > 0 ? (
+            <Button variant="secondary" size="sm" onClick={() => goToTab(2)}>
+              <Wrench className="h-4 w-4 mr-1.5 text-amber-500" />
+              {stats.openRequests} open requests
+            </Button>
+          ) : undefined
+        }
+      />
 
       {stats && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
@@ -111,47 +159,228 @@ export function MaintenancePage() {
         tabs={tabs}
         activeTab={activeTab}
         onTabChange={(t) => { setActiveTab(t); setPage(1); setSearch(''); setStatus(''); }}
-        actions={canCreate ? (
-          <Button onClick={() => (activeTab === 0 ? setMachineModalOpen(true) : setRequestModalOpen(true))}>
-            <Plus className="h-4 w-4 mr-2" />{activeTab === 0 ? 'Add Machine' : 'Schedule Maintenance'}
-          </Button>
-        ) : undefined}
+        actions={toolbarActions}
       />
 
       {activeTab === 0 && (
-        <>
-          <div className="mb-4 max-w-sm"><Input placeholder="Search machines…" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} /></div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {(machines?.data as Machine[] || []).map((machine) => (
-              <Card key={machine.id}>
-                <div className="flex justify-between items-start gap-2 mb-1">
-                  <h3 className="font-semibold text-sm text-slate-900">{machine.name}</h3>
-                  <Badge variant={machine.status === 'operational' ? 'success' : 'warning'}>{machine.status}</Badge>
+        <div className="space-y-4">
+          {canCreate && (
+            <QuickActionGrid>
+              <QuickActionCard
+                label="Schedule maintenance"
+                desc="Create a repair or service request"
+                icon={Wrench}
+                color="bg-amber-50 text-amber-600 border-amber-100"
+                onClick={() => setRequestModalOpen(true)}
+              />
+              <QuickActionCard
+                label="Add machine"
+                desc="Register production equipment"
+                icon={Cog}
+                color="bg-primary-50 text-primary-600 border-primary-100"
+                onClick={() => setMachineModalOpen(true)}
+              />
+              <QuickActionCard
+                label="Open requests"
+                desc="View scheduled and active work"
+                icon={Calendar}
+                color="bg-violet-50 text-violet-600 border-violet-100"
+                onClick={() => goToTab(2)}
+              />
+            </QuickActionGrid>
+          )}
+
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+            <Card
+              title="Overdue & open requests"
+              action={
+                openRequests.length > 0 ? (
+                  <Button variant="ghost" size="sm" onClick={() => goToTab(2)}>
+                    View all
+                  </Button>
+                ) : undefined
+              }
+              padding={false}
+            >
+              {openRequests.length === 0 ? (
+                <div className="p-6">
+                  <EmptyState title="No open requests" description="All maintenance work is completed." />
                 </div>
-                <p className="text-xs text-slate-500">{machine.code} · {machine.type}</p>
-                {machine.capacity && <p className="text-xs text-slate-600 mt-1">Capacity: {machine.capacity}</p>}
-                {machine.location && <p className="text-xs text-slate-600">Location: {machine.location}</p>}
-              </Card>
-            ))}
+              ) : (
+                <ul className="divide-y divide-slate-100">
+                  {openRequests.map((req) => (
+                    <li
+                      key={req.id}
+                      className="flex items-center gap-3 px-4 py-3 hover:bg-red-50/30 cursor-pointer"
+                      onClick={() => openDetail(req)}
+                    >
+                      <div className={`flex h-9 w-9 items-center justify-center rounded-lg ${req.status === 'OVERDUE' ? 'bg-red-100 text-red-600' : 'bg-amber-100 text-amber-600'}`}>
+                        <AlertTriangle className="h-4 w-4" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-slate-900 truncate">{req.machine?.name || '—'}</p>
+                        <p className="text-xs text-slate-500 truncate">{req.description}</p>
+                      </div>
+                      <Badge variant={getStatusBadge(req.status)}>{req.status.replace(/_/g, ' ')}</Badge>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Card>
+
+            <Card
+              title="Recent requests"
+              action={
+                <Button variant="ghost" size="sm" onClick={() => goToTab(2)}>
+                  Full list
+                  <ChevronRight className="h-4 w-4 ml-1" />
+                </Button>
+              }
+              padding={false}
+            >
+              {recentRequests.length === 0 ? (
+                <div className="p-6">
+                  <EmptyState title="No maintenance requests" description="Schedule maintenance to track repairs and service." />
+                </div>
+              ) : (
+                <ul className="divide-y divide-slate-100">
+                  {recentRequests.map((req) => (
+                    <li
+                      key={req.id}
+                      className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 cursor-pointer"
+                      onClick={() => openDetail(req)}
+                    >
+                      <Badge variant={getStatusBadge(req.status)}>{req.status.replace(/_/g, ' ')}</Badge>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-slate-800 truncate">{req.machine?.name || '—'}</p>
+                        <p className="text-xs text-slate-400">{req.type}</p>
+                      </div>
+                      <span className="text-xs text-slate-500 shrink-0">
+                        {req.scheduledDate ? formatDate(req.scheduledDate) : '—'}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Card>
           </div>
-          {renderPagination(machines?.pagination)}
-        </>
+
+          {recentRequests.length > 0 && (
+            <Card
+              title="Requests snapshot"
+              action={<Button variant="ghost" size="sm" onClick={() => goToTab(2)}>View all</Button>}
+              padding={false}
+            >
+              <Table
+                columns={requestColumns.filter((c) => c.key !== 'actions')}
+                data={recentRequests}
+                embedded
+                onRowClick={(row) => openDetail(row as unknown as MaintenanceRequest)}
+              />
+            </Card>
+          )}
+        </div>
       )}
 
       {activeTab === 1 && (
-        <>
-          <div className="flex flex-wrap gap-3 mb-4">
-            <Input placeholder="Search requests…" className="max-w-sm" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} />
-            <Select options={STATUS_FILTER} value={status} onChange={(e) => { setStatus(e.target.value); setPage(1); }} className="w-44" />
+        <DataPanel>
+          <div className="p-4 pb-0">
+            <Input
+              placeholder="Search machines…"
+              className="sm:max-w-md"
+              value={search}
+              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+            />
           </div>
-          <Table
-            columns={requestColumns}
-            data={(requests?.data as MaintenanceRequest[]) || []}
-            loading={reqLoading}
-            onRowClick={(row) => { setSelected(row as unknown as MaintenanceRequest); setDetailOpen(true); }}
-          />
-          {renderPagination(requests?.pagination)}
-        </>
+          {(machines?.data?.length || 0) === 0 && !machLoading ? (
+            <div className="p-6">
+              <EmptyState
+                title="No machines found"
+                description="Register production equipment to track maintenance."
+                action={
+                  canCreate ? (
+                    <Button onClick={() => setMachineModalOpen(true)}>
+                      <Plus className="h-4 w-4 mr-2" />
+                      Add Machine
+                    </Button>
+                  ) : undefined
+                }
+              />
+            </div>
+          ) : (
+            <div className="p-4 pt-0 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {(machines?.data as Machine[] || []).map((machine) => (
+                <Card key={machine.id}>
+                  <div className="flex justify-between items-start gap-2 mb-1">
+                    <h3 className="font-semibold text-sm text-slate-900">{machine.name}</h3>
+                    <Badge variant={machine.status === 'operational' ? 'success' : 'warning'}>{machine.status}</Badge>
+                  </div>
+                  <p className="text-xs text-slate-500">{machine.code} · {machine.type}</p>
+                  {machine.capacity && <p className="text-xs text-slate-600 mt-1">Capacity: {machine.capacity}</p>}
+                  {machine.location && <p className="text-xs text-slate-600">Location: {machine.location}</p>}
+                </Card>
+              ))}
+            </div>
+          )}
+          <div className="px-4 pb-4">
+            <TablePagination pagination={machines?.pagination} page={page} onPageChange={setPage} label="machines" />
+          </div>
+        </DataPanel>
+      )}
+
+      {activeTab === 2 && (
+        <DataPanel>
+          <div className="p-4 pb-0 flex flex-col sm:flex-row gap-3">
+            <Input
+              placeholder="Search requests…"
+              className="sm:max-w-md"
+              value={search}
+              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+            />
+            <Select
+              options={STATUS_FILTER}
+              value={status}
+              onChange={(e) => { setStatus(e.target.value); setPage(1); }}
+              className="sm:w-44"
+            />
+          </div>
+          {(requests?.data?.length || 0) === 0 && !reqLoading ? (
+            <div className="p-6">
+              <EmptyState
+                title="No maintenance requests found"
+                description="Schedule maintenance for machines and equipment."
+                action={
+                  canCreate ? (
+                    <Button onClick={() => setRequestModalOpen(true)}>
+                      <Plus className="h-4 w-4 mr-2" />
+                      Schedule Maintenance
+                    </Button>
+                  ) : undefined
+                }
+              />
+            </div>
+          ) : (
+            <>
+              {status === 'OVERDUE' && (stats?.overdueRequests ?? 0) > 0 && (
+                <div className="px-4 pt-4">
+                  <Alert variant="warning">
+                    <strong>{stats?.overdueRequests}</strong> request(s) are overdue. Complete or reschedule them promptly.
+                  </Alert>
+                </div>
+              )}
+              <Table
+                columns={requestColumns}
+                data={(requests?.data as MaintenanceRequest[]) || []}
+                loading={reqLoading}
+                onRowClick={(row) => openDetail(row as unknown as MaintenanceRequest)}
+                embedded
+              />
+            </>
+          )}
+          <div className="px-4 pb-4">
+            <TablePagination pagination={requests?.pagination} page={page} onPageChange={setPage} label="requests" />
+          </div>
+        </DataPanel>
       )}
 
       <Modal open={requestModalOpen} onClose={() => setRequestModalOpen(false)} title="Schedule Maintenance" size="lg">

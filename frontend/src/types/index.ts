@@ -467,11 +467,39 @@ export interface DeliveryStats {
   deliveredToday: number;
   deliveredMonth: number;
   activeVehicles: number;
+  motorcycles: number;
+  trucks: number;
+  lorries: number;
+}
+
+export type VehicleType = 'MOTORCYCLE' | 'TRUCK' | 'LORRY';
+
+export const VEHICLE_TYPE_OPTIONS = [
+  { value: '', label: 'All fleet types' },
+  { value: 'MOTORCYCLE', label: 'Motorcycle' },
+  { value: 'TRUCK', label: 'Truck' },
+  { value: 'LORRY', label: 'Lorry' },
+] as const;
+
+export const VEHICLE_TYPE_FORM_OPTIONS = [
+  { value: 'MOTORCYCLE', label: 'Motorcycle — small parcels & city runs' },
+  { value: 'TRUCK', label: 'Truck — medium loads' },
+  { value: 'LORRY', label: 'Lorry — bulk & long haul' },
+] as const;
+
+export function vehicleTypeLabel(type: VehicleType | string): string {
+  const map: Record<string, string> = {
+    MOTORCYCLE: 'Motorcycle',
+    TRUCK: 'Truck',
+    LORRY: 'Lorry',
+  };
+  return map[type] || type;
 }
 
 export interface Vehicle {
   id: string;
   registration: string;
+  type: VehicleType;
   make?: string;
   model?: string;
   capacity?: string;
