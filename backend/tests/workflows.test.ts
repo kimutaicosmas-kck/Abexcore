@@ -17,7 +17,7 @@ async function login(): Promise<string> {
     .post('/api/v1/auth/login')
     .send({ email: 'admin@filtererp.co.ke', password: 'Admin@123' });
   if (res.status !== 200) throw new Error(`Login failed: ${res.status}`);
-  return res.body.data.token as string;
+  return res.body.data.accessToken as string;
 }
 
 function authReq(token: string) {
@@ -168,6 +168,290 @@ describe('RFQ workflow (integration)', () => {
     expect(awardRes.status).toBe(200);
     expect(awardRes.body.message).toContain('purchase order');
     expect(awardRes.body.data.status).toBe('APPROVED');
+  });
+});
+
+describe('Order-to-cash workflow (integration)', () => {
+  it.skipIf(() => !dbConnected)('runs order → confirm → ready → delivery → auto invoice → credit sync', async () => {
+    const customersRes = await authReq(authToken).get('/api/v1/customers?limit=1');
+    const productsRes = await authReq(authToken).get('/api/v1/products?limit=1');
+    expect(customersRes.status).toBe(200);
+    expect(productsRes.status).toBe(200);
+
+    const customerId = customersRes.body.data[0]?.id;
+    const productId = productsRes.body.data[0]?.id;
+    expect(customerId).toBeTruthy();
+    expect(productId).toBeTruthy();
+
+    const createRes = await authReq(authToken)
+      .post('/api/v1/operations/orders')
+      .send({
+        customerId,
+        notes: 'Order-to-cash E2E',
+        items: [{ productId, quantity: 1, unitPrice: 150 }],
+      });
+    expect(createRes.status).toBe(201);
+    const orderId = createRes.body.data.id;
+
+    const confirmRes = await authReq(authToken)
+      .patch(`/api/v1/operations/orders/${orderId}/status`)
+      .send({ status: 'CONFIRMED' });
+    expect(confirmRes.status).toBe(200);
+
+    const readyRes = await authReq(authToken)
+      .patch(`/api/v1/operations/orders/${orderId}/status`)
+      .send({ status: 'READY' });
+    expect(readyRes.status).toBe(200);
+
+    const deliveryRes = await authReq(authToken)
+      .post('/api/v1/delivery')
+      .send({
+        salesOrderId: orderId,
+        notes: 'E2E dispatch',
+        items: [{ productId, quantity: 1 }],
+      });
+    expect(deliveryRes.status).toBe(201);
+    expect(deliveryRes.body.invoice?.invoiceNumber).toMatch(/^INV-/);
+    expect(deliveryRes.body.data.status).toMatch(/PENDING|ASSIGNED/);
+
+    const orderRes = await authReq(authToken).get(`/api/v1/operations/orders/${orderId}`);
+    expect(orderRes.status).toBe(200);
+    expect(orderRes.body.data.status).toBe('DISPATCHED');
+    expect(orderRes.body.data.invoices?.length).toBeGreaterThan(0);
+
+    const customerRes = await authReq(authToken).get(`/api/v1/customers/${customerId}`);
+    expect(customerRes.status).toBe(200);
+    expect(Number(customerRes.body.data.creditUsed)).toBeGreaterThan(0);
+
+    const deliveryNo = deliveryRes.body.data.deliveryNo as string;
+    const journalsRes = await authReq(authToken).get('/api/v1/finance/journal-entries?limit=50');
+    expect(journalsRes.status).toBe(200);
+    const cogsEntry = (journalsRes.body.data as {
+      reference?: string;
+      description?: string;
+      lines?: { account?: { code?: string }; debit?: number }[];
+    }[]).find(
+      (entry) =>
+        entry.reference === deliveryNo &&
+        entry.description?.includes('Cost of goods sold')
+    );
+    if (cogsEntry) {
+      const cogsLine = cogsEntry.lines?.find((line) => line.account?.code === '5100');
+      expect(cogsLine?.debit).toBeGreaterThan(0);
+    }
+  });
+});
+
+describe('Procure-to-pay workflow (integration)', () => {
+  it.skipIf(() => !dbConnected)('runs GRN → QC pass → post to stock → GL entry', async () => {
+    const [suppliersRes, warehousesRes, materialsRes] = await Promise.all([
+      authReq(authToken).get('/api/v1/inventory/suppliers?limit=1'),
+      authReq(authToken).get('/api/v1/inventory/warehouses'),
+      authReq(authToken).get('/api/v1/inventory/materials?limit=1'),
+    ]);
+
+    expect(suppliersRes.status).toBe(200);
+    expect(warehousesRes.status).toBe(200);
+    expect(materialsRes.status).toBe(200);
+
+    const supplierId = suppliersRes.body.data[0]?.id;
+    const warehouseId = warehousesRes.body.data[0]?.id;
+    const rawMaterialId = materialsRes.body.data[0]?.id;
+    expect(supplierId).toBeTruthy();
+    expect(warehouseId).toBeTruthy();
+    expect(rawMaterialId).toBeTruthy();
+
+    const grnRes = await authReq(authToken)
+      .post('/api/v1/inventory/goods-receipts')
+      .send({
+        supplierId,
+        warehouseId,
+        notes: 'Procure-to-pay E2E',
+        items: [{ rawMaterialId, quantity: 10, unit: 'pcs', unitCost: 45 }],
+      });
+    expect(grnRes.status).toBe(201);
+    expect(grnRes.body.data.status).toBe('PENDING');
+    const grnId = grnRes.body.data.id;
+    const grnNumber = grnRes.body.data.grnNumber;
+
+    const qcRes = await authReq(authToken)
+      .post('/api/v1/quality')
+      .send({
+        type: 'incoming',
+        goodsReceiptId: grnId,
+        status: 'PASSED',
+        result: 'E2E inspection passed',
+      });
+    expect(qcRes.status).toBe(201);
+
+    const postRes = await authReq(authToken)
+      .post(`/api/v1/inventory/goods-receipts/${grnId}/post-to-stock`);
+    expect(postRes.status).toBe(200);
+    expect(postRes.body.data.status).toBe('APPROVED');
+
+    const journalsRes = await authReq(authToken).get('/api/v1/finance/journal-entries?limit=20');
+    expect(journalsRes.status).toBe(200);
+    const posted = (journalsRes.body.data as { reference?: string; description?: string }[]).some(
+      (entry) => entry.reference === grnNumber || entry.description?.includes(grnNumber)
+    );
+    expect(posted).toBe(true);
+  });
+});
+
+describe('Production auto-ready workflow (integration)', () => {
+  it.skipIf(() => !dbConnected)('marks sales order READY when linked production and QC complete', async () => {
+    const [customersRes, productsRes, machinesRes, warehousesRes] = await Promise.all([
+      authReq(authToken).get('/api/v1/customers?limit=1'),
+      authReq(authToken).get('/api/v1/products?limit=1'),
+      authReq(authToken).get('/api/v1/operations/machines'),
+      authReq(authToken).get('/api/v1/inventory/warehouses'),
+    ]);
+
+    const customerId = customersRes.body.data[0]?.id;
+    const productId = productsRes.body.data[0]?.id;
+    const machineId = machinesRes.body.data[0]?.id;
+    const warehouseId = warehousesRes.body.data[0]?.id;
+    expect(customerId && productId && machineId && warehouseId).toBeTruthy();
+
+    const orderRes = await authReq(authToken)
+      .post('/api/v1/operations/orders')
+      .send({
+        customerId,
+        items: [{ productId, quantity: 1, unitPrice: 150 }],
+      });
+    expect(orderRes.status).toBe(201);
+    const salesOrderId = orderRes.body.data.id;
+
+    await authReq(authToken)
+      .patch(`/api/v1/operations/orders/${salesOrderId}/status`)
+      .send({ status: 'CONFIRMED' });
+
+    await authReq(authToken)
+      .patch(`/api/v1/operations/orders/${salesOrderId}/status`)
+      .send({ status: 'IN_PRODUCTION' });
+
+    const productionRes = await authReq(authToken)
+      .post('/api/v1/operations/production')
+      .send({
+        productId,
+        salesOrderId,
+        machineId,
+        quantity: 1,
+        scheduledStart: new Date().toISOString(),
+      });
+    expect(productionRes.status).toBe(201);
+    const productionId = productionRes.body.data.id;
+
+    await authReq(authToken).post(`/api/v1/operations/production/${productionId}/start`);
+
+    const qcRes = await authReq(authToken)
+      .post('/api/v1/quality')
+      .send({
+        type: 'production',
+        productionOrderId: productionId,
+        status: 'PASSED',
+        result: 'Production QC passed',
+      });
+    expect(qcRes.status).toBe(201);
+
+    const completeRes = await authReq(authToken)
+      .post(`/api/v1/operations/production/${productionId}/complete`)
+      .send({ completedQty: 1, rejectedQty: 0, warehouseId });
+    expect(completeRes.status).toBe(200);
+
+    const salesRes = await authReq(authToken).get(`/api/v1/operations/orders/${salesOrderId}`);
+    expect(salesRes.status).toBe(200);
+    expect(salesRes.body.data.status).toBe('READY');
+
+    const productionOrderNo = completeRes.body.data.orderNumber as string;
+    const journalsRes = await authReq(authToken).get('/api/v1/finance/journal-entries?limit=50');
+    expect(journalsRes.status).toBe(200);
+    const costingEntry = (journalsRes.body.data as {
+      reference?: string;
+      description?: string;
+    }[]).find(
+      (entry) =>
+        entry.reference === productionOrderNo &&
+        entry.description?.includes('Production costing')
+    );
+    if (costingEntry) {
+      expect(costingEntry.reference).toBe(productionOrderNo);
+    }
+  });
+});
+
+describe('Partial delivery workflow (integration)', () => {
+  it.skipIf(() => !dbConnected)('allows multiple delivery notes and partial invoices', async () => {
+    const customersRes = await authReq(authToken).get('/api/v1/customers?limit=1');
+    const productsRes = await authReq(authToken).get('/api/v1/products?limit=1');
+    const customerId = customersRes.body.data[0]?.id;
+    const productId = productsRes.body.data[0]?.id;
+
+    const createRes = await authReq(authToken)
+      .post('/api/v1/operations/orders')
+      .send({
+        customerId,
+        items: [{ productId, quantity: 4, unitPrice: 150 }],
+      });
+    expect(createRes.status).toBe(201);
+    const orderId = createRes.body.data.id;
+
+    await authReq(authToken).patch(`/api/v1/operations/orders/${orderId}/status`).send({ status: 'CONFIRMED' });
+    await authReq(authToken).patch(`/api/v1/operations/orders/${orderId}/status`).send({ status: 'READY' });
+
+    const firstDelivery = await authReq(authToken).post('/api/v1/delivery').send({
+      salesOrderId: orderId,
+      items: [{ productId, quantity: 2 }],
+    });
+    expect(firstDelivery.status).toBe(201);
+    expect(firstDelivery.body.invoice?.totalAmount).toBeTruthy();
+
+    const partialOrder = await authReq(authToken).get(`/api/v1/operations/orders/${orderId}`);
+    expect(partialOrder.body.data.status).toBe('PARTIALLY_DELIVERED');
+
+    const secondDelivery = await authReq(authToken).post('/api/v1/delivery').send({
+      salesOrderId: orderId,
+      items: [{ productId, quantity: 2 }],
+    });
+    expect(secondDelivery.status).toBe(201);
+
+    const finalOrder = await authReq(authToken).get(`/api/v1/operations/orders/${orderId}`);
+    expect(finalOrder.body.data.status).toBe('DISPATCHED');
+    expect(finalOrder.body.data.invoices.length).toBeGreaterThanOrEqual(2);
+  });
+});
+
+describe('Overdue invoice automation (integration)', () => {
+  it.skipIf(() => !dbConnected)('marks past-due invoices as OVERDUE via maintenance endpoint', async () => {
+    const customersRes = await authReq(authToken).get('/api/v1/customers?limit=1');
+    expect(customersRes.status).toBe(200);
+    const customerId = customersRes.body.data[0]?.id;
+    expect(customerId).toBeTruthy();
+
+    const createRes = await authReq(authToken)
+      .post('/api/v1/finance/invoices')
+      .send({
+        type: 'SALES',
+        customerId,
+        dueDate: '2020-01-01',
+        notes: 'Overdue automation E2E',
+        items: [{ description: 'Test overdue item', quantity: 1, unitPrice: 100 }],
+      });
+    expect(createRes.status).toBe(201);
+    expect(createRes.body.data.status).toBe('UNPAID');
+    const invoiceId = createRes.body.data.id;
+
+    const markRes = await authReq(authToken).post('/api/v1/finance/maintenance/mark-overdue');
+    expect(markRes.status).toBe(200);
+    expect(markRes.body.data.marked).toBeGreaterThanOrEqual(1);
+
+    const invoiceRes = await authReq(authToken).get(`/api/v1/finance/invoices/${invoiceId}`);
+    expect(invoiceRes.status).toBe(200);
+    expect(invoiceRes.body.data.status).toBe('OVERDUE');
+
+    const statsRes = await authReq(authToken).get('/api/v1/finance/stats');
+    expect(statsRes.status).toBe(200);
+    expect(statsRes.body.data.overdueInvoices).toBeGreaterThanOrEqual(1);
   });
 });
 

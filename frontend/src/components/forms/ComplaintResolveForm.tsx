@@ -31,6 +31,7 @@ export function ComplaintResolveForm({ complaintId, subject, onSuccess, onCancel
       crmApi.resolveComplaint(complaintId, { resolution: data.resolution, status: 'APPROVED' }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['complaints'] });
+      queryClient.invalidateQueries({ queryKey: ['crm-stats'] });
       onSuccess();
     },
   });

@@ -81,6 +81,7 @@ export function RawMaterialForm({ material, onSuccess, onCancel }: RawMaterialFo
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['materials'] });
+      queryClient.invalidateQueries({ queryKey: ['inventory-stats'] });
       onSuccess();
     },
   });

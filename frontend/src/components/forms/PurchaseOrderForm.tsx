@@ -95,6 +95,7 @@ export function PurchaseOrderForm({ onSuccess, onCancel }: PurchaseOrderFormProp
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['purchase-orders'] });
+      queryClient.invalidateQueries({ queryKey: ['procurement-stats'] });
       onSuccess();
     },
   });

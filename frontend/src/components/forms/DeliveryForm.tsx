@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useFieldArray, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -24,8 +24,9 @@ type DeliveryFormData = z.infer<typeof deliverySchema>;
 
 interface Vehicle {
   id: string;
-  registrationNo: string;
+  registration: string;
   make?: string;
+  model?: string;
 }
 
 interface DeliveryFormProps {
@@ -37,8 +38,14 @@ export function DeliveryForm({ onSuccess, onCancel }: DeliveryFormProps) {
   const queryClient = useQueryClient();
 
   const { data: salesOrdersData } = useQuery({
-    queryKey: ['sales-orders'],
-    queryFn: () => operationsApi.salesOrders({ limit: 100 }).then((r) => r.data.data as SalesOrder[]),
+    queryKey: ['sales-orders-deliverable'],
+    queryFn: async () => {
+      const [ready, partial] = await Promise.all([
+        operationsApi.salesOrders({ limit: 100, status: 'READY' }).then((r) => r.data.data as SalesOrder[]),
+        operationsApi.salesOrders({ limit: 100, status: 'PARTIALLY_DELIVERED' }).then((r) => r.data.data as SalesOrder[]),
+      ]);
+      return [...ready, ...partial];
+    },
   });
 
   const { data: vehiclesData } = useQuery({
@@ -50,7 +57,7 @@ export function DeliveryForm({ onSuccess, onCancel }: DeliveryFormProps) {
     { value: '', label: 'Select sales order...' },
     ...(salesOrdersData || []).map((o) => ({
       value: o.id,
-      label: `${o.orderNumber} - ${o.customer.name}`,
+      label: `${o.orderNumber} - ${o.customer.name} (${o.status.replace(/_/g, ' ')})`,
     })),
   ];
 
@@ -58,11 +65,11 @@ export function DeliveryForm({ onSuccess, onCancel }: DeliveryFormProps) {
     { value: '', label: 'None' },
     ...(vehiclesData || []).map((v) => ({
       value: v.id,
-      label: v.registrationNo + (v.make ? ` (${v.make})` : ''),
+      label: v.registration + (v.make ? ` (${v.make}${v.model ? ` ${v.model}` : ''})` : ''),
     })),
   ];
 
-  const { register, control, handleSubmit, watch, setValue, formState: { errors } } = useForm<DeliveryFormData>({
+  const { register, control, handleSubmit, watch, formState: { errors } } = useForm<DeliveryFormData>({
     resolver: zodResolver(deliverySchema),
     defaultValues: {
       salesOrderId: '',
@@ -74,19 +81,21 @@ export function DeliveryForm({ onSuccess, onCancel }: DeliveryFormProps) {
   const { fields, replace } = useFieldArray({ control, name: 'items' });
   const salesOrderId = watch('salesOrderId');
 
+  const selectedOrder = useMemo(
+    () => salesOrdersData?.find((o) => o.id === salesOrderId),
+    [salesOrderId, salesOrdersData]
+  );
+
   useEffect(() => {
-    if (salesOrderId && salesOrdersData) {
-      const order = salesOrdersData.find((o) => o.id === salesOrderId);
-      if (order?.items?.length) {
-        replace(
-          order.items.map((item) => ({
-            productId: item.productId,
-            quantity: item.quantity,
-          }))
-        );
-      }
+    if (selectedOrder?.items?.length) {
+      replace(
+        selectedOrder.items.map((item) => ({
+          productId: item.productId,
+          quantity: Math.max(1, item.quantity - (item.deliveredQty || 0)),
+        }))
+      );
     }
-  }, [salesOrderId, salesOrdersData, replace]);
+  }, [selectedOrder, replace]);
 
   const mutation = useMutation({
     mutationFn: (data: DeliveryFormData) => {
@@ -98,6 +107,10 @@ export function DeliveryForm({ onSuccess, onCancel }: DeliveryFormProps) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['deliveries'] });
+      queryClient.invalidateQueries({ queryKey: ['delivery-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['sales-orders'] });
+      queryClient.invalidateQueries({ queryKey: ['sales-orders-deliverable'] });
+      queryClient.invalidateQueries({ queryKey: ['finance-invoices'] });
       onSuccess();
     },
   });
@@ -106,7 +119,7 @@ export function DeliveryForm({ onSuccess, onCancel }: DeliveryFormProps) {
     <form onSubmit={handleSubmit((data) => mutation.mutate(data))} className="space-y-4">
       {mutation.isError && (
         <div className="p-3 rounded-lg bg-red-50 text-red-700 text-sm">
-          Failed to create delivery. Please check all fields.
+          Failed to create delivery. Check quantities against remaining order balance.
         </div>
       )}
 
@@ -129,8 +142,12 @@ export function DeliveryForm({ onSuccess, onCancel }: DeliveryFormProps) {
 
         <div className="space-y-3">
           {fields.map((field, index) => {
-            const order = salesOrdersData?.find((o) => o.id === salesOrderId);
-            const orderItem = order?.items[index];
+            const orderItem = selectedOrder?.items.find(
+              (item) => item.productId === watch(`items.${index}.productId`)
+            );
+            const remaining = orderItem
+              ? orderItem.quantity - (orderItem.deliveredQty || 0)
+              : null;
             const productLabel = orderItem?.product
               ? `${orderItem.product.sku} - ${orderItem.product.name}`
               : 'Product';
@@ -141,11 +158,15 @@ export function DeliveryForm({ onSuccess, onCancel }: DeliveryFormProps) {
                 <div>
                   <label className="block text-xs text-gray-500 mb-1">Product</label>
                   <p className="text-sm font-medium">{productLabel}</p>
+                  {remaining !== null && (
+                    <p className="text-xs text-slate-500 mt-1">Remaining: {remaining}</p>
+                  )}
                 </div>
                 <Input
                   label={index === 0 ? 'Quantity' : undefined}
                   type="number"
                   min={1}
+                  max={remaining ?? undefined}
                   {...register(`items.${index}.quantity`)}
                 />
               </div>
@@ -155,6 +176,10 @@ export function DeliveryForm({ onSuccess, onCancel }: DeliveryFormProps) {
       </div>
 
       <Input label="Notes" {...register('notes')} />
+
+      <p className="text-xs text-slate-500">
+        A sales invoice is auto-created for the quantities on this delivery note.
+      </p>
 
       <div className="flex justify-end gap-3 pt-4 border-t">
         <Button type="button" variant="secondary" onClick={onCancel}>Cancel</Button>

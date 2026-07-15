@@ -5,6 +5,7 @@ import fs from 'fs';
 import { config } from '../config';
 import prisma from '../config/database';
 import { AppError } from '../middleware/errorHandler';
+import { getCompanySettings } from '../utils/company';
 
 type InvoiceWithRelations = Awaited<ReturnType<typeof ExportService.getInvoice>>;
 
@@ -23,7 +24,13 @@ export class ExportService {
     return invoice;
   }
 
-  static generateInvoicePDF(invoice: NonNullable<InvoiceWithRelations>): Promise<Buffer> {
+  static async generateInvoicePDF(invoice: NonNullable<InvoiceWithRelations>): Promise<Buffer> {
+    const company = await getCompanySettings();
+    const companyName = company?.name ?? 'Company';
+    const companyAddress = company?.address ?? '';
+    const companyContact = [company?.email, company?.phone].filter(Boolean).join(' | ');
+    const vatRate = company ? Number(company.vatRate) : 16;
+
     return new Promise((resolve, reject) => {
       const doc = new PDFDocument({ margin: 50, size: 'A4' });
       const chunks: Buffer[] = [];
@@ -35,9 +42,9 @@ export class ExportService {
       const party = invoice.customer || invoice.supplier;
       const partyLabel = invoice.customer ? 'Bill To' : 'Supplier';
 
-      doc.fontSize(20).fillColor('#2563eb').text('Kenya Filter Industries Ltd', { align: 'left' });
-      doc.fontSize(10).fillColor('#666').text('Industrial Area, Nairobi, Kenya');
-      doc.fontSize(10).text('info@kenyafilters.co.ke | +254 700 123 456');
+      doc.fontSize(20).fillColor('#2563eb').text(companyName, { align: 'left' });
+      if (companyAddress) doc.fontSize(10).fillColor('#666').text(companyAddress);
+      if (companyContact) doc.fontSize(10).text(companyContact);
       doc.moveDown();
 
       doc.fontSize(16).fillColor('#000').text('TAX INVOICE', { align: 'right' });
@@ -75,7 +82,7 @@ export class ExportService {
       y += 10;
       doc.text(`Subtotal: KES ${Number(invoice.subtotal).toLocaleString('en-KE')}`, 350, y, { align: 'right' });
       y += 15;
-      doc.text(`VAT (16%): KES ${Number(invoice.taxAmount).toLocaleString('en-KE')}`, 350, y, { align: 'right' });
+      doc.text(`VAT (${vatRate}%): KES ${Number(invoice.taxAmount).toLocaleString('en-KE')}`, 350, y, { align: 'right' });
       y += 15;
       doc.fontSize(12).text(`Total: KES ${Number(invoice.totalAmount).toLocaleString('en-KE')}`, 350, y, { align: 'right' });
       y += 15;
@@ -100,12 +107,15 @@ export class ExportService {
   }
 
   static async generateInvoiceExcel(invoice: NonNullable<InvoiceWithRelations>): Promise<Buffer> {
+    const company = await getCompanySettings();
+    const companyName = company?.name ?? 'Company';
+
     const workbook = new ExcelJS.Workbook();
     workbook.creator = 'ApexCore ERP';
     const sheet = workbook.addWorksheet('Invoice');
 
     sheet.mergeCells('A1:E1');
-    sheet.getCell('A1').value = 'Kenya Filter Industries Ltd - Tax Invoice';
+    sheet.getCell('A1').value = `${companyName} - Tax Invoice`;
     sheet.getCell('A1').font = { bold: true, size: 14 };
 
     sheet.getCell('A3').value = 'Invoice #';

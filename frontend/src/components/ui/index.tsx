@@ -1,3 +1,4 @@
+import { useId } from 'react';
 import clsx from 'clsx';
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
@@ -18,14 +19,14 @@ export function Button({
   return (
     <button
       className={clsx(
-        'inline-flex items-center justify-center font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed',
+        'inline-flex items-center justify-center font-medium rounded-xl transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98]',
         {
-          'bg-primary-600 text-white hover:bg-primary-700 focus:ring-primary-500': variant === 'primary',
-          'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 focus:ring-primary-500': variant === 'secondary',
-          'bg-red-600 text-white hover:bg-red-700 focus:ring-red-500': variant === 'danger',
-          'text-gray-600 hover:bg-gray-100 focus:ring-gray-500': variant === 'ghost',
+          'bg-primary-600 text-white hover:bg-primary-700 shadow-sm shadow-primary-600/20 focus:ring-primary-500': variant === 'primary',
+          'bg-white text-slate-700 border border-border hover:bg-surface-muted hover:border-border-strong focus:ring-primary-500 shadow-sm': variant === 'secondary',
+          'bg-red-600 text-white hover:bg-red-700 shadow-sm shadow-red-600/20 focus:ring-red-500': variant === 'danger',
+          'text-slate-600 hover:bg-surface-subtle focus:ring-slate-400': variant === 'ghost',
           'px-3 py-1.5 text-sm': size === 'sm',
-          'px-4 py-2 text-sm': size === 'md',
+          'px-4 py-2.5 text-sm': size === 'md',
           'px-6 py-3 text-base': size === 'lg',
         },
         className
@@ -49,14 +50,22 @@ interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   error?: string;
 }
 
-export function Input({ label, error, className, ...props }: InputProps) {
+export function Input({ label, error, className, id: idProp, ...props }: InputProps) {
+  const autoId = useId();
+  const id = idProp ?? autoId;
+
   return (
-    <div className="space-y-1">
-      {label && <label className="block text-sm font-medium text-gray-700">{label}</label>}
+    <div className="space-y-1.5">
+      {label && (
+        <label htmlFor={id} className="block text-sm font-medium text-slate-700">
+          {label}
+        </label>
+      )}
       <input
+        id={id}
         className={clsx(
-          'block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500',
-          error && 'border-red-500',
+          'block w-full rounded-xl border border-border bg-white px-3.5 py-2.5 text-sm text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-500/15 transition-all',
+          error && 'border-red-400 focus:border-red-400 focus:ring-red-500/15',
           className
         )}
         {...props}
@@ -74,12 +83,12 @@ interface SelectProps extends React.SelectHTMLAttributes<HTMLSelectElement> {
 
 export function Select({ label, error, options, className, ...props }: SelectProps) {
   return (
-    <div className="space-y-1">
-      {label && <label className="block text-sm font-medium text-gray-700">{label}</label>}
+    <div className="space-y-1.5">
+      {label && <label className="block text-sm font-medium text-slate-700">{label}</label>}
       <select
         className={clsx(
-          'block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500',
-          error && 'border-red-500',
+          'block w-full rounded-xl border border-border bg-white px-3.5 py-2.5 text-sm text-slate-900 shadow-sm focus:border-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-500/15 transition-all',
+          error && 'border-red-400 focus:border-red-400 focus:ring-red-500/15',
           className
         )}
         {...props}
@@ -100,18 +109,19 @@ interface CardProps {
   className?: string;
   title?: string;
   action?: React.ReactNode;
+  padding?: boolean;
 }
 
-export function Card({ children, className, title, action }: CardProps) {
+export function Card({ children, className, title, action, padding = true }: CardProps) {
   return (
-    <div className={clsx('bg-white rounded-xl shadow-sm border border-gray-200', className)}>
+    <div className={clsx('bg-white rounded-2xl border border-border shadow-soft overflow-hidden', className)}>
       {(title || action) && (
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
-          {title && <h3 className="text-lg font-semibold text-gray-900">{title}</h3>}
+        <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-surface-muted/40">
+          {title && <h3 className="text-sm font-semibold text-slate-900">{title}</h3>}
           {action}
         </div>
       )}
-      <div className="p-6">{children}</div>
+      <div className={padding ? 'p-4' : undefined}>{children}</div>
     </div>
   );
 }
@@ -124,12 +134,12 @@ interface BadgeProps {
 export function Badge({ children, variant = 'default' }: BadgeProps) {
   return (
     <span
-      className={clsx('inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium', {
-        'bg-gray-100 text-gray-800': variant === 'default',
-        'bg-green-100 text-green-800': variant === 'success',
-        'bg-yellow-100 text-yellow-800': variant === 'warning',
-        'bg-red-100 text-red-800': variant === 'danger',
-        'bg-blue-100 text-blue-800': variant === 'info',
+      className={clsx('inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ring-1 ring-inset', {
+        'bg-slate-100 text-slate-700 ring-slate-200': variant === 'default',
+        'bg-emerald-50 text-emerald-700 ring-emerald-200': variant === 'success',
+        'bg-amber-50 text-amber-700 ring-amber-200': variant === 'warning',
+        'bg-red-50 text-red-700 ring-red-200': variant === 'danger',
+        'bg-sky-50 text-sky-700 ring-sky-200': variant === 'info',
       })}
     >
       {children}
@@ -145,20 +155,20 @@ interface StatCardProps {
   color?: string;
 }
 
-export function StatCard({ title, value, icon, trend, color = 'bg-primary-500' }: StatCardProps) {
+export function StatCard({ title, value, icon, trend, color = 'from-primary-500 to-primary-600' }: StatCardProps) {
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-sm font-medium text-gray-500">{title}</p>
-          <p className="mt-2 text-3xl font-bold text-gray-900">{value}</p>
+    <div className="rounded-xl border border-border bg-white p-3.5 shadow-soft">
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-xs font-medium text-slate-500">{title}</p>
+          <p className="mt-1 text-xl font-bold tracking-tight text-slate-900 truncate">{value}</p>
           {trend && (
-            <p className={clsx('mt-1 text-sm', trend.value >= 0 ? 'text-green-600' : 'text-red-600')}>
+            <p className={clsx('mt-0.5 text-xs font-medium', trend.value >= 0 ? 'text-emerald-600' : 'text-red-600')}>
               {trend.value >= 0 ? '+' : ''}{trend.value}% {trend.label}
             </p>
           )}
         </div>
-        <div className={clsx('p-3 rounded-lg', color)}>
+        <div className={clsx('p-2 rounded-lg bg-gradient-to-br text-white shrink-0', color)}>
           {icon}
         </div>
       </div>
@@ -171,67 +181,239 @@ interface TableProps {
   data: Record<string, unknown>[] | object[];
   loading?: boolean;
   onRowClick?: (row: Record<string, unknown>) => void;
+  embedded?: boolean;
 }
 
-export function Table({ columns, data, loading, onRowClick }: TableProps) {
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600" />
-      </div>
-    );
-  }
+export function Table({ columns, data, loading, onRowClick, embedded = false }: TableProps) {
+  const content = (() => {
+    if (loading) {
+      return (
+        <div className="flex items-center justify-center py-16">
+          <div className="animate-spin rounded-full h-9 w-9 border-2 border-primary-200 border-t-primary-600" />
+        </div>
+      );
+    }
 
-  if (data.length === 0) {
-    return (
-      <div className="text-center py-12 text-gray-500">No data found</div>
-    );
-  }
+    if (data.length === 0) {
+      return (
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <div className="h-12 w-12 rounded-2xl bg-surface-subtle flex items-center justify-center mb-3">
+            <span className="text-xl text-slate-400">—</span>
+          </div>
+          <p className="text-sm font-medium text-slate-600">No records found</p>
+          <p className="text-xs text-slate-400 mt-1">Try adjusting filters or add a new entry</p>
+        </div>
+      );
+    }
 
-  return (
-    <div className="overflow-x-auto">
-      <table className="min-w-full divide-y divide-gray-200">
-        <thead className="bg-gray-50">
-          <tr>
-            {columns.map((col) => (
-              <th key={col.key} className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                {col.label}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody className="bg-white divide-y divide-gray-200">
-          {data.map((row, i) => {
-            const record = row as Record<string, unknown>;
-            return (
-            <tr
-              key={i}
-              className={clsx('hover:bg-gray-50', onRowClick && 'cursor-pointer')}
-              onClick={() => onRowClick?.(record)}
-            >
+    return (
+      <div className="overflow-x-auto">
+        <table className="min-w-full">
+          <thead>
+            <tr className="border-b border-border bg-surface-muted/60">
               {columns.map((col) => (
-                <td key={col.key} className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                  {col.render ? col.render(record[col.key], record) : String(record[col.key] ?? '')}
-                </td>
+                <th
+                  key={col.key}
+                  className="px-5 py-3.5 text-left text-[11px] font-semibold text-slate-500 uppercase tracking-wider"
+                >
+                  {col.label}
+                </th>
               ))}
             </tr>
-          );})}
-        </tbody>
-      </table>
+          </thead>
+          <tbody className="divide-y divide-border/70">
+            {data.map((row, i) => {
+              const record = row as Record<string, unknown>;
+              return (
+                <tr
+                  key={i}
+                  className={clsx(
+                    'transition-colors',
+                    onRowClick ? 'cursor-pointer hover:bg-primary-50/40' : 'hover:bg-surface-muted/50'
+                  )}
+                  onClick={() => onRowClick?.(record)}
+                >
+                  {columns.map((col) => (
+                    <td key={col.key} className="px-5 py-4 whitespace-nowrap text-sm text-slate-800">
+                      {col.render ? col.render(record[col.key], record) : String(record[col.key] ?? '')}
+                    </td>
+                  ))}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    );
+  })();
+
+  if (embedded) return content;
+
+  return (
+    <div className="bg-white rounded-2xl border border-border shadow-soft overflow-hidden">
+      {content}
     </div>
   );
 }
 
-export function PageHeader({ title, subtitle, action }: { title: string; subtitle?: string; action?: React.ReactNode }) {
+export function DataPanel({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
-    <div className="flex items-center justify-between mb-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">{title}</h1>
-        {subtitle && <p className="mt-1 text-sm text-gray-500">{subtitle}</p>}
-      </div>
-      {action}
+    <div className={clsx('bg-white rounded-2xl border border-border shadow-soft overflow-hidden', className)}>
+      {children}
     </div>
   );
+}
+
+interface TabGroupProps {
+  tabs: string[];
+  activeIndex: number;
+  onChange: (index: number) => void;
+  className?: string;
+}
+
+export function TabGroup({ tabs, activeIndex, onChange, className }: TabGroupProps) {
+  return (
+    <div className={clsx('inline-flex flex-wrap gap-0.5 p-0.5 rounded-lg bg-slate-100 border border-slate-200', className)}>
+      {tabs.map((tab, i) => (
+        <button
+          key={tab}
+          onClick={() => onChange(i)}
+          className={clsx(
+            'px-3 py-1.5 rounded-md text-xs font-medium transition-colors',
+            activeIndex === i
+              ? 'bg-white text-primary-700 shadow-sm'
+              : 'text-slate-600 hover:text-slate-900'
+          )}
+        >
+          {tab}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+export function PageHeader({ title, subtitle, action }: { title?: string; subtitle?: string; action?: React.ReactNode }) {
+  if (!title && !subtitle && !action) return null;
+  return (
+    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-3">
+      {(title || subtitle) && (
+        <div className="min-w-0">
+          {title && <h2 className="text-lg font-semibold text-slate-900">{title}</h2>}
+          {subtitle && <p className="text-xs text-slate-500 truncate">{subtitle}</p>}
+        </div>
+      )}
+      {action && <div className="flex flex-wrap items-center gap-2 shrink-0">{action}</div>}
+    </div>
+  );
+}
+
+interface PageToolbarProps {
+  tabs?: string[];
+  activeTab?: number;
+  onTabChange?: (index: number) => void;
+  actions?: React.ReactNode;
+  className?: string;
+}
+
+export function PageToolbar({ tabs, activeTab = 0, onTabChange, actions, className }: PageToolbarProps) {
+  return (
+    <div className={clsx('flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-3', className)}>
+      {tabs && onTabChange && (
+        <TabGroup tabs={tabs} activeIndex={activeTab} onChange={onTabChange} className="!mb-0" />
+      )}
+      {actions && <div className="flex flex-wrap items-center gap-2 shrink-0">{actions}</div>}
+    </div>
+  );
+}
+
+interface TextareaProps extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
+  label?: string;
+  error?: string;
+}
+
+export function Textarea({ label, error, className, ...props }: TextareaProps) {
+  return (
+    <div className="space-y-1.5">
+      {label && <label className="block text-sm font-medium text-slate-700">{label}</label>}
+      <textarea
+        className={clsx(
+          'block w-full rounded-xl border border-border bg-white px-3.5 py-2.5 text-sm text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-500/15 transition-all resize-y min-h-[80px]',
+          error && 'border-red-400 focus:border-red-400 focus:ring-red-500/15',
+          className
+        )}
+        {...props}
+      />
+      {error && <p className="text-sm text-red-600">{error}</p>}
+    </div>
+  );
+}
+
+interface AlertProps {
+  children: React.ReactNode;
+  variant?: 'success' | 'error' | 'info';
+  className?: string;
+}
+
+export function Alert({ children, variant = 'info', className }: AlertProps) {
+  return (
+    <div
+      className={clsx(
+        'px-3 py-2 rounded-lg text-sm ring-1',
+        {
+          'bg-emerald-50 text-emerald-800 ring-emerald-200': variant === 'success',
+          'bg-red-50 text-red-800 ring-red-200': variant === 'error',
+          'bg-sky-50 text-sky-800 ring-sky-200': variant === 'info',
+        },
+        className
+      )}
+    >
+      {children}
+    </div>
+  );
+}
+
+export function LoadingSpinner({ className, size = 'md' }: { className?: string; size?: 'sm' | 'md' | 'lg' }) {
+  const sizeClass = { sm: 'h-6 w-6', md: 'h-9 w-9', lg: 'h-12 w-12' }[size];
+  return (
+    <div className={clsx('flex items-center justify-center', className)}>
+      <div className={clsx('animate-spin rounded-full border-2 border-primary-200 border-t-primary-600', sizeClass)} />
+    </div>
+  );
+}
+
+interface EmptyStateProps {
+  title: string;
+  description?: string;
+  action?: React.ReactNode;
+}
+
+export function EmptyState({ title, description, action }: EmptyStateProps) {
+  return (
+    <div className="flex flex-col items-center justify-center py-12 px-4 text-center rounded-xl border border-dashed border-slate-200 bg-slate-50/50">
+      <div className="h-10 w-10 rounded-xl bg-slate-100 flex items-center justify-center mb-3 text-slate-400 text-lg">—</div>
+      <p className="text-sm font-medium text-slate-700">{title}</p>
+      {description && <p className="text-xs text-slate-500 mt-1 max-w-sm">{description}</p>}
+      {action && <div className="mt-4">{action}</div>}
+    </div>
+  );
+}
+
+export function FormActions({ onCancel, submitLabel = 'Save', loading, cancelLabel = 'Cancel' }: {
+  onCancel: () => void;
+  submitLabel?: string;
+  loading?: boolean;
+  cancelLabel?: string;
+}) {
+  return (
+    <div className="flex justify-end gap-2 pt-4 border-t border-slate-200">
+      <Button type="button" variant="secondary" onClick={onCancel}>{cancelLabel}</Button>
+      <Button type="submit" loading={loading}>{submitLabel}</Button>
+    </div>
+  );
+}
+
+export function SectionTitle({ children, className }: { children: React.ReactNode; className?: string }) {
+  return <h3 className={clsx('text-sm font-semibold text-slate-800 mb-2', className)}>{children}</h3>;
 }
 
 export function formatCurrency(amount: number, currency = 'KES') {
@@ -253,6 +435,7 @@ export function getStatusBadge(status: string) {
     PAID: 'success',
     PASSED: 'success',
     DELIVERED: 'success',
+    APPROVED: 'success',
     PENDING: 'warning',
     IN_PROGRESS: 'info',
     IN_PRODUCTION: 'info',

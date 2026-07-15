@@ -62,6 +62,7 @@ enum OrderStatus {
   CONFIRMED
   IN_PRODUCTION
   READY
+  PARTIALLY_DELIVERED
   DISPATCHED
   DELIVERED
   COMPLETED
@@ -99,6 +100,26 @@ enum PaymentMethod {
   MPESA
   CARD
   CREDIT
+}
+
+enum FiscalStatus {
+  NOT_REQUIRED
+  PENDING
+  SUBMITTED
+  FAILED
+}
+
+enum MpesaTransactionStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  CANCELLED
+}
+
+enum BankLineMatchStatus {
+  UNMATCHED
+  MATCHED
+  IGNORED
 }
 
 enum InvoiceType {
@@ -304,6 +325,7 @@ model User {
   status          UserStatus @default(ACTIVE)
   twoFactorEnabled Boolean   @default(false) @map("two_factor_enabled")
   twoFactorSecret  String?   @map("two_factor_secret")
+  mustChangePassword Boolean @default(false) @map("must_change_password")
   lastLoginAt     DateTime?  @map("last_login_at")
   passwordChangedAt DateTime? @map("password_changed_at")
   createdAt       DateTime   @default(now()) @map("created_at")
@@ -830,6 +852,7 @@ model GoodsReceipt {
   supplier      Supplier       @relation(fields: [supplierId], references: [id])
   items         GoodsReceiptItem[]
   inspections   QualityInspection[]
+  invoices      Invoice[]
 
   @@map("goods_receipts")
 }
@@ -1067,6 +1090,7 @@ model DeliveryNote {
   salesOrder SalesOrder @relation(fields: [salesOrderId], references: [id])
   vehicle    Vehicle?   @relation(fields: [vehicleId], references: [id])
   items      DeliveryItem[]
+  invoices   Invoice[]
 
   @@map("delivery_notes")
 }
@@ -1138,6 +1162,8 @@ model Invoice {
   supplierId      String?       @map("supplier_id")
   salesOrderId    String?       @map("sales_order_id")
   purchaseOrderId String?       @map("purchase_order_id")
+  deliveryNoteId  String?       @map("delivery_note_id")
+  goodsReceiptId  String?       @map("goods_receipt_id")
   invoiceDate     DateTime      @default(now()) @map("invoice_date")
   dueDate         DateTime?     @map("due_date")
   subtotal        Decimal       @default(0) @db.Decimal(15, 2)
@@ -1146,6 +1172,11 @@ model Invoice {
   paidAmount      Decimal       @default(0) @map("paid_amount") @db.Decimal(15, 2)
   status          PaymentStatus @default(UNPAID)
   notes           String?       @db.Text
+  fiscalStatus    FiscalStatus  @default(NOT_REQUIRED) @map("fiscal_status")
+  etimsQrCode     String?       @map("etims_qr_code") @db.Text
+  etimsControlCode String?      @map("etims_control_code")
+  etimsSubmittedAt DateTime?    @map("etims_submitted_at")
+  etimsInvoiceNumber String?    @map("etims_invoice_number")
   createdAt       DateTime      @default(now()) @map("created_at")
   updatedAt       DateTime       @updatedAt @map("updated_at")
 
@@ -1153,8 +1184,11 @@ model Invoice {
   supplier      Supplier?      @relation("SupplierInvoices", fields: [supplierId], references: [id])
   salesOrder    SalesOrder?    @relation(fields: [salesOrderId], references: [id])
   purchaseOrder PurchaseOrder? @relation(fields: [purchaseOrderId], references: [id])
+  deliveryNote  DeliveryNote?  @relation(fields: [deliveryNoteId], references: [id])
+  goodsReceipt  GoodsReceipt?  @relation(fields: [goodsReceiptId], references: [id])
   items         InvoiceItem[]
   payments      Payment[]
+  mpesaTransactions MpesaTransaction[]
 
   @@map("invoices")
 }
@@ -1185,9 +1219,12 @@ model Payment {
   isReconciled  Boolean       @default(false) @map("is_reconciled")
   reconciledAt  DateTime?     @map("reconciled_at")
   bankReference String?       @map("bank_reference")
+  reconciledById String?      @map("reconciled_by_id")
   createdAt     DateTime      @default(now()) @map("created_at")
 
   invoice Invoice? @relation(fields: [invoiceId], references: [id])
+  statementLine BankStatementLine?
+  mpesaTransaction MpesaTransaction?
 
   @@map("payments")
 }
@@ -1204,6 +1241,9 @@ model Employee {
   departmentId String?  @map("department_id")
   branchId     String?  @map("branch_id")
   position     String?
+  kraPin       String?  @map("kra_pin")
+  nhifNo       String?  @map("nhif_no")
+  nssfNo       String?  @map("nssf_no")
   hireDate     DateTime @map("hire_date")
   salary       Decimal  @default(0) @db.Decimal(15, 2)
   isActive     Boolean  @default(true) @map("is_active")
@@ -1257,6 +1297,10 @@ model PayrollRecord {
   periodEnd   DateTime @map("period_end")
   basicSalary Decimal  @map("basic_salary") @db.Decimal(15, 2)
   allowances  Decimal  @default(0) @db.Decimal(15, 2)
+  paye        Decimal  @default(0) @db.Decimal(15, 2)
+  nssf        Decimal  @default(0) @db.Decimal(15, 2)
+  shif        Decimal  @default(0) @db.Decimal(15, 2)
+  housingLevy Decimal  @default(0) @map("housing_levy") @db.Decimal(15, 2)
   deductions  Decimal  @default(0) @db.Decimal(15, 2)
   netPay      Decimal  @map("net_pay") @db.Decimal(15, 2)
   isPaid      Boolean  @default(false) @map("is_paid")
@@ -1285,4 +1329,60 @@ model MaintenanceRequest {
   machine Machine @relation(fields: [machineId], references: [id])
 
   @@map("maintenance_requests")
+}
+
+// ==================== BANK RECONCILIATION & PAYMENTS ====================
+
+model BankStatement {
+  id              String   @id @default(uuid())
+  statementNumber String   @unique @map("statement_number")
+  bankAccountCode String   @default("1100") @map("bank_account_code")
+  periodStart     DateTime @map("period_start")
+  periodEnd       DateTime @map("period_end")
+  openingBalance  Decimal  @default(0) @map("opening_balance") @db.Decimal(15, 2)
+  closingBalance  Decimal  @default(0) @map("closing_balance") @db.Decimal(15, 2)
+  importedAt      DateTime @default(now()) @map("imported_at")
+  notes           String?  @db.Text
+
+  lines BankStatementLine[]
+
+  @@map("bank_statements")
+}
+
+model BankStatementLine {
+  id               String              @id @default(uuid())
+  statementId      String              @map("statement_id")
+  transactionDate  DateTime            @map("transaction_date")
+  description      String?
+  reference        String?
+  amount           Decimal             @db.Decimal(15, 2)
+  matchStatus      BankLineMatchStatus @default(UNMATCHED) @map("match_status")
+  matchedPaymentId String?             @unique @map("matched_payment_id")
+  createdAt        DateTime            @default(now()) @map("created_at")
+
+  statement      BankStatement @relation(fields: [statementId], references: [id], onDelete: Cascade)
+  matchedPayment Payment?      @relation(fields: [matchedPaymentId], references: [id])
+
+  @@map("bank_statement_lines")
+}
+
+model MpesaTransaction {
+  id                 String                 @id @default(uuid())
+  invoiceId          String?                @map("invoice_id")
+  phone              String
+  amount             Decimal                @db.Decimal(15, 2)
+  checkoutRequestId  String?                @unique @map("checkout_request_id")
+  merchantRequestId  String?                @map("merchant_request_id")
+  mpesaReceiptNumber String?                @map("mpesa_receipt_number")
+  status             MpesaTransactionStatus @default(PENDING)
+  resultCode         String?                @map("result_code")
+  resultDesc         String?                @map("result_desc") @db.Text
+  paymentId          String?                @unique @map("payment_id")
+  createdAt          DateTime               @default(now()) @map("created_at")
+  updatedAt          DateTime               @updatedAt @map("updated_at")
+
+  invoice Invoice? @relation(fields: [invoiceId], references: [id])
+  payment Payment? @relation(fields: [paymentId], references: [id])
+
+  @@map("mpesa_transactions")
 }

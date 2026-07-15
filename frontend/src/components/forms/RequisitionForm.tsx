@@ -83,6 +83,7 @@ export function RequisitionForm({ onSuccess, onCancel }: RequisitionFormProps) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['requisitions'] });
+      queryClient.invalidateQueries({ queryKey: ['procurement-stats'] });
       onSuccess();
     },
   });

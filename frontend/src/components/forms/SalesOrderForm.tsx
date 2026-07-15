@@ -7,6 +7,7 @@ import { Plus, Trash2 } from 'lucide-react';
 import { operationsApi, customersApi, productsApi } from '../../services/api';
 import { Button, Input, Select } from '../ui';
 import { Customer, Product } from '../../types';
+import { useVatRate } from '../../contexts/AuthContext';
 
 const orderItemSchema = z.object({
   productId: z.string().min(1, 'Product required'),
@@ -76,17 +77,21 @@ export function SalesOrderForm({ onSuccess, onCancel }: SalesOrderFormProps) {
     });
   }, [items, productsData, setValue]);
 
+  const vatRate = useVatRate();
+  const vatMultiplier = vatRate / 100;
+
   const lineTotal = items.reduce((sum, item) => {
     const discount = item.discount || 0;
     return sum + (item.quantity || 0) * (item.unitPrice || 0) * (1 - discount / 100);
   }, 0);
-  const tax = lineTotal * 0.16;
+  const tax = lineTotal * vatMultiplier;
   const total = lineTotal + tax;
 
   const mutation = useMutation({
     mutationFn: (data: SalesOrderFormData) => operationsApi.createSalesOrder(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['sales-orders'] });
+      queryClient.invalidateQueries({ queryKey: ['sales-stats'] });
       onSuccess();
     },
   });
@@ -163,7 +168,7 @@ export function SalesOrderForm({ onSuccess, onCancel }: SalesOrderFormProps) {
 
       <div className="bg-gray-50 rounded-lg p-4 space-y-1 text-sm">
         <div className="flex justify-between"><span>Subtotal</span><span>KES {lineTotal.toLocaleString('en-KE', { minimumFractionDigits: 2 })}</span></div>
-        <div className="flex justify-between"><span>VAT (16%)</span><span>KES {tax.toLocaleString('en-KE', { minimumFractionDigits: 2 })}</span></div>
+        <div className="flex justify-between"><span>VAT ({vatRate}%)</span><span>KES {tax.toLocaleString('en-KE', { minimumFractionDigits: 2 })}</span></div>
         <div className="flex justify-between font-bold text-base pt-1 border-t"><span>Total</span><span>KES {total.toLocaleString('en-KE', { minimumFractionDigits: 2 })}</span></div>
       </div>
 

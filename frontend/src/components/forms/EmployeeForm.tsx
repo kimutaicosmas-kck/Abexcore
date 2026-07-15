@@ -76,6 +76,7 @@ export function EmployeeForm({ employee, onSuccess, onCancel }: EmployeeFormProp
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['employees'] });
+      queryClient.invalidateQueries({ queryKey: ['hr-stats'] });
       onSuccess();
     },
   });

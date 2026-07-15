@@ -114,6 +114,9 @@ export function GoodsReceiptForm({ onSuccess, onCancel }: GoodsReceiptFormProps)
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['goods-receipts'] });
+      queryClient.invalidateQueries({ queryKey: ['procurement-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['inventory-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['stock-levels'] });
       onSuccess();
     },
   });
@@ -196,6 +199,10 @@ export function GoodsReceiptForm({ onSuccess, onCancel }: GoodsReceiptFormProps)
       </div>
 
       <Input label="Notes" {...register('notes')} />
+
+      <p className="text-xs text-slate-500">
+        Received goods are held pending quality inspection. After QC passes, use Post to Stock on the Goods Receipts tab to add items to inventory.
+      </p>
 
       <div className="flex justify-end gap-3 pt-4 border-t">
         <Button type="button" variant="secondary" onClick={onCancel}>Cancel</Button>

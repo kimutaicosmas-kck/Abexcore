@@ -4,8 +4,9 @@ import { z } from 'zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, Trash2 } from 'lucide-react';
 import { financeApi, customersApi, inventoryApi } from '../../services/api';
-import { Button, Input, Select } from '../ui';
+import { Button, Input, Select, Alert } from '../ui';
 import { Customer, Supplier } from '../../types';
+import { useVatRate } from '../../contexts/AuthContext';
 
 const invoiceItemSchema = z.object({
   description: z.string().min(1, 'Description is required'),
@@ -72,10 +73,13 @@ export function InvoiceForm({ onSuccess, onCancel }: InvoiceFormProps) {
   const items = watch('items');
   const isCustomerType = invoiceType === 'SALES' || invoiceType === 'CREDIT_NOTE';
 
+  const vatRate = useVatRate();
   const lineTotal = items.reduce(
     (sum, item) => sum + (item.quantity || 0) * (item.unitPrice || 0),
     0
   );
+  const taxAmount = lineTotal * (vatRate / 100);
+  const grandTotal = lineTotal + taxAmount;
 
   const mutation = useMutation({
     mutationFn: (data: InvoiceFormData) => {
@@ -88,6 +92,7 @@ export function InvoiceForm({ onSuccess, onCancel }: InvoiceFormProps) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['invoices'] });
+      queryClient.invalidateQueries({ queryKey: ['finance-stats'] });
       onSuccess();
     },
   });
@@ -95,9 +100,7 @@ export function InvoiceForm({ onSuccess, onCancel }: InvoiceFormProps) {
   return (
     <form onSubmit={handleSubmit((data) => mutation.mutate(data))} className="space-y-4">
       {mutation.isError && (
-        <div className="p-3 rounded-lg bg-red-50 text-red-700 text-sm">
-          Failed to create invoice. Please check all fields.
-        </div>
+        <Alert variant="error">Failed to create invoice. Please check all fields.</Alert>
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -129,7 +132,7 @@ export function InvoiceForm({ onSuccess, onCancel }: InvoiceFormProps) {
 
         <div className="space-y-3">
           {fields.map((field, index) => (
-            <div key={field.id} className="grid grid-cols-12 gap-2 items-end p-3 bg-gray-50 rounded-lg">
+            <div key={field.id} className="grid grid-cols-12 gap-2 items-end p-3 bg-slate-50 rounded-xl border border-slate-100">
               <div className="col-span-5">
                 <Input
                   label={index === 0 ? 'Description' : undefined}
@@ -156,10 +159,18 @@ export function InvoiceForm({ onSuccess, onCancel }: InvoiceFormProps) {
 
       <Input label="Notes" {...register('notes')} />
 
-      <div className="bg-gray-50 rounded-lg p-4 text-sm">
-        <div className="flex justify-between font-bold">
-          <span>Total</span>
+      <div className="rounded-xl bg-slate-50 border border-slate-100 p-4 text-sm space-y-2">
+        <div className="flex justify-between text-slate-600">
+          <span>Subtotal</span>
           <span>KES {lineTotal.toLocaleString('en-KE', { minimumFractionDigits: 2 })}</span>
+        </div>
+        <div className="flex justify-between text-slate-600">
+          <span>VAT ({vatRate}%)</span>
+          <span>KES {taxAmount.toLocaleString('en-KE', { minimumFractionDigits: 2 })}</span>
+        </div>
+        <div className="flex justify-between font-bold text-slate-900 pt-2 border-t border-slate-200">
+          <span>Total</span>
+          <span>KES {grandTotal.toLocaleString('en-KE', { minimumFractionDigits: 2 })}</span>
         </div>
       </div>
 

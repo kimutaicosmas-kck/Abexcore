@@ -3,10 +3,12 @@ import { Request, Response, NextFunction } from 'express';
 export class AppError extends Error {
   statusCode: number;
   isOperational: boolean;
+  code?: string;
 
-  constructor(message: string, statusCode = 500) {
+  constructor(message: string, statusCode = 500, code?: string) {
     super(message);
     this.statusCode = statusCode;
+    this.code = code;
     this.isOperational = true;
     Error.captureStackTrace(this, this.constructor);
   }
@@ -28,6 +30,7 @@ export const errorHandler = (
   res.status(statusCode).json({
     success: false,
     message,
+    ...(err instanceof AppError && err.code ? { code: err.code } : {}),
     ...(process.env.NODE_ENV === 'development' && { stack: err.stack }),
   });
 };

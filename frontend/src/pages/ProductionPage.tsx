@@ -87,9 +87,7 @@ export function ProductionPage() {
           </Button>
         }
       />
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200">
-        <Table columns={columns} data={data?.data || []} loading={isLoading} />
-      </div>
+      <Table columns={columns} data={data?.data || []} loading={isLoading} />
 
       <Modal open={createModalOpen} onClose={() => setCreateModalOpen(false)} title="New Production Order" size="lg">
         <ProductionOrderForm onSuccess={() => setCreateModalOpen(false)} onCancel={() => setCreateModalOpen(false)} />

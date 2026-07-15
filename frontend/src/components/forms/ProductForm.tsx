@@ -2,6 +2,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { AxiosError } from 'axios';
 import { productsApi } from '../../services/api';
 import { Button, Input, Select } from '../ui';
 import { Product } from '../../types';
@@ -20,6 +21,7 @@ const productSchema = z.object({
   distributorPrice: z.coerce.number().min(0).optional(),
   retailPrice: z.coerce.number().min(0).optional(),
   minStockLevel: z.coerce.number().int().min(0).optional(),
+  isActive: z.boolean().optional(),
 });
 
 type ProductFormData = z.infer<typeof productSchema>;
@@ -57,8 +59,10 @@ export function ProductForm({ product, onSuccess, onCancel }: ProductFormProps) 
           distributorPrice: Number(product.distributorPrice),
           retailPrice: Number(product.retailPrice),
           minStockLevel: product.minStockLevel,
+          description: product.description || '',
+          isActive: product.isActive,
         }
-      : { category: 'OIL_FILTER', minStockLevel: 0 },
+      : { category: 'OIL_FILTER', minStockLevel: 0, isActive: true },
   });
 
   const mutation = useMutation({
@@ -66,16 +70,19 @@ export function ProductForm({ product, onSuccess, onCancel }: ProductFormProps) 
       isEdit ? productsApi.update(product!.id, data) : productsApi.create(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['products'] });
+      queryClient.invalidateQueries({ queryKey: ['product-stats'] });
+      if (isEdit) queryClient.invalidateQueries({ queryKey: ['product-detail', product!.id] });
       onSuccess();
     },
   });
 
+  const getError = (err: unknown) =>
+    (err as AxiosError<{ message?: string }>).response?.data?.message || 'Failed to save product.';
+
   return (
     <form onSubmit={handleSubmit((data) => mutation.mutate(data))} className="space-y-4">
       {mutation.isError && (
-        <div className="p-3 rounded-lg bg-red-50 text-red-700 text-sm">
-          Failed to save product. Please try again.
-        </div>
+        <div className="p-3 rounded-lg bg-red-50 text-red-700 text-sm">{getError(mutation.error)}</div>
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -88,6 +95,16 @@ export function ProductForm({ product, onSuccess, onCancel }: ProductFormProps) 
         <Input label="Selling Price (KES)" type="number" step="0.01" {...register('sellingPrice')} />
         <Input label="Distributor Price (KES)" type="number" step="0.01" {...register('distributorPrice')} />
         <Input label="Retail Price (KES)" type="number" step="0.01" {...register('retailPrice')} />
+        {isEdit && (
+          <Select
+            label="Status"
+            options={[
+              { value: 'true', label: 'Active' },
+              { value: 'false', label: 'Inactive' },
+            ]}
+            {...register('isActive', { setValueAs: (v) => v === true || v === 'true' })}
+          />
+        )}
       </div>
       <Input label="Description" {...register('description')} />
 

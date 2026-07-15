@@ -1,52 +1,163 @@
 import { Router, Response } from 'express';
-import { authenticate, AuthRequest } from '../middleware/auth';
+import { authenticate, authorize, AuthRequest } from '../middleware/auth';
 import { validate } from '../middleware/validate';
-import { asyncHandler } from '../middleware/errorHandler';
-import { createQualityInspectionSchema, paginationSchema } from '../validators/schemas';
+import { asyncHandler, AppError } from '../middleware/errorHandler';
+import { auditLog } from '../middleware/auditLog';
+import {
+  createQualityInspectionSchema,
+  updateQualityInspectionSchema,
+  qualityListQuerySchema,
+} from '../validators/schemas';
 import prisma from '../config/database';
 import { generateNumber } from '../utils/date';
 import { getParam, getQuery } from '../utils/request';
+import { QualityService } from '../services/operations.service';
+import { Prisma } from '@prisma/client';
 
 const router = Router();
 router.use(authenticate);
 
-router.get('/', validate(paginationSchema, 'query'), asyncHandler(async (req: AuthRequest, res: Response) => {
-  const { page, limit } = getQuery<{ page: number; limit: number }>(req.query);
-  const skip = (page - 1) * limit;
-  const [data, total] = await Promise.all([
-    prisma.qualityInspection.findMany({
-      skip, take: limit,
+router.get(
+  '/stats',
+  authorize('quality:read'),
+  asyncHandler(async (_req: AuthRequest, res: Response) => {
+    const data = await QualityService.getStats();
+    res.json({ success: true, data });
+  })
+);
+
+router.get(
+  '/',
+  authorize('quality:read'),
+  validate(qualityListQuerySchema, 'query'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const { page, limit, search, status, type } = getQuery<{
+      page: number;
+      limit: number;
+      search?: string;
+      status?: string;
+      type?: string;
+    }>(req.query);
+    const skip = (page - 1) * limit;
+
+    const where: Prisma.QualityInspectionWhereInput = {};
+    if (status) where.status = status as Prisma.EnumQualityStatusFilter['equals'];
+    if (type) where.type = type;
+    if (search) {
+      where.OR = [
+        { inspectionNo: { contains: search } },
+        { type: { contains: search } },
+        { result: { contains: search } },
+      ];
+    }
+
+    const [data, total] = await Promise.all([
+      prisma.qualityInspection.findMany({
+        where,
+        skip,
+        take: limit,
+        include: {
+          goodsReceipt: { select: { grnNumber: true } },
+          productionOrder: {
+            select: { orderNumber: true, product: { select: { name: true, sku: true } } },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+      }),
+      prisma.qualityInspection.count({ where }),
+    ]);
+
+    res.json({
+      success: true,
+      data,
+      pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
+    });
+  })
+);
+
+router.get(
+  '/:id',
+  authorize('quality:read'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const data = await prisma.qualityInspection.findUnique({
+      where: { id: getParam(req.params.id) },
       include: {
-        goodsReceipt: { select: { grnNumber: true } },
-        productionOrder: { select: { orderNumber: true, product: { select: { name: true } } } },
+        goodsReceipt: { include: { supplier: { select: { name: true } } } },
+        productionOrder: {
+          include: { product: { select: { name: true, sku: true } }, machine: true },
+        },
       },
-      orderBy: { createdAt: 'desc' },
-    }),
-    prisma.qualityInspection.count(),
-  ]);
-  res.json({ success: true, data, pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } });
-}));
+    });
+    if (!data) throw new AppError('Inspection not found', 404);
+    res.json({ success: true, data });
+  })
+);
 
-router.post('/', validate(createQualityInspectionSchema), asyncHandler(async (req: AuthRequest, res: Response) => {
-  const count = await prisma.qualityInspection.count();
-  const inspectionNo = generateNumber('QC', count + 1);
-  const data = await prisma.qualityInspection.create({
-    data: {
-      inspectionNo,
-      ...req.body,
-      inspectorId: req.user!.id,
-      inspectedAt: req.body.status && req.body.status !== 'PENDING' ? new Date() : undefined,
-    },
-  });
-  res.status(201).json({ success: true, data });
-}));
+router.post(
+  '/',
+  authorize('quality:create'),
+  validate(createQualityInspectionSchema),
+  auditLog('quality', 'create', 'quality_inspection'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const body = req.body;
+    const data = await prisma.$transaction(async (tx) => {
+      const inspection = await tx.qualityInspection.create({
+        data: {
+          inspectionNo: generateNumber('QC', (await tx.qualityInspection.count()) + 1),
+          ...body,
+          inspectorId: req.user!.id,
+          inspectedAt: body.status && body.status !== 'PENDING' ? new Date() : undefined,
+        },
+        include: {
+          goodsReceipt: { select: { grnNumber: true, id: true } },
+          productionOrder: { select: { orderNumber: true } },
+        },
+      });
 
-router.patch('/:id', asyncHandler(async (req: AuthRequest, res: Response) => {
-  const data = await prisma.qualityInspection.update({
-    where: { id: getParam(req.params.id) },
-    data: { ...req.body, inspectedAt: new Date() },
-  });
-  res.json({ success: true, data });
-}));
+      if (body.goodsReceiptId && body.status && body.status !== 'PENDING') {
+        await tx.goodsReceipt.update({
+          where: { id: body.goodsReceiptId },
+          data: { inspectionStatus: body.status },
+        });
+      }
+
+      return inspection;
+    });
+
+    res.status(201).json({ success: true, data });
+  })
+);
+
+router.patch(
+  '/:id',
+  authorize('quality:update'),
+  validate(updateQualityInspectionSchema),
+  auditLog('quality', 'update', 'quality_inspection'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const data = await prisma.$transaction(async (tx) => {
+      const inspection = await tx.qualityInspection.update({
+        where: { id: getParam(req.params.id) },
+        data: {
+          ...req.body,
+          inspectedAt: req.body.status && req.body.status !== 'PENDING' ? new Date() : undefined,
+        },
+        include: {
+          goodsReceipt: { select: { grnNumber: true, id: true } },
+          productionOrder: { select: { orderNumber: true, product: { select: { name: true } } } },
+        },
+      });
+
+      if (inspection.goodsReceiptId && req.body.status && req.body.status !== 'PENDING') {
+        await tx.goodsReceipt.update({
+          where: { id: inspection.goodsReceiptId },
+          data: { inspectionStatus: req.body.status },
+        });
+      }
+
+      return inspection;
+    });
+    res.json({ success: true, data });
+  })
+);
 
 export default router;

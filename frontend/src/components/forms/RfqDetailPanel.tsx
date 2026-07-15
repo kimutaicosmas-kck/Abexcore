@@ -34,7 +34,10 @@ export function RfqDetailPanel({ rfq, onClose }: RfqDetailProps) {
   const saveQuote = useMutation({
     mutationFn: ({ id, totalAmount }: { id: string; totalAmount: number }) =>
       inventoryApi.updateQuotation(id, { totalAmount }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['rfqs'] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['rfqs'] });
+      queryClient.invalidateQueries({ queryKey: ['procurement-stats'] });
+    },
   });
 
   const award = useMutation({
@@ -42,6 +45,7 @@ export function RfqDetailPanel({ rfq, onClose }: RfqDetailProps) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['rfqs'] });
       queryClient.invalidateQueries({ queryKey: ['purchase-orders'] });
+      queryClient.invalidateQueries({ queryKey: ['procurement-stats'] });
       onClose();
     },
   });

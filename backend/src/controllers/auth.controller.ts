@@ -4,10 +4,11 @@ import { asyncHandler } from '../middleware/errorHandler';
 import { AuthRequest } from '../middleware/auth';
 
 export const login = asyncHandler(async (req: AuthRequest, res: Response) => {
-  const { email, password } = req.body;
+  const { email, password, totpCode } = req.body;
   const result = await AuthService.login(
     email,
     password,
+    totpCode,
     req.ip,
     req.headers['user-agent']
   );

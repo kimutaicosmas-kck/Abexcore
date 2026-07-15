@@ -6,5 +6,9 @@ export default defineConfig({
     environment: 'node',
     include: ['tests/**/*.test.ts'],
     testTimeout: 15000,
+    fileParallelism: false,
+    poolOptions: {
+      threads: { singleThread: true },
+    },
   },
 });

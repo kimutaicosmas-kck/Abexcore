@@ -7,6 +7,24 @@ function invNumber(seq: number) {
   return `INV-${new Date().getFullYear()}-${String(seq).padStart(5, '0')}`;
 }
 
+function soNumber(seq: number) {
+  return `SO-${new Date().getFullYear()}-${String(seq).padStart(5, '0')}`;
+}
+
+function poNumber(seq: number) {
+  return `PO-${new Date().getFullYear()}-${String(seq).padStart(5, '0')}`;
+}
+
+function prodNumber(seq: number) {
+  return `PROD-${new Date().getFullYear()}-${String(seq).padStart(5, '0')}`;
+}
+
+function subDays(date: Date, days: number) {
+  const d = new Date(date);
+  d.setDate(d.getDate() - days);
+  return d;
+}
+
 const ROLES = [
   'Super Admin',
   'Managing Director',
@@ -25,7 +43,7 @@ const ROLES = [
 
 const MODULES = [
   'dashboard', 'users', 'customers', 'products', 'inventory',
-  'procurement', 'production', 'sales', 'finance', 'hr',
+  'procurement', 'production', 'sales', 'delivery', 'finance', 'hr',
   'maintenance', 'quality', 'reports', 'settings',
 ];
 
@@ -69,12 +87,12 @@ async function main() {
               'Production Manager': ['dashboard', 'production', 'inventory', 'quality'],
               'Procurement Officer': ['dashboard', 'procurement', 'inventory'],
               'Warehouse Officer': ['dashboard', 'inventory'],
-              'Sales Officer': ['dashboard', 'customers', 'sales'],
+              'Sales Officer': ['dashboard', 'customers', 'sales', 'delivery'],
               'Finance Officer': ['dashboard', 'finance', 'reports'],
               Accountant: ['dashboard', 'finance', 'reports'],
               HR: ['dashboard', 'hr'],
               'Customer Service': ['dashboard', 'customers'],
-              Driver: ['dashboard'],
+              Driver: ['dashboard', 'delivery'],
               Auditor: ['dashboard', 'reports', 'finance'],
             };
             return (roleModules[roleName] || ['dashboard']).includes(p.module);
@@ -178,6 +196,8 @@ async function main() {
       branchId: branch.id,
     },
   });
+
+  const adminUser = await prisma.user.findUnique({ where: { email: 'admin@filtererp.co.ke' } });
 
   // Suppliers
   const suppliers = await Promise.all([
@@ -301,6 +321,7 @@ async function main() {
     { code: '1300', name: 'Inventory', type: 'ASSET' as const },
     { code: '2000', name: 'Liabilities', type: 'LIABILITY' as const },
     { code: '2100', name: 'Accounts Payable', type: 'LIABILITY' as const },
+    { code: '2150', name: 'Goods Received Not Invoiced', type: 'LIABILITY' as const },
     { code: '2200', name: 'VAT Payable', type: 'LIABILITY' as const },
     { code: '3000', name: 'Equity', type: 'EQUITY' as const },
     { code: '4000', name: 'Revenue', type: 'INCOME' as const },
@@ -332,30 +353,351 @@ async function main() {
     create: { registration: 'KCA 123A', make: 'Isuzu', model: 'NQR', capacity: '3 tons' },
   });
 
-  // Sample sales invoice for finance/export demo
-  const customer = await prisma.customer.findFirst();
-  if (customer) {
-    const invCount = await prisma.invoice.count();
-    await prisma.invoice.create({
+  // Dashboard demo data (sales history, pending actions, production)
+  const existingOrders = await prisma.salesOrder.count();
+  if (existingOrders < 5 && adminUser) {
+    const orderStatuses = ['CONFIRMED', 'IN_PRODUCTION', 'READY', 'DISPATCHED', 'COMPLETED', 'PENDING', 'CONFIRMED', 'IN_PRODUCTION', 'DELIVERED', 'COMPLETED'] as const;
+    let invSeq = await prisma.invoice.count();
+    let soSeq = 0;
+
+    for (let i = 0; i < 10; i++) {
+      const customer = customers[i % customers.length];
+      const product = products[i % products.length];
+      const qty = 20 + i * 15;
+      const unitPrice = Number(product.sellingPrice);
+      const subtotal = qty * unitPrice;
+      const taxAmount = subtotal * 0.16;
+      const totalAmount = subtotal + taxAmount;
+      const orderDate = subDays(new Date(), i * 2);
+      soSeq += 1;
+
+      const order = await prisma.salesOrder.create({
+        data: {
+          orderNumber: soNumber(soSeq),
+          customerId: customer.id,
+          createdById: adminUser.id,
+          orderDate,
+          status: orderStatuses[i],
+          subtotal,
+          taxAmount,
+          totalAmount,
+          items: {
+            create: [{ productId: product.id, quantity: qty, unitPrice, totalPrice: subtotal }],
+          },
+        },
+      });
+
+      if (i % 3 === 0) {
+        invSeq += 1;
+        const invoiceDate = subDays(new Date(), Math.min(i * 2, 29));
+        await prisma.invoice.create({
+          data: {
+            invoiceNumber: invNumber(invSeq),
+            type: 'SALES',
+            customerId: customer.id,
+            salesOrderId: order.id,
+            invoiceDate,
+            dueDate: subDays(invoiceDate, -30),
+            subtotal,
+            taxAmount,
+            totalAmount,
+            status: i === 0 ? 'OVERDUE' : i % 4 === 0 ? 'PAID' : 'UNPAID',
+            items: {
+              create: [{ description: `${product.name} x ${qty}`, quantity: qty, unitPrice, taxRate: 16, totalPrice: subtotal }],
+            },
+          },
+        });
+      }
+    }
+
+    // Spread additional sales invoices across 30 days for chart data
+    for (let day = 1; day <= 29; day += 3) {
+      invSeq += 1;
+      const customer = customers[day % customers.length];
+      const product = products[day % products.length];
+      const qty = 10 + (day % 5) * 5;
+      const subtotal = qty * Number(product.sellingPrice);
+      const taxAmount = subtotal * 0.16;
+      await prisma.invoice.create({
+        data: {
+          invoiceNumber: invNumber(invSeq),
+          type: 'SALES',
+          customerId: customer.id,
+          invoiceDate: subDays(new Date(), day),
+          subtotal,
+          taxAmount,
+          totalAmount: subtotal + taxAmount,
+          status: 'PAID',
+          items: {
+            create: [{ description: `${product.name} daily sale`, quantity: qty, unitPrice: Number(product.sellingPrice), taxRate: 16, totalPrice: subtotal }],
+          },
+        },
+      });
+    }
+
+    // Purchase invoices for monthly expenses
+    const supplier = suppliers[0];
+    for (let e = 0; e < 3; e++) {
+      invSeq += 1;
+      const amount = 25000 + e * 8000;
+      await prisma.invoice.create({
+        data: {
+          invoiceNumber: invNumber(invSeq),
+          type: 'PURCHASE',
+          supplierId: supplier.id,
+          invoiceDate: subDays(new Date(), e * 7),
+          subtotal: amount,
+          taxAmount: amount * 0.16,
+          totalAmount: amount * 1.16,
+          status: 'PAID',
+          items: {
+            create: [{ description: 'Raw material purchase', quantity: 1, unitPrice: amount, taxRate: 16, totalPrice: amount }],
+          },
+        },
+      });
+    }
+
+    const machine = await prisma.machine.findFirst();
+    const prodStatuses = ['PLANNED', 'SCHEDULED', 'IN_PROGRESS', 'COMPLETED'] as const;
+    let prodSeq = await prisma.productionOrder.count();
+    for (let p = 0; p < 4; p++) {
+      prodSeq += 1;
+      await prisma.productionOrder.create({
+        data: {
+          orderNumber: prodNumber(prodSeq),
+          productId: products[p].id,
+          machineId: machine?.id,
+          quantity: 100 + p * 50,
+          completedQty: p === 3 ? 150 : p * 30,
+          status: prodStatuses[p],
+          scheduledStart: subDays(new Date(), 5 - p),
+        },
+      });
+    }
+
+    await prisma.purchaseRequisition.create({
       data: {
-        invoiceNumber: invNumber(invCount + 1),
-        type: 'SALES',
-        customerId: customer.id,
-        subtotal: 15000,
-        taxAmount: 2400,
-        totalAmount: 17400,
-        status: 'UNPAID',
+        requisitionNo: `PR-${new Date().getFullYear()}-00001`,
+        requestedById: adminUser.id,
+        department: 'Production',
+        status: 'PENDING',
         items: {
-          create: [
-            { description: 'Oil Filter KFI-101 x 100', quantity: 100, unitPrice: 150, taxRate: 16, totalPrice: 15000 },
-          ],
+          create: [{ rawMaterialId: materials[0].id, description: 'Steel Shell restock', quantity: 500, unit: 'pcs', estimatedCost: 22500 }],
         },
       },
     });
+
+    await prisma.requestForQuotation.create({
+      data: {
+        rfqNo: `RFQ-${new Date().getFullYear()}-00001`,
+        status: 'PENDING',
+        dueDate: subDays(new Date(), -7),
+        notes: 'Awaiting supplier quotes for filter paper',
+      },
+    });
+
+    const employees = await prisma.employee.findMany({ take: 2 });
+    if (employees[0]) {
+      await prisma.leaveRequest.create({
+        data: {
+          employeeId: employees[0].id,
+          type: 'Annual',
+          startDate: subDays(new Date(), -5),
+          endDate: subDays(new Date(), -3),
+          reason: 'Family event',
+          status: 'PENDING',
+        },
+      });
+
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      for (const emp of employees) {
+        await prisma.attendance.upsert({
+          where: { employeeId_date: { employeeId: emp.id, date: today } },
+          update: {},
+          create: {
+            employeeId: emp.id,
+            date: today,
+            checkIn: new Date(),
+            status: 'present',
+          },
+        });
+      }
+    }
+
+    await prisma.complaint.createMany({
+      data: [
+        { customerId: customers[0].id, subject: 'Delayed delivery', description: 'Order arrived 3 days late.', priority: 'high', status: 'PENDING' },
+        { customerId: customers[1].id, subject: 'Wrong filter size', description: 'Received incorrect SKU.', priority: 'medium', status: 'PENDING' },
+      ],
+    });
+
+    await prisma.opportunity.createMany({
+      data: [
+        { customerId: customers[2].id, title: 'Annual filter supply contract', value: 850000, stage: 'proposal', probability: 65, status: 'PENDING' },
+        { customerId: customers[3].id, title: 'Fleet maintenance filters', value: 320000, stage: 'negotiation', probability: 80, status: 'APPROVED' },
+      ],
+    });
+
+    await prisma.notification.createMany({
+      data: [
+        { userId: adminUser.id, type: 'APPROVAL', title: 'Leave request pending', message: 'John Kamau submitted a leave request for approval.', link: '/hr', isRead: false },
+        { userId: adminUser.id, type: 'LOW_STOCK', title: 'Low stock alert', message: 'Industrial Adhesive is below minimum level.', link: '/inventory', isRead: false },
+      ],
+    });
+
+    // Set one material below minimum for low-stock widget
+    const glueStock = await prisma.stockLevel.findFirst({
+      where: { rawMaterialId: materials[6].id },
+    });
+    if (glueStock) {
+      await prisma.stockLevel.update({
+        where: { id: glueStock.id },
+        data: { quantity: 30 },
+      });
+    }
+
+    const poCount = await prisma.purchaseOrder.count();
+    await prisma.purchaseOrder.create({
+      data: {
+        poNumber: poNumber(poCount + 1),
+        supplierId: suppliers[1].id,
+        status: 'CONFIRMED',
+        subtotal: 45000,
+        taxAmount: 7200,
+        totalAmount: 52200,
+        items: {
+          create: [{ description: 'Filter Paper bulk order', quantity: 200, unitPrice: 225, totalPrice: 45000 }],
+        },
+      },
+    });
+  } else if (adminUser) {
+    // Ensure at least one sales invoice exists for finance demo
+    const invCount = await prisma.invoice.count();
+    const customer = await prisma.customer.findFirst();
+    if (customer && invCount === 0) {
+      await prisma.invoice.create({
+        data: {
+          invoiceNumber: invNumber(1),
+          type: 'SALES',
+          customerId: customer.id,
+          subtotal: 15000,
+          taxAmount: 2400,
+          totalAmount: 17400,
+          status: 'UNPAID',
+          items: {
+            create: [{ description: 'Oil Filter KFI-101 x 100', quantity: 100, unitPrice: 150, taxRate: 16, totalPrice: 15000 }],
+          },
+        },
+      });
+    }
+  }
+
+  // Quality & delivery demo data
+  if (adminUser) {
+    const qcCount = await prisma.qualityInspection.count();
+    if (qcCount === 0) {
+      const [gr, prodOrder] = await Promise.all([
+        prisma.goodsReceipt.findFirst(),
+        prisma.productionOrder.findFirst(),
+      ]);
+      await prisma.qualityInspection.createMany({
+        data: [
+          {
+            inspectionNo: 'QC-00001',
+            type: 'incoming',
+            goodsReceiptId: gr?.id,
+            inspectorId: adminUser.id,
+            status: 'PASSED',
+            result: 'All items within spec',
+            defectsFound: 0,
+            inspectedAt: subDays(new Date(), 2),
+          },
+          {
+            inspectionNo: 'QC-00002',
+            type: 'production',
+            productionOrderId: prodOrder?.id,
+            inspectorId: adminUser.id,
+            status: 'PENDING',
+            defectsFound: 0,
+          },
+          {
+            inspectionNo: 'QC-00003',
+            type: 'finished',
+            productionOrderId: prodOrder?.id,
+            inspectorId: adminUser.id,
+            status: 'CONDITIONAL',
+            result: 'Minor packaging defect',
+            defectsFound: 2,
+            correctiveAction: 'Repack affected units',
+            inspectedAt: subDays(new Date(), 1),
+          },
+        ],
+      });
+    }
+
+    const dnCount = await prisma.deliveryNote.count();
+    if (dnCount === 0) {
+      const [order, vehicle] = await Promise.all([
+        prisma.salesOrder.findFirst({
+          where: { status: { in: ['READY', 'DISPATCHED', 'CONFIRMED'] } },
+          include: { items: true },
+        }),
+        prisma.vehicle.findFirst(),
+      ]);
+      if (order && order.items.length > 0) {
+        await prisma.deliveryNote.create({
+          data: {
+            deliveryNo: 'DN-00001',
+            salesOrderId: order.id,
+            vehicleId: vehicle?.id,
+            status: vehicle ? 'ASSIGNED' : 'PENDING',
+            scheduledDate: subDays(new Date(), -1),
+            items: {
+              create: order.items.map((item) => ({
+                productId: item.productId,
+                quantity: item.quantity,
+              })),
+            },
+          },
+        });
+      }
+    }
+
+    const quoteCount = await prisma.salesQuotation.count();
+    if (quoteCount === 0) {
+      const customer = await prisma.customer.findFirst();
+      const product = await prisma.product.findFirst();
+      if (customer && product) {
+        const subtotal = Number(product.sellingPrice) * 50;
+        const taxAmount = subtotal * 0.16;
+        await prisma.salesQuotation.create({
+          data: {
+            quotationNo: 'QT-00001',
+            customerId: customer.id,
+            status: 'PENDING',
+            validUntil: subDays(new Date(), -14),
+            subtotal,
+            taxAmount,
+            totalAmount: subtotal + taxAmount,
+            items: {
+              create: [{
+                productId: product.id,
+                quantity: 50,
+                unitPrice: Number(product.sellingPrice),
+                totalPrice: subtotal,
+              }],
+            },
+          },
+        });
+      }
+    }
   }
 
   console.log('Seed completed successfully!');
-  console.log('Login: admin@filtererp.co.ke / Admin@123');
+  if (process.env.NODE_ENV !== 'production') {
+    console.log('Demo data loaded. Configure SEED_ADMIN_PASSWORD in production.');
+  }
 }
 
 main()

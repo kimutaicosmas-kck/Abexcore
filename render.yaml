@@ -1,0 +1,43 @@
+# Render blueprint — free-tier friendly (2-week testing)
+# MySQL: add a Railway MySQL service and paste DATABASE_URL into erp-api below.
+# Docs: see DEPLOYMENT.md § Free 2-week testing
+
+services:
+  - type: web
+    name: erp-api
+    runtime: docker
+    dockerfilePath: docker/Dockerfile.backend
+    dockerContext: backend
+    plan: free
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3001
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_REFRESH_SECRET
+        generateValue: true
+      - key: FRONTEND_URL
+        sync: false
+      - key: SEED_ON_START
+        value: "true"
+      - key: MPESA_ENV
+        value: stub
+
+  - type: web
+    name: erp-web
+    runtime: static
+    plan: free
+    buildCommand: cd frontend && npm ci && npm run build
+    staticPublishPath: frontend/dist
+    envVars:
+      - key: VITE_API_URL
+        sync: false
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html

@@ -50,6 +50,7 @@ export function MaintenanceForm({ onSuccess, onCancel }: MaintenanceFormProps) {
     mutationFn: (data: MaintenanceFormData) => maintenanceApi.createRequest(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['maintenance-requests'] });
+      queryClient.invalidateQueries({ queryKey: ['maintenance-stats'] });
       onSuccess();
     },
   });

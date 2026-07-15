@@ -2,6 +2,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { AxiosError } from 'axios';
 import { customersApi } from '../../services/api';
 import { Button, Input, Select } from '../ui';
 import { Customer } from '../../types';
@@ -18,6 +19,7 @@ const customerSchema = z.object({
   creditLimit: z.coerce.number().min(0).optional(),
   paymentTerms: z.coerce.number().int().min(0).optional(),
   notes: z.string().optional(),
+  isActive: z.boolean().optional(),
 });
 
 type CustomerFormData = z.infer<typeof customerSchema>;
@@ -36,6 +38,11 @@ interface CustomerFormProps {
   onCancel: () => void;
 }
 
+function getApiError(error: unknown): string {
+  const axiosError = error as AxiosError<{ message?: string }>;
+  return axiosError.response?.data?.message || 'Failed to save customer. Please try again.';
+}
+
 export function CustomerForm({ customer, onSuccess, onCancel }: CustomerFormProps) {
   const queryClient = useQueryClient();
   const isEdit = !!customer;
@@ -49,26 +56,38 @@ export function CustomerForm({ customer, onSuccess, onCancel }: CustomerFormProp
           type: customer.type as CustomerFormData['type'],
           email: customer.email || '',
           phone: customer.phone || '',
+          address: customer.address || '',
           city: customer.city || '',
+          taxPin: customer.taxPin || '',
           creditLimit: Number(customer.creditLimit),
-          paymentTerms: 30,
+          paymentTerms: customer.paymentTerms ?? 30,
+          notes: customer.notes || '',
+          isActive: customer.isActive,
         }
       : {
           type: 'DEALER',
           creditLimit: 0,
           paymentTerms: 30,
+          isActive: true,
         },
   });
 
   const mutation = useMutation({
     mutationFn: (data: CustomerFormData) => {
-      const payload = { ...data, email: data.email || undefined };
+      const payload = {
+        ...data,
+        email: data.email || undefined,
+        address: data.address || undefined,
+        notes: data.notes || undefined,
+      };
       return isEdit
         ? customersApi.update(customer!.id, payload)
         : customersApi.create(payload);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['customers'] });
+      queryClient.invalidateQueries({ queryKey: ['crm-stats'] });
+      if (isEdit) queryClient.invalidateQueries({ queryKey: ['customer-detail', customer!.id] });
       onSuccess();
     },
   });
@@ -76,9 +95,7 @@ export function CustomerForm({ customer, onSuccess, onCancel }: CustomerFormProp
   return (
     <form onSubmit={handleSubmit((data) => mutation.mutate(data))} className="space-y-4">
       {mutation.isError && (
-        <div className="p-3 rounded-lg bg-red-50 text-red-700 text-sm">
-          Failed to save customer. Please try again.
-        </div>
+        <div className="p-3 rounded-lg bg-red-50 text-red-700 text-sm">{getApiError(mutation.error)}</div>
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -91,6 +108,18 @@ export function CustomerForm({ customer, onSuccess, onCancel }: CustomerFormProp
         <Input label="Tax PIN" {...register('taxPin')} />
         <Input label="Credit Limit (KES)" type="number" {...register('creditLimit')} />
         <Input label="Payment Terms (days)" type="number" {...register('paymentTerms')} />
+        {isEdit && (
+          <Select
+            label="Status"
+            options={[
+              { value: 'true', label: 'Active' },
+              { value: 'false', label: 'Inactive' },
+            ]}
+            {...register('isActive', {
+              setValueAs: (v) => v === true || v === 'true',
+            })}
+          />
+        )}
       </div>
       <Input label="Address" {...register('address')} />
       <Input label="Notes" {...register('notes')} />

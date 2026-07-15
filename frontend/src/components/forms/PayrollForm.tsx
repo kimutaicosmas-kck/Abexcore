@@ -52,6 +52,7 @@ export function PayrollForm({ onSuccess, onCancel }: PayrollFormProps) {
     mutationFn: (data: PayrollFormData) => hrApi.createPayroll(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['payroll'] });
+      queryClient.invalidateQueries({ queryKey: ['hr-stats'] });
       onSuccess();
     },
   });

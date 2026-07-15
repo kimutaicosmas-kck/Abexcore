@@ -1,4 +1,7 @@
-export async function downloadFile(url: string, filename: string) {
+import { apiUrl } from '../config/api';
+
+export async function downloadFile(path: string, filename: string) {
+  const url = apiUrl(path);
   const token = localStorage.getItem('accessToken');
   const response = await fetch(url, {
     headers: token ? { Authorization: `Bearer ${token}` } : {},

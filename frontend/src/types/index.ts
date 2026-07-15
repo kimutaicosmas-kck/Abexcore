@@ -6,11 +6,50 @@ export interface User {
   phone?: string;
   avatar?: string;
   roleId: string;
-  role: { id: string; name: string };
+  role: { id: string; name: string; permissions?: { permission: { module: string; action: string } }[] };
   department?: { id: string; name: string };
   branch?: { id: string; name: string; code: string };
   permissions: string[];
   status: string;
+  lastLoginAt?: string;
+  createdAt?: string;
+  loginHistory?: LoginHistoryEntry[];
+}
+
+export interface LoginHistoryEntry {
+  id: string;
+  ipAddress?: string;
+  userAgent?: string;
+  success: boolean;
+  createdAt: string;
+}
+
+export interface UserStats {
+  total: number;
+  active: number;
+  inactive: number;
+  suspended: number;
+  recentLogins: number;
+  byRole: { roleId: string; roleName: string; count: number }[];
+}
+
+export interface RoleWithPermissions {
+  id: string;
+  name: string;
+  description?: string;
+  isSystem: boolean;
+  permissions: { permission: { id: string; module: string; action: string; description?: string } }[];
+  _count?: { users: number };
+}
+
+export interface AuditLogEntry {
+  id: string;
+  action: string;
+  module: string;
+  entityType: string;
+  entityId?: string;
+  createdAt: string;
+  user?: { firstName: string; lastName: string; email: string };
 }
 
 export interface AuthResponse {
@@ -49,6 +88,20 @@ export interface DashboardKPIs {
   topSellingFilters: { id: string; name: string; sku: string; quantitySold: number }[];
   recentOrders: { id: string; orderNumber: string; customer: string; total: number; status: string; date: string }[];
   productionStatus: { status: string; count: number }[];
+  pendingActions: { type: string; label: string; count: number; path: string }[];
+  moduleSnapshots: {
+    hr: { attendanceToday: number; pendingLeave: number; activeEmployees: number };
+    crm: { openComplaints: number; openOpportunities: number; pipelineValue: number };
+    procurement: { pendingRequisitions: number; openRfqs: number; activePurchaseOrders: number };
+    finance: { overdueInvoices: number; accountsReceivable: number; monthlyProfit: number };
+  };
+  lastUpdated: string;
+}
+
+export interface DashboardCharts {
+  days: number;
+  salesTrend: { date: string; amount: number }[];
+  productCategories: { category: string; count: number }[];
 }
 
 export interface Customer {
@@ -58,10 +111,71 @@ export interface Customer {
   type: string;
   email?: string;
   phone?: string;
+  address?: string;
   city?: string;
+  taxPin?: string;
   creditLimit: number;
   creditUsed: number;
+  paymentTerms?: number;
+  notes?: string;
   isActive: boolean;
+  contacts?: CustomerContact[];
+  _count?: { salesOrders: number; invoices: number; complaints: number; opportunities: number };
+}
+
+export interface CustomerContact {
+  id: string;
+  name: string;
+  title?: string;
+  email?: string;
+  phone?: string;
+  isPrimary: boolean;
+}
+
+export interface Complaint {
+  id: string;
+  customerId: string;
+  subject: string;
+  description: string;
+  priority: string;
+  status: string;
+  resolution?: string;
+  resolvedAt?: string;
+  createdAt: string;
+  customer?: { id: string; name: string; code: string };
+}
+
+export interface Opportunity {
+  id: string;
+  customerId: string;
+  title: string;
+  value: number;
+  stage: string;
+  probability: number;
+  expectedCloseDate?: string;
+  status: string;
+  notes?: string;
+  createdAt: string;
+  customer?: { id: string; name: string; code: string };
+}
+
+export interface Warranty {
+  id: string;
+  customerId: string;
+  productId: string;
+  serialNumber?: string;
+  startDate: string;
+  endDate: string;
+  notes?: string;
+  customer?: { id: string; name: string; code: string };
+  product?: { id: string; name: string; sku: string };
+}
+
+export interface CrmStats {
+  customers: { total: number; active: number; inactive: number };
+  complaints: { open: number; resolved: number };
+  opportunities: { open: number; pipelineValue: number; won: number };
+  warranties: { total: number; expiringSoon: number };
 }
 
 export interface Product {
@@ -70,6 +184,8 @@ export interface Product {
   barcode?: string;
   name: string;
   category: string;
+  description?: string;
+  imageUrl?: string;
   manufacturingCost: number;
   sellingPrice: number;
   distributorPrice: number;
@@ -77,6 +193,65 @@ export interface Product {
   minStockLevel: number;
   isActive: boolean;
   bom?: BillOfMaterial;
+  stockLevels?: StockLevel[];
+}
+
+export interface ProductStats {
+  total: number;
+  active: number;
+  inactive: number;
+  withBom: number;
+  withoutBom: number;
+  finishedGoodsQty: number;
+  byCategory: { category: string; count: number }[];
+}
+
+export interface InventoryStats {
+  materialsCount: number;
+  warehouses: number;
+  lowStockCount: number;
+  inventoryValue: number;
+  transfersToday: number;
+}
+
+export interface ProcurementStats {
+  pendingRequisitions: number;
+  openRfqs: number;
+  activePurchaseOrders: number;
+  activePoValue: number;
+  goodsReceiptsMonth: number;
+  suppliers: number;
+}
+
+export interface GoodsReceipt {
+  id: string;
+  grnNumber: string;
+  receiptDate: string;
+  status: string;
+  inspectionStatus: string;
+  notes?: string;
+  supplier?: { name: string };
+  purchaseOrder?: { poNumber: string };
+  items?: {
+    id: string;
+    quantity: number;
+    unit: string;
+    unitCost: number;
+    batchNumber?: string;
+    rawMaterialId?: string;
+  }[];
+  inspections?: { id: string; inspectionNo: string; status: string }[];
+}
+
+export interface InventoryTransaction {
+  id: string;
+  type: string;
+  quantity: number;
+  batchNumber?: string;
+  notes?: string;
+  referenceType?: string;
+  createdAt: string;
+  warehouse?: { name: string; code: string };
 }
 
 export interface BillOfMaterial {
@@ -135,12 +310,15 @@ export interface SalesOrder {
   orderDate: string;
   totalAmount: number;
   items: SalesOrderItem[];
+  invoices?: { id: string; invoiceNumber: string; status: string; totalAmount: number }[];
+  deliveries?: { id: string; deliveryNo: string; status: string }[];
 }
 
 export interface SalesOrderItem {
   id: string;
   productId: string;
   quantity: number;
+  deliveredQty?: number;
   unitPrice: number;
   totalPrice: number;
   product: Product;
@@ -168,6 +346,32 @@ export interface PurchaseOrder {
   items: { id: string; description: string; quantity: number; unitPrice: number }[];
 }
 
+export interface InvoiceItem {
+  id: string;
+  description: string;
+  quantity: number;
+  unitPrice: number;
+  taxRate?: number;
+  totalPrice: number;
+}
+
+export interface Payment {
+  id: string;
+  paymentNumber: string;
+  invoiceId?: string;
+  amount: number;
+  method?: string;
+  reference?: string;
+  paymentDate: string;
+  isReconciled?: boolean;
+  invoice?: {
+    id: string;
+    invoiceNumber: string;
+    customer?: { name: string };
+    supplier?: { name: string };
+  };
+}
+
 export interface Invoice {
   id: string;
   invoiceNumber: string;
@@ -176,9 +380,17 @@ export interface Invoice {
   supplier?: Supplier;
   invoiceDate: string;
   dueDate?: string;
+  subtotal?: number;
+  taxAmount?: number;
   totalAmount: number;
   paidAmount: number;
   status: string;
+  fiscalStatus?: string;
+  etimsControlCode?: string;
+  etimsQrCode?: string;
+  notes?: string;
+  items?: InvoiceItem[];
+  payments?: Payment[];
 }
 
 export interface Employee {
@@ -200,6 +412,83 @@ export interface Machine {
   type: string;
   status: string;
   capacity?: string;
+  location?: string;
+}
+
+export interface QualityStats {
+  total: number;
+  pending: number;
+  passed: number;
+  failed: number;
+  conditional: number;
+  passRate: number;
+}
+
+export interface QualityInspection {
+  id: string;
+  inspectionNo: string;
+  type: string;
+  status: string;
+  result?: string;
+  defectsFound: number;
+  correctiveAction?: string;
+  inspectedAt?: string;
+  createdAt: string;
+  goodsReceipt?: { grnNumber: string; supplier?: { name: string } };
+  productionOrder?: { orderNumber: string; product?: { name: string; sku: string } };
+}
+
+export interface SalesStats {
+  openOrders: number;
+  pipelineValue: number;
+  pendingQuotations: number;
+  quotationValue: number;
+  ordersThisMonth: number;
+  monthlyRevenue: number;
+}
+
+export interface SalesQuotation {
+  id: string;
+  quotationNo: string;
+  customer: Customer;
+  status: string;
+  validUntil?: string;
+  totalAmount: number;
+  subtotal: number;
+  taxAmount: number;
+  notes?: string;
+  items: SalesOrderItem[];
+  salesOrders?: { id: string; orderNumber: string; status: string }[];
+}
+
+export interface DeliveryStats {
+  pending: number;
+  inTransit: number;
+  deliveredToday: number;
+  deliveredMonth: number;
+  activeVehicles: number;
+}
+
+export interface Vehicle {
+  id: string;
+  registration: string;
+  make?: string;
+  model?: string;
+  capacity?: string;
+  isActive: boolean;
+}
+
+export interface DeliveryNote {
+  id: string;
+  deliveryNo: string;
+  status: string;
+  scheduledDate?: string;
+  deliveredAt?: string;
+  proofOfDelivery?: string;
+  notes?: string;
+  salesOrder: SalesOrder & { customer: Customer };
+  vehicle?: Vehicle;
+  items: { id: string; productId: string; quantity: number }[];
 }
 
 export interface Notification {
@@ -210,4 +499,120 @@ export interface Notification {
   link?: string;
   isRead: boolean;
   createdAt: string;
+}
+
+export interface FinanceStats {
+  totalSales: number;
+  totalPurchases: number;
+  accountsReceivable: number;
+  accountsPayable: number;
+  overdueInvoices: number;
+  monthlyRevenue: number;
+  journalEntries: number;
+}
+
+export interface FinanceOverview {
+  arAging: {
+    buckets: {
+      current: { amount: number; count: number };
+      days1_30: { amount: number; count: number };
+      days31_60: { amount: number; count: number };
+      days61_90: { amount: number; count: number };
+      days90Plus: { amount: number; count: number };
+    };
+    totalOutstanding: number;
+    topOverdue: {
+      id: string;
+      invoiceNumber: string;
+      customerName: string;
+      balance: number;
+      daysPastDue: number;
+      bucket: string;
+    }[];
+  };
+  cashFlow: {
+    days: number;
+    trend: { date: string; inflow: number; outflow: number; net: number }[];
+    totalInflow: number;
+    totalOutflow: number;
+    net: number;
+  };
+}
+
+export interface HrStats {
+  totalEmployees: number;
+  activeEmployees: number;
+  pendingLeave: number;
+  unpaidPayroll: number;
+  payrollDue: number;
+  attendanceToday: number;
+}
+
+export interface MaintenanceStats {
+  totalMachines: number;
+  operational: number;
+  openRequests: number;
+  completedMonth: number;
+  overdueRequests: number;
+}
+
+export interface ReportsOverview {
+  totalSales: number;
+  totalPurchases: number;
+  completedProduction: number;
+  totalCustomers: number;
+  totalSuppliers: number;
+  purchaseOrdersMonth: number;
+  purchaseValueMonth: number;
+  productionOutputMonth: number;
+  unpaidInvoices: number;
+  qualityPassed: number;
+  qualityFailed: number;
+  topCustomers: { id: string; name: string; code: string; orderCount: number }[];
+}
+
+export interface MaintenanceRequest {
+  id: string;
+  type: string;
+  description: string;
+  status: string;
+  scheduledDate?: string;
+  completedDate?: string;
+  cost: number;
+  notes?: string;
+  machine: Machine;
+}
+
+export interface CompanySettings {
+  id: string;
+  name: string;
+  legalName?: string;
+  registrationNo?: string;
+  taxPin?: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  currency?: string;
+  vatRate: number;
+  branches?: { id: string; name: string; code: string; city: string }[];
+  taxRates?: { id: string; name: string; rate: number; isDefault: boolean }[];
+}
+
+export interface LeaveRequest {
+  id: string;
+  type: string;
+  startDate: string;
+  endDate: string;
+  reason?: string;
+  status: string;
+  employee: { firstName: string; lastName: string; employeeNo: string };
+}
+
+export interface PayrollRecord {
+  id: string;
+  periodStart: string;
+  periodEnd: string;
+  netPay: number;
+  isPaid: boolean;
+  employee: { firstName: string; lastName: string; employeeNo: string };
 }

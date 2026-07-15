@@ -59,6 +59,8 @@ export function StockTransferForm({ onSuccess, onCancel }: StockTransferFormProp
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['stock-levels'] });
       queryClient.invalidateQueries({ queryKey: ['transfers'] });
+      queryClient.invalidateQueries({ queryKey: ['inventory-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['inventory-transactions'] });
       onSuccess();
     },
   });

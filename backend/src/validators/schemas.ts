@@ -3,6 +3,7 @@ import { z } from 'zod';
 export const loginSchema = z.object({
   email: z.string().email('Invalid email address'),
   password: z.string().min(1, 'Password is required'),
+  totpCode: z.string().length(6).optional(),
 });
 
 export const refreshTokenSchema = z.object({
@@ -44,6 +45,18 @@ export const createCustomerSchema = z.object({
   notes: z.string().optional(),
 });
 
+export const updateCustomerSchema = createCustomerSchema.partial().extend({
+  isActive: z.boolean().optional(),
+});
+
+export const createContactSchema = z.object({
+  name: z.string().min(1),
+  title: z.string().optional(),
+  email: z.string().email().optional().or(z.literal('')),
+  phone: z.string().optional(),
+  isPrimary: z.boolean().optional(),
+});
+
 export const createProductSchema = z.object({
   sku: z.string().min(1),
   barcode: z.string().optional(),
@@ -62,6 +75,10 @@ export const createProductSchema = z.object({
   distributorPrice: z.number().min(0).optional(),
   retailPrice: z.number().min(0).optional(),
   minStockLevel: z.number().int().min(0).optional(),
+});
+
+export const updateProductSchema = createProductSchema.partial().extend({
+  isActive: z.boolean().optional(),
 });
 
 export const createRawMaterialSchema = z.object({
@@ -101,6 +118,56 @@ export const paginationSchema = z.object({
   sortOrder: z.preprocess(
     (v) => (v === '' || v === undefined ? undefined : v),
     z.enum(['asc', 'desc']).default('desc')
+  ),
+});
+
+export const userListQuerySchema = paginationSchema.extend({
+  status: z.preprocess(
+    (v) => (v === '' || v === undefined ? undefined : v),
+    z.enum(['ACTIVE', 'INACTIVE', 'SUSPENDED']).optional()
+  ),
+  roleId: z.preprocess(
+    (v) => (v === '' || v === undefined ? undefined : v),
+    z.string().uuid().optional()
+  ),
+});
+
+export const customerListQuerySchema = paginationSchema.extend({
+  type: z.preprocess(
+    (v) => (v === '' || v === undefined ? undefined : v),
+    z.enum(['DEALER', 'RETAIL_SHOP', 'INDUSTRY', 'GOVERNMENT', 'NGO']).optional()
+  ),
+  isActive: z.preprocess(
+    (v) => (v === '' || v === undefined ? undefined : v === 'true' ? true : v === 'false' ? false : undefined),
+    z.boolean().optional()
+  ),
+});
+
+export const productListQuerySchema = paginationSchema.extend({
+  category: z.preprocess(
+    (v) => (v === '' || v === undefined ? undefined : v),
+    z.enum([
+      'OIL_FILTER', 'FUEL_FILTER', 'AIR_FILTER', 'CABIN_FILTER',
+      'HYDRAULIC_FILTER', 'WATER_FILTER', 'INDUSTRIAL_FILTER', 'CUSTOM_FILTER',
+    ]).optional()
+  ),
+  isActive: z.preprocess(
+    (v) => (v === '' || v === undefined ? undefined : v === 'true' ? true : v === 'false' ? false : undefined),
+    z.boolean().optional()
+  ),
+});
+
+export const materialListQuerySchema = paginationSchema.extend({
+  type: z.preprocess(
+    (v) => (v === '' || v === undefined ? undefined : v),
+    z.string().optional()
+  ),
+});
+
+export const procurementListQuerySchema = paginationSchema.extend({
+  status: z.preprocess(
+    (v) => (v === '' || v === undefined ? undefined : v),
+    z.string().optional()
   ),
 });
 
@@ -187,13 +254,19 @@ export const createInvoiceSchema = z.object({
   })).min(1),
 });
 
-export const createPaymentSchema = z.object({
-  invoiceId: z.string().uuid(),
-  amount: z.number().min(0.01),
-  method: z.enum(['CASH', 'BANK_TRANSFER', 'CHEQUE', 'MPESA', 'CARD', 'CREDIT']).optional(),
-  reference: z.string().optional(),
-  notes: z.string().optional(),
-});
+export const createPaymentSchema = z
+  .object({
+    invoiceId: z.string().uuid(),
+    amount: z.number().min(0.01),
+    method: z.enum(['CASH', 'BANK_TRANSFER', 'CHEQUE', 'MPESA', 'CARD', 'CREDIT']).optional(),
+    reference: z.string().optional(),
+    notes: z.string().optional(),
+    mpesaPhone: z.string().optional(),
+  })
+  .refine((data) => data.method !== 'MPESA' || (data.reference && data.reference.length >= 6), {
+    message: 'M-Pesa payments require a transaction reference code',
+    path: ['reference'],
+  });
 
 export const createEmployeeSchema = z.object({
   employeeNo: z.string().min(1),
@@ -274,6 +347,30 @@ export const createComplaintSchema = z.object({
   priority: z.string().optional(),
 });
 
+export const resolveComplaintSchema = z.object({
+  resolution: z.string().min(1),
+  status: z.enum(['APPROVED', 'REJECTED']).optional(),
+});
+
+export const crmListQuerySchema = paginationSchema.extend({
+  status: z.preprocess(
+    (v) => (v === '' || v === undefined ? undefined : v),
+    z.string().optional()
+  ),
+  priority: z.preprocess(
+    (v) => (v === '' || v === undefined ? undefined : v),
+    z.string().optional()
+  ),
+  customerId: z.preprocess(
+    (v) => (v === '' || v === undefined ? undefined : v),
+    z.string().uuid().optional()
+  ),
+  stage: z.preprocess(
+    (v) => (v === '' || v === undefined ? undefined : v),
+    z.string().optional()
+  ),
+});
+
 export const createOpportunitySchema = z.object({
   customerId: z.string().uuid(),
   title: z.string().min(1),
@@ -281,6 +378,32 @@ export const createOpportunitySchema = z.object({
   stage: z.string().optional(),
   probability: z.number().int().min(0).max(100).optional(),
   expectedCloseDate: z.string().optional(),
+  notes: z.string().optional(),
+});
+
+export const updateOpportunitySchema = createOpportunitySchema.partial().extend({
+  status: z.enum(['PENDING', 'APPROVED', 'REJECTED', 'CANCELLED']).optional(),
+});
+
+export const createWarrantySchema = z.object({
+  customerId: z.string().uuid(),
+  productId: z.string().uuid(),
+  serialNumber: z.string().optional(),
+  startDate: z.string().min(1),
+  endDate: z.string().min(1),
+  notes: z.string().optional(),
+});
+
+export const cycleCountSchema = z.object({
+  warehouseId: z.string().uuid(),
+  counts: z.array(
+    z.object({
+      productId: z.string().uuid().optional(),
+      rawMaterialId: z.string().uuid().optional(),
+      physicalQty: z.number().min(0),
+      batchNumber: z.string().optional(),
+    })
+  ).min(1),
   notes: z.string().optional(),
 });
 
@@ -314,4 +437,101 @@ export const updateSupplierQuotationSchema = z.object({
   totalAmount: z.coerce.number().min(0),
   notes: z.string().optional(),
   validUntil: optionalDateString,
+});
+
+export const qualityListQuerySchema = paginationSchema.extend({
+  status: z.preprocess(
+    (v) => (v === '' || v === undefined ? undefined : v),
+    z.enum(['PENDING', 'PASSED', 'FAILED', 'CONDITIONAL']).optional()
+  ),
+  type: z.preprocess(
+    (v) => (v === '' || v === undefined ? undefined : v),
+    z.string().optional()
+  ),
+});
+
+export const updateQualityInspectionSchema = z.object({
+  status: z.enum(['PENDING', 'PASSED', 'FAILED', 'CONDITIONAL']).optional(),
+  result: z.string().optional(),
+  defectsFound: z.coerce.number().int().min(0).optional(),
+  correctiveAction: z.string().optional(),
+});
+
+export const salesListQuerySchema = paginationSchema.extend({
+  status: z.preprocess(
+    (v) => (v === '' || v === undefined ? undefined : v),
+    z.string().optional()
+  ),
+});
+
+export const deliveryListQuerySchema = paginationSchema.extend({
+  status: z.preprocess(
+    (v) => (v === '' || v === undefined ? undefined : v),
+    z.enum(['PENDING', 'ASSIGNED', 'IN_TRANSIT', 'DELIVERED', 'FAILED', 'RETURNED']).optional()
+  ),
+});
+
+export const updateDeliveryStatusSchema = z.object({
+  status: z.enum(['PENDING', 'ASSIGNED', 'IN_TRANSIT', 'DELIVERED', 'FAILED', 'RETURNED']),
+  proofOfDelivery: z.string().optional(),
+});
+
+export const createVehicleSchema = z.object({
+  registration: z.string().min(1),
+  make: z.string().optional(),
+  model: z.string().optional(),
+  capacity: z.string().optional(),
+});
+
+export const financeListQuerySchema = paginationSchema.extend({
+  type: z.preprocess(
+    (v) => (v === '' || v === undefined ? undefined : v),
+    z.enum(['SALES', 'PURCHASE', 'CREDIT_NOTE', 'DEBIT_NOTE']).optional()
+  ),
+  status: z.preprocess(
+    (v) => (v === '' || v === undefined ? undefined : v),
+    z.enum(['UNPAID', 'PARTIAL', 'PAID', 'OVERDUE', 'REFUNDED']).optional()
+  ),
+});
+
+export const hrListQuerySchema = paginationSchema.extend({
+  status: z.preprocess(
+    (v) => (v === '' || v === undefined ? undefined : v),
+    z.string().optional()
+  ),
+  isActive: z.preprocess(
+    (v) => (v === '' || v === undefined ? undefined : v === 'true' ? true : v === 'false' ? false : undefined),
+    z.boolean().optional()
+  ),
+});
+
+export const maintenanceListQuerySchema = paginationSchema.extend({
+  status: z.preprocess(
+    (v) => (v === '' || v === undefined ? undefined : v),
+    z.enum(['SCHEDULED', 'IN_PROGRESS', 'COMPLETED', 'OVERDUE']).optional()
+  ),
+});
+
+export const createMachineSchema = z.object({
+  code: z.string().min(1),
+  name: z.string().min(1),
+  type: z.string().min(1),
+  capacity: z.string().optional(),
+  location: z.string().optional(),
+  status: z.string().optional(),
+});
+
+export const createJournalEntrySchema = z.object({
+  date: z.string().optional(),
+  description: z.string().min(1),
+  reference: z.string().optional(),
+  lines: z.array(z.object({
+    accountId: z.string().uuid(),
+    debit: z.coerce.number().min(0).default(0),
+    credit: z.coerce.number().min(0).default(0),
+  })).min(2),
+});
+
+export const approveLeaveSchema = z.object({
+  status: z.enum(['APPROVED', 'REJECTED', 'CANCELLED']),
 });

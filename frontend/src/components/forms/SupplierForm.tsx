@@ -55,6 +55,7 @@ export function SupplierForm({ supplier, onSuccess, onCancel }: SupplierFormProp
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['suppliers'] });
+      queryClient.invalidateQueries({ queryKey: ['procurement-stats'] });
       onSuccess();
     },
   });

@@ -24,6 +24,7 @@ import crmRoutes from './routes/crm.routes';
 import qualityRoutes from './routes/quality.routes';
 import maintenanceRoutes from './routes/maintenance.routes';
 import searchRoutes from './routes/search.routes';
+import mpesaRoutes from './routes/mpesa.routes';
 
 export function createApp() {
   const app = express();
@@ -89,6 +90,7 @@ export function createApp() {
   apiRouter.use('/inventory', inventoryRoutes);
   apiRouter.use('/operations', operationsRoutes);
   apiRouter.use('/finance', financeRoutes);
+  apiRouter.use('/finance/mpesa', mpesaRoutes);
   apiRouter.use('/hr', hrRoutes);
   apiRouter.use('/delivery', deliveryRoutes);
   apiRouter.use('/crm', crmRoutes);

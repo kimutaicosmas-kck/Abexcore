@@ -1,21 +1,39 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { User } from '../types';
 import { authApi } from '../services/api';
 
+export interface CompanyConfig {
+  name: string;
+  vatRate: number;
+  currency: string;
+}
+
 interface AuthContextType {
   user: User | null;
+  company: CompanyConfig | null;
   isLoading: boolean;
   isAuthenticated: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  mustChangePassword: boolean;
+  login: (email: string, password: string, totpCode?: string) => Promise<void>;
   logout: () => Promise<void>;
   hasPermission: (permission: string) => boolean;
+  refreshUser: () => Promise<void>;
+  clearMustChangePassword: () => void;
+  setCompany: (c: CompanyConfig) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
+  const [company, setCompany] = useState<CompanyConfig | null>(null);
+  const [mustChangePassword, setMustChangePassword] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+
+  const refreshUser = useCallback(async () => {
+    const { data } = await authApi.me();
+    setUser(data.data);
+  }, []);
 
   useEffect(() => {
     const token = localStorage.getItem('accessToken');
@@ -33,11 +51,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const login = async (email: string, password: string) => {
-    const { data } = await authApi.login(email, password);
+  const login = async (email: string, password: string, totpCode?: string) => {
+    const { data } = await authApi.login(email, password, totpCode);
     localStorage.setItem('accessToken', data.data.accessToken);
     localStorage.setItem('refreshToken', data.data.refreshToken);
     setUser(data.data.user);
+    setMustChangePassword(!!data.data.mustChangePassword);
+    if (data.data.company) setCompany(data.data.company);
   };
 
   const logout = async () => {
@@ -50,6 +70,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem('accessToken');
     localStorage.removeItem('refreshToken');
     setUser(null);
+    setMustChangePassword(false);
   };
 
   const hasPermission = (permission: string) => {
@@ -62,11 +83,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     <AuthContext.Provider
       value={{
         user,
+        company,
         isLoading,
         isAuthenticated: !!user,
+        mustChangePassword,
         login,
         logout,
         hasPermission,
+        refreshUser,
+        clearMustChangePassword: () => setMustChangePassword(false),
+        setCompany,
       }}
     >
       {children}
@@ -78,4 +104,9 @@ export function useAuth() {
   const context = useContext(AuthContext);
   if (!context) throw new Error('useAuth must be used within AuthProvider');
   return context;
+}
+
+export function useVatRate(): number {
+  const { company } = useAuth();
+  return company?.vatRate ?? 16;
 }

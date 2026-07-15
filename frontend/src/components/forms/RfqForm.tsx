@@ -46,6 +46,7 @@ export function RfqForm({ requisitionId, onSuccess, onCancel }: RfqFormProps) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['rfqs'] });
       queryClient.invalidateQueries({ queryKey: ['requisitions'] });
+      queryClient.invalidateQueries({ queryKey: ['procurement-stats'] });
       onSuccess();
     },
   });

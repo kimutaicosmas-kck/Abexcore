@@ -1,10 +1,12 @@
 import bcrypt from 'bcrypt';
 import jwt, { SignOptions } from 'jsonwebtoken';
+import { randomUUID } from 'crypto';
 import speakeasy from 'speakeasy';
 import qrcode from 'qrcode';
 import { config } from '../config';
 import prisma from '../config/database';
 import { AppError } from '../middleware/errorHandler';
+import { getCompanySettings } from '../utils/company';
 
 const SALT_ROUNDS = 12;
 
@@ -31,13 +33,19 @@ export class AuthService {
     const accessToken = jwt.sign({ userId, email, roleId }, config.jwt.secret, {
       expiresIn: config.jwt.expiresIn,
     } as SignOptions);
-    const refreshToken = jwt.sign({ userId }, config.jwt.refreshSecret, {
+    const refreshToken = jwt.sign({ userId, jti: randomUUID() }, config.jwt.refreshSecret, {
       expiresIn: config.jwt.refreshExpiresIn,
     } as SignOptions);
     return { accessToken, refreshToken };
   }
 
-  static async login(email: string, password: string, ipAddress?: string, userAgent?: string) {
+  static async login(
+    email: string,
+    password: string,
+    totpCode?: string,
+    ipAddress?: string,
+    userAgent?: string
+  ) {
     const user = await prisma.user.findUnique({
       where: { email: email.toLowerCase() },
       include: {
@@ -63,6 +71,19 @@ export class AuthService {
     const valid = await bcrypt.compare(password, user!.passwordHash);
     if (!valid) await loginFail();
 
+    if (user!.twoFactorEnabled) {
+      if (!totpCode) {
+        throw new AppError('Two-factor authentication code required', 403, '2FA_REQUIRED');
+      }
+      const verified = speakeasy.totp.verify({
+        secret: user!.twoFactorSecret!,
+        encoding: 'base32',
+        token: totpCode,
+        window: 2,
+      });
+      if (!verified) throw new AppError('Invalid 2FA code', 401);
+    }
+
     const tokens = this.generateTokens(user!.id, user!.email, user!.roleId);
 
     await prisma.refreshToken.create({
@@ -83,6 +104,7 @@ export class AuthService {
     });
 
     const { passwordHash, twoFactorSecret, ...safeUser } = user!;
+    const company = await getCompanySettings();
 
     return {
       user: {
@@ -91,6 +113,10 @@ export class AuthService {
           (rp) => `${rp.permission.module}:${rp.permission.action}`
         ),
       },
+      mustChangePassword: user!.mustChangePassword,
+      company: company
+        ? { name: company.name, vatRate: Number(company.vatRate), currency: company.currency }
+        : { name: 'Company', vatRate: 16, currency: 'KES' },
       ...tokens,
     };
   }
@@ -173,7 +199,7 @@ export class AuthService {
 
     await prisma.user.update({
       where: { id: userId },
-      data: { passwordHash, passwordChangedAt: new Date() },
+      data: { passwordHash, passwordChangedAt: new Date(), mustChangePassword: false },
     });
 
     await prisma.refreshToken.deleteMany({ where: { userId } });

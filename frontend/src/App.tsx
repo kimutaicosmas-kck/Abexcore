@@ -18,6 +18,7 @@ import { QualityPage } from './pages/QualityPage';
 import { ReportsPage } from './pages/ReportsPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { DeliveryPage } from './pages/DeliveryPage';
+import { ChangePasswordPage } from './pages/ChangePasswordPage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -25,18 +26,25 @@ const queryClient = new QueryClient({
   },
 });
 
+import { LoadingSpinner } from './components/ui';
+
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, mustChangePassword } = useAuth();
 
   if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600" />
-      </div>
-    );
+    return <LoadingSpinner className="min-h-screen" size="lg" />;
   }
 
   if (!isAuthenticated) return <Navigate to="/login" replace />;
+  if (mustChangePassword) return <Navigate to="/change-password" replace />;
+  return <>{children}</>;
+}
+
+function PasswordChangeRoute({ children }: { children: React.ReactNode }) {
+  const { isAuthenticated, isLoading, mustChangePassword } = useAuth();
+  if (isLoading) return <LoadingSpinner className="min-h-screen" size="lg" />;
+  if (!isAuthenticated) return <Navigate to="/login" replace />;
+  if (!mustChangePassword) return <Navigate to="/" replace />;
   return <>{children}</>;
 }
 
@@ -44,6 +52,7 @@ function AppRoutes() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/change-password" element={<PasswordChangeRoute><ChangePasswordPage /></PasswordChangeRoute>} />
       <Route
         path="/"
         element={

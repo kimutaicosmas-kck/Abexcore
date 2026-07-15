@@ -1,16 +1,75 @@
 import { Router, Response } from 'express';
-import { authenticate, AuthRequest } from '../middleware/auth';
+import { authenticate, authorize, AuthRequest } from '../middleware/auth';
 import { validate } from '../middleware/validate';
 import { asyncHandler, AppError } from '../middleware/errorHandler';
-import { createRawMaterialSchema, createSupplierSchema, createRequisitionSchema, createGoodsReceiptSchema, createPurchaseOrderSchema, stockAdjustSchema, stockTransferSchema, updateSupplierQuotationSchema, paginationSchema } from '../validators/schemas';
+import { auditLog } from '../middleware/auditLog';
+import { createRawMaterialSchema, createSupplierSchema, createRequisitionSchema, createGoodsReceiptSchema, createPurchaseOrderSchema, stockAdjustSchema, stockTransferSchema, cycleCountSchema, updateSupplierQuotationSchema, paginationSchema, materialListQuerySchema, procurementListQuerySchema } from '../validators/schemas';
 import { createCrudService } from '../utils/crud';
 import prisma from '../config/database';
 import { generateNumber } from '../utils/date';
 import { getParam, getQuery } from '../utils/request';
 import { NotificationService } from '../services/notification.service';
+import { InventoryService } from '../services/catalog.service';
+import { StockMovementService } from '../services/inventory.service';
+import { AccountingService } from '../services/accounting.service';
+import { ProcurementService } from '../services/procurement.service';
+import { Prisma } from '@prisma/client';
 
 const router = Router();
 router.use(authenticate);
+
+router.get(
+  '/stats',
+  authorize('inventory:read'),
+  asyncHandler(async (_req: AuthRequest, res: Response) => {
+    const data = await InventoryService.getStats();
+    res.json({ success: true, data });
+  })
+);
+
+router.get(
+  '/procurement-stats',
+  authorize('procurement:read'),
+  asyncHandler(async (_req: AuthRequest, res: Response) => {
+    const data = await InventoryService.getProcurementStats();
+    res.json({ success: true, data });
+  })
+);
+
+router.get(
+  '/transactions',
+  authorize('inventory:read'),
+  validate(paginationSchema, 'query'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const { page, limit, search } = getQuery<{ page: number; limit: number; search?: string }>(req.query);
+    const skip = (page - 1) * limit;
+
+    const where: Prisma.InventoryTransactionWhereInput = search
+      ? {
+          OR: [
+            { notes: { contains: search } },
+            { referenceType: { contains: search } },
+            { batchNumber: { contains: search } },
+          ],
+        }
+      : {};
+
+    const [data, total] = await Promise.all([
+      prisma.inventoryTransaction.findMany({
+        where,
+        skip,
+        take: limit,
+        include: {
+          warehouse: { select: { name: true, code: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+      }),
+      prisma.inventoryTransaction.count({ where }),
+    ]);
+
+    res.json({ success: true, data, pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } });
+  })
+);
 
 // Raw Materials
 const materialService = createCrudService('rawMaterial', ['name', 'code'], {
@@ -18,12 +77,17 @@ const materialService = createCrudService('rawMaterial', ['name', 'code'], {
   stockLevels: { include: { warehouse: true } },
 });
 
-router.get('/materials', validate(paginationSchema, 'query'), asyncHandler(async (req: AuthRequest, res: Response) => {
-  const result = await materialService.list(getQuery(req.query));
+router.get('/materials', authorize('inventory:read'), validate(materialListQuerySchema, 'query'), asyncHandler(async (req: AuthRequest, res: Response) => {
+  const { page, limit, search, sortBy, sortOrder, type } = getQuery<{
+    page: number; limit: number; search?: string; sortBy?: string; sortOrder?: 'asc' | 'desc'; type?: string;
+  }>(req.query);
+  const where: Record<string, unknown> = {};
+  if (type) where.type = type;
+  const result = await materialService.list({ page, limit, search, sortBy, sortOrder, where });
   res.json({ success: true, ...result });
 }));
 
-router.get('/materials/low-stock', asyncHandler(async (_req: AuthRequest, res: Response) => {
+router.get('/materials/low-stock', authorize('inventory:read'), asyncHandler(async (_req: AuthRequest, res: Response) => {
   const materials = await prisma.rawMaterial.findMany({
     where: { isActive: true, deletedAt: null },
     include: { stockLevels: true, supplier: true },
@@ -35,12 +99,12 @@ router.get('/materials/low-stock', asyncHandler(async (_req: AuthRequest, res: R
   res.json({ success: true, data: lowStock });
 }));
 
-router.post('/materials', validate(createRawMaterialSchema), asyncHandler(async (req: AuthRequest, res: Response) => {
+router.post('/materials', authorize('inventory:create'), validate(createRawMaterialSchema), asyncHandler(async (req: AuthRequest, res: Response) => {
   const data = await materialService.create(req.body);
   res.status(201).json({ success: true, data });
 }));
 
-router.put('/materials/:id', validate(createRawMaterialSchema.partial()), asyncHandler(async (req: AuthRequest, res: Response) => {
+router.put('/materials/:id', authorize('inventory:update'), validate(createRawMaterialSchema.partial()), asyncHandler(async (req: AuthRequest, res: Response) => {
   const data = await materialService.update(getParam(req.params.id), req.body);
   res.json({ success: true, data });
 }));
@@ -50,23 +114,23 @@ const supplierService = createCrudService('supplier', ['name', 'code', 'email'],
   _count: { select: { purchaseOrders: true, rawMaterials: true } },
 });
 
-router.get('/suppliers', validate(paginationSchema, 'query'), asyncHandler(async (req: AuthRequest, res: Response) => {
+router.get('/suppliers', authorize('procurement:read'), validate(paginationSchema, 'query'), asyncHandler(async (req: AuthRequest, res: Response) => {
   const result = await supplierService.list(getQuery(req.query));
   res.json({ success: true, ...result });
 }));
 
-router.post('/suppliers', validate(createSupplierSchema), asyncHandler(async (req: AuthRequest, res: Response) => {
+router.post('/suppliers', authorize('procurement:create'), validate(createSupplierSchema), asyncHandler(async (req: AuthRequest, res: Response) => {
   const data = await supplierService.create(req.body);
   res.status(201).json({ success: true, data });
 }));
 
-router.put('/suppliers/:id', validate(createSupplierSchema.partial()), asyncHandler(async (req: AuthRequest, res: Response) => {
+router.put('/suppliers/:id', authorize('procurement:update'), validate(createSupplierSchema.partial()), asyncHandler(async (req: AuthRequest, res: Response) => {
   const data = await supplierService.update(getParam(req.params.id), req.body);
   res.json({ success: true, data });
 }));
 
 // Warehouses
-router.get('/warehouses', asyncHandler(async (_req: AuthRequest, res: Response) => {
+router.get('/warehouses', authorize('inventory:read'), asyncHandler(async (_req: AuthRequest, res: Response) => {
   const warehouses = await prisma.warehouse.findMany({
     where: { deletedAt: null, isActive: true },
     include: { branch: true, locations: true, stockLevels: true },
@@ -74,24 +138,36 @@ router.get('/warehouses', asyncHandler(async (_req: AuthRequest, res: Response) 
   res.json({ success: true, data: warehouses });
 }));
 
-router.get('/stock-levels', validate(paginationSchema, 'query'), asyncHandler(async (req: AuthRequest, res: Response) => {
-  const { page, limit } = getQuery<{ page: number; limit: number }>(req.query);
+router.get('/stock-levels', authorize('inventory:read'), validate(paginationSchema, 'query'), asyncHandler(async (req: AuthRequest, res: Response) => {
+  const { page, limit, search } = getQuery<{ page: number; limit: number; search?: string }>(req.query);
   const skip = (page - 1) * limit;
+
+  const where: Prisma.StockLevelWhereInput = search
+    ? {
+        OR: [
+          { product: { name: { contains: search } } },
+          { rawMaterial: { name: { contains: search } } },
+          { warehouse: { name: { contains: search } } },
+          { batchNumber: { contains: search } },
+        ],
+      }
+    : {};
 
   const [data, total] = await Promise.all([
     prisma.stockLevel.findMany({
+      where,
       skip,
       take: limit,
       include: { warehouse: true, product: true, rawMaterial: true },
       orderBy: { updatedAt: 'desc' },
     }),
-    prisma.stockLevel.count(),
+    prisma.stockLevel.count({ where }),
   ]);
 
   res.json({ success: true, data, pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } });
 }));
 
-router.post('/adjust', validate(stockAdjustSchema), asyncHandler(async (req: AuthRequest, res: Response) => {
+router.post('/adjust', authorize('inventory:update'), validate(stockAdjustSchema), asyncHandler(async (req: AuthRequest, res: Response) => {
   const { warehouseId, productId, rawMaterialId, quantity, type, notes, batchNumber } = req.body;
 
   const transaction = await prisma.$transaction(async (tx) => {
@@ -104,9 +180,11 @@ router.post('/adjust', validate(stockAdjustSchema), asyncHandler(async (req: Aut
       },
     });
 
+    const unitCost = Number(existing?.unitCost || 0);
+    const adjustQty = Math.abs(Number(quantity));
     const newQty = type === 'add'
-      ? Number(existing?.quantity || 0) + Number(quantity)
-      : Number(existing?.quantity || 0) - Number(quantity);
+      ? Number(existing?.quantity || 0) + adjustQty
+      : Number(existing?.quantity || 0) - adjustQty;
 
     if (newQty < 0) throw new AppError('Insufficient stock', 400);
 
@@ -125,18 +203,29 @@ router.post('/adjust', validate(stockAdjustSchema), asyncHandler(async (req: Aut
           },
         });
 
-    await tx.inventoryTransaction.create({
+    const invTx = await tx.inventoryTransaction.create({
       data: {
         warehouseId,
         type: type === 'add' ? 'RECEIPT' : 'ISSUE',
         productId,
         rawMaterialId,
         batchNumber,
-        quantity: Math.abs(Number(quantity)),
+        quantity: adjustQty,
+        unitCost,
         notes,
         createdById: req.user!.id,
       },
     });
+
+    const glAmount = adjustQty * unitCost;
+    if (glAmount > 0) {
+      await AccountingService.postInventoryAdjustment(tx, {
+        reference: invTx.id,
+        amount: glAmount,
+        direction: type === 'add' ? 'increase' : 'decrease',
+        reason: notes || `Stock adjustment ${type}`,
+      });
+    }
 
     return stockLevel;
   });
@@ -144,7 +233,75 @@ router.post('/adjust', validate(stockAdjustSchema), asyncHandler(async (req: Aut
   res.json({ success: true, data: transaction });
 }));
 
-router.get('/transfers', asyncHandler(async (_req: AuthRequest, res: Response) => {
+router.post('/cycle-counts', authorize('inventory:update'), validate(cycleCountSchema), asyncHandler(async (req: AuthRequest, res: Response) => {
+  const { warehouseId, counts, notes } = req.body;
+
+  const adjustments = await prisma.$transaction(async (tx) => {
+    const results = [];
+    for (const count of counts) {
+      const existing = await tx.stockLevel.findFirst({
+        where: {
+          warehouseId,
+          productId: count.productId || null,
+          rawMaterialId: count.rawMaterialId || null,
+          batchNumber: count.batchNumber || null,
+        },
+      });
+      const systemQty = Number(existing?.quantity || 0);
+      const variance = Number(count.physicalQty) - systemQty;
+      if (variance === 0) {
+        results.push({ ...count, systemQty, variance: 0, adjusted: false });
+        continue;
+      }
+
+      const unitCost = Number(existing?.unitCost || 0);
+      const newQty = Number(count.physicalQty);
+      if (existing) {
+        await tx.stockLevel.update({ where: { id: existing.id }, data: { quantity: newQty } });
+      } else if (newQty > 0) {
+        await tx.stockLevel.create({
+          data: {
+            warehouseId,
+            productId: count.productId,
+            rawMaterialId: count.rawMaterialId,
+            batchNumber: count.batchNumber,
+            quantity: newQty,
+          },
+        });
+      }
+
+      const invTx = await tx.inventoryTransaction.create({
+        data: {
+          warehouseId,
+          type: 'ADJUSTMENT',
+          productId: count.productId,
+          rawMaterialId: count.rawMaterialId,
+          batchNumber: count.batchNumber,
+          quantity: Math.abs(variance),
+          unitCost,
+          notes: notes || `Cycle count variance: ${variance > 0 ? '+' : ''}${variance}`,
+          createdById: req.user!.id,
+        },
+      });
+
+      const glAmount = Math.abs(variance) * unitCost;
+      if (glAmount > 0) {
+        await AccountingService.postInventoryAdjustment(tx, {
+          reference: invTx.id,
+          amount: glAmount,
+          direction: variance > 0 ? 'increase' : 'decrease',
+          reason: notes || 'Cycle count adjustment',
+        });
+      }
+      results.push({ ...count, systemQty, variance, adjusted: true });
+    }
+    return results;
+  });
+
+  res.status(201).json({ success: true, data: adjustments });
+}));
+
+router.get('/transfers', authorize('inventory:read'), asyncHandler(async (_req: AuthRequest, res: Response) => {
   const data = await prisma.inventoryTransaction.findMany({
     where: { type: 'TRANSFER', quantity: { gt: 0 } },
     include: { warehouse: { select: { name: true, code: true } } },
@@ -154,22 +311,28 @@ router.get('/transfers', asyncHandler(async (_req: AuthRequest, res: Response) =
   res.json({ success: true, data });
 }));
 
-router.post('/transfers', validate(stockTransferSchema), asyncHandler(async (req: AuthRequest, res: Response) => {
+router.post('/transfers', authorize('inventory:update'), validate(stockTransferSchema), asyncHandler(async (req: AuthRequest, res: Response) => {
   const { fromWarehouseId, toWarehouseId, productId, rawMaterialId, quantity, notes, batchNumber } = req.body;
 
   const result = await prisma.$transaction(async (tx) => {
-    const source = await tx.stockLevel.findFirst({
-      where: {
-        warehouseId: fromWarehouseId,
-        productId: productId || null,
-        rawMaterialId: rawMaterialId || null,
-        batchNumber: batchNumber || null,
-      },
-    });
+    const [source, fromWarehouse, toWarehouse] = await Promise.all([
+      tx.stockLevel.findFirst({
+        where: {
+          warehouseId: fromWarehouseId,
+          productId: productId || null,
+          rawMaterialId: rawMaterialId || null,
+          batchNumber: batchNumber || null,
+        },
+      }),
+      tx.warehouse.findUnique({ where: { id: fromWarehouseId }, select: { code: true } }),
+      tx.warehouse.findUnique({ where: { id: toWarehouseId }, select: { code: true } }),
+    ]);
 
     if (!source || Number(source.quantity) < Number(quantity)) {
       throw new AppError('Insufficient stock at source warehouse', 400);
     }
+
+    const unitCost = Number(source.unitCost || 0);
 
     await tx.stockLevel.update({
       where: { id: source.id },
@@ -211,6 +374,7 @@ router.post('/transfers', validate(stockTransferSchema), asyncHandler(async (req
         rawMaterialId,
         batchNumber,
         quantity: -Math.abs(Number(quantity)),
+        unitCost,
         notes: notes ? `Transfer out: ${notes}` : 'Transfer out',
         referenceType: 'transfer',
         referenceId: toWarehouseId,
@@ -226,12 +390,24 @@ router.post('/transfers', validate(stockTransferSchema), asyncHandler(async (req
         rawMaterialId,
         batchNumber,
         quantity: Math.abs(Number(quantity)),
+        unitCost,
         notes: notes ? `Transfer in: ${notes}` : 'Transfer in',
         referenceType: 'transfer',
         referenceId: fromWarehouseId,
         createdById: req.user!.id,
       },
     });
+
+    const transferAmount = Math.abs(Number(quantity)) * unitCost;
+    if (transferAmount > 0) {
+      await AccountingService.postInventoryTransfer(tx, {
+        reference: transferOut.id,
+        amount: transferAmount,
+        fromWarehouseCode: fromWarehouse?.code || fromWarehouseId.slice(0, 8),
+        toWarehouseCode: toWarehouse?.code || toWarehouseId.slice(0, 8),
+        notes,
+      });
+    }
 
     return transferOut;
   });
@@ -240,24 +416,34 @@ router.post('/transfers', validate(stockTransferSchema), asyncHandler(async (req
 }));
 
 // Purchase Orders
-router.get('/purchase-orders', validate(paginationSchema, 'query'), asyncHandler(async (req: AuthRequest, res: Response) => {
-  const { page, limit } = getQuery<{ page: number; limit: number }>(req.query);
+router.get('/purchase-orders', authorize('procurement:read'), validate(procurementListQuerySchema, 'query'), asyncHandler(async (req: AuthRequest, res: Response) => {
+  const { page, limit, search, status } = getQuery<{ page: number; limit: number; search?: string; status?: string }>(req.query);
   const skip = (page - 1) * limit;
+
+  const where: Prisma.PurchaseOrderWhereInput = {};
+  if (status) where.status = status as Prisma.EnumOrderStatusFilter['equals'];
+  if (search) {
+    where.OR = [
+      { poNumber: { contains: search } },
+      { supplier: { name: { contains: search } } },
+    ];
+  }
 
   const [data, total] = await Promise.all([
     prisma.purchaseOrder.findMany({
+      where,
       skip,
       take: limit,
       include: { supplier: true, items: true },
       orderBy: { createdAt: 'desc' },
     }),
-    prisma.purchaseOrder.count(),
+    prisma.purchaseOrder.count({ where }),
   ]);
 
   res.json({ success: true, data, pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } });
 }));
 
-router.post('/purchase-orders', validate(createPurchaseOrderSchema), asyncHandler(async (req: AuthRequest, res: Response) => {
+router.post('/purchase-orders', authorize('procurement:create'), validate(createPurchaseOrderSchema), asyncHandler(async (req: AuthRequest, res: Response) => {
   const { supplierId, expectedDate, notes, items } = req.body;
   const count = await prisma.purchaseOrder.count();
   const poNumber = generateNumber('PO', count + 1);
@@ -293,19 +479,38 @@ router.post('/purchase-orders', validate(createPurchaseOrderSchema), asyncHandle
 }));
 
 // Purchase Requisitions
-router.get('/requisitions', asyncHandler(async (_req: AuthRequest, res: Response) => {
-  const data = await prisma.purchaseRequisition.findMany({
-    include: {
-      requestedBy: { select: { firstName: true, lastName: true } },
-      approvedBy: { select: { firstName: true, lastName: true } },
-      items: true,
-    },
-    orderBy: { createdAt: 'desc' },
-  });
-  res.json({ success: true, data });
+router.get('/requisitions', authorize('procurement:read'), validate(procurementListQuerySchema, 'query'), asyncHandler(async (req: AuthRequest, res: Response) => {
+  const { page, limit, search, status } = getQuery<{ page: number; limit: number; search?: string; status?: string }>(req.query);
+  const skip = (page - 1) * limit;
+
+  const where: Prisma.PurchaseRequisitionWhereInput = {};
+  if (status) where.status = status as Prisma.EnumApprovalStatusFilter['equals'];
+  if (search) {
+    where.OR = [
+      { requisitionNo: { contains: search } },
+      { department: { contains: search } },
+    ];
+  }
+
+  const [data, total] = await Promise.all([
+    prisma.purchaseRequisition.findMany({
+      where,
+      skip,
+      take: limit,
+      include: {
+        requestedBy: { select: { firstName: true, lastName: true } },
+        approvedBy: { select: { firstName: true, lastName: true } },
+        items: true,
+      },
+      orderBy: { createdAt: 'desc' },
+    }),
+    prisma.purchaseRequisition.count({ where }),
+  ]);
+
+  res.json({ success: true, data, pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } });
 }));
 
-router.post('/requisitions', validate(createRequisitionSchema), asyncHandler(async (req: AuthRequest, res: Response) => {
+router.post('/requisitions', authorize('procurement:create'), validate(createRequisitionSchema), asyncHandler(async (req: AuthRequest, res: Response) => {
   const { department, priority, requiredDate, notes, items } = req.body;
   const count = await prisma.purchaseRequisition.count();
   const requisitionNo = generateNumber('PR', count + 1);
@@ -333,7 +538,7 @@ router.post('/requisitions', validate(createRequisitionSchema), asyncHandler(asy
   res.status(201).json({ success: true, data: req_ });
 }));
 
-router.patch('/requisitions/:id/approve', asyncHandler(async (req: AuthRequest, res: Response) => {
+router.patch('/requisitions/:id/approve', authorize('procurement:update'), asyncHandler(async (req: AuthRequest, res: Response) => {
   const { status } = req.body;
   const data = await prisma.purchaseRequisition.update({
     where: { id: getParam(req.params.id) },
@@ -358,18 +563,34 @@ router.patch('/requisitions/:id/approve', asyncHandler(async (req: AuthRequest, 
 }));
 
 // Request for Quotations (v2.0)
-router.get('/rfqs', asyncHandler(async (_req: AuthRequest, res: Response) => {
-  const data = await prisma.requestForQuotation.findMany({
-    include: {
-      requisition: { select: { requisitionNo: true, department: true } },
-      quotations: { include: { supplier: { select: { name: true, code: true } } } },
-    },
-    orderBy: { createdAt: 'desc' },
-  });
-  res.json({ success: true, data });
+router.get('/rfqs', authorize('procurement:read'), validate(procurementListQuerySchema, 'query'), asyncHandler(async (req: AuthRequest, res: Response) => {
+  const { page, limit, search, status } = getQuery<{ page: number; limit: number; search?: string; status?: string }>(req.query);
+  const skip = (page - 1) * limit;
+
+  const where: Prisma.RequestForQuotationWhereInput = {};
+  if (status) where.status = status as Prisma.EnumApprovalStatusFilter['equals'];
+  if (search) {
+    where.OR = [{ rfqNo: { contains: search } }, { notes: { contains: search } }];
+  }
+
+  const [data, total] = await Promise.all([
+    prisma.requestForQuotation.findMany({
+      where,
+      skip,
+      take: limit,
+      include: {
+        requisition: { select: { requisitionNo: true, department: true } },
+        quotations: { include: { supplier: { select: { name: true, code: true } } } },
+      },
+      orderBy: { createdAt: 'desc' },
+    }),
+    prisma.requestForQuotation.count({ where }),
+  ]);
+
+  res.json({ success: true, data, pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } });
 }));
 
-router.post('/requisitions/:id/rfq', asyncHandler(async (req: AuthRequest, res: Response) => {
+router.post('/requisitions/:id/rfq', authorize('procurement:create'), asyncHandler(async (req: AuthRequest, res: Response) => {
   const requisitionId = getParam(req.params.id);
   const requisition = await prisma.purchaseRequisition.findUnique({
     where: { id: requisitionId },
@@ -422,7 +643,7 @@ router.post('/requisitions/:id/rfq', asyncHandler(async (req: AuthRequest, res: 
   res.status(201).json({ success: true, data: rfq });
 }));
 
-router.patch('/rfqs/:id/award', asyncHandler(async (req: AuthRequest, res: Response) => {
+router.patch('/rfqs/:id/award', authorize('procurement:update'), asyncHandler(async (req: AuthRequest, res: Response) => {
   const rfqId = getParam(req.params.id);
   const { quotationId } = req.body;
 
@@ -493,7 +714,7 @@ router.patch('/rfqs/:id/award', asyncHandler(async (req: AuthRequest, res: Respo
   res.json({ success: true, data: rfq, message: 'RFQ awarded and purchase order created' });
 }));
 
-router.patch('/quotations/:id', validate(updateSupplierQuotationSchema), asyncHandler(async (req: AuthRequest, res: Response) => {
+router.patch('/quotations/:id', authorize('procurement:update'), validate(updateSupplierQuotationSchema), asyncHandler(async (req: AuthRequest, res: Response) => {
   const { totalAmount, notes, validUntil } = req.body;
   const data = await prisma.supplierQuotation.update({
     where: { id: getParam(req.params.id) },
@@ -508,15 +729,39 @@ router.patch('/quotations/:id', validate(updateSupplierQuotationSchema), asyncHa
 }));
 
 // Goods Receipts
-router.get('/goods-receipts', asyncHandler(async (_req: AuthRequest, res: Response) => {
-  const data = await prisma.goodsReceipt.findMany({
-    include: { supplier: true, items: true, purchaseOrder: { select: { poNumber: true } } },
-    orderBy: { createdAt: 'desc' },
-  });
-  res.json({ success: true, data });
+router.get('/goods-receipts', authorize('procurement:read'), validate(procurementListQuerySchema, 'query'), asyncHandler(async (req: AuthRequest, res: Response) => {
+  const { page, limit, search, status } = getQuery<{ page: number; limit: number; search?: string; status?: string }>(req.query);
+  const skip = (page - 1) * limit;
+
+  const where: Prisma.GoodsReceiptWhereInput = {};
+  if (status) where.status = status as Prisma.EnumApprovalStatusFilter['equals'];
+  if (search) {
+    where.OR = [
+      { grnNumber: { contains: search } },
+      { supplier: { name: { contains: search } } },
+    ];
+  }
+
+  const [data, total] = await Promise.all([
+    prisma.goodsReceipt.findMany({
+      where,
+      skip,
+      take: limit,
+      include: {
+        supplier: true,
+        items: true,
+        purchaseOrder: { select: { poNumber: true } },
+        inspections: { select: { id: true, inspectionNo: true, status: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    }),
+    prisma.goodsReceipt.count({ where }),
+  ]);
+
+  res.json({ success: true, data, pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } });
 }));
 
-router.post('/goods-receipts', validate(createGoodsReceiptSchema), asyncHandler(async (req: AuthRequest, res: Response) => {
+router.post('/goods-receipts', authorize('procurement:create'), validate(createGoodsReceiptSchema), asyncHandler(async (req: AuthRequest, res: Response) => {
   const { purchaseOrderId, supplierId, warehouseId, notes, items } = req.body;
   const count = await prisma.goodsReceipt.count();
   const grnNumber = generateNumber('GRN', count + 1);
@@ -529,68 +774,81 @@ router.post('/goods-receipts', validate(createGoodsReceiptSchema), asyncHandler(
         supplierId,
         warehouseId,
         notes,
-        status: 'APPROVED',
-        inspectionStatus: 'PASSED',
+        status: 'PENDING',
+        inspectionStatus: 'PENDING',
         items: { create: items },
       },
       include: { items: true, supplier: true },
     });
 
-    for (const item of items) {
-      const existing = await tx.stockLevel.findFirst({
-        where: {
-          warehouseId,
-          rawMaterialId: item.rawMaterialId || null,
-          batchNumber: item.batchNumber || null,
-        },
-      });
-
-      if (existing) {
-        await tx.stockLevel.update({
-          where: { id: existing.id },
-          data: { quantity: { increment: item.quantity }, unitCost: item.unitCost },
-        });
-      } else {
-        await tx.stockLevel.create({
-          data: {
-            warehouseId,
-            rawMaterialId: item.rawMaterialId,
-            batchNumber: item.batchNumber,
-            quantity: item.quantity,
-            unitCost: item.unitCost,
-            expiryDate: item.expiryDate ? new Date(item.expiryDate) : undefined,
-          },
-        });
-      }
-
-      await tx.inventoryTransaction.create({
-        data: {
-          warehouseId,
-          type: 'RECEIPT',
-          rawMaterialId: item.rawMaterialId,
-          batchNumber: item.batchNumber,
-          quantity: item.quantity,
-          unitCost: item.unitCost,
-          referenceType: 'goods_receipt',
-          referenceId: gr.id,
-          createdById: req.user!.id,
-        },
-      });
-    }
-
-    if (purchaseOrderId) {
-      await tx.purchaseOrder.update({
-        where: { id: purchaseOrderId },
-        data: { status: 'COMPLETED' },
-      });
-    }
-
     return gr;
+  });
+
+  res.status(201).json({ success: true, data: receipt });
+}));
+
+router.post('/goods-receipts/:id/post-to-stock', authorize('procurement:update'), auditLog('procurement', 'update', 'goods_receipt'), asyncHandler(async (req: AuthRequest, res: Response) => {
+  const grnId = getParam(req.params.id);
+
+  const receipt = await prisma.$transaction(async (tx) => {
+    const gr = await tx.goodsReceipt.findUnique({
+      where: { id: grnId },
+      include: { items: true },
+    });
+    if (!gr) throw new AppError('Goods receipt not found', 404);
+    if (gr.status === 'APPROVED') throw new AppError('Goods receipt already posted to stock', 400);
+
+    const passedInspection = await tx.qualityInspection.findFirst({
+      where: { goodsReceiptId: gr.id, status: 'PASSED' },
+    });
+    if (!passedInspection) {
+      throw new AppError('Quality inspection must pass before posting goods to stock', 400);
+    }
+
+    await StockMovementService.postGoodsReceiptToStock(tx, {
+      goodsReceiptId: gr.id,
+      warehouseId: gr.warehouseId,
+      items: gr.items.map((item) => ({
+        rawMaterialId: item.rawMaterialId,
+        batchNumber: item.batchNumber,
+        quantity: Number(item.quantity),
+        unitCost: Number(item.unitCost),
+        expiryDate: item.expiryDate,
+      })),
+      userId: req.user!.id,
+    });
+
+    await AccountingService.postGoodsReceipt(tx, {
+      grnNumber: gr.grnNumber,
+      items: gr.items.map((item) => ({
+        quantity: Number(item.quantity),
+        unitCost: Number(item.unitCost),
+      })),
+    });
+
+    if (gr.purchaseOrderId) {
+      await ProcurementService.applyGoodsReceiptToPurchaseOrder(
+        tx,
+        gr.purchaseOrderId,
+        gr.items.map((item) => ({
+          rawMaterialId: item.rawMaterialId,
+          quantity: Number(item.quantity),
+        }))
+      );
+    }
+
+    const updated = await tx.goodsReceipt.update({
+      where: { id: gr.id },
+      data: { status: 'APPROVED', inspectionStatus: 'PASSED' },
+      include: { items: true, supplier: true, purchaseOrder: { select: { poNumber: true } } },
+    });
+
+    return updated;
   });
 
   NotificationService.runLowStockCheck().catch(() => undefined);
 
-  res.status(201).json({ success: true, data: receipt });
+  res.json({ success: true, data: receipt });
 }));
 
 export default router;

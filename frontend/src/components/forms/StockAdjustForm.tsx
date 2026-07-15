@@ -92,6 +92,8 @@ export function StockAdjustForm({ onSuccess, onCancel }: StockAdjustFormProps) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['stock-levels'] });
+      queryClient.invalidateQueries({ queryKey: ['inventory-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['inventory-transactions'] });
       onSuccess();
     },
   });

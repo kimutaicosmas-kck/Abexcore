@@ -10,5 +10,6 @@ reports/*
 !reports/.gitkeep
 .DS_Store
 coverage/
+test-results/
 *.tsbuildinfo
 mysql-data/

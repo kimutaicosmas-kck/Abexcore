@@ -3,8 +3,8 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { crmApi, customersApi } from '../../services/api';
-import { Button, Input, Select } from '../ui';
-import { Customer } from '../../types';
+import { Button, Input, Select, Textarea } from '../ui';
+import { Customer, Opportunity } from '../../types';
 
 const opportunitySchema = z.object({
   customerId: z.string().min(1, 'Customer is required'),
@@ -28,12 +28,14 @@ const stageOptions = [
 ];
 
 interface OpportunityFormProps {
+  opportunity?: Opportunity | null;
   onSuccess: () => void;
   onCancel: () => void;
 }
 
-export function OpportunityForm({ onSuccess, onCancel }: OpportunityFormProps) {
+export function OpportunityForm({ opportunity, onSuccess, onCancel }: OpportunityFormProps) {
   const queryClient = useQueryClient();
+  const isEdit = !!opportunity;
 
   const { data: customersData } = useQuery({
     queryKey: ['customers'],
@@ -47,19 +49,34 @@ export function OpportunityForm({ onSuccess, onCancel }: OpportunityFormProps) {
 
   const { register, handleSubmit, formState: { errors } } = useForm<OpportunityFormData>({
     resolver: zodResolver(opportunitySchema),
-    defaultValues: { customerId: '', stage: 'PROSPECTING', probability: 25, notes: '' },
+    defaultValues: opportunity
+      ? {
+          customerId: opportunity.customerId,
+          title: opportunity.title,
+          value: Number(opportunity.value),
+          stage: (opportunity.stage || 'PROSPECTING').toUpperCase(),
+          probability: opportunity.probability,
+          expectedCloseDate: opportunity.expectedCloseDate?.slice(0, 10) || '',
+          notes: opportunity.notes || '',
+        }
+      : { customerId: '', stage: 'PROSPECTING', probability: 25, notes: '' },
   });
 
   const mutation = useMutation({
-    mutationFn: (data: OpportunityFormData) =>
-      crmApi.createOpportunity({
+    mutationFn: (data: OpportunityFormData) => {
+      const payload = {
         ...data,
         stage: data.stage || 'PROSPECTING',
         expectedCloseDate: data.expectedCloseDate || undefined,
         notes: data.notes || undefined,
-      }),
+      };
+      return isEdit
+        ? crmApi.updateOpportunity(opportunity!.id, payload)
+        : crmApi.createOpportunity(payload);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['opportunities'] });
+      queryClient.invalidateQueries({ queryKey: ['crm-stats'] });
       onSuccess();
     },
   });
@@ -68,7 +85,7 @@ export function OpportunityForm({ onSuccess, onCancel }: OpportunityFormProps) {
     <form onSubmit={handleSubmit((data) => mutation.mutate(data))} className="space-y-4">
       {mutation.isError && (
         <div className="p-3 rounded-lg bg-red-50 text-red-700 text-sm">
-          Failed to create opportunity. Please try again.
+          Failed to save opportunity. Please try again.
         </div>
       )}
 
@@ -78,6 +95,7 @@ export function OpportunityForm({ onSuccess, onCancel }: OpportunityFormProps) {
           options={customerOptions}
           {...register('customerId')}
           error={errors.customerId?.message}
+          disabled={isEdit}
         />
         <Input label="Title *" {...register('title')} error={errors.title?.message} />
         <Input label="Value (KES) *" type="number" step="0.01" {...register('value')} error={errors.value?.message} />
@@ -85,18 +103,13 @@ export function OpportunityForm({ onSuccess, onCancel }: OpportunityFormProps) {
         <Input label="Probability (%)" type="number" min={0} max={100} {...register('probability')} />
         <Input label="Expected Close Date" type="date" {...register('expectedCloseDate')} />
       </div>
-      <div className="space-y-1">
-        <label className="block text-sm font-medium text-gray-700">Notes</label>
-        <textarea
-          className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-          rows={3}
-          {...register('notes')}
-        />
-      </div>
+      <Textarea label="Notes" rows={3} {...register('notes')} />
 
       <div className="flex justify-end gap-3 pt-4 border-t">
         <Button type="button" variant="secondary" onClick={onCancel}>Cancel</Button>
-        <Button type="submit" loading={mutation.isPending}>Create Opportunity</Button>
+        <Button type="submit" loading={mutation.isPending}>
+          {isEdit ? 'Update Opportunity' : 'Create Opportunity'}
+        </Button>
       </div>
     </form>
   );

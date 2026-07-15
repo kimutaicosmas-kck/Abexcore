@@ -1,13 +1,21 @@
 import dotenv from 'dotenv';
 dotenv.config();
 
+function requireSecret(name: string, value: string | undefined, devFallback: string): string {
+  if (value) return value;
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error(`${name} must be set in production`);
+  }
+  return devFallback;
+}
+
 export const config = {
   port: parseInt(process.env.PORT || '3001', 10),
   nodeEnv: process.env.NODE_ENV || 'development',
   frontendUrl: process.env.FRONTEND_URL || 'http://localhost:5173',
   jwt: {
-    secret: process.env.JWT_SECRET || 'dev-secret-change-me',
-    refreshSecret: process.env.JWT_REFRESH_SECRET || 'dev-refresh-secret-change-me',
+    secret: requireSecret('JWT_SECRET', process.env.JWT_SECRET, 'dev-secret-change-me'),
+    refreshSecret: requireSecret('JWT_REFRESH_SECRET', process.env.JWT_REFRESH_SECRET, 'dev-refresh-secret-change-me'),
     expiresIn: process.env.JWT_EXPIRES_IN || '15m',
     refreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d',
   },

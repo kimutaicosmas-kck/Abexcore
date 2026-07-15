@@ -65,6 +65,7 @@ export function AttendanceForm({ onSuccess, onCancel }: AttendanceFormProps) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['attendance'] });
+      queryClient.invalidateQueries({ queryKey: ['hr-stats'] });
       onSuccess();
     },
   });

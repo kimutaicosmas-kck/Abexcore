@@ -57,6 +57,7 @@ export function LeaveForm({ onSuccess, onCancel }: LeaveFormProps) {
       hrApi.createLeave({ ...data, reason: data.reason || undefined }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['leave'] });
+      queryClient.invalidateQueries({ queryKey: ['hr-stats'] });
       onSuccess();
     },
   });

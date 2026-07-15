@@ -33,6 +33,7 @@ type QualityFormData = z.infer<typeof qualitySchema>;
 interface GoodsReceipt {
   id: string;
   grnNumber: string;
+  status?: string;
 }
 
 interface QualityFormProps {
@@ -55,7 +56,9 @@ export function QualityForm({ onSuccess, onCancel }: QualityFormProps) {
 
   const goodsReceiptOptions = [
     { value: '', label: 'None' },
-    ...(goodsReceiptsData || []).map((gr) => ({ value: gr.id, label: gr.grnNumber })),
+    ...(goodsReceiptsData || [])
+      .filter((gr) => gr.status !== 'APPROVED')
+      .map((gr) => ({ value: gr.id, label: gr.grnNumber })),
   ];
 
   const productionOptions = [
@@ -85,6 +88,7 @@ export function QualityForm({ onSuccess, onCancel }: QualityFormProps) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['quality'] });
+      queryClient.invalidateQueries({ queryKey: ['quality-stats'] });
       onSuccess();
     },
   });

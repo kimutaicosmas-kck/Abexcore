@@ -88,6 +88,7 @@ export function JournalEntryForm({ onSuccess, onCancel }: JournalEntryFormProps)
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['journal-entries'] });
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
+      queryClient.invalidateQueries({ queryKey: ['finance-stats'] });
       onSuccess();
     },
   });
