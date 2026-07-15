@@ -42,17 +42,18 @@ jobs:
         working-directory: backend
         run: npx prisma generate
 
-      - name: Apply migrations
+      - name: Sync database schema
         working-directory: backend
         env:
           DATABASE_URL: mysql://erp_user:erp_password@127.0.0.1:3306/filter_erp_test
-        run: npx prisma migrate deploy
+        run: npx prisma db push --skip-generate
 
       - name: Seed test database
         working-directory: backend
         env:
           DATABASE_URL: mysql://erp_user:erp_password@127.0.0.1:3306/filter_erp_test
           SEED_MODE: demo
+          MPESA_ENV: stub
         run: npm run db:seed
 
       - name: Build backend
@@ -63,9 +64,10 @@ jobs:
         working-directory: backend
         env:
           DATABASE_URL: mysql://erp_user:erp_password@127.0.0.1:3306/filter_erp_test
-          JWT_SECRET: test-secret
-          JWT_REFRESH_SECRET: test-refresh-secret
+          JWT_SECRET: test-secret-minimum-32-characters-long
+          JWT_REFRESH_SECRET: test-refresh-secret-min-32-chars
           NODE_ENV: test
+          MPESA_ENV: stub
         run: npm test
 
   frontend:
