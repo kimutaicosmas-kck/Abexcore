@@ -24,16 +24,16 @@ import {
   Select,
   Card,
   StatCard,
+  StatGrid,
   Alert,
   EmptyState,
   DataPanel,
-  QuickActionCard,
-  QuickActionGrid,
   TablePagination,
   formatCurrency,
   formatDate,
   getStatusBadge,
   PageToolbar,
+  ConfirmDialog,
 } from '../components/ui';
 import { Modal } from '../components/ui/Modal';
 import { CustomerForm } from '../components/forms/CustomerForm';
@@ -43,7 +43,9 @@ import { ComplaintResolveForm } from '../components/forms/ComplaintResolveForm';
 import { WarrantyForm } from '../components/forms/WarrantyForm';
 import { ContactForm } from '../components/forms/ContactForm';
 import { useAuth } from '../contexts/AuthContext';
+import { OverviewHint } from '../components/layout/ModuleOverview';
 import { Complaint, CrmStats, Customer, Opportunity, Warranty } from '../types';
+import { formatProductOptionLabel } from '../utils/productDisplay';
 
 const tabs = ['Overview', 'Customers', 'Complaints', 'Opportunities', 'Warranties'];
 
@@ -126,6 +128,7 @@ export function CustomersPage() {
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [selectedComplaint, setSelectedComplaint] = useState<Complaint | null>(null);
   const [resolvingComplaint, setResolvingComplaint] = useState<{ id: string; subject: string } | null>(null);
+  const [pendingDeleteContact, setPendingDeleteContact] = useState<{ customerId: string; contactId: string; name: string } | null>(null);
 
   const canCreate = hasPermission('customers:create');
   const canUpdate = hasPermission('customers:update');
@@ -401,7 +404,7 @@ export function CustomersPage() {
       label: 'Product',
       render: (_: unknown, row: Record<string, unknown>) =>
         (row.product as { name: string; sku: string })
-          ? `${(row.product as { sku: string }).sku} - ${(row.product as { name: string }).name}`
+          ? formatProductOptionLabel(row.product as { sku: string; name: string })
           : '-',
     },
     { key: 'serialNumber', label: 'Serial #', render: (val: unknown) => (val as string) || '—' },
@@ -465,12 +468,12 @@ export function CustomersPage() {
       />
 
       {stats && (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+        <StatGrid>
           <StatCard title="Customers" value={stats.customers.active} icon={<Users className="h-5 w-5 text-white" />} color="from-primary-500 to-indigo-600" />
           <StatCard title="Open Complaints" value={stats.complaints.open} icon={<AlertCircle className="h-5 w-5 text-white" />} color="from-red-500 to-rose-600" />
           <StatCard title="Pipeline Value" value={formatCurrency(stats.opportunities.pipelineValue)} icon={<TrendingUp className="h-5 w-5 text-white" />} color="from-emerald-500 to-teal-600" />
           <StatCard title="Warranties Expiring" value={stats.warranties.expiringSoon} icon={<Shield className="h-5 w-5 text-white" />} color="from-violet-500 to-purple-600" />
-        </div>
+        </StatGrid>
       )}
 
       <PageToolbar
@@ -488,31 +491,7 @@ export function CustomersPage() {
 
       {activeTab === 0 && (
         <div className="space-y-4">
-          {canCreate && (
-            <QuickActionGrid>
-              <QuickActionCard
-                label="Add customer"
-                desc="Register a new account"
-                icon={UserPlus}
-                color="bg-emerald-50 text-emerald-600 border-emerald-100"
-                onClick={openCreate}
-              />
-              <QuickActionCard
-                label="Log complaint"
-                desc="Record a customer issue"
-                icon={MessageSquarePlus}
-                color="bg-red-50 text-red-600 border-red-100"
-                onClick={() => setComplaintModalOpen(true)}
-              />
-              <QuickActionCard
-                label="Add opportunity"
-                desc="Track sales pipeline"
-                icon={Target}
-                color="bg-violet-50 text-violet-600 border-violet-100"
-                onClick={() => { setEditingOpportunity(null); setOpportunityModalOpen(true); }}
-              />
-            </QuickActionGrid>
-          )}
+          <OverviewHint>Use the tabs above to manage records. Summary counts are shown at the top.</OverviewHint>
 
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
             <Card
@@ -582,36 +561,6 @@ export function CustomersPage() {
               )}
             </Card>
           </div>
-
-          <Card
-            title="Customer snapshot"
-            action={<Button variant="ghost" size="sm" onClick={() => goToTab(1)}>View all</Button>}
-            padding={false}
-          >
-            {recentCustomers.length === 0 ? (
-              <div className="p-6">
-                <EmptyState
-                  title="No customers yet"
-                  description="Add your first customer to start managing relationships."
-                  action={
-                    canCreate ? (
-                      <Button onClick={openCreate}>
-                        <Plus className="h-4 w-4 mr-2" />
-                        Add customer
-                      </Button>
-                    ) : undefined
-                  }
-                />
-              </div>
-            ) : (
-              <Table
-                columns={customerColumns.filter((c) => c.key !== 'actions')}
-                data={recentCustomers}
-                onRowClick={(row) => openDetail(row as unknown as Customer)}
-                embedded
-              />
-            )}
-          </Card>
         </div>
       )}
 
@@ -816,7 +765,7 @@ export function CustomersPage() {
                         <p className="text-xs text-slate-500">{c.title || '—'} · {c.email || c.phone || 'No contact info'}</p>
                       </div>
                       {canUpdate && (
-                        <Button size="sm" variant="ghost" loading={deleteContactMutation.isPending} onClick={() => deleteContactMutation.mutate({ customerId: customerDetail.id, contactId: c.id })}>
+                        <Button size="sm" variant="ghost" loading={deleteContactMutation.isPending} onClick={() => setPendingDeleteContact({ customerId: customerDetail.id, contactId: c.id, name: c.name })}>
                           <Trash2 className="h-4 w-4 text-red-500" />
                         </Button>
                       )}
@@ -832,11 +781,13 @@ export function CustomersPage() {
               {Array.isArray(customerOrders) && customerOrders.length > 0 ? (
                 <div className="space-y-2">
                   {(customerOrders as { id: string; orderNumber: string; totalAmount: number; status: string; orderDate: string }[]).slice(0, 5).map((o) => (
-                    <div key={o.id} className="flex items-center justify-between py-2 text-sm">
-                      <span className="font-medium">{o.orderNumber}</span>
-                      <span>{formatCurrency(Number(o.totalAmount))}</span>
-                      <Badge variant={getStatusBadge(o.status)}>{o.status.replace(/_/g, ' ')}</Badge>
-                      <span className="text-slate-500">{formatDate(o.orderDate)}</span>
+                    <div key={o.id} className="grid grid-cols-2 gap-x-3 gap-y-1 py-2 text-sm sm:flex sm:items-center sm:justify-between">
+                      <span className="font-medium truncate">{o.orderNumber}</span>
+                      <span className="tabular-nums text-right sm:text-left">{formatCurrency(Number(o.totalAmount))}</span>
+                      <span className="col-span-2 sm:col-span-1">
+                        <Badge variant={getStatusBadge(o.status)}>{o.status.replace(/_/g, ' ')}</Badge>
+                      </span>
+                      <span className="text-slate-500 text-xs sm:text-sm col-span-2 sm:col-span-1">{formatDate(o.orderDate)}</span>
                     </div>
                   ))}
                 </div>
@@ -911,6 +862,22 @@ export function CustomersPage() {
           </Button>
         </div>
       </Modal>
+
+      <ConfirmDialog
+        open={!!pendingDeleteContact}
+        title="Delete contact?"
+        message={`Remove ${pendingDeleteContact?.name || 'this contact'} from the customer record?`}
+        confirmLabel="Delete"
+        loading={deleteContactMutation.isPending}
+        onCancel={() => setPendingDeleteContact(null)}
+        onConfirm={() => {
+          if (!pendingDeleteContact) return;
+          deleteContactMutation.mutate(
+            { customerId: pendingDeleteContact.customerId, contactId: pendingDeleteContact.contactId },
+            { onSettled: () => setPendingDeleteContact(null) }
+          );
+        }}
+      />
     </div>
   );
 }

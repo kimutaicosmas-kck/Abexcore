@@ -9,6 +9,8 @@ import swaggerUi from 'swagger-ui-express';
 import swaggerJsdoc from 'swagger-jsdoc';
 import { config } from './config';
 import { errorHandler, notFound } from './middleware/errorHandler';
+import { isCorsOriginAllowed } from './utils/corsOrigins';
+import { authenticate, requireSuperAdmin } from './middleware/auth';
 
 import authRoutes from './routes/auth.routes';
 import dashboardRoutes from './routes/dashboard.routes';
@@ -25,16 +27,35 @@ import qualityRoutes from './routes/quality.routes';
 import maintenanceRoutes from './routes/maintenance.routes';
 import searchRoutes from './routes/search.routes';
 import mpesaRoutes from './routes/mpesa.routes';
+import realtimeRoutes from './routes/realtime.routes';
 
 export function createApp() {
   const app = express();
 
-  app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
+  if (config.nodeEnv === 'production') {
+    app.set('trust proxy', 1);
+  }
+
+  app.use(helmet({
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
+    ...(config.nodeEnv === 'production' ? { hsts: { maxAge: 31536000, includeSubDomains: true } } : {}),
+  }));
   app.use(cors({
-    origin: [config.frontendUrl, 'http://localhost:5173', 'http://localhost:5174'],
+    origin: (origin, callback) => {
+      if (isCorsOriginAllowed(origin)) {
+        callback(null, true);
+        return;
+      }
+      callback(new Error('Not allowed by CORS'));
+    },
     credentials: true,
   }));
-  app.use(compression());
+  app.use(compression({
+    filter: (req, res) => {
+      if (req.path.includes('/realtime/events')) return false;
+      return compression.filter(req, res);
+    },
+  }));
   app.use(express.json({ limit: '10mb' }));
   app.use(express.urlencoded({ extended: true }));
   app.use(cookieParser());
@@ -49,7 +70,12 @@ export function createApp() {
     );
   }
 
-  app.use('/uploads', express.static(path.resolve(config.uploadDir)));
+  app.use('/uploads', express.static(path.resolve(config.uploadDir), {
+    maxAge: config.nodeEnv === 'production' ? '7d' : 0,
+    setHeaders: (res) => {
+      res.setHeader('Cache-Control', config.nodeEnv === 'production' ? 'public, max-age=604800' : 'no-cache');
+    },
+  }));
 
   const swaggerSpec = swaggerJsdoc({
     definition: {
@@ -59,25 +85,43 @@ export function createApp() {
         description: 'Enterprise ERP API — Designed by ApexCore Technologies',
         version: '2.1.0',
       },
-      servers: [{ url: `http://localhost:${config.port}/api/v1` }],
+      servers: [{ url: `/api/v1` }],
       components: {
         securitySchemes: {
           bearerAuth: { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' },
         },
       },
     },
-    apis: ['./src/routes/*.ts'],
+    apis: ['./src/routes/*.ts', './src/openapi/*.yaml'],
   });
 
-  app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+  if (config.swaggerEnabled) {
+    app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+  } else {
+    app.get('/api/docs', authenticate, requireSuperAdmin, (_req, res) => {
+      res.json({ success: true, message: 'Swagger UI disabled in production. Set SWAGGER_ENABLED=true to enable.' });
+    });
+  }
 
   app.get('/api/health', async (_req, res) => {
     try {
       const { default: prisma } = await import('./config/database');
       await prisma.$queryRaw`SELECT 1`;
-      res.json({ status: 'ok', version: '2.1.0', database: 'connected', timestamp: new Date().toISOString() });
+      res.json({
+        status: 'ok',
+        version: '2.1.0',
+        database: 'connected',
+        timezone: config.timezone,
+        timestamp: new Date().toISOString(),
+      });
     } catch {
-      res.status(503).json({ status: 'degraded', version: '2.1.0', database: 'disconnected', timestamp: new Date().toISOString() });
+      res.status(503).json({
+        status: 'degraded',
+        version: '2.1.0',
+        database: 'disconnected',
+        timezone: config.timezone,
+        timestamp: new Date().toISOString(),
+      });
     }
   });
 
@@ -97,6 +141,7 @@ export function createApp() {
   apiRouter.use('/quality', qualityRoutes);
   apiRouter.use('/maintenance', maintenanceRoutes);
   apiRouter.use('/search', searchRoutes);
+  apiRouter.use('/realtime', realtimeRoutes);
 
   app.use('/api/v1', apiRouter);
   app.use(notFound);

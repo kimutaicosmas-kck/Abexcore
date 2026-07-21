@@ -10,22 +10,23 @@ import {
   Input,
   Select,
   StatCard,
+  StatGrid,
   Card,
   Alert,
   EmptyState,
   DataPanel,
-  QuickActionCard,
-  QuickActionGrid,
   TablePagination,
   formatCurrency,
   formatDate,
   getStatusBadge,
   PageToolbar,
+  ConfirmDialog,
 } from '../components/ui';
 import { Modal } from '../components/ui/Modal';
 import { MaintenanceForm } from '../components/forms/MaintenanceForm';
 import { MachineForm } from '../components/forms/MachineForm';
 import { useAuth } from '../contexts/AuthContext';
+import { OverviewHint } from '../components/layout/ModuleOverview';
 import { Machine, MaintenanceRequest, MaintenanceStats } from '../types';
 
 const tabs = ['Overview', 'Machines', 'Requests'];
@@ -49,10 +50,10 @@ export function MaintenancePage() {
   const [machineModalOpen, setMachineModalOpen] = useState(false);
   const [selected, setSelected] = useState<MaintenanceRequest | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
+  const [pendingCompleteId, setPendingCompleteId] = useState<string | null>(null);
 
   const canCreate = hasPermission('maintenance:create');
   const canUpdate = hasPermission('maintenance:update');
-
   const { data: stats } = useQuery({
     queryKey: ['maintenance-stats'],
     queryFn: () => maintenanceApi.stats().then((r) => r.data.data as MaintenanceStats),
@@ -104,7 +105,7 @@ export function MaintenancePage() {
       render: (_: unknown, row: Record<string, unknown>) => {
         if (!canUpdate || row.status === 'COMPLETED') return null;
         return (
-          <Button size="sm" loading={completeMutation.isPending} onClick={(e) => { e.stopPropagation(); completeMutation.mutate(row.id as string); }}>
+          <Button size="sm" loading={completeMutation.isPending} onClick={(e) => { e.stopPropagation(); setPendingCompleteId(row.id as string); }}>
             Complete
           </Button>
         );
@@ -147,12 +148,12 @@ export function MaintenancePage() {
       />
 
       {stats && (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+        <StatGrid>
           <StatCard title="Machines" value={stats.totalMachines} icon={<Cog className="h-5 w-5 text-white" />} color="from-primary-500 to-indigo-600" />
           <StatCard title="Operational" value={stats.operational} icon={<CheckCircle2 className="h-5 w-5 text-white" />} color="from-emerald-500 to-teal-600" />
           <StatCard title="Open Requests" value={stats.openRequests} icon={<Wrench className="h-5 w-5 text-white" />} color="from-amber-500 to-orange-600" />
           <StatCard title="Overdue" value={stats.overdueRequests} icon={<AlertTriangle className="h-5 w-5 text-white" />} color="from-red-500 to-rose-600" />
-        </div>
+        </StatGrid>
       )}
 
       <PageToolbar
@@ -164,31 +165,7 @@ export function MaintenancePage() {
 
       {activeTab === 0 && (
         <div className="space-y-4">
-          {canCreate && (
-            <QuickActionGrid>
-              <QuickActionCard
-                label="Schedule maintenance"
-                desc="Create a repair or service request"
-                icon={Wrench}
-                color="bg-amber-50 text-amber-600 border-amber-100"
-                onClick={() => setRequestModalOpen(true)}
-              />
-              <QuickActionCard
-                label="Add machine"
-                desc="Register production equipment"
-                icon={Cog}
-                color="bg-primary-50 text-primary-600 border-primary-100"
-                onClick={() => setMachineModalOpen(true)}
-              />
-              <QuickActionCard
-                label="Open requests"
-                desc="View scheduled and active work"
-                icon={Calendar}
-                color="bg-violet-50 text-violet-600 border-violet-100"
-                onClick={() => goToTab(2)}
-              />
-            </QuickActionGrid>
-          )}
+          <OverviewHint>Use the tabs above to manage records. Summary counts are shown at the top.</OverviewHint>
 
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
             <Card
@@ -264,21 +241,6 @@ export function MaintenancePage() {
               )}
             </Card>
           </div>
-
-          {recentRequests.length > 0 && (
-            <Card
-              title="Requests snapshot"
-              action={<Button variant="ghost" size="sm" onClick={() => goToTab(2)}>View all</Button>}
-              padding={false}
-            >
-              <Table
-                columns={requestColumns.filter((c) => c.key !== 'actions')}
-                data={recentRequests}
-                embedded
-                onRowClick={(row) => openDetail(row as unknown as MaintenanceRequest)}
-              />
-            </Card>
-          )}
         </div>
       )}
 
@@ -403,12 +365,25 @@ export function MaintenancePage() {
             <Card title="Description"><p>{selected.description}</p></Card>
             {canUpdate && selected.status !== 'COMPLETED' && (
               <div className="flex justify-end">
-                <Button loading={completeMutation.isPending} onClick={() => completeMutation.mutate(selected.id)}>Mark Complete</Button>
+                <Button loading={completeMutation.isPending} onClick={() => setPendingCompleteId(selected.id)}>Mark Complete</Button>
               </div>
             )}
           </div>
         )}
       </Modal>
+
+      <ConfirmDialog
+        open={!!pendingCompleteId}
+        title="Complete maintenance request?"
+        message="This marks the maintenance work as completed."
+        confirmLabel="Mark Complete"
+        loading={completeMutation.isPending}
+        onCancel={() => setPendingCompleteId(null)}
+        onConfirm={() => {
+          if (!pendingCompleteId) return;
+          completeMutation.mutate(pendingCompleteId, { onSettled: () => setPendingCompleteId(null) });
+        }}
+      />
     </div>
   );
 }

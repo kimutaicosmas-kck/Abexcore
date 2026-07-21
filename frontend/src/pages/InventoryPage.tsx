@@ -25,6 +25,7 @@ import {
   Input,
   Select,
   StatCard,
+  StatGrid,
   Alert,
   EmptyState,
   DataPanel,
@@ -32,8 +33,6 @@ import {
   formatDate,
   getStatusBadge,
   PageToolbar,
-  QuickActionCard,
-  QuickActionGrid,
   TablePagination,
 } from '../components/ui';
 import { Modal } from '../components/ui/Modal';
@@ -41,7 +40,9 @@ import { RawMaterialForm } from '../components/forms/RawMaterialForm';
 import { StockAdjustForm } from '../components/forms/StockAdjustForm';
 import { StockTransferForm } from '../components/forms/StockTransferForm';
 import { useAuth } from '../contexts/AuthContext';
+import { OverviewHint } from '../components/layout/ModuleOverview';
 import { InventoryStats, InventoryTransaction, RawMaterial } from '../types';
+import { formatPartNumberLine } from '../utils/productDisplay';
 
 const tabs = ['Overview', 'Stock Levels', 'Materials', 'Warehouses', 'Low Stock', 'Movements'];
 
@@ -168,7 +169,9 @@ export function InventoryPage() {
             </div>
             <div>
               <p className="font-medium text-slate-900">{product?.name || material?.name || '—'}</p>
-              <p className="text-xs text-slate-500">{product?.sku || material?.code || '—'}</p>
+              <p className="text-xs text-slate-500">
+                {product?.sku ? formatPartNumberLine(product.sku) : material?.code || '—'}
+              </p>
             </div>
           </div>
         );
@@ -338,7 +341,7 @@ export function InventoryPage() {
       />
 
       {stats && (
-        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-4">
+        <StatGrid>
           <StatCard
             title="Inventory value"
             value={formatCurrency(stats.inventoryValue)}
@@ -369,7 +372,7 @@ export function InventoryPage() {
             icon={<Activity className="h-5 w-5 text-white" />}
             color="from-violet-500 to-purple-600"
           />
-        </div>
+        </StatGrid>
       )}
 
       <PageToolbar tabs={tabs} activeTab={activeTab} onTabChange={setActiveTab} actions={toolbarActions} />
@@ -377,35 +380,7 @@ export function InventoryPage() {
       {/* Overview */}
       {activeTab === 0 && (
         <div className="space-y-4">
-          {canCreate && (
-            <QuickActionGrid>
-              {[
-                {
-                  label: 'Adjust stock',
-                  desc: 'Add or remove quantities',
-                  icon: SlidersHorizontal,
-                  color: 'bg-amber-50 text-amber-600 border-amber-100',
-                  onClick: () => setAdjustModalOpen(true),
-                },
-                {
-                  label: 'Transfer stock',
-                  desc: 'Move between warehouses',
-                  icon: ArrowLeftRight,
-                  color: 'bg-violet-50 text-violet-600 border-violet-100',
-                  onClick: () => setTransferModalOpen(true),
-                },
-                {
-                  label: 'Add material',
-                  desc: 'Register raw material SKU',
-                  icon: PackagePlus,
-                  color: 'bg-emerald-50 text-emerald-600 border-emerald-100',
-                  onClick: () => { setEditingMaterial(null); setMaterialModalOpen(true); },
-                },
-              ].map((action) => (
-                <QuickActionCard key={action.label} {...action} />
-              ))}
-            </QuickActionGrid>
-          )}
+          <OverviewHint>Use the tabs above to manage records. Summary counts are shown at the top.</OverviewHint>
 
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
             <Card
@@ -484,16 +459,6 @@ export function InventoryPage() {
               )}
             </Card>
           </div>
-
-          <Card title="Stock snapshot" action={<Button variant="ghost" size="sm" onClick={() => goToTab(1)}>View all</Button>} padding={false}>
-            {recentStock.length === 0 ? (
-              <div className="p-6">
-                <EmptyState title="No stock on hand" description="Post a goods receipt or adjust stock to get started." />
-              </div>
-            ) : (
-              <Table columns={stockColumns} data={recentStock} embedded />
-            )}
-          </Card>
         </div>
       )}
 

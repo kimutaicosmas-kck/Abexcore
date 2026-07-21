@@ -11,6 +11,7 @@
     "db:migrate": "prisma migrate dev",
     "db:migrate:prod": "prisma migrate deploy",
     "db:seed": "tsx prisma/seed.ts",
+    "db:refresh-roles": "tsx scripts/refresh-role-permissions.ts",
     "db:seed:production": "tsx prisma/seed.production.ts",
     "db:studio": "prisma studio",
     "test": "vitest run",
@@ -35,6 +36,7 @@
     "nodemailer": "^6.10.0",
     "pdfkit": "^0.16.0",
     "qrcode": "^1.5.4",
+    "sharp": "^0.35.3",
     "speakeasy": "^2.0.0",
     "swagger-jsdoc": "^6.2.8",
     "swagger-ui-express": "^5.0.1",
@@ -64,5 +66,8 @@
     "tsx": "^4.19.3",
     "typescript": "^5.8.2",
     "vitest": "^3.0.9"
+  },
+  "optionalDependencies": {
+    "@sentry/node": "^10.67.0"
   }
 }

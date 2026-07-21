@@ -121,8 +121,8 @@ export function RequisitionForm({ onSuccess, onCancel }: RequisitionFormProps) {
 
         <div className="space-y-3">
           {fields.map((field, index) => (
-            <div key={field.id} className="grid grid-cols-12 gap-2 items-end p-3 bg-gray-50 rounded-lg">
-              <div className="col-span-3">
+            <div key={field.id} className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-end p-3 bg-gray-50 rounded-lg">
+              <div className="col-span-12 sm:col-span-3">
                 <Select
                   label={index === 0 ? 'Material' : undefined}
                   options={materialOptions}
@@ -131,19 +131,19 @@ export function RequisitionForm({ onSuccess, onCancel }: RequisitionFormProps) {
                   })}
                 />
               </div>
-              <div className="col-span-3">
+              <div className="col-span-12 sm:col-span-3">
                 <Input label={index === 0 ? 'Description' : undefined} {...register(`items.${index}.description`)} />
               </div>
-              <div className="col-span-2">
+              <div className="col-span-12 sm:col-span-2">
                 <Input label={index === 0 ? 'Qty' : undefined} type="number" step="0.001" min={0.001} {...register(`items.${index}.quantity`)} />
               </div>
-              <div className="col-span-1">
+              <div className="col-span-12 sm:col-span-1">
                 <Input label={index === 0 ? 'Unit' : undefined} {...register(`items.${index}.unit`)} />
               </div>
-              <div className="col-span-2">
+              <div className="col-span-12 sm:col-span-2">
                 <Input label={index === 0 ? 'Est. Cost' : undefined} type="number" step="0.01" {...register(`items.${index}.estimatedCost`)} />
               </div>
-              <div className="col-span-1">
+              <div className="col-span-12 sm:col-span-1">
                 {fields.length > 1 && (
                   <Button type="button" variant="ghost" size="sm" onClick={() => remove(index)}>
                     <Trash2 className="h-4 w-4 text-red-500" />

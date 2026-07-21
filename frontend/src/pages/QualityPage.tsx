@@ -18,12 +18,11 @@ import {
   Input,
   Select,
   StatCard,
+  StatGrid,
   Card,
   Alert,
   EmptyState,
   DataPanel,
-  QuickActionCard,
-  QuickActionGrid,
   TablePagination,
   formatDate,
   getStatusBadge,
@@ -33,6 +32,7 @@ import { Modal } from '../components/ui/Modal';
 import { QualityForm } from '../components/forms/QualityForm';
 import { QualityUpdatePanel } from '../components/forms/QualityUpdatePanel';
 import { useAuth } from '../contexts/AuthContext';
+import { OverviewHint } from '../components/layout/ModuleOverview';
 import { QualityInspection, QualityStats } from '../types';
 
 const tabs = ['Overview', 'Inspections'];
@@ -66,7 +66,6 @@ export function QualityPage() {
 
   const canCreate = hasPermission('quality:create');
   const canUpdate = hasPermission('quality:update');
-
   const { data: stats } = useQuery({
     queryKey: ['quality-stats'],
     queryFn: () => qualityApi.stats().then((r) => r.data.data as QualityStats),
@@ -156,7 +155,7 @@ export function QualityPage() {
       />
 
       {stats && (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+        <StatGrid>
           <StatCard
             title="Pending"
             value={stats.pending}
@@ -181,38 +180,14 @@ export function QualityPage() {
             icon={<Percent className="h-5 w-5 text-white" />}
             color="from-primary-500 to-indigo-600"
           />
-        </div>
+        </StatGrid>
       )}
 
       <PageToolbar tabs={tabs} activeTab={activeTab} onTabChange={setActiveTab} actions={toolbarActions} />
 
       {activeTab === 0 && (
         <div className="space-y-4">
-          {canCreate && (
-            <QuickActionGrid>
-              <QuickActionCard
-                label="Add inspection"
-                desc="Record incoming or production QC"
-                icon={Plus}
-                color="bg-emerald-50 text-emerald-600 border-emerald-100"
-                onClick={() => setModalOpen(true)}
-              />
-              <QuickActionCard
-                label="Pending queue"
-                desc="Inspections awaiting results"
-                icon={ClipboardCheck}
-                color="bg-amber-50 text-amber-600 border-amber-100"
-                onClick={() => { setStatus('PENDING'); setPage(1); goToTab(1); }}
-              />
-              <QuickActionCard
-                label="All inspections"
-                desc="Full inspection register"
-                icon={ChevronRight}
-                color="bg-violet-50 text-violet-600 border-violet-100"
-                onClick={() => goToTab(1)}
-              />
-            </QuickActionGrid>
-          )}
+          <OverviewHint>Use the tabs above to manage records. Summary counts are shown at the top.</OverviewHint>
 
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
             <Card
@@ -291,41 +266,6 @@ export function QualityPage() {
               )}
             </Card>
           </div>
-
-          <Card
-            title="Inspection snapshot"
-            action={
-              <Button variant="ghost" size="sm" onClick={() => goToTab(1)}>
-                View all
-              </Button>
-            }
-            padding={false}
-          >
-            {recentInspections.length === 0 && !isLoading ? (
-              <div className="p-6">
-                <EmptyState
-                  title="No inspections yet"
-                  description="Record incoming, production, or finished goods inspections."
-                  action={
-                    canCreate ? (
-                      <Button onClick={() => setModalOpen(true)}>
-                        <Plus className="h-4 w-4 mr-2" />
-                        Add inspection
-                      </Button>
-                    ) : undefined
-                  }
-                />
-              </div>
-            ) : (
-              <Table
-                columns={columns}
-                data={recentInspections}
-                loading={isLoading}
-                onRowClick={(row) => openDetail(row as unknown as QualityInspection)}
-                embedded
-              />
-            )}
-          </Card>
         </div>
       )}
 

@@ -1,9 +1,9 @@
 import { Prisma } from '@prisma/client';
 import { AppError } from '../middleware/errorHandler';
-import { generateNumber } from '../utils/date';
 import { getVatRate, calcTax } from '../utils/company';
 import { AccountingService } from './accounting.service';
 import { syncCustomerCreditUsed } from '../utils/credit';
+import { nextInvoiceNumber, nextPaymentNumber } from '../utils/numbering';
 
 type TxClient = Prisma.TransactionClient;
 
@@ -17,6 +17,7 @@ export class FinanceInvoiceService {
           include: {
             items: { include: { product: true } },
             customer: true,
+            invoices: { where: { type: 'SALES' }, select: { id: true, totalAmount: true, deliveryNoteId: true } },
           },
         },
       },
@@ -29,6 +30,17 @@ export class FinanceInvoiceService {
     if (existing) return existing;
 
     const order = delivery.salesOrder;
+    const orderLevelInvoice = order.invoices.find((inv) => !inv.deliveryNoteId);
+    if (orderLevelInvoice) {
+      return tx.invoice.findUniqueOrThrow({
+        where: { id: orderLevelInvoice.id },
+        include: { customer: true, items: true },
+      });
+    }
+
+    const alreadyInvoiced = order.invoices
+      .filter((inv) => inv.deliveryNoteId !== deliveryNoteId)
+      .reduce((sum, inv) => sum + Number(inv.totalAmount), 0);
     const vatRate = await getVatRate();
     let subtotal = 0;
 
@@ -54,8 +66,16 @@ export class FinanceInvoiceService {
 
     const taxAmount = calcTax(subtotal, vatRate);
     const totalAmount = subtotal + taxAmount;
-    const count = await tx.invoice.count();
-    const invoiceNumber = generateNumber('INV', count + 1);
+
+    const orderTotal = Number(order.totalAmount);
+    if (alreadyInvoiced + totalAmount > orderTotal + 0.01) {
+      throw new AppError(
+        `Invoice total would exceed order value (KES ${Math.max(0, orderTotal - alreadyInvoiced).toFixed(2)} remaining to invoice)`,
+        400
+      );
+    }
+
+    const invoiceNumber = await nextInvoiceNumber(tx, 'INV');
     const paymentTerms = Number(order.customer?.paymentTerms || 30);
 
     const inv = await tx.invoice.create({
@@ -89,22 +109,25 @@ export class FinanceInvoiceService {
   static async createSalesInvoiceFromOrder(tx: TxClient, orderId: string) {
     const order = await tx.salesOrder.findUnique({
       where: { id: orderId },
-      include: { items: { include: { product: true } }, customer: true, deliveries: true },
+      include: {
+        items: { include: { product: true } },
+        customer: true,
+        deliveries: true,
+        invoices: { where: { type: 'SALES' }, select: { id: true } },
+      },
     });
     if (!order) throw new AppError('Sales order not found', 404);
 
-    const existing = await tx.invoice.findFirst({
-      where: { salesOrderId: orderId, type: 'SALES', deliveryNoteId: null },
-    });
-    if (existing) return existing;
+    if (order.invoices.length > 0) {
+      throw new AppError('This order already has a sales invoice', 409);
+    }
 
     if (order.deliveries.length > 0) {
-      throw new AppError('Order has deliveries — invoice per delivery note instead', 400);
+      throw new AppError('Order has deliveries — invoice is created automatically when you dispatch goods', 400);
     }
 
     const vatRate = await getVatRate();
-    const count = await tx.invoice.count();
-    const invoiceNumber = generateNumber('INV', count + 1);
+    const invoiceNumber = await nextInvoiceNumber(tx, 'INV');
     const paymentTerms = Number(order.customer?.paymentTerms || 30);
 
     const inv = await tx.invoice.create({
@@ -164,8 +187,7 @@ export class FinanceInvoiceService {
     );
     const taxAmount = calcTax(subtotal, vatRate);
     const totalAmount = subtotal + taxAmount;
-    const count = await tx.invoice.count();
-    const invoiceNumber = generateNumber('PINV', count + 1);
+    const invoiceNumber = await nextInvoiceNumber(tx, 'PINV');
     const paymentTerms = Number(grn.supplier?.paymentTerms || 30);
 
     const inv = await tx.invoice.create({
@@ -215,8 +237,7 @@ export class FinancePaymentService {
       reconciledById?: string;
     }
   ) {
-    const count = await tx.payment.count();
-    const paymentNumber = generateNumber('PAY', count + 1);
+    const paymentNumber = await nextPaymentNumber(tx);
 
     const p = await tx.payment.create({
       data: {

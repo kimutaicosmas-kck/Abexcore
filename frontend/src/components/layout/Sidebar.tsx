@@ -16,12 +16,14 @@ import {
   Settings,
   PanelLeftClose,
   PanelLeft,
-  Layers,
   TrendingUp,
+  Target,
 } from 'lucide-react';
 import clsx from 'clsx';
 import { useAuth } from '../../contexts/AuthContext';
-import { APP_NAME, APP_VERSION } from '../../constants/brand';
+import { ApexCoreLogo } from '../brand/ApexCoreLogo';
+import { PoweredBy } from '../brand/PoweredBy';
+import { APP_NAME } from '../../constants/brand';
 
 type NavItem = {
   name: string;
@@ -81,9 +83,26 @@ interface SidebarProps {
 }
 
 export function Sidebar({ collapsed, mobileOpen, onToggle }: SidebarProps) {
-  const { hasPermission } = useAuth();
+  const { hasPermission, isSalesOfficer, isSuperAdmin } = useAuth();
 
-  const visibleGroups = navigationGroups
+  const extraItems: NavItem[] = [
+    ...(isSalesOfficer
+      ? [{ name: 'My Sales', href: '/my-sales', icon: Target, permission: 'sales:read' as const }]
+      : []),
+    ...(isSuperAdmin
+      ? [{ name: 'Sales Targets', href: '/sales-targets', icon: Target, permission: 'settings:read' as const }]
+      : []),
+  ];
+
+  const navigationGroupsWithExtras: NavGroup[] = navigationGroups.map((group) => {
+    if (group.label !== 'Operations') return group;
+    return {
+      ...group,
+      items: [...group.items, ...extraItems.filter((item) => !group.items.some((g) => g.href === item.href))],
+    };
+  });
+
+  const visibleGroups = navigationGroupsWithExtras
     .map((group) => ({
       ...group,
       items: group.items.filter((item) => !item.permission || hasPermission(item.permission)),
@@ -101,12 +120,7 @@ export function Sidebar({ collapsed, mobileOpen, onToggle }: SidebarProps) {
       <div className="flex h-14 shrink-0 items-center justify-between gap-2 border-b border-slate-200 bg-slate-50 px-3">
         {!collapsed ? (
           <>
-            <div className="flex items-center gap-2.5 min-w-0">
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary-600 text-white shadow-sm">
-                <Layers className="h-4 w-4" />
-              </div>
-              <span className="font-bold text-sm text-slate-900 truncate">{APP_NAME}</span>
-            </div>
+            <ApexCoreLogo variant="sidebar" className="flex-1" />
             <button
               onClick={onToggle}
               className="p-1.5 rounded-lg text-slate-500 hover:text-slate-800 hover:bg-white transition-colors"
@@ -118,11 +132,11 @@ export function Sidebar({ collapsed, mobileOpen, onToggle }: SidebarProps) {
         ) : (
           <button
             onClick={onToggle}
-            className="mx-auto p-1.5 rounded-lg text-slate-500 hover:text-primary-600 hover:bg-primary-50 transition-colors"
+            className="mx-auto p-1 rounded-lg hover:bg-slate-100 transition-colors"
             aria-label="Expand sidebar"
             title={APP_NAME}
           >
-            <PanelLeft className="h-4 w-4" />
+            <ApexCoreLogo variant="mark" size="sm" inverted={false} />
           </button>
         )}
       </div>
@@ -170,8 +184,8 @@ export function Sidebar({ collapsed, mobileOpen, onToggle }: SidebarProps) {
       </nav>
 
       {!collapsed && (
-        <div className="shrink-0 border-t border-slate-200 px-3 py-2 bg-slate-50">
-          <p className="text-[10px] text-center text-slate-500">v{APP_VERSION}</p>
+        <div className="shrink-0 border-t border-slate-200 px-3 py-2.5 bg-slate-50">
+          <PoweredBy centered />
         </div>
       )}
     </aside>

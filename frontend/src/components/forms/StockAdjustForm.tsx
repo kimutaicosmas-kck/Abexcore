@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { inventoryApi, productsApi } from '../../services/api';
 import { Button, Input, Select } from '../ui';
 import { Product, RawMaterial } from '../../types';
+import { formatProductOptionLabel } from '../../utils/productDisplay';
 
 const stockAdjustSchema = z.object({
   warehouseId: z.string().min(1, 'Warehouse is required'),
@@ -66,7 +67,7 @@ export function StockAdjustForm({ onSuccess, onCancel }: StockAdjustFormProps) {
 
   const productOptions = [
     { value: '', label: 'None' },
-    ...(productsData || []).map((p) => ({ value: p.id, label: `${p.sku} - ${p.name}` })),
+    ...(productsData || []).map((p) => ({ value: p.id, label: formatProductOptionLabel(p) })),
   ];
 
   const { register, handleSubmit, formState: { errors } } = useForm<StockAdjustFormData>({

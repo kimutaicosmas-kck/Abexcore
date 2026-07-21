@@ -1,5 +1,5 @@
 import { Router, Response } from 'express';
-import { authenticate, authorize, AuthRequest } from '../middleware/auth';
+import { authenticate, authorize, AuthRequest, authorizeAny, requireSuperAdmin } from '../middleware/auth';
 import { validate } from '../middleware/validate';
 import { asyncHandler, AppError } from '../middleware/errorHandler';
 import { auditLog } from '../middleware/auditLog';
@@ -10,9 +10,15 @@ import {
   createInvoiceSchema,
   createPaymentSchema,
   createJournalEntrySchema,
+  salesByPersonQuerySchema,
+  mySalesQuerySchema,
+  upsertSalesTargetSchema,
+  grnIdParamSchema,
+  orderIdParamSchema,
 } from '../validators/schemas';
 import prisma from '../config/database';
 import { generateNumber } from '../utils/date';
+import { nextInvoiceNumber } from '../utils/numbering';
 import { getParam, getQuery } from '../utils/request';
 import { FinanceService, ReportsService } from '../services/admin.service';
 import { AccountingService } from '../services/accounting.service';
@@ -29,6 +35,7 @@ router.use(authenticate);
 
 router.get(
   '/config',
+  authorizeAny('finance:read', 'sales:read', 'settings:read', 'customers:read'),
   asyncHandler(async (_req: AuthRequest, res: Response) => {
     const company = await prisma.company.findFirst({
       select: { name: true, legalName: true, vatRate: true, currency: true, taxPin: true, email: true, phone: true, address: true },
@@ -189,8 +196,6 @@ router.post(
   asyncHandler(async (req: AuthRequest, res: Response) => {
     const { type, customerId, supplierId, salesOrderId, purchaseOrderId, dueDate, items, notes } =
       req.body;
-    const count = await prisma.invoice.count();
-    const invoiceNumber = generateNumber(type === 'SALES' ? 'INV' : 'PINV', count + 1);
     const vatRate = await getVatRate();
 
     const subtotal = items.reduce(
@@ -202,6 +207,7 @@ router.post(
     const totalAmount = subtotal + taxAmount;
 
     const invoice = await prisma.$transaction(async (tx) => {
+      const invoiceNumber = await nextInvoiceNumber(tx, type === 'SALES' ? 'INV' : 'PINV');
       const inv = await tx.invoice.create({
         data: {
           invoiceNumber,
@@ -256,6 +262,7 @@ router.post(
 router.post(
   '/invoices/from-grn/:grnId',
   authorize('finance:create'),
+  validate(grnIdParamSchema, 'params'),
   auditLog('finance', 'create', 'invoice'),
   asyncHandler(async (req: AuthRequest, res: Response) => {
     const grnId = getParam(req.params.grnId);
@@ -275,6 +282,7 @@ router.post(
 router.post(
   '/invoices/from-order/:orderId',
   authorize('finance:create'),
+  validate(orderIdParamSchema, 'params'),
   auditLog('finance', 'create', 'invoice'),
   asyncHandler(async (req: AuthRequest, res: Response) => {
     const orderId = getParam(req.params.orderId);
@@ -376,10 +384,9 @@ router.get(
 
 router.get(
   '/notifications',
-  authorize('finance:read'),
   asyncHandler(async (req: AuthRequest, res: Response) => {
     const notifications = await prisma.notification.findMany({
-      where: { userId: req.user!.id },
+      where: { userId: req.user!.id, isRead: false },
       orderBy: { createdAt: 'desc' },
       take: 50,
     });
@@ -389,12 +396,14 @@ router.get(
 
 router.patch(
   '/notifications/:id/read',
-  authorize('finance:update'),
   asyncHandler(async (req: AuthRequest, res: Response) => {
-    await prisma.notification.update({
-      where: { id: getParam(req.params.id) },
+    const result = await prisma.notification.updateMany({
+      where: { id: getParam(req.params.id), userId: req.user!.id },
       data: { isRead: true },
     });
+    if (result.count === 0) {
+      throw new AppError('Notification not found', 404);
+    }
     res.json({ success: true });
   })
 );
@@ -417,6 +426,134 @@ router.get(
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', 'attachment; filename="sales-report.xlsx"');
     res.send(excel);
+  })
+);
+
+router.get(
+  '/reports/sales-by-person/sales-officers',
+  authorize('reports:read'),
+  asyncHandler(async (_req: AuthRequest, res: Response) => {
+    const { SalespersonReportService } = await import('../services/salesperson-report.service');
+    const data = await SalespersonReportService.listSalesOfficers();
+    res.json({ success: true, data });
+  })
+);
+
+router.get(
+  '/reports/sales-by-person',
+  authorize('reports:read'),
+  validate(salesByPersonQuerySchema, 'query'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const query = getQuery<{
+      page: number;
+      limit: number;
+      salesPersonId?: string;
+      startDate?: string;
+      endDate?: string;
+    }>(req.query);
+    const { SalespersonReportService } = await import('../services/salesperson-report.service');
+    const data = await SalespersonReportService.getReport(query);
+    res.json({ success: true, data, pagination: data.pagination });
+  })
+);
+
+router.get(
+  '/reports/sales-by-person/excel',
+  authorize('reports:read'),
+  validate(salesByPersonQuerySchema.omit({ page: true, limit: true }), 'query'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const query = getQuery<{
+      salesPersonId?: string;
+      startDate?: string;
+      endDate?: string;
+    }>(req.query);
+    const { ExportService } = await import('../services/export.service');
+    const excel = await ExportService.generateSalesByPersonExcel(query);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader(
+      'Content-Disposition',
+      'attachment; filename="sales-by-salesperson.xlsx"'
+    );
+    res.send(excel);
+  })
+);
+
+router.get(
+  '/my-sales',
+  authorize('sales:read'),
+  validate(mySalesQuerySchema, 'query'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const query = getQuery<{
+      page: number;
+      limit: number;
+      salesPersonId?: string;
+      from?: string;
+      to?: string;
+    }>(req.query);
+
+    let salesPersonId = query.salesPersonId || req.user!.id;
+    const canViewOthers = req.user!.roleName === 'Super Admin' || req.user!.permissions.includes('reports:read');
+    if (salesPersonId !== req.user!.id && !canViewOthers) {
+      throw new AppError('You can only view your own sales performance', 403);
+    }
+
+    const { MySalesService } = await import('../services/my-sales.service');
+    const data = await MySalesService.getDashboard({ ...query, salesPersonId });
+    res.json({ success: true, data, pagination: data.pagination });
+  })
+);
+
+router.get(
+  '/sales-targets',
+  authorize('sales:read'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const { year, month } = getQuery<{ year?: number; month?: number }>(req.query);
+    const { MySalesService } = await import('../services/my-sales.service');
+
+    if (req.user!.roleName === 'Super Admin' || req.user!.permissions.includes('reports:read')) {
+      const data = await MySalesService.listTargets(
+        year ? Number(year) : undefined,
+        month ? Number(month) : undefined
+      );
+      res.json({ success: true, data });
+      return;
+    }
+
+    if (req.user!.roleName !== 'Sales Officer') {
+      throw new AppError('Sales targets are only available for Sales Officers', 403);
+    }
+
+    const now = new Date();
+    const user = await prisma.user.findUnique({
+      where: { id: req.user!.id },
+      select: { id: true, firstName: true, lastName: true, email: true },
+    });
+    const y = year ? Number(year) : now.getFullYear();
+    const m = month ? Number(month) : now.getMonth() + 1;
+    const targetAmount = await MySalesService.getMonthlyTarget(req.user!.id, y, m);
+    res.json({
+      success: true,
+      data: [{
+        salesPersonId: req.user!.id,
+        name: user ? `${user.firstName} ${user.lastName}`.trim() : req.user!.email,
+        email: user?.email || req.user!.email,
+        year: y,
+        month: m,
+        targetAmount,
+      }],
+    });
+  })
+);
+
+router.put(
+  '/sales-targets',
+  requireSuperAdmin,
+  validate(upsertSalesTargetSchema),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const { salesPersonId, year, month, targetAmount } = req.body;
+    const { MySalesService } = await import('../services/my-sales.service');
+    const data = await MySalesService.upsertTarget(salesPersonId, year, month, targetAmount);
+    res.json({ success: true, data });
   })
 );
 

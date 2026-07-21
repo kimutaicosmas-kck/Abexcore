@@ -8,6 +8,7 @@ import prisma from '../config/database';
 import { getParam } from '../utils/request';
 import { MpesaService } from '../services/mpesa.service';
 import { FinancePaymentService } from '../services/finance.service';
+import { config } from '../config';
 
 const router = Router();
 
@@ -20,6 +21,12 @@ const stkPushSchema = z.object({
 router.post(
   '/callback',
   asyncHandler(async (req: Request, res: Response) => {
+    if (config.mpesa.callbackSecret) {
+      const provided = req.headers['x-mpesa-callback-secret'];
+      if (provided !== config.mpesa.callbackSecret) {
+        throw new AppError('Invalid M-Pesa callback credentials', 401);
+      }
+    }
     const body = req.body as {
       Body?: {
         stkCallback?: {

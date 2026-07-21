@@ -119,8 +119,8 @@ export function JournalEntryForm({ onSuccess, onCancel }: JournalEntryFormProps)
         </div>
 
         {fields.map((field, index) => (
-          <div key={field.id} className="grid grid-cols-12 gap-2 items-start p-3 bg-gray-50 rounded-lg">
-            <div className="col-span-12 md:col-span-5">
+          <div key={field.id} className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-start p-3 bg-gray-50 rounded-lg">
+            <div className="col-span-12 sm:col-span-12 md:col-span-5">
               <Select
                 label="Account"
                 options={accountOptions}
@@ -128,16 +128,16 @@ export function JournalEntryForm({ onSuccess, onCancel }: JournalEntryFormProps)
                 error={errors.lines?.[index]?.accountId?.message}
               />
             </div>
-            <div className="col-span-6 md:col-span-2">
+            <div className="col-span-12 sm:col-span-6 md:col-span-2">
               <Input label="Debit" type="number" step="0.01" {...register(`lines.${index}.debit`)} />
             </div>
-            <div className="col-span-6 md:col-span-2">
+            <div className="col-span-12 sm:col-span-6 md:col-span-2">
               <Input label="Credit" type="number" step="0.01" {...register(`lines.${index}.credit`)} />
             </div>
-            <div className="col-span-10 md:col-span-2">
+            <div className="col-span-12 sm:col-span-10 md:col-span-2">
               <Input label="Line Note" {...register(`lines.${index}.description`)} />
             </div>
-            <div className="col-span-2 flex items-end pb-1">
+            <div className="col-span-12 sm:col-span-2 flex items-end pb-1">
               {fields.length > 2 && (
                 <Button type="button" size="sm" variant="ghost" onClick={() => remove(index)}>
                   <Trash2 className="h-4 w-4 text-red-500" />

@@ -13,12 +13,14 @@ import {
 import prisma from '../config/database';
 import { generateNumber } from '../utils/date';
 import { getParam, getQuery } from '../utils/request';
-import { SalesService } from '../services/operations.service';
+import { SalesService, ProductionStatsService } from '../services/operations.service';
 import { getVatRate, calcTax } from '../utils/company';
 import { assertCreditLimit, assertOrderStatusTransition, syncCustomerCreditUsed } from '../utils/credit';
 import { StockMovementService } from '../services/inventory.service';
-import { SalesOrderService } from '../services/sales-order.service';
+import { SalesOrderService, StockShortage } from '../services/sales-order.service';
 import { AccountingService } from '../services/accounting.service';
+import { salesPersonOrderFilter } from '../services/my-sales.service';
+import { NotificationService } from '../services/notification.service';
 import { Prisma } from '@prisma/client';
 
 const router = Router();
@@ -27,8 +29,18 @@ router.use(authenticate);
 router.get(
   '/stats',
   authorize('sales:read'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const scopedId = req.user!.roleName === 'Sales Officer' ? req.user!.id : undefined;
+    const data = await SalesService.getStats(scopedId);
+    res.json({ success: true, data });
+  })
+);
+
+router.get(
+  '/production-stats',
+  authorize('production:read'),
   asyncHandler(async (_req: AuthRequest, res: Response) => {
-    const data = await SalesService.getStats();
+    const data = await ProductionStatsService.getStats();
     res.json({ success: true, data });
   })
 );
@@ -39,21 +51,34 @@ router.get(
   authorize('sales:read'),
   validate(salesListQuerySchema, 'query'),
   asyncHandler(async (req: AuthRequest, res: Response) => {
-    const { page, limit, search, status } = getQuery<{
+    const { page, limit, search, status, salesPersonId } = getQuery<{
       page: number;
       limit: number;
       search?: string;
       status?: string;
+      salesPersonId?: string;
     }>(req.query);
     const skip = (page - 1) * limit;
 
     const where: Prisma.SalesOrderWhereInput = {};
     if (status) where.status = status as Prisma.EnumOrderStatusFilter['equals'];
+
+    if (req.user!.roleName === 'Sales Officer') {
+      Object.assign(where, salesPersonOrderFilter(req.user!.id));
+    } else if (salesPersonId) {
+      Object.assign(where, salesPersonOrderFilter(salesPersonId));
+    }
+
     if (search) {
-      where.OR = [
-        { orderNumber: { contains: search } },
-        { customer: { name: { contains: search } } },
-        { customer: { code: { contains: search } } },
+      where.AND = [
+        ...(Array.isArray(where.AND) ? where.AND : where.AND ? [where.AND] : []),
+        {
+          OR: [
+            { orderNumber: { contains: search } },
+            { customer: { name: { contains: search } } },
+            { customer: { code: { contains: search } } },
+          ],
+        },
       ];
     }
 
@@ -66,6 +91,7 @@ router.get(
           customer: true,
           items: { include: { product: true } },
           createdBy: { select: { firstName: true, lastName: true } },
+          salesPerson: { select: { id: true, firstName: true, lastName: true } },
           deliveries: { select: { id: true, deliveryNo: true, status: true } },
         },
         orderBy: { createdAt: 'desc' },
@@ -108,10 +134,15 @@ router.post(
   validate(createSalesOrderSchema),
   auditLog('sales', 'create', 'sales_order'),
   asyncHandler(async (req: AuthRequest, res: Response) => {
-    const { customerId, quotationId, requiredDate, notes, items } = req.body;
+    const { customerId, quotationId, salesPersonId, requiredDate, notes, items } = req.body;
     const count = await prisma.salesOrder.count();
     const orderNumber = generateNumber('SO', count + 1);
     const vatRate = await getVatRate();
+
+    const assignedSalesPersonId =
+      req.user!.roleName === 'Sales Officer'
+        ? req.user!.id
+        : salesPersonId || req.user!.id;
 
     const subtotal = items.reduce(
       (sum: number, item: { quantity: number; unitPrice: number; discount?: number }) => {
@@ -132,6 +163,7 @@ router.post(
           customerId,
           quotationId,
           createdById: req.user!.id,
+          salesPersonId: assignedSalesPersonId,
           requiredDate: requiredDate ? new Date(requiredDate) : undefined,
           notes,
           subtotal,
@@ -164,26 +196,76 @@ router.patch(
     const orderId = getParam(req.params.id);
     const existing = await prisma.salesOrder.findUnique({
       where: { id: orderId },
-      include: { items: true },
+      include: { items: { include: { product: true } }, customer: true },
     });
     if (!existing) throw new AppError('Sales order not found', 404);
-    assertOrderStatusTransition(existing.status, status);
+
+    const isConfirm = status === 'CONFIRMED' && existing.status === 'PENDING';
+    if (!isConfirm) {
+      assertOrderStatusTransition(existing.status, status);
+    }
+
+    if (status === 'IN_PRODUCTION') {
+      throw new AppError(
+        'Production is managed independently by the production team. Finished goods are recorded when production completes.',
+        400
+      );
+    }
+
+    if (req.user!.roleName === 'Sales Officer' && status === 'READY') {
+      throw new AppError(
+        'Only an administrator can mark orders ready for invoicing and delivery.',
+        403
+      );
+    }
 
     const order = await prisma.$transaction(async (tx) => {
-      if (status === 'CONFIRMED' && existing.status === 'PENDING') {
+      let finalStatus = status;
+      let confirmShortages: StockShortage[] = [];
+
+      if (isConfirm) {
+        const stockCheck = await SalesOrderService.checkStockAvailability(tx, existing.items);
+
+        if (stockCheck.canFulfill) {
+          for (const item of existing.items) {
+            await StockMovementService.reserveProductStock(tx, {
+              productId: item.productId,
+              quantity: item.quantity,
+            });
+          }
+          assertOrderStatusTransition(existing.status, 'READY', { system: true });
+          finalStatus = 'READY';
+        } else {
+          assertOrderStatusTransition(existing.status, 'CONFIRMED');
+          finalStatus = 'CONFIRMED';
+          confirmShortages = stockCheck.shortages;
+        }
+      } else if (finalStatus === 'READY' && existing.status === 'CONFIRMED') {
+        const stockCheck = await SalesOrderService.checkStockAvailability(tx, existing.items);
+        if (!stockCheck.canFulfill) {
+          const summary = stockCheck.shortages
+            .slice(0, 3)
+            .map((s) => `${s.productName} (need ${s.required}, have ${s.available})`)
+            .join('; ');
+          throw new AppError(`Insufficient finished goods stock: ${summary}`, 400);
+        }
         for (const item of existing.items) {
           await StockMovementService.reserveProductStock(tx, {
             productId: item.productId,
             quantity: item.quantity,
           });
         }
+        assertOrderStatusTransition(existing.status, 'READY');
       }
 
-      if (status === 'READY' && existing.status === 'IN_PRODUCTION') {
-        const hasOpenProduction = await SalesOrderService.hasOpenProduction(tx, existing.id);
-        if (hasOpenProduction) {
-          throw new AppError('Complete all production orders before marking ready', 400);
+      if (finalStatus === 'READY' && existing.status === 'IN_PRODUCTION') {
+        for (const item of existing.items) {
+          await StockMovementService.reserveProductStock(tx, {
+            productId: item.productId,
+            quantity: item.quantity,
+          });
         }
+        assertOrderStatusTransition(existing.status, 'READY', { system: true });
       }
 
       if (status === 'CANCELLED' && ['CONFIRMED', 'IN_PRODUCTION', 'READY', 'PARTIALLY_DELIVERED'].includes(existing.status)) {
@@ -192,15 +274,64 @@ router.patch(
 
       const updated = await tx.salesOrder.update({
         where: { id: orderId },
-        data: { status },
+        data: { status: finalStatus },
         include: { customer: true, items: { include: { product: true } } },
       });
 
       await syncCustomerCreditUsed(existing.customerId, tx);
-      return updated;
+      return { order: updated, confirmShortages };
     });
 
-    res.json({ success: true, data: order });
+    if (isConfirm && order.order.status === 'READY') {
+      const total = Number(order.order.totalAmount).toLocaleString('en-KE');
+      await NotificationService.notifyAdmins(
+        'APPROVAL',
+        `Sales order ${order.order.orderNumber} ready for invoicing`,
+        `${order.order.customer.name} — KES ${total}. Stock reserved — create invoice in Finance, then assign delivery.`,
+        '/finance'
+      );
+    } else if (isConfirm && order.order.status === 'CONFIRMED') {
+      const total = Number(order.order.totalAmount).toLocaleString('en-KE');
+      const shortageSummary = order.confirmShortages
+        .slice(0, 3)
+        .map((s) => `${s.productName} (need ${s.required}, have ${s.available})`)
+        .join('; ');
+      await NotificationService.notifyRole(
+        'Production Manager',
+        'LOW_STOCK',
+        `Finished goods needed for ${order.order.orderNumber}`,
+        `Sales order requires: ${shortageSummary}. Continue independent production to replenish finished goods stock.`,
+        '/production'
+      );
+      await NotificationService.notifyAdmins(
+        'APPROVAL',
+        `Sales order ${order.order.orderNumber} awaiting stock`,
+        `${order.order.customer.name} — KES ${total}. Out of stock: ${shortageSummary}. Mark ready in Sales when finished goods are available.`,
+        '/sales'
+      );
+    }
+
+    res.json({
+      success: true,
+      data: order.order,
+      fulfillment: isConfirm
+        ? {
+            type: order.order.status === 'READY' ? 'stock' : 'awaiting_stock',
+            shortages: order.confirmShortages,
+          }
+        : undefined,
+    });
+  })
+);
+
+router.post(
+  '/orders/:id/generate-production',
+  authorize('sales:update'),
+  asyncHandler(async (_req: AuthRequest, res: Response) => {
+    throw new AppError(
+      'Production is managed independently in the Production module. Sales orders no longer generate production orders.',
+      410
+    );
   })
 );
 
@@ -487,6 +618,21 @@ router.post(
         data: { status: 'IN_PROGRESS', actualStart: new Date() },
       });
 
+      const existingQc = await tx.qualityInspection.findFirst({
+        where: { productionOrderId: order.id },
+      });
+      if (!existingQc) {
+        await tx.qualityInspection.create({
+          data: {
+            inspectionNo: generateNumber('QC', (await tx.qualityInspection.count()) + 1),
+            type: 'production',
+            productionOrderId: order.id,
+            inspectorId: req.user!.id,
+            status: 'PENDING',
+          },
+        });
+      }
+
       if (order.salesOrderId) {
         await SalesOrderService.maybeSetInProduction(tx, order.salesOrderId);
       }
@@ -511,6 +657,9 @@ router.post(
     });
 
     if (!order) throw new AppError('Production order not found', 404);
+    if (order.status !== 'IN_PROGRESS') {
+      throw new AppError('Start production before completing it', 400);
+    }
 
     const passedInspection = await prisma.qualityInspection.findFirst({
       where: { productionOrderId: order.id, status: 'PASSED' },
@@ -624,10 +773,6 @@ router.post(
         },
         include: { product: true, batches: true },
       });
-
-      if (order.salesOrderId) {
-        await SalesOrderService.maybeAdvanceToReady(tx, order.salesOrderId);
-      }
 
       return productionResult;
     });

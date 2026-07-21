@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -28,7 +27,7 @@ import {
   ArrowRight,
   Receipt,
   CircleDollarSign,
-  BarChart3,
+  Download,
 } from 'lucide-react';
 import { financeApi } from '../services/api';
 import {
@@ -38,13 +37,12 @@ import {
   Card,
   Button,
   StatCard,
+  StatGrid,
   Input,
   Select,
   Alert,
   EmptyState,
   DataPanel,
-  QuickActionCard,
-  QuickActionGrid,
   TablePagination,
   formatCurrency,
   formatDate,
@@ -56,6 +54,7 @@ import { InvoiceForm } from '../components/forms/InvoiceForm';
 import { PaymentForm } from '../components/forms/PaymentForm';
 import { JournalEntryForm } from '../components/forms/JournalEntryForm';
 import { useAuth } from '../contexts/AuthContext';
+import { OverviewHint } from '../components/layout/ModuleOverview';
 import { downloadFile } from '../utils/download';
 import { FinanceStats, FinanceOverview, Invoice, Payment } from '../types';
 
@@ -312,6 +311,26 @@ export function FinancePage() {
       label: 'Status',
       render: (val: unknown) => <Badge variant={getStatusBadge(val as string)}>{val as string}</Badge>,
     },
+    {
+      key: 'actions',
+      label: '',
+      render: (_: unknown, row: Record<string, unknown>) => {
+        const inv = row as unknown as Invoice;
+        return (
+          <div onClick={(e) => e.stopPropagation()}>
+            <Button
+              variant="secondary"
+              size="sm"
+              loading={downloading === `${inv.id}-pdf`}
+              onClick={() => handleExport(inv.id, 'pdf', inv.invoiceNumber)}
+            >
+              <Download className="h-4 w-4 mr-1" />
+              PDF
+            </Button>
+          </div>
+        );
+      },
+    },
   ];
 
   const paymentColumns = [
@@ -454,14 +473,14 @@ export function FinancePage() {
       />
 
       {stats && (
-        <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 mb-4">
+        <StatGrid>
           <StatCard title="Monthly Revenue" value={formatCurrency(stats.monthlyRevenue)} icon={<TrendingUp className="h-5 w-5 text-white" />} color="from-emerald-500 to-teal-600" />
           <StatCard title="Receivable" value={formatCurrency(stats.accountsReceivable)} icon={<Wallet className="h-5 w-5 text-white" />} color="from-primary-500 to-indigo-600" />
           <StatCard title="Payable" value={formatCurrency(stats.accountsPayable)} icon={<TrendingDown className="h-5 w-5 text-white" />} color="from-red-500 to-rose-600" />
           <StatCard title="Overdue" value={stats.overdueInvoices} icon={<AlertCircle className="h-5 w-5 text-white" />} color="from-amber-500 to-orange-600" />
           <StatCard title="Total Sales" value={formatCurrency(stats.totalSales)} icon={<Receipt className="h-5 w-5 text-white" />} color="from-violet-500 to-purple-600" />
           <StatCard title="Journal Entries" value={stats.journalEntries} icon={<BookOpen className="h-5 w-5 text-white" />} color="from-slate-600 to-slate-700" />
-        </div>
+        </StatGrid>
       )}
 
       <PageToolbar
@@ -479,34 +498,9 @@ export function FinancePage() {
       {/* Overview */}
       {activeTab === 0 && stats && (
         <div className="space-y-4">
-          {canCreate && (
-            <QuickActionGrid>
-              <QuickActionCard
-                label="New Invoice"
-                desc="Create sales or purchase invoice"
-                icon={Plus}
-                color="bg-emerald-50 text-emerald-600 border-emerald-100"
-                onClick={() => { goToTab(1); setInvoiceModalOpen(true); }}
-              />
-              <QuickActionCard
-                label="Record Payment"
-                desc="Apply payment to an invoice"
-                icon={CreditCard}
-                color="bg-violet-50 text-violet-600 border-violet-100"
-                onClick={() => openPaymentModal()}
-              />
-              <QuickActionCard
-                label="Journal Entry"
-                desc="Post a general ledger entry"
-                icon={BookOpen}
-                color="bg-amber-50 text-amber-600 border-amber-100"
-                onClick={() => { goToTab(3); setJournalModalOpen(true); }}
-              />
-            </QuickActionGrid>
-          )}
+          <OverviewHint>Use the tabs above to manage records. Summary counts are shown at the top.</OverviewHint>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          <div className="lg:col-span-2 space-y-4">
+          <div className="space-y-4">
             {/* Cash flow */}
             <Card
               title="Cash flow"
@@ -524,18 +518,18 @@ export function FinancePage() {
                 <div className="h-48 flex items-center justify-center text-sm text-slate-500">Loading chart…</div>
               ) : overview && cashFlowChartData ? (
                 <>
-                  <div className="grid grid-cols-3 gap-3 mb-4">
-                    <div className="rounded-xl bg-emerald-50 border border-emerald-100 px-3 py-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+                    <div className="rounded-xl bg-emerald-50 border border-emerald-100 px-3 py-2.5 min-w-0">
                       <p className="text-xs text-emerald-700">Cash in</p>
-                      <p className="text-lg font-bold text-emerald-800">{formatCurrency(overview.cashFlow.totalInflow)}</p>
+                      <p className="mt-1 text-sm sm:text-base font-bold text-emerald-800 tabular-nums break-words">{formatCurrency(overview.cashFlow.totalInflow)}</p>
                     </div>
-                    <div className="rounded-xl bg-red-50 border border-red-100 px-3 py-2">
+                    <div className="rounded-xl bg-red-50 border border-red-100 px-3 py-2.5 min-w-0">
                       <p className="text-xs text-red-700">Cash out</p>
-                      <p className="text-lg font-bold text-red-800">{formatCurrency(overview.cashFlow.totalOutflow)}</p>
+                      <p className="mt-1 text-sm sm:text-base font-bold text-red-800 tabular-nums break-words">{formatCurrency(overview.cashFlow.totalOutflow)}</p>
                     </div>
-                    <div className={`rounded-xl border px-3 py-2 ${overview.cashFlow.net >= 0 ? 'bg-primary-50 border-primary-100' : 'bg-amber-50 border-amber-100'}`}>
+                    <div className={`rounded-xl border px-3 py-2.5 min-w-0 ${overview.cashFlow.net >= 0 ? 'bg-primary-50 border-primary-100' : 'bg-amber-50 border-amber-100'}`}>
                       <p className={`text-xs ${overview.cashFlow.net >= 0 ? 'text-primary-700' : 'text-amber-700'}`}>Net</p>
-                      <p className={`text-lg font-bold ${overview.cashFlow.net >= 0 ? 'text-primary-800' : 'text-amber-800'}`}>
+                      <p className={`mt-1 text-sm sm:text-base font-bold tabular-nums break-words ${overview.cashFlow.net >= 0 ? 'text-primary-800' : 'text-amber-800'}`}>
                         {formatCurrency(overview.cashFlow.net)}
                       </p>
                     </div>
@@ -591,11 +585,11 @@ export function FinancePage() {
                         ? (bucket.amount / overview.arAging.totalOutstanding) * 100
                         : 0;
                       return (
-                        <div key={b.key} className="rounded-xl border border-slate-100 bg-slate-50/80 p-3">
+                        <div key={b.key} className="rounded-xl border border-slate-100 bg-slate-50/80 p-3 min-w-0">
                           <div className={`h-1 w-full rounded-full ${b.color} mb-2`} style={{ opacity: Math.max(0.25, pct / 100) }} />
-                          <p className="text-xs font-medium text-slate-700">{b.label}</p>
+                          <p className="text-xs font-medium text-slate-700 line-clamp-2">{b.label}</p>
                           <p className="text-[10px] text-slate-400 mb-1">{b.sub}</p>
-                          <p className="text-sm font-bold text-slate-900">{formatCurrency(bucket.amount)}</p>
+                          <p className="text-xs sm:text-sm font-bold text-slate-900 tabular-nums break-words">{formatCurrency(bucket.amount)}</p>
                           <p className="text-[10px] text-slate-500">{bucket.count} invoice{bucket.count !== 1 ? 's' : ''}</p>
                         </div>
                       );
@@ -625,16 +619,16 @@ export function FinancePage() {
                           <button
                             key={row.id}
                             type="button"
-                            className="w-full flex items-center justify-between py-2 text-sm hover:bg-slate-50 rounded-lg px-2 -mx-2"
+                            className="w-full flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between py-2 text-sm hover:bg-slate-50 rounded-lg px-2 -mx-2 min-w-0"
                             onClick={() => {
                               setSelectedInvoiceId(row.id);
                               setDetailOpen(true);
                             }}
                           >
-                            <span className="text-slate-800">{row.invoiceNumber} · {row.customerName}</span>
-                            <span className="flex items-center gap-2">
+                            <span className="text-slate-800 truncate min-w-0">{row.invoiceNumber} · {row.customerName}</span>
+                            <span className="flex items-center gap-2 shrink-0">
                               <Badge variant="danger">{row.daysPastDue}d</Badge>
-                              <span className="font-semibold text-red-700">{formatCurrency(row.balance)}</span>
+                              <span className="font-semibold text-red-700 tabular-nums">{formatCurrency(row.balance)}</span>
                             </span>
                           </button>
                         ))}
@@ -643,41 +637,6 @@ export function FinancePage() {
                   )}
                 </>
               ) : null}
-            </Card>
-
-            <Card title="Financial snapshot" padding>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-medium text-slate-700">Accounts Receivable</span>
-                    <span className="text-sm font-bold text-primary-700">{formatCurrency(stats.accountsReceivable)}</span>
-                  </div>
-                  <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
-                    <div
-                      className="h-full rounded-full bg-gradient-to-r from-primary-500 to-indigo-500"
-                      style={{
-                        width: `${Math.min(100, (stats.accountsReceivable / Math.max(stats.totalSales, 1)) * 100)}%`,
-                      }}
-                    />
-                  </div>
-                  <p className="text-xs text-slate-500 mt-2">Money customers owe you</p>
-                </div>
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-medium text-slate-700">Accounts Payable</span>
-                    <span className="text-sm font-bold text-red-700">{formatCurrency(stats.accountsPayable)}</span>
-                  </div>
-                  <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
-                    <div
-                      className="h-full rounded-full bg-gradient-to-r from-red-500 to-rose-500"
-                      style={{
-                        width: `${Math.min(100, (stats.accountsPayable / Math.max(stats.totalPurchases, 1)) * 100)}%`,
-                      }}
-                    />
-                  </div>
-                  <p className="text-xs text-slate-500 mt-2">Money you owe suppliers</p>
-                </div>
-              </div>
             </Card>
 
             <Card
@@ -696,18 +655,18 @@ export function FinancePage() {
                     <button
                       key={inv.id}
                       type="button"
-                      className="w-full flex items-center justify-between py-3 text-left hover:bg-slate-50/80 px-2 -mx-2 rounded-lg transition-colors"
+                      className="w-full flex items-start justify-between gap-3 py-3 text-left hover:bg-slate-50/80 px-2 -mx-2 rounded-lg transition-colors min-w-0"
                       onClick={() => openInvoiceDetail(inv)}
                     >
-                      <div>
-                        <p className="font-medium text-sm text-slate-900">{inv.invoiceNumber}</p>
-                        <p className="text-xs text-slate-500">
+                      <div className="min-w-0 flex-1">
+                        <p className="font-medium text-sm text-slate-900 truncate">{inv.invoiceNumber}</p>
+                        <p className="text-xs text-slate-500 truncate">
                           {inv.customer?.name || inv.supplier?.name || '—'}
                           {inv.dueDate && ` · Due ${formatDate(inv.dueDate)}`}
                         </p>
                       </div>
-                      <div className="text-right">
-                        <p className="font-semibold text-sm text-amber-700">{formatCurrency(invoiceBalance(inv))}</p>
+                      <div className="text-right shrink-0">
+                        <p className="font-semibold text-sm text-amber-700 tabular-nums">{formatCurrency(invoiceBalance(inv))}</p>
                         <Badge variant={getStatusBadge(inv.status)}>{inv.status}</Badge>
                       </div>
                     </button>
@@ -715,33 +674,6 @@ export function FinancePage() {
                 </div>
               )}
             </Card>
-          </div>
-
-          <div className="space-y-4">
-            <Card title="Reports & links" padding>
-              <Link to="/reports" className="block">
-                <Button className="w-full justify-start" variant="ghost">
-                  <BarChart3 className="h-4 w-4 mr-2" /> Financial reports
-                </Button>
-              </Link>
-            </Card>
-
-            <Card title="Chart of accounts (summary)" padding>
-              <div className="space-y-1 max-h-72 overflow-y-auto">
-                {(accounts || []).slice(0, 12).map((acc) => (
-                  <div key={acc.id} className="flex justify-between text-sm py-1.5 border-b border-slate-100 last:border-0">
-                    <span className="text-slate-600 truncate pr-2">{acc.code} · {acc.name}</span>
-                    <span className="font-medium shrink-0 tabular-nums">{formatCurrency(Number(acc.balance))}</span>
-                  </div>
-                ))}
-                {(accounts?.length || 0) > 12 && (
-                  <Button size="sm" variant="ghost" className="w-full mt-2" onClick={() => setActiveTab(4)}>
-                    View all accounts
-                  </Button>
-                )}
-              </div>
-            </Card>
-          </div>
           </div>
         </div>
       )}
@@ -905,12 +837,12 @@ export function FinancePage() {
       {/* Reconciliation */}
       {activeTab === 5 && reconciliation && (
         <>
-          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 mb-4">
+          <StatGrid>
             <StatCard title="Bank Balance (GL)" value={formatCurrency(reconciliation.bankBalance)} icon={<Landmark className="h-5 w-5 text-white" />} color="from-slate-600 to-slate-700" />
             <StatCard title="Statement Balance" value={formatCurrency(reconciliation.statementBalance ?? 0)} icon={<Landmark className="h-5 w-5 text-white" />} color="from-blue-600 to-indigo-700" />
             <StatCard title="Variance" value={formatCurrency(reconciliation.variance ?? 0)} icon={<CircleDollarSign className="h-5 w-5 text-white" />} color="from-rose-500 to-red-600" />
             <StatCard title="Unreconciled" value={formatCurrency(reconciliation.unreconciledTotal)} icon={<CircleDollarSign className="h-5 w-5 text-white" />} color="from-amber-500 to-orange-600" />
-          </div>
+          </StatGrid>
           {canUpdate && (
             <div className="mb-4 p-4 bg-white rounded-xl border border-slate-200 space-y-3">
               <p className="text-sm font-medium text-slate-700">Import bank statement (CSV: date, description, reference, amount)</p>
@@ -1125,13 +1057,14 @@ export function FinancePage() {
       <Modal open={journalDetailOpen} onClose={() => { setJournalDetailOpen(false); setSelectedJournal(null); }} title="Journal Entry" size="lg">
         {selectedJournal && (
           <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4 text-sm">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
               <div><p className="text-slate-500">Entry #</p><p className="font-semibold">{selectedJournal.entryNumber as string}</p></div>
               <div><p className="text-slate-500">Date</p><p className="font-semibold">{formatDate(selectedJournal.date as string)}</p></div>
-              <div className="col-span-2"><p className="text-slate-500">Description</p><p>{(selectedJournal.description as string) || '—'}</p></div>
+              <div className="sm:col-span-2"><p className="text-slate-500">Description</p><p>{(selectedJournal.description as string) || '—'}</p></div>
             </div>
             <Card title="Lines" padding={false}>
-              <table className="w-full text-sm">
+              <div className="overflow-x-auto">
+              <table className="w-full text-sm min-w-[20rem]">
                 <thead>
                   <tr className="bg-slate-50 text-slate-500 text-left">
                     <th className="px-4 py-2">Account</th>
@@ -1149,6 +1082,7 @@ export function FinancePage() {
                   ))}
                 </tbody>
               </table>
+              </div>
             </Card>
           </div>
         )}

@@ -8,6 +8,7 @@ import { operationsApi, customersApi, productsApi } from '../../services/api';
 import { Button, Input, Select } from '../ui';
 import { Customer, Product } from '../../types';
 import { useVatRate } from '../../contexts/AuthContext';
+import { formatProductOptionLabel } from '../../utils/productDisplay';
 
 const quotationItemSchema = z.object({
   productId: z.string().min(1, 'Product required'),
@@ -52,7 +53,7 @@ export function QuotationForm({ onSuccess, onCancel }: QuotationFormProps) {
     { value: '', label: 'Select product...' },
     ...(productsData || []).map((p) => ({
       value: p.id,
-      label: `${p.sku} - ${p.name}`,
+      label: formatProductOptionLabel(p),
     })),
   ];
 
@@ -133,24 +134,24 @@ export function QuotationForm({ onSuccess, onCancel }: QuotationFormProps) {
 
         <div className="space-y-3">
           {fields.map((field, index) => (
-            <div key={field.id} className="grid grid-cols-12 gap-2 items-end p-3 bg-gray-50 rounded-lg">
-              <div className="col-span-5">
+            <div key={field.id} className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-end p-3 bg-gray-50 rounded-lg">
+              <div className="col-span-12 sm:col-span-5">
                 <Select
                   label={index === 0 ? 'Product' : undefined}
                   options={productOptions}
                   {...register(`items.${index}.productId`)}
                 />
               </div>
-              <div className="col-span-2">
+              <div className="col-span-12 sm:col-span-2">
                 <Input label={index === 0 ? 'Qty' : undefined} type="number" min={1} {...register(`items.${index}.quantity`)} />
               </div>
-              <div className="col-span-2">
+              <div className="col-span-12 sm:col-span-2">
                 <Input label={index === 0 ? 'Price' : undefined} type="number" step="0.01" {...register(`items.${index}.unitPrice`)} />
               </div>
-              <div className="col-span-2">
+              <div className="col-span-12 sm:col-span-2">
                 <Input label={index === 0 ? 'Disc %' : undefined} type="number" min={0} max={100} {...register(`items.${index}.discount`)} />
               </div>
-              <div className="col-span-1">
+              <div className="col-span-12 sm:col-span-1">
                 {fields.length > 1 && (
                   <Button type="button" variant="ghost" size="sm" onClick={() => remove(index)}>
                     <Trash2 className="h-4 w-4 text-red-500" />

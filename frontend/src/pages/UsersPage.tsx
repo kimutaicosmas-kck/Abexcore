@@ -23,11 +23,10 @@ import {
   Select,
   Card,
   StatCard,
+  StatGrid,
   Alert,
   EmptyState,
   DataPanel,
-  QuickActionCard,
-  QuickActionGrid,
   TablePagination,
   formatDate,
   PageToolbar,
@@ -35,6 +34,7 @@ import {
 import { Modal } from '../components/ui/Modal';
 import { UserForm } from '../components/forms/UserForm';
 import { useAuth } from '../contexts/AuthContext';
+import { OverviewHint } from '../components/layout/ModuleOverview';
 import { AuditLogEntry, RoleWithPermissions, User, UserStats } from '../types';
 
 const tabs = ['Overview', 'Users', 'Roles & Permissions', 'Audit Log'];
@@ -283,12 +283,12 @@ export function UsersPage() {
       />
 
       {stats && (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+        <StatGrid>
           <StatCard title="Total Users" value={stats.total} icon={<Users className="h-5 w-5 text-white" />} color="from-primary-500 to-indigo-600" />
           <StatCard title="Active" value={stats.active} icon={<UserCheck className="h-5 w-5 text-white" />} color="from-emerald-500 to-teal-600" />
           <StatCard title="Inactive / Suspended" value={stats.inactive + stats.suspended} icon={<UserX className="h-5 w-5 text-white" />} color="from-red-500 to-rose-600" />
           <StatCard title="Logged In (7d)" value={stats.recentLogins} icon={<Shield className="h-5 w-5 text-white" />} color="from-violet-500 to-purple-600" />
-        </div>
+        </StatGrid>
       )}
 
       <PageToolbar
@@ -304,31 +304,7 @@ export function UsersPage() {
 
       {activeTab === 0 && (
         <div className="space-y-4">
-          {canCreate && (
-            <QuickActionGrid>
-              <QuickActionCard
-                label="Add user"
-                desc="Create a new account"
-                icon={UserPlus}
-                color="bg-emerald-50 text-emerald-600 border-emerald-100"
-                onClick={openCreate}
-              />
-              <QuickActionCard
-                label="Roles & permissions"
-                desc="Review access control"
-                icon={Shield}
-                color="bg-violet-50 text-violet-600 border-violet-100"
-                onClick={() => goToTab(2)}
-              />
-              <QuickActionCard
-                label="Audit log"
-                desc="Track system activity"
-                icon={ScrollText}
-                color="bg-slate-50 text-slate-600 border-slate-200"
-                onClick={() => goToTab(3)}
-              />
-            </QuickActionGrid>
-          )}
+          <OverviewHint>Use the tabs above to manage records. Summary counts are shown at the top.</OverviewHint>
 
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
             <Card
@@ -392,36 +368,6 @@ export function UsersPage() {
               )}
             </Card>
           </div>
-
-          <Card
-            title="User snapshot"
-            action={<Button variant="ghost" size="sm" onClick={() => goToTab(1)}>View all</Button>}
-            padding={false}
-          >
-            {recentUsers.length === 0 ? (
-              <div className="p-6">
-                <EmptyState
-                  title="No users found"
-                  description="Add users to manage access to the system."
-                  action={
-                    canCreate ? (
-                      <Button onClick={openCreate}>
-                        <Plus className="h-4 w-4 mr-2" />
-                        Add user
-                      </Button>
-                    ) : undefined
-                  }
-                />
-              </div>
-            ) : (
-              <Table
-                columns={userColumns.filter((c) => c.key !== 'actions')}
-                data={recentUsers}
-                onRowClick={(row) => openDetail(row as unknown as User)}
-                embedded
-              />
-            )}
-          </Card>
         </div>
       )}
 
@@ -599,7 +545,7 @@ export function UsersPage() {
             <div>
               <h4 className="text-sm font-semibold text-slate-900 mb-2">Recent Login History</h4>
               {userDetail.loginHistory?.length ? (
-                <div className="rounded-xl border border-border overflow-hidden">
+                <div className="rounded-xl border border-border overflow-x-auto">
                   <table className="min-w-full text-sm">
                     <thead className="bg-surface-muted/60">
                       <tr>

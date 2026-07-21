@@ -6,6 +6,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { deliveryApi, operationsApi } from '../../services/api';
 import { Button, Input, Select } from '../ui';
 import { SalesOrder, Vehicle, vehicleTypeLabel } from '../../types';
+import { formatProductOptionLabel } from '../../utils/productDisplay';
 
 const deliveryItemSchema = z.object({
   productId: z.string().min(1, 'Product is required'),
@@ -142,7 +143,7 @@ export function DeliveryForm({ onSuccess, onCancel }: DeliveryFormProps) {
               ? orderItem.quantity - (orderItem.deliveredQty || 0)
               : null;
             const productLabel = orderItem?.product
-              ? `${orderItem.product.sku} - ${orderItem.product.name}`
+              ? formatProductOptionLabel(orderItem.product)
               : 'Product';
 
             return (

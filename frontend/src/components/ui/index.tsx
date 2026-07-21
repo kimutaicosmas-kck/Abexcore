@@ -1,4 +1,4 @@
-import { useId } from 'react';
+import { useId, Children } from 'react';
 import clsx from 'clsx';
 import { ChevronRight } from 'lucide-react';
 
@@ -115,14 +115,14 @@ interface CardProps {
 
 export function Card({ children, className, title, action, padding = true }: CardProps) {
   return (
-    <div className={clsx('bg-white rounded-2xl border border-border shadow-soft overflow-hidden', className)}>
+    <div className={clsx('bg-white rounded-2xl border border-border shadow-soft overflow-hidden min-w-0', className)}>
       {(title || action) && (
-        <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-surface-muted/40">
-          {title && <h3 className="text-sm font-semibold text-slate-900">{title}</h3>}
-          {action}
+        <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-border bg-surface-muted/40 min-w-0">
+          {title && <h3 className="text-sm font-semibold text-slate-900 min-w-0 flex-1 truncate">{title}</h3>}
+          {action && <div className="shrink-0">{action}</div>}
         </div>
       )}
-      <div className={padding ? 'p-4' : undefined}>{children}</div>
+      <div className={padding ? 'p-4 min-w-0' : undefined}>{children}</div>
     </div>
   );
 }
@@ -158,21 +158,28 @@ interface StatCardProps {
 
 export function StatCard({ title, value, icon, trend, color = 'from-primary-500 to-primary-600' }: StatCardProps) {
   return (
-    <div className="rounded-xl border border-border bg-white p-3.5 shadow-soft">
-      <div className="flex items-center justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-xs font-medium text-slate-500">{title}</p>
-          <p className="mt-1 text-xl font-bold tracking-tight text-slate-900 truncate">{value}</p>
-          {trend && (
-            <p className={clsx('mt-0.5 text-xs font-medium', trend.value >= 0 ? 'text-emerald-600' : 'text-red-600')}>
-              {trend.value >= 0 ? '+' : ''}{trend.value}% {trend.label}
-            </p>
+    <div className="rounded-xl border border-border bg-white p-2.5 sm:p-3.5 shadow-soft min-w-0 h-full min-h-[6rem] sm:min-h-[6.75rem] flex flex-col snap-start">
+      <div className="flex items-start justify-between gap-1.5 sm:gap-2">
+        <p className="min-w-0 flex-1 text-[10px] sm:text-xs font-medium text-slate-500 leading-snug line-clamp-2 min-h-[1.75rem] sm:min-h-[2rem]">
+          {title}
+        </p>
+        <div
+          className={clsx(
+            'h-8 w-8 sm:h-9 sm:w-9 shrink-0 flex items-center justify-center rounded-lg bg-gradient-to-br text-white [&_svg]:h-4 [&_svg]:w-4 sm:[&_svg]:h-5 sm:[&_svg]:w-5',
+            color
           )}
-        </div>
-        <div className={clsx('p-2 rounded-lg bg-gradient-to-br text-white shrink-0', color)}>
+        >
           {icon}
         </div>
       </div>
+      <p className="mt-auto pt-1.5 sm:pt-2 text-[11px] sm:text-sm font-bold tabular-nums text-slate-900 leading-none whitespace-nowrap">
+        {value}
+      </p>
+      {trend && (
+        <p className={clsx('mt-1 text-[10px] sm:text-xs font-medium whitespace-nowrap', trend.value >= 0 ? 'text-emerald-600' : 'text-red-600')}>
+          {trend.value >= 0 ? '+' : ''}{trend.value}% {trend.label}
+        </p>
+      )}
     </div>
   );
 }
@@ -183,9 +190,11 @@ interface TableProps {
   loading?: boolean;
   onRowClick?: (row: Record<string, unknown>) => void;
   embedded?: boolean;
+  /** Stack rows as cards on small screens instead of a wide table. */
+  responsive?: boolean;
 }
 
-export function Table({ columns, data, loading, onRowClick, embedded = false }: TableProps) {
+export function Table({ columns, data, loading, onRowClick, embedded = false, responsive = false }: TableProps) {
   const content = (() => {
     if (loading) {
       return (
@@ -208,43 +217,115 @@ export function Table({ columns, data, loading, onRowClick, embedded = false }: 
     }
 
     return (
-      <div className="overflow-x-auto">
-        <table className="min-w-full">
-          <thead>
-            <tr className="border-b border-border bg-surface-muted/60">
-              {columns.map((col) => (
-                <th
-                  key={col.key}
-                  className="px-5 py-3.5 text-left text-[11px] font-semibold text-slate-500 uppercase tracking-wider"
-                >
-                  {col.label}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border/70">
+      <>
+        {responsive && (
+          <div className="md:hidden divide-y divide-border/70">
             {data.map((row, i) => {
               const record = row as Record<string, unknown>;
+              const actionCol = columns.find((col) => col.key === 'actions');
+              const dataCols = columns.filter((col) => col.key !== 'actions');
+              const primary = dataCols[0];
+
               return (
-                <tr
+                <div
                   key={i}
                   className={clsx(
-                    'transition-colors',
-                    onRowClick ? 'cursor-pointer hover:bg-primary-50/40' : 'hover:bg-surface-muted/50'
+                    'px-4 py-3 space-y-2',
+                    onRowClick && 'cursor-pointer active:bg-primary-50/40'
                   )}
                   onClick={() => onRowClick?.(record)}
                 >
-                  {columns.map((col) => (
-                    <td key={col.key} className="px-5 py-4 whitespace-nowrap text-sm text-slate-800">
-                      {col.render ? col.render(record[col.key], record) : String(record[col.key] ?? '')}
-                    </td>
-                  ))}
-                </tr>
+                  {primary && (
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="font-semibold text-slate-900 truncate">
+                          {primary.render
+                            ? primary.render(record[primary.key], record)
+                            : String(record[primary.key] ?? '')}
+                        </p>
+                      </div>
+                      {dataCols.length > 1 && dataCols[dataCols.length - 1]?.key === 'status' && (
+                        <div className="shrink-0">
+                          {dataCols[dataCols.length - 1].render
+                            ? dataCols[dataCols.length - 1].render!(
+                                record[dataCols[dataCols.length - 1].key],
+                                record
+                              )
+                            : String(record[dataCols[dataCols.length - 1].key] ?? '')}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  <div className="grid grid-cols-1 gap-1.5">
+                    {dataCols.slice(1).map((col) => {
+                      if (col.key === 'status' && dataCols[dataCols.length - 1]?.key === 'status') return null;
+                      return (
+                        <div key={col.key} className="flex items-center justify-between gap-3 text-sm">
+                          <span className="text-slate-500 shrink-0">{col.label}</span>
+                          <span className="text-slate-800 text-right min-w-0 truncate">
+                            {col.render ? col.render(record[col.key], record) : String(record[col.key] ?? '')}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {actionCol?.render && (
+                    <div
+                      className="pt-1"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {actionCol.render(record[actionCol.key], record)}
+                    </div>
+                  )}
+                </div>
               );
             })}
-          </tbody>
-        </table>
-      </div>
+          </div>
+        )}
+
+        <div className={clsx(responsive && 'hidden md:block', 'min-w-0')}>
+          <div className={clsx('overflow-x-auto', embedded ? 'px-4 sm:px-0' : undefined)}>
+            <table className="min-w-full">
+              <thead>
+                <tr className="border-b border-border bg-surface-muted/60">
+                  {columns.map((col) => (
+                    <th
+                      key={col.key}
+                      className="px-3 sm:px-5 py-3 sm:py-3.5 text-left text-[11px] font-semibold text-slate-500 uppercase tracking-wider whitespace-nowrap"
+                    >
+                      {col.label}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border/70">
+                {data.map((row, i) => {
+                  const record = row as Record<string, unknown>;
+                  return (
+                    <tr
+                      key={i}
+                      className={clsx(
+                        'transition-colors',
+                        onRowClick ? 'cursor-pointer hover:bg-primary-50/40' : 'hover:bg-surface-muted/50'
+                      )}
+                      onClick={() => onRowClick?.(record)}
+                    >
+                      {columns.map((col) => (
+                        <td
+                          key={col.key}
+                          className="px-3 sm:px-5 py-3 sm:py-4 whitespace-nowrap text-sm text-slate-800 max-w-[12rem] truncate"
+                        >
+                          {col.render ? col.render(record[col.key], record) : String(record[col.key] ?? '')}
+                        </td>
+                      ))}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </>
     );
   })();
 
@@ -274,13 +355,18 @@ interface TabGroupProps {
 
 export function TabGroup({ tabs, activeIndex, onChange, className }: TabGroupProps) {
   return (
-    <div className={clsx('inline-flex flex-wrap gap-0.5 p-0.5 rounded-lg bg-slate-100 border border-slate-200', className)}>
+    <div
+      className={clsx(
+        'flex max-w-full gap-0.5 p-0.5 rounded-lg bg-slate-100 border border-slate-200 overflow-x-auto',
+        className
+      )}
+    >
       {tabs.map((tab, i) => (
         <button
           key={tab}
           onClick={() => onChange(i)}
           className={clsx(
-            'px-3 py-1.5 rounded-md text-xs font-medium transition-colors',
+            'px-3 py-1.5 rounded-md text-xs font-medium transition-colors whitespace-nowrap shrink-0',
             activeIndex === i
               ? 'bg-white text-primary-700 shadow-sm'
               : 'text-slate-600 hover:text-slate-900'
@@ -318,9 +404,9 @@ interface PageToolbarProps {
 
 export function PageToolbar({ tabs, activeTab = 0, onTabChange, actions, className }: PageToolbarProps) {
   return (
-    <div className={clsx('flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-3', className)}>
+    <div className={clsx('flex flex-col gap-2 md:flex-row md:items-center md:justify-between mb-3 min-w-0', className)}>
       {tabs && onTabChange && (
-        <TabGroup tabs={tabs} activeIndex={activeTab} onChange={onTabChange} className="!mb-0" />
+        <TabGroup tabs={tabs} activeIndex={activeTab} onChange={onTabChange} className="!mb-0 w-full md:w-auto" />
       )}
       {actions && <div className="flex flex-wrap items-center gap-2 shrink-0">{actions}</div>}
     </div>
@@ -410,8 +496,8 @@ interface TablePaginationProps {
 export function TablePagination({ pagination, page, onPageChange, label = 'records' }: TablePaginationProps) {
   if (!pagination || pagination.totalPages <= 1) return null;
   return (
-    <div className="flex items-center justify-between px-1 pt-4 text-sm text-slate-600 border-t border-slate-100 mt-4">
-      <span>
+    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between px-1 pt-4 text-sm text-slate-600 border-t border-slate-100 mt-4">
+      <span className="min-w-0 truncate">
         Page {pagination.page} of {pagination.totalPages}
         {pagination.total != null && ` · ${pagination.total} ${label}`}
       </span>
@@ -438,14 +524,30 @@ interface QuickActionCardProps {
   icon: React.ComponentType<{ className?: string }>;
   color: string;
   onClick: () => void;
+  disabled?: boolean;
 }
 
-export function QuickActionCard({ label, desc, icon: Icon, color, onClick }: QuickActionCardProps) {
+export function QuickActionCard({
+  label,
+  desc,
+  icon: Icon,
+  color,
+  onClick,
+  disabled = false,
+}: QuickActionCardProps) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`flex items-center gap-4 p-4 rounded-xl border text-left transition-all hover:shadow-md hover:-translate-y-0.5 ${color}`}
+      disabled={disabled}
+      title={disabled ? 'View only on dashboard — open from your assigned menu' : undefined}
+      className={clsx(
+        'flex items-center gap-4 p-4 rounded-xl border text-left transition-all w-full',
+        color,
+        disabled
+          ? 'opacity-60 cursor-not-allowed hover:shadow-none hover:translate-y-0'
+          : 'hover:shadow-md hover:-translate-y-0.5'
+      )}
     >
       <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/80">
         <Icon className="h-5 w-5" />
@@ -460,7 +562,35 @@ export function QuickActionCard({ label, desc, icon: Icon, color, onClick }: Qui
 }
 
 export function QuickActionGrid({ children }: { children: React.ReactNode }) {
-  return <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">{children}</div>;
+  return <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 min-w-0">{children}</div>;
+}
+
+
+/** Single-row stat cards with equal width and height across all modules. */
+export function StatGrid({
+  children,
+  className,
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  const count = Math.max(Children.count(children), 1);
+
+  return (
+    <div
+      className={clsx(
+        'mb-4 min-w-0 w-full overflow-x-auto overscroll-x-contain snap-x snap-mandatory scroll-smooth sm:overflow-visible -mx-1 px-1 sm:mx-0 sm:px-0 pb-0.5',
+        className
+      )}
+    >
+      <div
+        className="grid gap-2 sm:gap-3 items-stretch w-full"
+        style={{ gridTemplateColumns: `repeat(${count}, minmax(9.75rem, 1fr))` }}
+      >
+        {children}
+      </div>
+    </div>
+  );
 }
 
 export function FormActions({ onCancel, submitLabel = 'Save', loading, cancelLabel = 'Cancel' }: {
@@ -481,16 +611,16 @@ export function SectionTitle({ children, className }: { children: React.ReactNod
   return <h3 className={clsx('text-sm font-semibold text-slate-800 mb-2', className)}>{children}</h3>;
 }
 
-export function formatCurrency(amount: number, currency = 'KES') {
-  return new Intl.NumberFormat('en-KE', { style: 'currency', currency }).format(amount);
-}
-
 export function formatDate(date: string) {
   return new Date(date).toLocaleDateString('en-KE', {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
   });
+}
+
+export function formatCurrency(amount: number, currency = 'KES') {
+  return new Intl.NumberFormat('en-KE', { style: 'currency', currency }).format(amount);
 }
 
 export function getStatusBadge(status: string) {
@@ -514,3 +644,6 @@ export function getStatusBadge(status: string) {
   };
   return map[status] || 'default';
 }
+
+export { ConfirmDialog, QueryErrorAlert, getApiErrorMessage } from './ConfirmDialog';
+export { ErrorBoundary } from './ErrorBoundary';

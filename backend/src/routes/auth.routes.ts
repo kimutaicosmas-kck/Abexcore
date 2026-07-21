@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { authenticate, authorize } from '../middleware/auth';
+import { loginRateLimiter, authRateLimiter } from '../middleware/rateLimiters';
 import { validate } from '../middleware/validate';
 import {
   loginSchema,
@@ -10,8 +11,8 @@ import * as authController from '../controllers/auth.controller';
 
 const router = Router();
 
-router.post('/login', validate(loginSchema), authController.login);
-router.post('/refresh', validate(refreshTokenSchema), authController.refresh);
+router.post('/login', loginRateLimiter, validate(loginSchema), authController.login);
+router.post('/refresh', authRateLimiter, validate(refreshTokenSchema), authController.refresh);
 router.post('/logout', authenticate, authController.logout);
 router.get('/me', authenticate, authController.me);
 router.post('/2fa/setup', authenticate, authController.setup2FA);

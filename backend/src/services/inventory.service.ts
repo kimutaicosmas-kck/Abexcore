@@ -7,10 +7,19 @@ type TxClient = Prisma.TransactionClient;
 export class StockMovementService {
   static async getDefaultWarehouseId(tx: TxClient = prisma): Promise<string> {
     const warehouse = await tx.warehouse.findFirst({
-      where: { isActive: true },
+      where: { isActive: true, deletedAt: null },
       orderBy: { createdAt: 'asc' },
     });
     if (!warehouse) throw new AppError('No active warehouse configured', 400);
+    return warehouse.id;
+  }
+
+  static async getFinishedGoodsWarehouseId(tx: TxClient = prisma): Promise<string> {
+    const warehouse = await tx.warehouse.findFirst({
+      where: { isActive: true, deletedAt: null, type: 'finished_goods' },
+      orderBy: { createdAt: 'asc' },
+    });
+    if (!warehouse) throw new AppError('No finished goods warehouse configured', 400);
     return warehouse.id;
   }
 
@@ -22,7 +31,7 @@ export class StockMovementService {
       warehouseId?: string;
     }
   ) {
-    const warehouseId = opts.warehouseId ?? (await this.getDefaultWarehouseId(tx));
+    const warehouseId = opts.warehouseId ?? (await this.getFinishedGoodsWarehouseId(tx));
     const qty = opts.quantity;
 
     const stock = await tx.stockLevel.findFirst({
@@ -58,7 +67,7 @@ export class StockMovementService {
       warehouseId?: string;
     }
   ) {
-    const warehouseId = opts.warehouseId ?? (await this.getDefaultWarehouseId(tx));
+    const warehouseId = opts.warehouseId ?? (await this.getFinishedGoodsWarehouseId(tx));
     const stock = await tx.stockLevel.findFirst({
       where: { warehouseId, productId: opts.productId },
     });
@@ -100,7 +109,7 @@ export class StockMovementService {
       releaseReservedQty?: number;
     }
   ) {
-    const warehouseId = opts.warehouseId ?? (await this.getDefaultWarehouseId(tx));
+    const warehouseId = opts.warehouseId ?? (await this.getFinishedGoodsWarehouseId(tx));
     const qty = opts.quantity;
 
     const stock = await tx.stockLevel.findFirst({
@@ -154,7 +163,7 @@ export class StockMovementService {
       notes?: string;
     }
   ) {
-    const warehouseId = opts.warehouseId ?? (await this.getDefaultWarehouseId(tx));
+    const warehouseId = opts.warehouseId ?? (await this.getFinishedGoodsWarehouseId(tx));
     const existing = await tx.stockLevel.findFirst({
       where: { warehouseId, productId: opts.productId },
     });

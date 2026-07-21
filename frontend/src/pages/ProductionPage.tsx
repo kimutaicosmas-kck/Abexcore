@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, Play, CheckCircle, Factory, Calendar, Clock, ChevronRight, Package } from 'lucide-react';
-import { dashboardApi, operationsApi } from '../services/api';
+import { operationsApi } from '../services/api';
 import {
   PageHeader,
   Table,
@@ -11,20 +11,27 @@ import {
   Input,
   Select,
   StatCard,
+  StatGrid,
   EmptyState,
   DataPanel,
-  QuickActionCard,
-  QuickActionGrid,
   TablePagination,
   formatDate,
   getStatusBadge,
   PageToolbar,
+  ConfirmDialog,
 } from '../components/ui';
 import { Modal } from '../components/ui/Modal';
 import { ProductionOrderForm } from '../components/forms/ProductionOrderForm';
 import { CompleteProductionForm } from '../components/forms/CompleteProductionForm';
 import { useAuth } from '../contexts/AuthContext';
-import { DashboardKPIs } from '../types';
+import { OverviewHint } from '../components/layout/ModuleOverview';
+
+type ProductionStats = {
+  activeOrders: number;
+  inProgress: number;
+  scheduled: number;
+  awaitingProduction: number;
+};
 
 const tabs = ['Overview', 'Production Orders'];
 
@@ -38,10 +45,6 @@ const STATUS_OPTIONS = [
   { value: 'CANCELLED', label: 'Cancelled' },
 ];
 
-function statusCount(kpis: DashboardKPIs | undefined, status: string) {
-  return kpis?.productionStatus?.find((s) => s.status === status)?.count ?? 0;
-}
-
 export function ProductionPage() {
   const queryClient = useQueryClient();
   const { hasPermission } = useAuth();
@@ -50,13 +53,18 @@ export function ProductionPage() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [createModalOpen, setCreateModalOpen] = useState(false);
-  const [completingId, setCompletingId] = useState<string | null>(null);
+  const [completingOrder, setCompletingOrder] = useState<{
+    id: string;
+    quantity: number;
+    orderNumber: string;
+  } | null>(null);
+  const [pendingStartId, setPendingStartId] = useState<string | null>(null);
 
   const canCreate = hasPermission('production:create');
 
-  const { data: kpis } = useQuery({
-    queryKey: ['dashboard-kpis'],
-    queryFn: () => dashboardApi.getKPIs().then((r) => r.data.data as DashboardKPIs),
+  const { data: stats } = useQuery({
+    queryKey: ['production-stats'],
+    queryFn: () => operationsApi.productionStats().then((r) => r.data.data as ProductionStats),
   });
 
   const { data, isLoading } = useQuery({
@@ -72,7 +80,7 @@ export function ProductionPage() {
     mutationFn: (id: string) => operationsApi.startProduction(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['production'] });
-      queryClient.invalidateQueries({ queryKey: ['dashboard-kpis'] });
+      queryClient.invalidateQueries({ queryKey: ['production-stats'] });
     },
   });
 
@@ -117,14 +125,24 @@ export function ProductionPage() {
         const id = row.id as string;
         if (st === 'PLANNED' || st === 'SCHEDULED') {
           return (
-            <Button size="sm" loading={startMutation.isPending} onClick={() => startMutation.mutate(id)}>
+            <Button size="sm" loading={startMutation.isPending} onClick={() => setPendingStartId(id)}>
               <Play className="h-3 w-3 mr-1" /> Start
             </Button>
           );
         }
         if (st === 'IN_PROGRESS') {
           return (
-            <Button size="sm" variant="secondary" onClick={() => setCompletingId(id)}>
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() =>
+                setCompletingOrder({
+                  id,
+                  quantity: Number(row.quantity) || 1,
+                  orderNumber: String(row.orderNumber || id),
+                })
+              }
+            >
               <CheckCircle className="h-3 w-3 mr-1" /> Complete
             </Button>
           );
@@ -149,73 +167,53 @@ export function ProductionPage() {
         title="Production"
         subtitle="Manage production orders, scheduling, and manufacturing execution"
         action={
-          statusCount(kpis, 'IN_PROGRESS') > 0 ? (
+          stats && stats.inProgress > 0 ? (
             <Button variant="secondary" size="sm" onClick={() => goToTab(1)}>
               <Factory className="h-4 w-4 mr-1.5 text-orange-500" />
-              {statusCount(kpis, 'IN_PROGRESS')} in progress
+              {stats.inProgress} in progress
             </Button>
           ) : undefined
         }
       />
 
-      {kpis && (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+      {stats && (
+        <StatGrid>
           <StatCard
             title="Active orders"
-            value={kpis.productionOrders}
+            value={stats.activeOrders}
             icon={<Factory className="h-5 w-5 text-white" />}
             color="from-primary-500 to-indigo-600"
           />
           <StatCard
             title="In progress"
-            value={statusCount(kpis, 'IN_PROGRESS')}
+            value={stats.inProgress}
             icon={<Clock className="h-5 w-5 text-white" />}
             color="from-orange-500 to-amber-600"
           />
           <StatCard
             title="Scheduled"
-            value={statusCount(kpis, 'SCHEDULED')}
+            value={stats.scheduled}
             icon={<Calendar className="h-5 w-5 text-white" />}
             color="from-violet-500 to-purple-600"
           />
           <StatCard
             title="Awaiting production"
-            value={kpis.ordersAwaitingProduction}
+            value={stats.awaitingProduction}
             icon={<Package className="h-5 w-5 text-white" />}
             color="from-emerald-500 to-teal-600"
           />
-        </div>
+        </StatGrid>
       )}
 
       <PageToolbar tabs={tabs} activeTab={activeTab} onTabChange={setActiveTab} actions={toolbarActions} />
 
       {activeTab === 0 && (
         <div className="space-y-4">
-          {canCreate && (
-            <QuickActionGrid>
-              <QuickActionCard
-                label="New production order"
-                desc="Schedule manufacturing run"
-                icon={Plus}
-                color="bg-emerald-50 text-emerald-600 border-emerald-100"
-                onClick={() => setCreateModalOpen(true)}
-              />
-              <QuickActionCard
-                label="View in progress"
-                desc="Orders currently on the floor"
-                icon={Factory}
-                color="bg-orange-50 text-orange-600 border-orange-100"
-                onClick={() => { setStatusFilter('IN_PROGRESS'); setPage(1); goToTab(1); }}
-              />
-              <QuickActionCard
-                label="All orders"
-                desc="Full production schedule"
-                icon={Calendar}
-                color="bg-violet-50 text-violet-600 border-violet-100"
-                onClick={() => goToTab(1)}
-              />
-            </QuickActionGrid>
-          )}
+          <OverviewHint>
+            Production runs independently of sales orders. Create production orders to manufacture finished goods,
+            complete them with QC, and stock is added to finished goods inventory. Raw material low-stock alerts
+            are sent to the Production Manager.
+          </OverviewHint>
 
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
             <Card
@@ -282,12 +280,6 @@ export function ProductionPage() {
               )}
             </Card>
           </div>
-
-          {recentOrders.length > 0 && (
-            <Card title="Schedule snapshot" action={<Button variant="ghost" size="sm" onClick={() => goToTab(1)}>View all</Button>} padding={false}>
-              <Table columns={columns.filter((c) => c.key !== 'actions')} data={recentOrders} embedded />
-            </Card>
-          )}
         </div>
       )}
 
@@ -335,15 +327,35 @@ export function ProductionPage() {
         <ProductionOrderForm onSuccess={() => setCreateModalOpen(false)} onCancel={() => setCreateModalOpen(false)} />
       </Modal>
 
-      <Modal open={completingId !== null} onClose={() => setCompletingId(null)} title="Complete Production" size="md">
-        {completingId && (
+      <Modal
+        open={completingOrder !== null}
+        onClose={() => setCompletingOrder(null)}
+        title="Complete Production"
+        size="md"
+      >
+        {completingOrder && (
           <CompleteProductionForm
-            productionId={completingId}
-            onSuccess={() => setCompletingId(null)}
-            onCancel={() => setCompletingId(null)}
+            productionId={completingOrder.id}
+            orderQuantity={completingOrder.quantity}
+            orderNumber={completingOrder.orderNumber}
+            onSuccess={() => setCompletingOrder(null)}
+            onCancel={() => setCompletingOrder(null)}
           />
         )}
       </Modal>
+
+      <ConfirmDialog
+        open={!!pendingStartId}
+        title="Start production?"
+        message="This begins manufacturing for the selected order."
+        confirmLabel="Start"
+        loading={startMutation.isPending}
+        onCancel={() => setPendingStartId(null)}
+        onConfirm={() => {
+          if (!pendingStartId) return;
+          startMutation.mutate(pendingStartId, { onSettled: () => setPendingStartId(null) });
+        }}
+      />
     </div>
   );
 }

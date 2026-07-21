@@ -1,9 +1,100 @@
 import { Prisma, OrderStatus } from '@prisma/client';
 import { assertOrderStatusTransition } from '../utils/credit';
+import { AppError } from '../middleware/errorHandler';
+import { generateNumber } from '../utils/date';
+import { StockMovementService } from './inventory.service';
 
 type TxClient = Prisma.TransactionClient;
 
+export type StockShortage = {
+  productId: string;
+  productName: string;
+  required: number;
+  available: number;
+};
+
 export class SalesOrderService {
+  static async checkStockAvailability(
+    tx: TxClient,
+    items: { productId: string; quantity: number; product?: { name: string } | null }[]
+  ): Promise<{ canFulfill: boolean; shortages: StockShortage[] }> {
+    const warehouseId = await StockMovementService.getFinishedGoodsWarehouseId(tx);
+    const shortages: StockShortage[] = [];
+
+    for (const item of items) {
+      const stock = await tx.stockLevel.findFirst({
+        where: { warehouseId, productId: item.productId },
+      });
+      const onHand = stock ? Number(stock.quantity) : 0;
+      const reserved = stock ? Number(stock.reservedQty) : 0;
+      const available = onHand - reserved;
+
+      if (available < item.quantity) {
+        shortages.push({
+          productId: item.productId,
+          productName: item.product?.name || 'Product',
+          required: item.quantity,
+          available: Math.max(0, available),
+        });
+      }
+    }
+
+    return { canFulfill: shortages.length === 0, shortages };
+  }
+  static async createProductionOrdersFromSalesOrder(
+    tx: TxClient,
+    salesOrderId: string,
+    assignedToId: string
+  ) {
+    const existingCount = await tx.productionOrder.count({
+      where: { salesOrderId, status: { notIn: ['CANCELLED'] } },
+    });
+    if (existingCount > 0) return [];
+
+    const salesOrder = await tx.salesOrder.findUnique({
+      where: { id: salesOrderId },
+      include: { items: true },
+    });
+    if (!salesOrder) throw new AppError('Sales order not found', 404);
+    if (salesOrder.items.length === 0) {
+      throw new AppError('Sales order has no line items to manufacture', 400);
+    }
+
+    const created = [];
+    let sequence = await tx.productionOrder.count();
+
+    for (const item of salesOrder.items) {
+      const bom = await tx.billOfMaterial.findUnique({
+        where: { productId: item.productId },
+        include: { items: true },
+      });
+
+      sequence += 1;
+      const order = await tx.productionOrder.create({
+        data: {
+          orderNumber: generateNumber('PRO', sequence),
+          productId: item.productId,
+          salesOrderId,
+          assignedToId,
+          quantity: item.quantity,
+          priority: 'NORMAL',
+          notes: `From sales order ${salesOrder.orderNumber}`,
+          consumption: bom
+            ? {
+                create: bom.items.map((bomItem) => ({
+                  rawMaterialId: bomItem.rawMaterialId,
+                  plannedQty: Number(bomItem.quantity) * item.quantity,
+                  unit: bomItem.unit,
+                })),
+              }
+            : undefined,
+        },
+      });
+      created.push(order);
+    }
+
+    return created;
+  }
   static async maybeAdvanceToReady(tx: TxClient, salesOrderId: string) {
     const salesOrder = await tx.salesOrder.findUnique({ where: { id: salesOrderId } });
     if (!salesOrder || salesOrder.status !== 'IN_PRODUCTION') return null;

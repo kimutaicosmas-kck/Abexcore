@@ -9,6 +9,8 @@ import { getParam, getQuery } from '../utils/request';
 import { ProductService } from '../services/catalog.service';
 import prisma from '../config/database';
 import { productImageUpload } from '../middleware/upload';
+import { compressProductImage } from '../utils/image';
+import { AccountingService } from '../services/accounting.service';
 
 const router = Router();
 router.use(authenticate);
@@ -64,6 +66,19 @@ router.get(
 );
 
 router.get(
+  '/warehouses/stock',
+  authorize('products:read'),
+  asyncHandler(async (_req: AuthRequest, res: Response) => {
+    const warehouses = await prisma.warehouse.findMany({
+      where: { isActive: true, deletedAt: null, type: 'finished_goods' },
+      select: { id: true, code: true, name: true },
+      orderBy: { name: 'asc' },
+    });
+    res.json({ success: true, data: warehouses });
+  })
+);
+
+router.get(
   '/:id',
   authorize('products:read'),
   asyncHandler(async (req: AuthRequest, res: Response) => {
@@ -78,10 +93,76 @@ router.post(
   validate(createProductSchema),
   auditLog('products', 'create', 'product'),
   asyncHandler(async (req: AuthRequest, res: Response) => {
-    const existing = await prisma.product.findUnique({ where: { sku: req.body.sku } });
-    if (existing) throw new AppError('SKU already exists', 409);
+    const { initialQuantity, warehouseId, ...productData } = req.body;
+    const existing = await prisma.product.findUnique({ where: { sku: productData.sku } });
+    if (existing) throw new AppError('Part number already exists', 409);
 
-    const data = await productService.create(req.body);
+    const openingQty = Number(initialQuantity || 0);
+
+    const data = await prisma.$transaction(async (tx) => {
+      const product = await tx.product.create({ data: productData });
+
+      if (openingQty > 0) {
+        let targetWarehouseId = warehouseId as string | undefined;
+        if (!targetWarehouseId) {
+          const defaultWarehouse = await tx.warehouse.findFirst({
+            where: { isActive: true, deletedAt: null, type: 'finished_goods' },
+            orderBy: { createdAt: 'asc' },
+          });
+          if (!defaultWarehouse) {
+            throw new AppError('No finished goods warehouse configured for opening stock', 400);
+          }
+          targetWarehouseId = defaultWarehouse.id;
+        } else {
+          const warehouse = await tx.warehouse.findFirst({
+            where: { id: targetWarehouseId, isActive: true, deletedAt: null, type: 'finished_goods' },
+          });
+          if (!warehouse) throw new AppError('Invalid finished goods warehouse', 400);
+        }
+
+        const unitCost = Number(product.sellingPrice || 0);
+        await tx.stockLevel.create({
+          data: {
+            warehouseId: targetWarehouseId,
+            productId: product.id,
+            quantity: openingQty,
+            unitCost,
+          },
+        });
+
+        const invTx = await tx.inventoryTransaction.create({
+          data: {
+            warehouseId: targetWarehouseId,
+            type: 'RECEIPT',
+            productId: product.id,
+            quantity: openingQty,
+            unitCost,
+            notes: 'Opening stock on product creation',
+            createdById: req.user!.id,
+          },
+        });
+
+        const glAmount = openingQty * unitCost;
+        if (glAmount > 0) {
+          await AccountingService.postInventoryAdjustment(tx, {
+            reference: invTx.id,
+            amount: glAmount,
+            direction: 'increase',
+            reason: `Opening stock — ${product.sku}`,
+          });
+        }
+
+        return tx.product.findUniqueOrThrow({
+          where: { id: product.id },
+          include: {
+            stockLevels: { include: { warehouse: { select: { id: true, name: true, code: true } } } },
+          },
+        });
+      }
+
+      return product;
+    });
+
     res.status(201).json({ success: true, data });
   })
 );
@@ -149,7 +230,8 @@ router.post(
       return;
     }
 
-    const imageUrl = `/uploads/products/${req.file.filename}`;
+    const filename = await compressProductImage(req.file.path);
+    const imageUrl = `/uploads/products/${filename}`;
     const data = await prisma.product.update({
       where: { id: getParam(req.params.id) },
       data: { imageUrl },

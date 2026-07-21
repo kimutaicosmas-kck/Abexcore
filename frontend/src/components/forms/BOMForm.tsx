@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, Trash2 } from 'lucide-react';
 import { productsApi, inventoryApi } from '../../services/api';
 import { Button } from '../ui';
+import { formatPartNumberLine } from '../../utils/productDisplay';
 
 interface BOMItem {
   rawMaterialId: string;
@@ -69,7 +70,7 @@ export function BOMForm({ productId, onSuccess, onCancel }: BOMFormProps) {
       className="space-y-4"
     >
       <p className="text-sm text-gray-600">
-        Bill of Materials for <strong>{product?.name}</strong> ({product?.sku})
+        Bill of Materials for <strong>{product?.name}</strong> ({product?.sku ? formatPartNumberLine(product.sku) : '—'})
       </p>
 
       <div className="grid grid-cols-2 gap-4">
@@ -100,11 +101,11 @@ export function BOMForm({ productId, onSuccess, onCancel }: BOMFormProps) {
         </div>
 
         {items.map((item, idx) => (
-          <div key={idx} className="grid grid-cols-12 gap-2 items-center">
+          <div key={idx} className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-center">
             <select
               value={item.rawMaterialId}
               onChange={(e) => updateItem(idx, 'rawMaterialId', e.target.value)}
-              className="col-span-5 rounded-lg border border-gray-300 px-2 py-2 text-sm"
+              className="col-span-12 sm:col-span-5 rounded-lg border border-gray-300 px-2 py-2 text-sm"
               required
             >
               <option value="">Select material</option>
@@ -120,12 +121,12 @@ export function BOMForm({ productId, onSuccess, onCancel }: BOMFormProps) {
               step="0.001"
               value={item.quantity}
               onChange={(e) => updateItem(idx, 'quantity', parseFloat(e.target.value))}
-              className="col-span-2 rounded-lg border border-gray-300 px-2 py-2 text-sm"
+              className="col-span-12 sm:col-span-2 rounded-lg border border-gray-300 px-2 py-2 text-sm"
             />
             <input
               value={item.unit}
               onChange={(e) => updateItem(idx, 'unit', e.target.value)}
-              className="col-span-2 rounded-lg border border-gray-300 px-2 py-2 text-sm"
+              className="col-span-12 sm:col-span-2 rounded-lg border border-gray-300 px-2 py-2 text-sm"
             />
             <input
               type="number"
@@ -133,13 +134,13 @@ export function BOMForm({ productId, onSuccess, onCancel }: BOMFormProps) {
               max="100"
               value={item.wastePercent}
               onChange={(e) => updateItem(idx, 'wastePercent', parseFloat(e.target.value))}
-              className="col-span-2 rounded-lg border border-gray-300 px-2 py-2 text-sm"
+              className="col-span-12 sm:col-span-2 rounded-lg border border-gray-300 px-2 py-2 text-sm"
               placeholder="Waste %"
             />
             <button
               type="button"
               onClick={() => removeRow(idx)}
-              className="col-span-1 p-2 text-red-500 hover:bg-red-50 rounded"
+              className="col-span-12 sm:col-span-1 p-2 text-red-500 hover:bg-red-50 rounded"
               disabled={items.length === 1}
             >
               <Trash2 className="h-4 w-4" />

@@ -10,16 +10,17 @@ import {
   Input,
   Select,
   StatCard,
+  StatGrid,
   Card,
   EmptyState,
   DataPanel,
-  QuickActionCard,
-  QuickActionGrid,
   TablePagination,
   formatCurrency,
   formatDate,
   getStatusBadge,
   PageToolbar,
+  ConfirmDialog,
+  QueryErrorAlert,
 } from '../components/ui';
 import { Modal } from '../components/ui/Modal';
 import { EmployeeForm } from '../components/forms/EmployeeForm';
@@ -27,6 +28,7 @@ import { AttendanceForm } from '../components/forms/AttendanceForm';
 import { LeaveForm } from '../components/forms/LeaveForm';
 import { PayrollForm } from '../components/forms/PayrollForm';
 import { useAuth } from '../contexts/AuthContext';
+import { OverviewHint } from '../components/layout/ModuleOverview';
 import { Employee, HrStats, LeaveRequest, PayrollRecord } from '../types';
 
 const tabs = ['Overview', 'Employees', 'Attendance', 'Leave', 'Payroll'];
@@ -55,10 +57,14 @@ export function HRPage() {
   const [leaveSearch, setLeaveSearch] = useState('');
   const [leaveStatus, setLeaveStatus] = useState('');
   const [paySearch, setPaySearch] = useState('');
+  const [pendingConfirm, setPendingConfirm] = useState<
+    | { type: 'leave'; id: string; status: string; label: string }
+    | { type: 'payroll'; id: string }
+    | null
+  >(null);
 
   const canCreate = hasPermission('hr:create');
   const canUpdate = hasPermission('hr:update');
-
   const { data: stats } = useQuery({
     queryKey: ['hr-stats'],
     queryFn: () => hrApi.stats().then((r) => r.data.data as HrStats),
@@ -155,8 +161,8 @@ export function HRPage() {
       if (!canUpdate || row.status !== 'PENDING') return null;
       return (
         <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
-          <Button size="sm" loading={approveLeaveMutation.isPending} onClick={() => approveLeaveMutation.mutate({ id: row.id as string, status: 'APPROVED' })}>Approve</Button>
-          <Button size="sm" variant="secondary" loading={approveLeaveMutation.isPending} onClick={() => approveLeaveMutation.mutate({ id: row.id as string, status: 'REJECTED' })}>Reject</Button>
+          <Button size="sm" loading={approveLeaveMutation.isPending} onClick={() => setPendingConfirm({ type: 'leave', id: row.id as string, status: 'APPROVED', label: 'Approve' })}>Approve</Button>
+          <Button size="sm" variant="secondary" loading={approveLeaveMutation.isPending} onClick={() => setPendingConfirm({ type: 'leave', id: row.id as string, status: 'REJECTED', label: 'Reject' })}>Reject</Button>
         </div>
       );
     }},
@@ -170,7 +176,7 @@ export function HRPage() {
     { key: 'isPaid', label: 'Status', render: (v: unknown) => <Badge variant={v ? 'success' : 'warning'}>{v ? 'Paid' : 'Unpaid'}</Badge> },
     { key: 'actions', label: 'Actions', render: (_: unknown, row: Record<string, unknown>) => {
       if (!canUpdate || row.isPaid) return null;
-      return <Button size="sm" loading={payPayrollMutation.isPending} onClick={(e) => { e.stopPropagation(); payPayrollMutation.mutate(row.id as string); }}>Mark Paid</Button>;
+      return <Button size="sm" loading={payPayrollMutation.isPending} onClick={(e) => { e.stopPropagation(); setPendingConfirm({ type: 'payroll', id: row.id as string }); }}>Mark Paid</Button>;
     }},
   ];
 
@@ -205,12 +211,12 @@ export function HRPage() {
       />
 
       {stats && (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+        <StatGrid>
           <StatCard title="Employees" value={stats.activeEmployees} icon={<Users className="h-5 w-5 text-white" />} color="from-primary-500 to-indigo-600" />
           <StatCard title="Pending Leave" value={stats.pendingLeave} icon={<Calendar className="h-5 w-5 text-white" />} color="from-amber-500 to-orange-600" />
           <StatCard title="Payroll Due" value={formatCurrency(stats.payrollDue)} icon={<DollarSign className="h-5 w-5 text-white" />} color="from-emerald-500 to-teal-600" />
           <StatCard title="Present Today" value={stats.attendanceToday} icon={<UserCheck className="h-5 w-5 text-white" />} color="from-violet-500 to-purple-600" />
-        </div>
+        </StatGrid>
       )}
 
       <PageToolbar
@@ -222,31 +228,7 @@ export function HRPage() {
 
       {activeTab === 0 && (
         <div className="space-y-4">
-          {canCreate && (
-            <QuickActionGrid>
-              <QuickActionCard
-                label="Add employee"
-                desc="Register a new team member"
-                icon={Users}
-                color="bg-primary-50 text-primary-600 border-primary-100"
-                onClick={() => { setEditing(null); setModal('employee'); }}
-              />
-              <QuickActionCard
-                label="Record attendance"
-                desc="Log check-in and check-out"
-                icon={UserCheck}
-                color="bg-emerald-50 text-emerald-600 border-emerald-100"
-                onClick={() => setModal('attendance')}
-              />
-              <QuickActionCard
-                label="Pending leave"
-                desc="Review leave approvals"
-                icon={Calendar}
-                color="bg-amber-50 text-amber-600 border-amber-100"
-                onClick={() => { setLeaveStatus('PENDING'); setLeavePage(1); goToTab(3); }}
-              />
-            </QuickActionGrid>
-          )}
+          <OverviewHint>Use the tabs above to manage records. Summary counts are shown at the top.</OverviewHint>
 
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
             <Card
@@ -320,21 +302,6 @@ export function HRPage() {
               )}
             </Card>
           </div>
-
-          {recentEmployees.length > 0 && (
-            <Card
-              title="Team snapshot"
-              action={<Button variant="ghost" size="sm" onClick={() => goToTab(1)}>View all</Button>}
-              padding={false}
-            >
-              <Table
-                columns={employeeColumns.filter((c) => c.key !== 'actions')}
-                data={recentEmployees}
-                embedded
-                onRowClick={(row) => openEmployeeEdit(row as unknown as Employee)}
-              />
-            </Card>
-          )}
         </div>
       )}
 
@@ -492,6 +459,31 @@ export function HRPage() {
         {modal === 'leave' && <LeaveForm onSuccess={() => setModal(null)} onCancel={() => setModal(null)} />}
         {modal === 'payroll' && <PayrollForm onSuccess={() => setModal(null)} onCancel={() => setModal(null)} />}
       </Modal>
+
+      <ConfirmDialog
+        open={!!pendingConfirm}
+        title={pendingConfirm?.type === 'payroll' ? 'Mark payroll as paid?' : `${pendingConfirm?.label} leave request?`}
+        message={
+          pendingConfirm?.type === 'payroll'
+            ? 'This records the payroll as paid and cannot be undone easily.'
+            : `This will ${pendingConfirm?.label?.toLowerCase()} the leave request. Continue?`
+        }
+        confirmLabel={pendingConfirm?.type === 'payroll' ? 'Mark Paid' : pendingConfirm?.label || 'Confirm'}
+        variant={pendingConfirm?.type === 'leave' && pendingConfirm.status === 'REJECTED' ? 'danger' : 'primary'}
+        loading={approveLeaveMutation.isPending || payPayrollMutation.isPending}
+        onCancel={() => setPendingConfirm(null)}
+        onConfirm={() => {
+          if (!pendingConfirm) return;
+          if (pendingConfirm.type === 'leave') {
+            approveLeaveMutation.mutate(
+              { id: pendingConfirm.id, status: pendingConfirm.status },
+              { onSettled: () => setPendingConfirm(null) }
+            );
+          } else {
+            payPayrollMutation.mutate(pendingConfirm.id, { onSettled: () => setPendingConfirm(null) });
+          }
+        }}
+      />
     </div>
   );
 }

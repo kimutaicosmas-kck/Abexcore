@@ -1,5 +1,8 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
 import { API_BASE_URL } from '../config/api';
+import { ERP_DATA_MUTATED_EVENT } from '../config/realtime';
+
+const MUTATION_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -13,10 +16,18 @@ api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
 });
 
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    const method = response.config.method?.toUpperCase();
+    if (method && MUTATION_METHODS.has(method)) {
+      window.dispatchEvent(new CustomEvent(ERP_DATA_MUTATED_EVENT));
+    }
+    return response;
+  },
   async (error: AxiosError) => {
     const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    const url = originalRequest.url || '';
+    const isAuthEndpoint = url.includes('/auth/login') || url.includes('/auth/refresh');
+    if (error.response?.status === 401 && !originalRequest._retry && !isAuthEndpoint) {
       originalRequest._retry = true;
       const refreshToken = localStorage.getItem('refreshToken');
       if (refreshToken) {
@@ -105,6 +116,7 @@ export const productsApi = {
   update: (id: string, data: object) => api.put(`/products/${id}`, data),
   delete: (id: string) => api.delete(`/products/${id}`),
   categories: () => api.get('/products/categories/list'),
+  stockWarehouses: () => api.get('/products/warehouses/stock'),
   saveBOM: (id: string, data: object) => api.post(`/products/${id}/bom`, data),
   uploadImage: (id: string, file: File) => {
     const form = new FormData();
@@ -156,11 +168,14 @@ export const searchApi = {
 
 export const operationsApi = {
   stats: () => api.get('/operations/stats'),
+  productionStats: () => api.get('/operations/production-stats'),
   salesOrders: (params?: object) => api.get('/operations/orders', { params }),
   getSalesOrder: (id: string) => api.get(`/operations/orders/${id}`),
   createSalesOrder: (data: object) => api.post('/operations/orders', data),
   updateOrderStatus: (id: string, status: string) =>
     api.patch(`/operations/orders/${id}/status`, { status }),
+  generateProductionFromOrder: (orderId: string) =>
+    api.post(`/operations/orders/${orderId}/generate-production`),
   quotations: (params?: object) => api.get('/operations/quotations', { params }),
   getQuotation: (id: string) => api.get(`/operations/quotations/${id}`),
   createQuotation: (data: object) => api.post('/operations/quotations', data),
@@ -241,6 +256,9 @@ export const financeApi = {
     api.patch(`/finance/payments/${id}/reconcile`, { bankReference }),
   submitEtims: (invoiceId: string) => api.post(`/finance/invoices/${invoiceId}/submit-etims`),
   vatItaxExport: (params?: object) => api.get('/finance/reports/vat-itax-export', { params }),
+  mySales: (params?: object) => api.get('/finance/my-sales', { params }),
+  salesTargets: (params?: object) => api.get('/finance/sales-targets', { params }),
+  upsertSalesTarget: (data: object) => api.put('/finance/sales-targets', data),
   mpesaStatus: () => api.get('/finance/mpesa/status'),
   mpesaStkPush: (data: object) => api.post('/finance/mpesa/stk-push', data),
 };
@@ -251,6 +269,8 @@ export const reportsApi = {
   balanceSheet: (params?: object) => api.get('/finance/reports/balance-sheet', { params }),
   cashFlow: (params?: object) => api.get('/finance/reports/cash-flow', { params }),
   vatReport: (params?: object) => api.get('/finance/reports/vat', { params }),
+  salesOfficers: () => api.get('/finance/reports/sales-by-person/sales-officers'),
+  salesByPerson: (params?: object) => api.get('/finance/reports/sales-by-person', { params }),
 };
 
 export const settingsApi = {

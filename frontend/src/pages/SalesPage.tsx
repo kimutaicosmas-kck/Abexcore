@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Plus,
@@ -7,12 +6,13 @@ import {
   FileText,
   TrendingUp,
   CalendarDays,
-  Truck,
   Receipt,
   AlertTriangle,
   ChevronRight,
+  Download,
 } from 'lucide-react';
 import { financeApi, operationsApi } from '../services/api';
+import { downloadFile } from '../utils/download';
 import {
   PageHeader,
   Table,
@@ -21,22 +21,24 @@ import {
   Input,
   Select,
   StatCard,
+  StatGrid,
   Card,
   Alert,
   EmptyState,
   DataPanel,
-  QuickActionCard,
-  QuickActionGrid,
   TablePagination,
   formatCurrency,
   formatDate,
   getStatusBadge,
   PageToolbar,
+  ConfirmDialog,
+  getApiErrorMessage,
 } from '../components/ui';
 import { Modal } from '../components/ui/Modal';
 import { SalesOrderForm } from '../components/forms/SalesOrderForm';
 import { QuotationForm } from '../components/forms/QuotationForm';
 import { useAuth } from '../contexts/AuthContext';
+import { OverviewHint } from '../components/layout/ModuleOverview';
 import { SalesOrder, SalesQuotation, SalesStats } from '../types';
 
 const tabs = ['Overview', 'Sales Orders', 'Quotations'];
@@ -65,26 +67,35 @@ const QUOTE_STATUS_OPTIONS = [
 
 const NEXT_STATUS: Record<string, { status: string; label: string }> = {
   PENDING: { status: 'CONFIRMED', label: 'Confirm' },
-  CONFIRMED: { status: 'IN_PRODUCTION', label: 'Start Production' },
   DELIVERED: { status: 'COMPLETED', label: 'Complete' },
 };
 
 const STATUS_HINTS: Record<string, string> = {
-  PENDING: 'Confirming reserves finished goods stock. Ensure enough inventory is on hand.',
-  CONFIRMED: 'Start production when manufacturing should begin. Create production orders in Production if needed.',
-  IN_PRODUCTION: 'Complete production with a passed QC inspection in Quality. The order moves to Ready automatically.',
-  READY: 'Create a delivery note in Delivery to dispatch goods and trigger invoicing.',
+  PENDING: 'Confirm checks finished goods stock. If available, stock is reserved and admin is notified to invoice. If not, the order waits until production replenishes stock.',
+  CONFIRMED: 'Finished goods are out of stock. The production team manufactures independently — admin will mark ready when stock is available.',
+  CONFIRMED_SALES: 'Waiting for finished goods. The production team works independently; you will be notified when the order can proceed.',
+  READY: 'Stock reserved. Admin creates the invoice in Finance; the delivery team dispatches after invoicing.',
+  IN_PRODUCTION: 'Legacy status — mark ready when finished goods stock is available.',
   PARTIALLY_DELIVERED: 'Finish remaining deliveries, then the order can be completed.',
 };
 
-function getApiErrorMessage(err: unknown): string {
-  const axiosErr = err as { response?: { data?: { message?: string } } };
-  return axiosErr.response?.data?.message || 'Unable to update order status';
+function getNextOrderAction(
+  status: string,
+  isSalesOfficer: boolean
+): { status: string; label: string } | null {
+  if (isSalesOfficer && status === 'CONFIRMED') return null;
+  if (!isSalesOfficer && status === 'CONFIRMED') {
+    return { status: 'READY', label: 'Mark Ready for Delivery' };
+  }
+  const next = NEXT_STATUS[status];
+  if (!next) return null;
+  if (status === 'CONFIRMED') return null;
+  return next;
 }
 
 export function SalesPage() {
   const queryClient = useQueryClient();
-  const { hasPermission } = useAuth();
+  const { hasPermission, isSalesOfficer } = useAuth();
   const [activeTab, setActiveTab] = useState(0);
   const [orderPage, setOrderPage] = useState(1);
   const [quotePage, setQuotePage] = useState(1);
@@ -98,11 +109,14 @@ export function SalesPage() {
   const [selectedQuote, setSelectedQuote] = useState<SalesQuotation | null>(null);
   const [orderDetailOpen, setOrderDetailOpen] = useState(false);
   const [quoteDetailOpen, setQuoteDetailOpen] = useState(false);
-  const [statusFeedback, setStatusFeedback] = useState<string | null>(null);
+  const [statusFeedback, setStatusFeedback] = useState<{ text: string; variant: 'error' | 'info' } | null>(null);
+  const [pendingStatusChange, setPendingStatusChange] = useState<{ id: string; status: string; label: string } | null>(null);
 
   const canCreate = hasPermission('sales:create');
   const canUpdate = hasPermission('sales:update');
   const canInvoice = hasPermission('finance:create');
+  const canDownloadInvoice = hasPermission('finance:read');
+  const [downloadingInvoiceId, setDownloadingInvoiceId] = useState<string | null>(null);
 
   const { data: orderDetail } = useQuery({
     queryKey: ['sales-order', selectedOrder?.id],
@@ -148,23 +162,62 @@ export function SalesPage() {
   const statusMutation = useMutation({
     mutationFn: ({ id, status }: { id: string; status: string }) =>
       operationsApi.updateOrderStatus(id, status),
-    onSuccess: () => {
-      setStatusFeedback(null);
+    onSuccess: (res, variables) => {
+      const fulfillment = res.data?.fulfillment as { type?: string; shortages?: { productName: string; required: number; available: number }[] } | undefined;
+      const newStatus = (res.data?.data as SalesOrder | undefined)?.status;
+
+      if (variables.status === 'CONFIRMED') {
+        if (fulfillment?.type === 'stock' || newStatus === 'READY') {
+          setStatusFeedback({
+            text: 'Stock available — reserved for this order. Admin will create the invoice in Finance.',
+            variant: 'info',
+          });
+        } else {
+          const firstShort = fulfillment?.shortages?.[0];
+          const detail = firstShort
+            ? ` (${firstShort.productName}: need ${firstShort.required}, in stock ${firstShort.available})`
+            : '';
+          setStatusFeedback({
+            text: `Some items are out of stock${detail} — production team notified to replenish finished goods.`,
+            variant: 'info',
+          });
+        }
+      } else if (variables.status === 'READY') {
+        setStatusFeedback({
+          text: 'Stock reserved. Create invoice in Finance, then assign delivery.',
+          variant: 'info',
+        });
+      } else {
+        setStatusFeedback(null);
+      }
       queryClient.invalidateQueries({ queryKey: ['sales-orders'] });
       queryClient.invalidateQueries({ queryKey: ['sales-stats'] });
       queryClient.invalidateQueries({ queryKey: ['sales-order'] });
     },
-    onError: (err) => setStatusFeedback(getApiErrorMessage(err)),
+    onError: (err) => setStatusFeedback({ text: getApiErrorMessage(err), variant: 'error' }),
   });
 
   const invoiceMutation = useMutation({
     mutationFn: (orderId: string) => financeApi.createInvoiceFromOrder(orderId),
     onSuccess: () => {
+      setStatusFeedback({
+        text: 'Invoice created. Download it from Finance or below. Assign delivery when ready.',
+        variant: 'info',
+      });
       queryClient.invalidateQueries({ queryKey: ['sales-order'] });
       queryClient.invalidateQueries({ queryKey: ['finance-invoices'] });
       queryClient.invalidateQueries({ queryKey: ['finance-stats'] });
     },
   });
+
+  const downloadInvoice = async (invoiceId: string, invoiceNumber: string) => {
+    setDownloadingInvoiceId(invoiceId);
+    try {
+      await downloadFile(`/finance/invoices/${invoiceId}/pdf`, `${invoiceNumber}.pdf`);
+    } finally {
+      setDownloadingInvoiceId(null);
+    }
+  };
 
   const goToTab = (index: number) => setActiveTab(index);
 
@@ -218,7 +271,7 @@ export function SalesPage() {
       render: (_: unknown, row: Record<string, unknown>) => {
         if (!canUpdate) return null;
         const status = row.status as string;
-        const next = NEXT_STATUS[status];
+        const next = getNextOrderAction(status, isSalesOfficer);
         if (!next || status === 'COMPLETED' || status === 'CANCELLED') return null;
         return (
           <Button
@@ -227,7 +280,7 @@ export function SalesPage() {
             disabled={statusMutation.isPending}
             onClick={(e) => {
               e.stopPropagation();
-              statusMutation.mutate({ id: row.id as string, status: next.status });
+              setPendingStatusChange({ id: row.id as string, status: next.status, label: next.label });
             }}
           >
             {next.label}
@@ -320,12 +373,12 @@ export function SalesPage() {
       />
 
       {stats && (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+        <StatGrid>
           <StatCard title="Open Orders" value={stats.openOrders} icon={<ShoppingCart className="h-5 w-5 text-white" />} color="from-primary-500 to-indigo-600" />
           <StatCard title="Pipeline Value" value={formatCurrency(stats.pipelineValue)} icon={<TrendingUp className="h-5 w-5 text-white" />} color="from-emerald-500 to-teal-600" />
           <StatCard title="Pending Quotes" value={stats.pendingQuotations} icon={<FileText className="h-5 w-5 text-white" />} color="from-amber-500 to-orange-600" />
           <StatCard title="Orders This Month" value={stats.ordersThisMonth} icon={<CalendarDays className="h-5 w-5 text-white" />} color="from-violet-500 to-purple-600" />
-        </div>
+        </StatGrid>
       )}
 
       <PageToolbar
@@ -341,31 +394,10 @@ export function SalesPage() {
 
       {activeTab === 0 && (
         <div className="space-y-4">
-          {canCreate && (
-            <QuickActionGrid>
-              <QuickActionCard
-                label="New sales order"
-                desc="Create a customer order"
-                icon={ShoppingCart}
-                color="bg-primary-50 text-primary-600 border-primary-100"
-                onClick={() => setOrderModalOpen(true)}
-              />
-              <QuickActionCard
-                label="New quotation"
-                desc="Send a price proposal"
-                icon={FileText}
-                color="bg-amber-50 text-amber-600 border-amber-100"
-                onClick={() => setQuotationModalOpen(true)}
-              />
-              <QuickActionCard
-                label="Open orders"
-                desc="Track active sales pipeline"
-                icon={TrendingUp}
-                color="bg-emerald-50 text-emerald-600 border-emerald-100"
-                onClick={() => goToTab(1)}
-              />
-            </QuickActionGrid>
-          )}
+          <OverviewHint>
+            Sales officers create and confirm orders. Confirm checks finished goods stock — admin invoices ready orders
+            in Finance and the delivery team dispatches. Production runs separately in the Production module.
+          </OverviewHint>
 
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
             <Card
@@ -443,26 +475,11 @@ export function SalesPage() {
               )}
             </Card>
           </div>
-
-          {recentOrders.length > 0 && (
-            <Card
-              title="Orders snapshot"
-              action={<Button variant="ghost" size="sm" onClick={() => goToTab(1)}>View all</Button>}
-              padding={false}
-            >
-              <Table
-                columns={orderColumns.filter((c) => c.key !== 'actions')}
-                data={recentOrders}
-                embedded
-                onRowClick={(row) => openOrderDetail(row as unknown as SalesOrder)}
-              />
-            </Card>
-          )}
         </div>
       )}
 
       {activeTab === 1 && (
-        <DataPanel>
+        <DataPanel className="min-w-0 overflow-hidden">
           <div className="p-4 pb-0 flex flex-col sm:flex-row gap-3">
             <Input
               placeholder="Search orders…"
@@ -479,7 +496,7 @@ export function SalesPage() {
           </div>
           {statusFeedback && (
             <div className="px-4 pt-3">
-              <Alert variant="error">{statusFeedback}</Alert>
+              <Alert variant={statusFeedback.variant}>{statusFeedback.text}</Alert>
             </div>
           )}
           {(orders?.data?.length || 0) === 0 && !ordersLoading ? (
@@ -504,6 +521,7 @@ export function SalesPage() {
               loading={ordersLoading}
               onRowClick={(row) => openOrderDetail(row as unknown as SalesOrder)}
               embedded
+              responsive
             />
           )}
           <div className="px-4 pb-4">
@@ -513,7 +531,7 @@ export function SalesPage() {
       )}
 
       {activeTab === 2 && (
-        <DataPanel>
+        <DataPanel className="min-w-0 overflow-hidden">
           <div className="p-4 pb-0 flex flex-col sm:flex-row gap-3">
             <Input
               placeholder="Search quotations…"
@@ -550,6 +568,7 @@ export function SalesPage() {
               loading={quotesLoading}
               onRowClick={(row) => openQuoteDetail(row as unknown as SalesQuotation)}
               embedded
+              responsive
             />
           )}
           <div className="px-4 pb-4">
@@ -569,7 +588,7 @@ export function SalesPage() {
       <Modal open={orderDetailOpen} onClose={() => { setOrderDetailOpen(false); setSelectedOrder(null); setStatusFeedback(null); }} title="Sales Order Details" size="lg">
         {activeOrder && (
           <div className="space-y-4 text-sm">
-            {statusFeedback && <Alert variant="error">{statusFeedback}</Alert>}
+            {statusFeedback && <Alert variant={statusFeedback.variant}>{statusFeedback.text}</Alert>}
             <div className="grid grid-cols-2 gap-4">
               <div><p className="text-slate-500">Order #</p><p className="font-semibold">{activeOrder.orderNumber}</p></div>
               <div><p className="text-slate-500">Customer</p><p className="font-semibold">{activeOrder.customer?.name}</p></div>
@@ -590,11 +609,22 @@ export function SalesPage() {
             {activeOrder.invoices && activeOrder.invoices.length > 0 && (
               <Card title="Invoices">
                 {activeOrder.invoices.map((inv) => (
-                  <div key={inv.id} className="flex justify-between py-2 border-b border-border/60 last:border-0">
+                  <div key={inv.id} className="flex justify-between items-center py-2 border-b border-border/60 last:border-0 gap-2">
                     <span>{inv.invoiceNumber}</span>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap justify-end">
                       <Badge variant={getStatusBadge(inv.status)}>{inv.status}</Badge>
                       <span>{formatCurrency(Number(inv.totalAmount))}</span>
+                      {canDownloadInvoice && (
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          loading={downloadingInvoiceId === inv.id}
+                          onClick={() => downloadInvoice(inv.id, inv.invoiceNumber)}
+                        >
+                          <Download className="h-4 w-4 mr-1" />
+                          PDF
+                        </Button>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -610,13 +640,34 @@ export function SalesPage() {
                 ))}
               </Card>
             )}
-            {STATUS_HINTS[activeOrder.status] && (
-              <Alert variant={activeOrder.status === 'IN_PRODUCTION' ? 'info' : 'warning'}>
-                {STATUS_HINTS[activeOrder.status]}
-              </Alert>
+            {activeOrder.productionOrders && activeOrder.productionOrders.length > 0 && (
+              <Card title="Production Orders">
+                {activeOrder.productionOrders.map((po) => (
+                  <div key={po.id} className="flex justify-between py-2 border-b border-border/60 last:border-0">
+                    <span>{po.orderNumber}</span>
+                    <Badge variant={getStatusBadge(po.status)}>{po.status.replace(/_/g, ' ')}</Badge>
+                  </div>
+                ))}
+              </Card>
             )}
+            {(() => {
+              const hintKey =
+                activeOrder.status === 'READY'
+                  ? 'READY'
+                  : activeOrder.status === 'CONFIRMED'
+                    ? isSalesOfficer
+                      ? 'CONFIRMED_SALES'
+                      : 'CONFIRMED'
+                    : activeOrder.status;
+              const hint = STATUS_HINTS[hintKey];
+              return hint ? (
+                <Alert variant={activeOrder.status === 'IN_PRODUCTION' ? 'info' : 'warning'}>
+                  {hint}
+                </Alert>
+              ) : null;
+            })()}
             <div className="flex flex-wrap justify-end gap-2 pt-2">
-              {canInvoice && !activeOrder.invoices?.length && !activeOrder.deliveries?.length && ['CONFIRMED', 'IN_PRODUCTION', 'READY'].includes(activeOrder.status) && (
+              {canInvoice && !activeOrder.invoices?.length && activeOrder.status === 'READY' && (
                 <Button
                   variant="secondary"
                   loading={invoiceMutation.isPending}
@@ -626,32 +677,29 @@ export function SalesPage() {
                   Create Invoice
                 </Button>
               )}
-              {(activeOrder.status === 'READY' || activeOrder.status === 'PARTIALLY_DELIVERED') && (
-                <Link to="/delivery">
-                  <Button variant="secondary">
-                    <Truck className="h-4 w-4 mr-2" />
-                    Create Delivery
+              {(() => {
+                const nextAction = getNextOrderAction(activeOrder.status, isSalesOfficer);
+                if (!canUpdate || !nextAction) return null;
+                return (
+                  <Button
+                    loading={statusMutation.isPending}
+                    disabled={statusMutation.isPending}
+                    onClick={() =>
+                      setPendingStatusChange({
+                        id: activeOrder.id,
+                        status: nextAction.status,
+                        label: nextAction.label,
+                      })
+                    }
+                  >
+                    {nextAction.label}
                   </Button>
-                </Link>
-              )}
-              {canUpdate && NEXT_STATUS[activeOrder.status] && (
-                <Button
-                  loading={statusMutation.isPending}
-                  disabled={statusMutation.isPending}
-                  onClick={() => statusMutation.mutate({ id: activeOrder.id, status: NEXT_STATUS[activeOrder.status].status })}
-                >
-                  {NEXT_STATUS[activeOrder.status].label}
-                </Button>
-              )}
-              {activeOrder.status === 'IN_PRODUCTION' && (
-                <Link to="/production">
-                  <Button variant="secondary">Open Production</Button>
-                </Link>
-              )}
+                );
+              })()}
             </div>
-            {activeOrder.status === 'READY' && (
+            {activeOrder.status === 'READY' && !activeOrder.invoices?.length && (
               <p className="text-xs text-slate-500 text-right">
-                Dispatch via Delivery auto-creates a sales invoice when the delivery note is created.
+                Admin creates the invoice in Finance, then the delivery team dispatches from the Delivery module.
               </p>
             )}
           </div>
@@ -688,6 +736,26 @@ export function SalesPage() {
           </div>
         )}
       </Modal>
+
+      <ConfirmDialog
+        open={!!pendingStatusChange}
+        title="Change order status?"
+        message={
+          pendingStatusChange
+            ? `This will move the order to "${pendingStatusChange.status.replace(/_/g, ' ')}". Continue?`
+            : ''
+        }
+        confirmLabel={pendingStatusChange?.label || 'Confirm'}
+        loading={statusMutation.isPending}
+        onCancel={() => setPendingStatusChange(null)}
+        onConfirm={() => {
+          if (!pendingStatusChange) return;
+          statusMutation.mutate(
+            { id: pendingStatusChange.id, status: pendingStatusChange.status },
+            { onSettled: () => setPendingStatusChange(null) }
+          );
+        }}
+      />
     </div>
   );
 }

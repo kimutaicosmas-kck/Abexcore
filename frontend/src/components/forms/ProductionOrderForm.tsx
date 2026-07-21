@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { operationsApi, productsApi } from '../../services/api';
 import { Button, Input, Select } from '../ui';
 import { Machine, Product } from '../../types';
+import { formatProductOptionLabel } from '../../utils/productDisplay';
 
 const priorityOptions = [
   { value: 'LOW', label: 'Low' },
@@ -44,7 +45,7 @@ export function ProductionOrderForm({ onSuccess, onCancel }: ProductionOrderForm
 
   const productOptions = [
     { value: '', label: 'Select product...' },
-    ...(productsData || []).map((p) => ({ value: p.id, label: `${p.sku} - ${p.name}` })),
+    ...(productsData || []).map((p) => ({ value: p.id, label: formatProductOptionLabel(p) })),
   ];
 
   const machineOptions = [
@@ -92,7 +93,11 @@ export function ProductionOrderForm({ onSuccess, onCancel }: ProductionOrderForm
         <Select label="Priority" options={priorityOptions} {...register('priority')} />
         <Input label="Scheduled Start" type="datetime-local" {...register('scheduledStart')} />
       </div>
-      <Input label="Notes" {...register('notes')} />
+      <Input label="Notes" {...register('notes')} placeholder="Optional — e.g. batch run, shift notes" />
+
+      <p className="text-xs text-slate-500">
+        Production is independent of sales orders. Completed goods are recorded as finished stock ready for sale.
+      </p>
 
       <div className="flex justify-end gap-3 pt-4 border-t">
         <Button type="button" variant="secondary" onClick={onCancel}>Cancel</Button>

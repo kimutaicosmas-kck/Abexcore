@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Search, Package, Users, ShoppingCart, Truck } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { searchApi } from '../../services/api';
+import { formatPartNumberLine } from '../../utils/productDisplay';
 
 const icons = {
   customer: Users,
@@ -62,7 +63,7 @@ export function GlobalSearch() {
       />
 
       {open && query.length >= 2 && (
-        <div className="absolute top-full mt-2 w-full min-w-[20rem] bg-white border border-border rounded-2xl shadow-float z-50 max-h-80 overflow-hidden">
+        <div className="absolute top-full mt-2 w-full max-w-[calc(100vw-2rem)] bg-white border border-border rounded-2xl shadow-float z-50 max-h-80 overflow-hidden">
           {allResults.length === 0 ? (
             <p className="px-4 py-4 text-sm text-slate-500">No results for &quot;{query}&quot;</p>
           ) : (
@@ -71,7 +72,10 @@ export function GlobalSearch() {
                 const type = item.type as keyof typeof icons;
                 const Icon = icons[type] || Search;
                 const label = (item.name as string) || (item.label as string) || (item.sku as string);
-                const sub = (item.code as string) || (item.sublabel as string) || (item.sku as string);
+                const sub =
+                  type === 'product' && item.sku
+                    ? formatPartNumberLine(item.sku as string)
+                    : (item.code as string) || (item.sublabel as string) || (item.sku as string);
                 return (
                   <button
                     key={`${type}-${item.id}`}

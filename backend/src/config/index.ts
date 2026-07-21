@@ -12,7 +12,15 @@ function requireSecret(name: string, value: string | undefined, devFallback: str
 export const config = {
   port: parseInt(process.env.PORT || '3001', 10),
   nodeEnv: process.env.NODE_ENV || 'development',
+  timezone: process.env.TZ || 'Africa/Nairobi',
   frontendUrl: process.env.FRONTEND_URL || 'http://localhost:5173',
+  swaggerEnabled: process.env.SWAGGER_ENABLED === 'true' || process.env.NODE_ENV !== 'production',
+  sentry: {
+    dsn: process.env.SENTRY_DSN || '',
+  },
+  mpesa: {
+    callbackSecret: process.env.MPESA_CALLBACK_SECRET || '',
+  },
   jwt: {
     secret: requireSecret('JWT_SECRET', process.env.JWT_SECRET, 'dev-secret-change-me'),
     refreshSecret: requireSecret('JWT_REFRESH_SECRET', process.env.JWT_REFRESH_SECRET, 'dev-refresh-secret-change-me'),

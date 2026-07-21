@@ -1,13 +1,12 @@
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Building2, MapPin, Percent, Shield, ChevronRight } from 'lucide-react';
 import { settingsApi, authApi } from '../services/api';
-import { PageHeader, Card, Button, Input, Alert, PageToolbar, EmptyState, Badge } from '../components/ui';
+import { PageHeader, Card, Button, Input, Alert, PageToolbar, EmptyState } from '../components/ui';
 import { useAuth } from '../contexts/AuthContext';
 import { CompanySettings } from '../types';
 
-const tabs = ['Overview', 'Company Profile', 'Branches & Tax', 'Security'];
+const tabs = ['Company Profile', 'Branches & Tax', 'Security'];
 
 interface CompanyFormData {
   name: string;
@@ -65,115 +64,13 @@ export function SettingsPage() {
     },
   });
 
-  const goToTab = (index: number) => setActiveTab(index);
-
   return (
-    <div className="space-y-1">
-      <PageHeader
-        title="Settings"
-        subtitle="Company profile, branches, and tax configuration"
-      />
+    <div className="space-y-4">
+      <PageHeader title="Settings" subtitle="Company profile, branches, and security" />
 
       <PageToolbar tabs={tabs} activeTab={activeTab} onTabChange={setActiveTab} />
 
       {activeTab === 0 && (
-        <div className="space-y-4">
-          {isLoading ? (
-            <Card title="Company summary">
-              <p className="text-sm text-slate-500">Loading…</p>
-            </Card>
-          ) : company ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-              <button
-                type="button"
-                onClick={() => goToTab(1)}
-                className="flex items-center gap-4 p-4 rounded-xl border border-slate-200 bg-white text-left transition-all hover:shadow-md hover:-translate-y-0.5"
-              >
-                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary-50 text-primary-600">
-                  <Building2 className="h-5 w-5" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs text-slate-500">Company</p>
-                  <p className="font-semibold text-slate-900 truncate">{company.name}</p>
-                  {company.legalName && (
-                    <p className="text-xs text-slate-500 mt-0.5 truncate">{company.legalName}</p>
-                  )}
-                </div>
-                <ChevronRight className="h-4 w-4 text-slate-400 shrink-0" />
-              </button>
-
-              <button
-                type="button"
-                onClick={() => goToTab(2)}
-                className="flex items-center gap-4 p-4 rounded-xl border border-slate-200 bg-white text-left transition-all hover:shadow-md hover:-translate-y-0.5"
-              >
-                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-violet-50 text-violet-600">
-                  <MapPin className="h-5 w-5" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs text-slate-500">Branches</p>
-                  <p className="font-semibold text-slate-900">{company.branches?.length || 0}</p>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    {(company.branches?.length || 0) === 1 ? 'location configured' : 'locations configured'}
-                  </p>
-                </div>
-                <ChevronRight className="h-4 w-4 text-slate-400 shrink-0" />
-              </button>
-
-              <button
-                type="button"
-                onClick={() => goToTab(2)}
-                className="flex items-center gap-4 p-4 rounded-xl border border-slate-200 bg-white text-left transition-all hover:shadow-md hover:-translate-y-0.5"
-              >
-                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
-                  <Percent className="h-5 w-5" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs text-slate-500">VAT rate</p>
-                  <p className="font-semibold text-slate-900">{Number(company.vatRate) || 16}%</p>
-                  <p className="text-xs text-slate-500 mt-0.5">{company.currency || 'KES'} · default tax</p>
-                </div>
-                <ChevronRight className="h-4 w-4 text-slate-400 shrink-0" />
-              </button>
-
-              <button
-                type="button"
-                onClick={() => goToTab(3)}
-                className="flex items-center gap-4 p-4 rounded-xl border border-slate-200 bg-white text-left transition-all hover:shadow-md hover:-translate-y-0.5"
-              >
-                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
-                  <Shield className="h-5 w-5" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs text-slate-500">Two-factor auth</p>
-                  <div className="flex items-center gap-2 mt-0.5">
-                    <p className="font-semibold text-slate-900">{twoFaEnabled ? 'Enabled' : 'Not enabled'}</p>
-                    <Badge variant={twoFaEnabled ? 'success' : 'warning'}>
-                      {twoFaEnabled ? 'Active' : 'Off'}
-                    </Badge>
-                  </div>
-                  <p className="text-xs text-slate-500 mt-0.5">Account security</p>
-                </div>
-                <ChevronRight className="h-4 w-4 text-slate-400 shrink-0" />
-              </button>
-            </div>
-          ) : (
-            <EmptyState title="Company not configured" description="Set up your company profile to get started." />
-          )}
-
-          {company && (
-            <Card title="Quick links" padding>
-              <div className="flex flex-wrap gap-2">
-                <Button variant="secondary" size="sm" onClick={() => goToTab(1)}>Edit company profile</Button>
-                <Button variant="secondary" size="sm" onClick={() => goToTab(2)}>Branches & tax</Button>
-                <Button variant="secondary" size="sm" onClick={() => goToTab(3)}>Security settings</Button>
-              </div>
-            </Card>
-          )}
-        </div>
-      )}
-
-      {activeTab === 1 && (
         <Card title="Company Profile">
           {isLoading ? (
             <p className="text-sm text-slate-500">Loading…</p>
@@ -199,7 +96,7 @@ export function SettingsPage() {
         </Card>
       )}
 
-      {activeTab === 2 && (
+      {activeTab === 1 && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <Card title="Branches">
             {company?.branches?.length ? company.branches.map((branch) => (
@@ -227,8 +124,11 @@ export function SettingsPage() {
         </div>
       )}
 
-      {activeTab === 3 && (
+      {activeTab === 2 && (
         <Card title="Two-Factor Authentication">
+          <p className="text-sm text-slate-600 mb-4">
+            Status: <span className="font-semibold text-slate-900">{twoFaEnabled ? 'Enabled' : 'Not enabled'}</span>
+          </p>
           <p className="text-sm text-slate-600 mb-4">
             Protect your account with an authenticator app (Google Authenticator, Authy, etc.).
           </p>

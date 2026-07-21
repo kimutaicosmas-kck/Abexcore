@@ -1,6 +1,8 @@
 import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { User } from '../types';
 import { authApi } from '../services/api';
+import { canAccessRoute as checkRouteAccess } from '../config/routeAccess';
+import { clearUserActivity, getLastActivityAt, isInactivityExpired, markUserActivity } from '../config/session';
 
 export interface CompanyConfig {
   name: string;
@@ -13,10 +15,13 @@ interface AuthContextType {
   company: CompanyConfig | null;
   isLoading: boolean;
   isAuthenticated: boolean;
+  isSuperAdmin: boolean;
+  isSalesOfficer: boolean;
   mustChangePassword: boolean;
   login: (email: string, password: string, totpCode?: string) => Promise<void>;
   logout: () => Promise<void>;
   hasPermission: (permission: string) => boolean;
+  canAccessRoute: (pathname: string) => boolean;
   refreshUser: () => Promise<void>;
   clearMustChangePassword: () => void;
   setCompany: (c: CompanyConfig) => void;
@@ -45,12 +50,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
 
+      if (isInactivityExpired()) {
+        localStorage.removeItem('accessToken');
+        localStorage.removeItem('refreshToken');
+        clearUserActivity();
+        setIsLoading(false);
+        return;
+      }
+
       try {
         const { data } = await authApi.me();
         setUser(data.data);
+        if (getLastActivityAt() == null) {
+          markUserActivity();
+        }
       } catch {
         localStorage.removeItem('accessToken');
         localStorage.removeItem('refreshToken');
+        clearUserActivity();
         setUser(null);
       } finally {
         setIsLoading(false);
@@ -64,6 +81,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { data } = await authApi.login(email, password, totpCode);
     localStorage.setItem('accessToken', data.data.accessToken);
     localStorage.setItem('refreshToken', data.data.refreshToken);
+    markUserActivity();
     setUser(data.data.user);
     setMustChangePassword(!!data.data.mustChangePassword);
     if (data.data.company) setCompany(data.data.company);
@@ -78,6 +96,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     localStorage.removeItem('accessToken');
     localStorage.removeItem('refreshToken');
+    clearUserActivity();
     setUser(null);
     setMustChangePassword(false);
   };
@@ -88,6 +107,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return user.permissions.includes(permission);
   };
 
+  const canAccessRoute = (pathname: string) => checkRouteAccess(pathname, hasPermission);
+
   return (
     <AuthContext.Provider
       value={{
@@ -95,10 +116,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         company,
         isLoading,
         isAuthenticated: !!user,
+        isSuperAdmin: user?.role?.name === 'Super Admin',
+        isSalesOfficer: user?.role?.name === 'Sales Officer',
         mustChangePassword,
         login,
         logout,
         hasPermission,
+        canAccessRoute,
         refreshUser,
         clearMustChangePassword: () => setMustChangePassword(false),
         setCompany,

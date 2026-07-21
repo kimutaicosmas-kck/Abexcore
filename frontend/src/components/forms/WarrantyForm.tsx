@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { crmApi, customersApi, productsApi } from '../../services/api';
 import { Button, Input, Select, Textarea } from '../ui';
 import { Customer, Product } from '../../types';
+import { formatProductOptionLabel } from '../../utils/productDisplay';
 
 const warrantySchema = z.object({
   customerId: z.string().min(1, 'Customer is required'),
@@ -42,7 +43,7 @@ export function WarrantyForm({ onSuccess, onCancel }: WarrantyFormProps) {
 
   const productOptions = [
     { value: '', label: 'Select product...' },
-    ...(productsData || []).map((p) => ({ value: p.id, label: `${p.sku} - ${p.name}` })),
+    ...(productsData || []).map((p) => ({ value: p.id, label: formatProductOptionLabel(p) })),
   ];
 
   const { register, handleSubmit, formState: { errors } } = useForm<WarrantyFormData>({

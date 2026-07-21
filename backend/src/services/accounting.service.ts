@@ -23,17 +23,22 @@ export class AccountingService {
     const count = await tx.journalEntry.count();
     const entryNumber = generateNumber('JE', count + 1);
 
-    const lines = await Promise.all(
-      opts.lines.map(async (line) => {
-        const account = await this.getAccountByCode(tx, line.accountCode);
-        return {
-          accountId: account.id,
-          debit: line.debit,
-          credit: line.credit,
-          description: line.description,
-        };
-      })
-    );
+    const codes = [...new Set(opts.lines.map((line) => line.accountCode))];
+    const accounts = await tx.account.findMany({ where: { code: { in: codes } } });
+    const accountByCode = new Map(accounts.map((account) => [account.code, account]));
+
+    const lines = opts.lines.map((line) => {
+      const account = accountByCode.get(line.accountCode);
+      if (!account) {
+        throw new AppError(`Account ${line.accountCode} not found — run seed to create chart of accounts`, 400);
+      }
+      return {
+        accountId: account.id,
+        debit: line.debit,
+        credit: line.credit,
+        description: line.description,
+      };
+    });
 
     const entry = await tx.journalEntry.create({
       data: {
@@ -46,13 +51,20 @@ export class AccountingService {
       include: { lines: { include: { account: true } } },
     });
 
+    const balanceDeltas = new Map<string, number>();
     for (const line of lines) {
       const net = line.debit - line.credit;
-      await tx.account.update({
-        where: { id: line.accountId },
-        data: { balance: { increment: net } },
-      });
+      balanceDeltas.set(line.accountId, (balanceDeltas.get(line.accountId) || 0) + net);
     }
+
+    await Promise.all(
+      [...balanceDeltas.entries()].map(([accountId, net]) =>
+        tx.account.update({
+          where: { id: accountId },
+          data: { balance: { increment: net } },
+        })
+      )
+    );
 
     return entry;
   }

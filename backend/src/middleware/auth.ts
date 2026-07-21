@@ -82,3 +82,34 @@ export const authorize = (...requiredPermissions: string[]) => {
     next();
   };
 };
+
+export const requireSuperAdmin = (req: AuthRequest, _res: Response, next: NextFunction) => {
+  if (!req.user) return next(new AppError('Authentication required', 401));
+  if (req.user.roleName !== 'Super Admin') {
+    return next(new AppError('Super Admin access required', 403));
+  }
+  next();
+};
+
+export const authorizeAny = (...requiredPermissions: string[]) => {
+  return (req: AuthRequest, _res: Response, next: NextFunction) => {
+    if (!req.user) return next(new AppError('Authentication required', 401));
+    if (req.user.roleName === 'Super Admin') return next();
+
+    const hasPermission = requiredPermissions.some((p) =>
+      req.user!.permissions.includes(p)
+    );
+
+    if (!hasPermission) {
+      return next(new AppError('Insufficient permissions', 403));
+    }
+
+    next();
+  };
+};
+
+export function userHasPermission(user: AuthRequest['user'], permission: string): boolean {
+  if (!user) return false;
+  if (user.roleName === 'Super Admin') return true;
+  return user.permissions.includes(permission);
+}

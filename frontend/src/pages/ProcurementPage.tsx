@@ -21,16 +21,16 @@ import {
   Input,
   Select,
   StatCard,
+  StatGrid,
   Card,
   EmptyState,
   DataPanel,
-  QuickActionCard,
-  QuickActionGrid,
   TablePagination,
   formatCurrency,
   formatDate,
   getStatusBadge,
   PageToolbar,
+  ConfirmDialog,
 } from '../components/ui';
 import { Modal } from '../components/ui/Modal';
 import { PurchaseOrderForm } from '../components/forms/PurchaseOrderForm';
@@ -40,6 +40,7 @@ import { SupplierForm } from '../components/forms/SupplierForm';
 import { RfqForm } from '../components/forms/RfqForm';
 import { RfqDetailPanel } from '../components/forms/RfqDetailPanel';
 import { useAuth } from '../contexts/AuthContext';
+import { OverviewHint } from '../components/layout/ModuleOverview';
 import { ProcurementStats, PurchaseOrder, Supplier, GoodsReceipt } from '../types';
 
 const tabs = ['Overview', 'Purchase Orders', 'Requisitions', 'RFQs', 'Goods Receipts', 'Suppliers'];
@@ -81,11 +82,16 @@ export function ProcurementPage() {
   const [selectedGr, setSelectedGr] = useState<GoodsReceipt | null>(null);
   const [grDetailOpen, setGrDetailOpen] = useState(false);
   const [postGrError, setPostGrError] = useState<string | null>(null);
+  const [pendingConfirm, setPendingConfirm] = useState<
+    | { type: 'approve-req'; id: string }
+    | { type: 'post-gr'; id: string }
+    | { type: 'purchase-invoice'; id: string }
+    | null
+  >(null);
 
   const canCreate = hasPermission('procurement:create');
   const canUpdate = hasPermission('procurement:update');
   const canInvoice = hasPermission('finance:create');
-
   const { data: stats } = useQuery({
     queryKey: ['procurement-stats'],
     queryFn: () => inventoryApi.procurementStats().then((r) => r.data.data as ProcurementStats),
@@ -158,10 +164,15 @@ export function ProcurementPage() {
 
   const handlePostGr = (gr: GoodsReceipt) => {
     setPostGrError(null);
-    postGrMutation.mutate(gr.id, {
+    setPendingConfirm({ type: 'post-gr', id: gr.id });
+  };
+
+  const runPostGr = (grId: string) => {
+    postGrMutation.mutate(grId, {
       onSuccess: () => {
-        setSelectedGr((prev) => (prev?.id === gr.id ? { ...prev, status: 'APPROVED', inspectionStatus: 'PASSED' } : prev));
+        setSelectedGr((prev) => (prev?.id === grId ? { ...prev, status: 'APPROVED', inspectionStatus: 'PASSED' } : prev));
       },
+      onSettled: () => setPendingConfirm(null),
     });
   };
 
@@ -256,7 +267,7 @@ export function ProcurementPage() {
         return (
           <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
             {canUpdate && (status === 'PENDING' || status === 'DRAFT') && (
-              <Button size="sm" loading={approveMutation.isPending} onClick={() => approveMutation.mutate(row.id as string)}>
+              <Button size="sm" loading={approveMutation.isPending} onClick={() => setPendingConfirm({ type: 'approve-req', id: row.id as string })}>
                 Approve
               </Button>
             )}
@@ -363,7 +374,7 @@ export function ProcurementPage() {
                 size="sm"
                 variant="secondary"
                 loading={purchaseInvoiceMutation.isPending && purchaseInvoiceMutation.variables === gr.id}
-                onClick={() => purchaseInvoiceMutation.mutate(gr.id)}
+                onClick={() => setPendingConfirm({ type: 'purchase-invoice', id: gr.id })}
               >
                 Purchase Invoice
               </Button>
@@ -433,12 +444,12 @@ export function ProcurementPage() {
       />
 
       {stats && (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+        <StatGrid>
           <StatCard title="Pending Requisitions" value={stats.pendingRequisitions} icon={<ClipboardList className="h-5 w-5 text-white" />} color="from-amber-500 to-orange-600" />
           <StatCard title="Open RFQs" value={stats.openRfqs} icon={<FileText className="h-5 w-5 text-white" />} color="from-primary-500 to-indigo-600" />
           <StatCard title="Active PO Value" value={formatCurrency(stats.activePoValue)} icon={<ShoppingCart className="h-5 w-5 text-white" />} color="from-emerald-500 to-teal-600" />
           <StatCard title="Suppliers" value={stats.suppliers} icon={<Users className="h-5 w-5 text-white" />} color="from-violet-500 to-purple-600" />
-        </div>
+        </StatGrid>
       )}
 
       <PageToolbar
@@ -457,31 +468,7 @@ export function ProcurementPage() {
 
       {activeTab === 0 && (
         <div className="space-y-4">
-          {canCreate && (
-            <QuickActionGrid>
-              <QuickActionCard
-                label="New requisition"
-                desc="Request materials or supplies"
-                icon={ClipboardList}
-                color="bg-amber-50 text-amber-600 border-amber-100"
-                onClick={() => openModal('requisition')}
-              />
-              <QuickActionCard
-                label="New purchase order"
-                desc="Issue PO to supplier"
-                icon={ShoppingCart}
-                color="bg-emerald-50 text-emerald-600 border-emerald-100"
-                onClick={() => openModal('po')}
-              />
-              <QuickActionCard
-                label="Goods receipt"
-                desc="Record incoming delivery"
-                icon={Truck}
-                color="bg-violet-50 text-violet-600 border-violet-100"
-                onClick={() => openModal('gr')}
-              />
-            </QuickActionGrid>
-          )}
+          <OverviewHint>Use the tabs above to manage records. Summary counts are shown at the top.</OverviewHint>
 
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
             <Card
@@ -548,36 +535,6 @@ export function ProcurementPage() {
               )}
             </Card>
           </div>
-
-          <Card
-            title="Purchase order snapshot"
-            action={<Button variant="ghost" size="sm" onClick={() => goToTab(1)}>View all</Button>}
-            padding={false}
-          >
-            {recentPos.length === 0 ? (
-              <div className="p-6">
-                <EmptyState
-                  title="No purchase orders"
-                  description="Create a PO to start the procurement cycle."
-                  action={
-                    canCreate ? (
-                      <Button onClick={() => openModal('po')}>
-                        <Plus className="h-4 w-4 mr-2" />
-                        New purchase order
-                      </Button>
-                    ) : undefined
-                  }
-                />
-              </div>
-            ) : (
-              <Table
-                columns={poColumns}
-                data={recentPos}
-                onRowClick={(row) => { setSelectedPo(row as unknown as PurchaseOrder); setPoDetailOpen(true); }}
-                embedded
-              />
-            )}
-          </Card>
         </div>
       )}
 
@@ -820,7 +777,7 @@ export function ProcurementPage() {
                 <Button
                   variant="secondary"
                   loading={purchaseInvoiceMutation.isPending}
-                  onClick={() => purchaseInvoiceMutation.mutate(selectedGr.id)}
+                  onClick={() => setPendingConfirm({ type: 'purchase-invoice', id: selectedGr.id })}
                 >
                   Create Purchase Invoice
                 </Button>
@@ -856,6 +813,43 @@ export function ProcurementPage() {
           </div>
         )}
       </Modal>
+
+      <ConfirmDialog
+        open={!!pendingConfirm}
+        title={
+          pendingConfirm?.type === 'approve-req'
+            ? 'Approve requisition?'
+            : pendingConfirm?.type === 'post-gr'
+              ? 'Post goods to stock?'
+              : 'Create purchase invoice?'
+        }
+        message={
+          pendingConfirm?.type === 'approve-req'
+            ? 'This approves the requisition for procurement. Continue?'
+            : pendingConfirm?.type === 'post-gr'
+              ? 'Stock levels will be updated. This action should only be done after QC passes.'
+              : 'A purchase invoice will be created from this goods receipt.'
+        }
+        confirmLabel={
+          pendingConfirm?.type === 'approve-req'
+            ? 'Approve'
+            : pendingConfirm?.type === 'post-gr'
+              ? 'Post to Stock'
+              : 'Create Invoice'
+        }
+        loading={approveMutation.isPending || postGrMutation.isPending || purchaseInvoiceMutation.isPending}
+        onCancel={() => setPendingConfirm(null)}
+        onConfirm={() => {
+          if (!pendingConfirm) return;
+          if (pendingConfirm.type === 'approve-req') {
+            approveMutation.mutate(pendingConfirm.id, { onSettled: () => setPendingConfirm(null) });
+          } else if (pendingConfirm.type === 'post-gr') {
+            runPostGr(pendingConfirm.id);
+          } else {
+            purchaseInvoiceMutation.mutate(pendingConfirm.id, { onSettled: () => setPendingConfirm(null) });
+          }
+        }}
+      />
     </div>
   );
 }

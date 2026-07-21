@@ -35,14 +35,28 @@ export class NotificationService {
   ) {
     const role = await prisma.role.findUnique({
       where: { name: roleName },
-      include: { users: { where: { status: 'ACTIVE', deletedAt: null } } },
+      include: { users: { where: { status: 'ACTIVE', deletedAt: null }, select: { id: true, email: true } } },
     });
 
-    if (!role) return [];
+    if (!role || role.users.length === 0) return [];
 
-    return Promise.all(
-      role.users.map((u) => this.notifyUser(u.id, type, title, message, link))
+    await prisma.notification.createMany({
+      data: role.users.map((user) => ({
+        userId: user.id,
+        type,
+        title,
+        message,
+        link,
+      })),
+    });
+
+    await Promise.all(
+      role.users
+        .filter((user) => user.email)
+        .map((user) => EmailService.sendNotificationEmail(user.email!, title, message, link))
     );
+
+    return role.users.map((user) => user.id);
   }
 
   static async notifyAdmins(type: NotificationType, title: string, message: string, link?: string) {
@@ -68,6 +82,7 @@ export class NotificationService {
       .map((m) => `${m.name} (${m.code})`)
       .join(', ');
 
+    await this.notifyRole('Production Manager', 'LOW_STOCK', title, message, '/inventory');
     await this.notifyRole('Procurement Officer', 'LOW_STOCK', title, message, '/inventory');
     await this.notifyRole('Warehouse Officer', 'LOW_STOCK', title, message, '/inventory');
   }

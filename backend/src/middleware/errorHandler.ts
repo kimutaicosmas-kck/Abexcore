@@ -1,4 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
+import { logger } from '../config/logger';
+import { captureException } from '../utils/monitoring';
 
 export class AppError extends Error {
   statusCode: number;
@@ -16,15 +18,24 @@ export class AppError extends Error {
 
 export const errorHandler = (
   err: Error | AppError,
-  _req: Request,
+  req: Request,
   res: Response,
   _next: NextFunction
 ) => {
   const statusCode = err instanceof AppError ? err.statusCode : 500;
   const message = err.message || 'Internal server error';
+  const meta = {
+    statusCode,
+    path: req.path,
+    method: req.method,
+    ...(err instanceof AppError && err.code ? { code: err.code } : {}),
+  };
 
-  if (process.env.NODE_ENV === 'development') {
-    console.error(err);
+  if (statusCode >= 500) {
+    logger.error(message, { ...meta, stack: err.stack });
+    captureException(err, meta);
+  } else if (statusCode >= 400) {
+    logger.warn(message, meta);
   }
 
   res.status(statusCode).json({

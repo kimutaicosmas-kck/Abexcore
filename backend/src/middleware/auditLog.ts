@@ -3,6 +3,7 @@ import prisma from '../config/database';
 import { AuthRequest } from './auth';
 import { getParam } from '../utils/request';
 import { loadOldValues, redactBody } from '../utils/audit';
+import { logger } from '../config/logger';
 
 export const auditLog = (module: string, action: string, entityType: string) => {
   return async (req: AuthRequest, res: Response, next: NextFunction) => {
@@ -39,7 +40,7 @@ export const auditLog = (module: string, action: string, entityType: string) => 
               ipAddress: req.ip,
             },
           })
-          .catch(console.error);
+          .catch((err) => logger.error('Audit log write failed', err));
       }
       return originalJson(body);
     };

@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { financeApi } from '../../services/api';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { GlobalSearch } from './GlobalSearch';
+import { NOTIFICATION_POLL_MS } from '../../config/realtime';
 
 interface TopNavProps {
   onMenuClick: () => void;
@@ -41,15 +42,23 @@ export function TopNav({ onMenuClick, sidebarOffset }: TopNavProps) {
   const { data: notifications } = useQuery({
     queryKey: ['notifications'],
     queryFn: () => financeApi.notifications().then((r) => r.data.data),
-    refetchInterval: 60000,
+    refetchInterval: NOTIFICATION_POLL_MS,
   });
 
   const markRead = useMutation({
     mutationFn: (id: string) => financeApi.markNotificationRead(id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['notifications'] }),
+    onSuccess: (_data, id) => {
+      queryClient.setQueryData(['notifications'], (current: Array<{ id: string }> | undefined) =>
+        (current || []).filter((n) => n.id !== id)
+      );
+      queryClient.invalidateQueries({ queryKey: ['notifications'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-kpis'] });
+    },
   });
 
-  const unreadCount = notifications?.filter((n: { isRead: boolean }) => !n.isRead).length || 0;
+  const unreadNotifications =
+    notifications?.filter((n: { isRead: boolean }) => !n.isRead) || [];
+  const unreadCount = unreadNotifications.length;
   const pageTitle = routeTitles[location.pathname] || 'Workspace';
 
   useEffect(() => {
@@ -82,7 +91,7 @@ export function TopNav({ onMenuClick, sidebarOffset }: TopNavProps) {
           <h1 className="hidden sm:block text-sm font-semibold text-slate-800 truncate shrink-0">
             {pageTitle}
           </h1>
-          <div className="flex-1 max-w-md ml-auto sm:ml-0">
+          <div className="hidden md:block flex-1 max-w-md min-w-0 ml-auto sm:ml-0">
             <GlobalSearch />
           </div>
         </div>
@@ -107,19 +116,19 @@ export function TopNav({ onMenuClick, sidebarOffset }: TopNavProps) {
                   Notifications
                 </div>
                 <div className="max-h-64 overflow-y-auto">
-                  {!notifications?.length ? (
-                    <p className="px-3 py-6 text-xs text-slate-500 text-center">No notifications</p>
+                  {!unreadNotifications.length ? (
+                    <p className="px-3 py-6 text-xs text-slate-500 text-center">No new notifications</p>
                   ) : (
-                    notifications.map((n: { id: string; title: string; message: string; isRead: boolean; link?: string }) => (
+                    unreadNotifications.map((n: { id: string; title: string; message: string; isRead: boolean; link?: string }) => (
                       <button
                         key={n.id}
                         type="button"
                         onClick={() => {
-                          if (!n.isRead) markRead.mutate(n.id);
+                          markRead.mutate(n.id);
                           if (n.link) navigate(n.link);
                           setNotifOpen(false);
                         }}
-                        className={`w-full text-left px-3 py-2.5 hover:bg-slate-50 border-b border-slate-50 text-sm ${!n.isRead ? 'bg-primary-50/50' : ''}`}
+                        className="w-full text-left px-3 py-2.5 hover:bg-slate-50 border-b border-slate-50 text-sm bg-primary-50/50"
                       >
                         <p className="font-medium text-slate-900 text-xs">{n.title}</p>
                         <p className="text-[11px] text-slate-500 mt-0.5 line-clamp-1">{n.message}</p>

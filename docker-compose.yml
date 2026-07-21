@@ -8,6 +8,7 @@ services:
       MYSQL_DATABASE: filter_erp
       MYSQL_USER: erp_user
       MYSQL_PASSWORD: erp_password
+      TZ: Africa/Nairobi
     ports:
       - '127.0.0.1:3307:3306'
     volumes:
@@ -33,6 +34,8 @@ services:
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-change-me-refresh-in-production}
       NODE_ENV: production
       PORT: 3001
+      TZ: Africa/Nairobi
+      USE_DB_PUSH: "false"
       FRONTEND_URL: http://localhost
       SMTP_HOST: ${SMTP_HOST:-}
       SMTP_PORT: ${SMTP_PORT:-587}

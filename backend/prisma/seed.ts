@@ -1,5 +1,11 @@
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcrypt';
+import {
+  PERMISSION_ACTIONS,
+  PERMISSION_MODULES,
+  SYSTEM_ROLES,
+  permissionsForRole,
+} from '../src/config/rolePermissions';
 
 const prisma = new PrismaClient();
 
@@ -25,29 +31,11 @@ function subDays(date: Date, days: number) {
   return d;
 }
 
-const ROLES = [
-  'Super Admin',
-  'Managing Director',
-  'Operations Manager',
-  'Production Manager',
-  'Procurement Officer',
-  'Warehouse Officer',
-  'Sales Officer',
-  'Finance Officer',
-  'Accountant',
-  'HR',
-  'Customer Service',
-  'Driver',
-  'Auditor',
-];
+const ROLES = [...SYSTEM_ROLES];
 
-const MODULES = [
-  'dashboard', 'users', 'customers', 'products', 'inventory',
-  'procurement', 'production', 'sales', 'delivery', 'finance', 'hr',
-  'maintenance', 'quality', 'reports', 'settings',
-];
+const MODULES = [...PERMISSION_MODULES];
 
-const ACTIONS = ['create', 'read', 'update', 'delete', 'approve'];
+const ACTIONS = [...PERMISSION_ACTIONS];
 
 async function main() {
   console.log('Seeding database...');
@@ -77,26 +65,7 @@ async function main() {
       },
     });
 
-    const permsToAssign =
-      roleName === 'Super Admin'
-        ? permissions
-        : permissions.filter((p) => {
-            const roleModules: Record<string, string[]> = {
-              'Managing Director': MODULES,
-              'Operations Manager': ['dashboard', 'production', 'inventory', 'procurement', 'quality'],
-              'Production Manager': ['dashboard', 'production', 'inventory', 'quality'],
-              'Procurement Officer': ['dashboard', 'procurement', 'inventory'],
-              'Warehouse Officer': ['dashboard', 'inventory'],
-              'Sales Officer': ['dashboard', 'customers', 'sales', 'delivery'],
-              'Finance Officer': ['dashboard', 'finance', 'reports'],
-              Accountant: ['dashboard', 'finance', 'reports'],
-              HR: ['dashboard', 'hr'],
-              'Customer Service': ['dashboard', 'customers'],
-              Driver: ['dashboard', 'delivery'],
-              Auditor: ['dashboard', 'reports', 'finance'],
-            };
-            return (roleModules[roleName] || ['dashboard']).includes(p.module);
-          });
+    const permsToAssign = permissionsForRole(roleName, permissions);
 
     for (const perm of permsToAssign) {
       await prisma.rolePermission.upsert({

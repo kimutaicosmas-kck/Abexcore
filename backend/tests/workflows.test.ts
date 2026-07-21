@@ -298,8 +298,8 @@ describe('Procure-to-pay workflow (integration)', () => {
   });
 });
 
-describe('Production auto-ready workflow (integration)', () => {
-  it.skipIf(() => !dbConnected)('marks sales order READY when linked production and QC complete', async () => {
+describe('Decoupled production workflow (integration)', () => {
+  it.skipIf(() => !dbConnected)('admin marks sales order READY after independent production adds stock', async () => {
     const [customersRes, productsRes, machinesRes, warehousesRes] = await Promise.all([
       authReq(authToken).get('/api/v1/customers?limit=1'),
       authReq(authToken).get('/api/v1/products?limit=1'),
@@ -322,19 +322,15 @@ describe('Production auto-ready workflow (integration)', () => {
     expect(orderRes.status).toBe(201);
     const salesOrderId = orderRes.body.data.id;
 
-    await authReq(authToken)
+    const confirmRes = await authReq(authToken)
       .patch(`/api/v1/operations/orders/${salesOrderId}/status`)
       .send({ status: 'CONFIRMED' });
-
-    await authReq(authToken)
-      .patch(`/api/v1/operations/orders/${salesOrderId}/status`)
-      .send({ status: 'IN_PRODUCTION' });
+    expect(confirmRes.status).toBe(200);
 
     const productionRes = await authReq(authToken)
       .post('/api/v1/operations/production')
       .send({
         productId,
-        salesOrderId,
         machineId,
         quantity: 1,
         scheduledStart: new Date().toISOString(),
@@ -358,6 +354,11 @@ describe('Production auto-ready workflow (integration)', () => {
       .post(`/api/v1/operations/production/${productionId}/complete`)
       .send({ completedQty: 1, rejectedQty: 0, warehouseId });
     expect(completeRes.status).toBe(200);
+
+    const readyRes = await authReq(authToken)
+      .patch(`/api/v1/operations/orders/${salesOrderId}/status`)
+      .send({ status: 'READY' });
+    expect(readyRes.status).toBe(200);
 
     const salesRes = await authReq(authToken).get(`/api/v1/operations/orders/${salesOrderId}`);
     expect(salesRes.status).toBe(200);

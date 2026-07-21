@@ -10,20 +10,21 @@ import {
   Input,
   Select,
   StatCard,
+  StatGrid,
   Card,
   EmptyState,
   DataPanel,
-  QuickActionCard,
-  QuickActionGrid,
   TablePagination,
   formatDate,
   getStatusBadge,
   PageToolbar,
+  ConfirmDialog,
 } from '../components/ui';
 import { Modal } from '../components/ui/Modal';
 import { DeliveryForm } from '../components/forms/DeliveryForm';
 import { VehicleForm } from '../components/forms/VehicleForm';
 import { useAuth } from '../contexts/AuthContext';
+import { OverviewHint } from '../components/layout/ModuleOverview';
 import { DeliveryNote, DeliveryStats, Vehicle, VEHICLE_TYPE_OPTIONS, vehicleTypeLabel, VehicleType } from '../types';
 
 const tabs = ['Overview', 'Deliveries', 'Vehicles'];
@@ -77,6 +78,12 @@ export function DeliveryPage() {
   const [vehicleModalOpen, setVehicleModalOpen] = useState(false);
   const [selected, setSelected] = useState<DeliveryNote | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
+  const [pendingStatusChange, setPendingStatusChange] = useState<{
+    id: string;
+    status: string;
+    label: string;
+    proofOfDelivery?: string;
+  } | null>(null);
 
   const canCreate = hasPermission('delivery:create');
   const canUpdate = hasPermission('delivery:update');
@@ -176,7 +183,7 @@ export function DeliveryPage() {
             loading={statusMutation.isPending}
             onClick={(e) => {
               e.stopPropagation();
-              statusMutation.mutate({ id: row.id as string, status: next.status });
+              setPendingStatusChange({ id: row.id as string, status: next.status, label: next.label });
             }}
           >
             {next.label}
@@ -235,14 +242,14 @@ export function DeliveryPage() {
       />
 
       {stats && (
-        <div className="grid grid-cols-2 lg:grid-cols-6 gap-3 mb-4">
+        <StatGrid>
           <StatCard title="Pending" value={stats.pending} icon={<Package className="h-5 w-5 text-white" />} color="from-amber-500 to-orange-600" />
           <StatCard title="In Transit" value={stats.inTransit} icon={<Truck className="h-5 w-5 text-white" />} color="from-primary-500 to-indigo-600" />
           <StatCard title="Delivered Today" value={stats.deliveredToday} icon={<MapPin className="h-5 w-5 text-white" />} color="from-emerald-500 to-teal-600" />
           <StatCard title="Motorcycles" value={stats.motorcycles ?? 0} icon={<Bike className="h-5 w-5 text-white" />} color="from-sky-500 to-cyan-600" />
           <StatCard title="Trucks" value={stats.trucks ?? 0} icon={<Truck className="h-5 w-5 text-white" />} color="from-violet-500 to-purple-600" />
           <StatCard title="Lorries" value={stats.lorries ?? 0} icon={<Container className="h-5 w-5 text-white" />} color="from-amber-500 to-orange-600" />
-        </div>
+        </StatGrid>
       )}
 
       <PageToolbar
@@ -254,31 +261,7 @@ export function DeliveryPage() {
 
       {activeTab === 0 && (
         <div className="space-y-4">
-          {canCreate && (
-            <QuickActionGrid>
-              <QuickActionCard
-                label="Add delivery"
-                desc="Schedule a customer dispatch"
-                icon={Truck}
-                color="bg-primary-50 text-primary-600 border-primary-100"
-                onClick={() => setDeliveryModalOpen(true)}
-              />
-              <QuickActionCard
-                label="Pending deliveries"
-                desc="Notes awaiting assignment"
-                icon={Package}
-                color="bg-amber-50 text-amber-600 border-amber-100"
-                onClick={() => { setStatus('PENDING'); setPage(1); goToTab(1); }}
-              />
-              <QuickActionCard
-                label="Manage fleet"
-                desc="Motorcycles, trucks & lorries"
-                icon={Container}
-                color="bg-violet-50 text-violet-600 border-violet-100"
-                onClick={() => goToTab(2)}
-              />
-            </QuickActionGrid>
-          )}
+          <OverviewHint>Use the tabs above to manage records. Summary counts are shown at the top.</OverviewHint>
 
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
             <Card
@@ -382,21 +365,6 @@ export function DeliveryPage() {
                 </button>
               ))}
             </div>
-          )}
-
-          {recentDeliveries.length > 0 && (
-            <Card
-              title="Delivery snapshot"
-              action={<Button variant="ghost" size="sm" onClick={() => goToTab(1)}>View all</Button>}
-              padding={false}
-            >
-              <Table
-                columns={deliveryColumns.filter((c) => c.key !== 'actions')}
-                data={recentDeliveries}
-                embedded
-                onRowClick={(row) => openDetail(row as unknown as DeliveryNote)}
-              />
-            </Card>
           )}
         </div>
       )}
@@ -524,9 +492,10 @@ export function DeliveryPage() {
                 <Button
                   loading={statusMutation.isPending}
                   onClick={() =>
-                    statusMutation.mutate({
+                    setPendingStatusChange({
                       id: selected.id,
                       status: NEXT_DELIVERY_STATUS[selected.status].status,
+                      label: NEXT_DELIVERY_STATUS[selected.status].label,
                     })
                   }
                 >
@@ -540,9 +509,10 @@ export function DeliveryPage() {
                   variant="secondary"
                   loading={statusMutation.isPending}
                   onClick={() =>
-                    statusMutation.mutate({
+                    setPendingStatusChange({
                       id: selected.id,
                       status: 'DELIVERED',
+                      label: 'Mark Delivered with POD',
                       proofOfDelivery: 'Confirmed by customer',
                     })
                   }
@@ -554,6 +524,30 @@ export function DeliveryPage() {
           </div>
         )}
       </Modal>
+
+      <ConfirmDialog
+        open={!!pendingStatusChange}
+        title="Update delivery status?"
+        message={
+          pendingStatusChange
+            ? `This will change the delivery to "${pendingStatusChange.status.replace(/_/g, ' ')}". Continue?`
+            : ''
+        }
+        confirmLabel={pendingStatusChange?.label || 'Confirm'}
+        loading={statusMutation.isPending}
+        onCancel={() => setPendingStatusChange(null)}
+        onConfirm={() => {
+          if (!pendingStatusChange) return;
+          statusMutation.mutate(
+            {
+              id: pendingStatusChange.id,
+              status: pendingStatusChange.status,
+              proofOfDelivery: pendingStatusChange.proofOfDelivery,
+            },
+            { onSettled: () => setPendingStatusChange(null) }
+          );
+        }}
+      />
     </div>
   );
 }

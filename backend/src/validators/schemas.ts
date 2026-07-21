@@ -75,11 +75,16 @@ export const createProductSchema = z.object({
   distributorPrice: z.number().min(0).optional(),
   retailPrice: z.number().min(0).optional(),
   minStockLevel: z.number().int().min(0).optional(),
+  initialQuantity: z.coerce.number().int().min(0).optional(),
+  warehouseId: z.string().uuid().optional(),
 });
 
-export const updateProductSchema = createProductSchema.partial().extend({
-  isActive: z.boolean().optional(),
-});
+export const updateProductSchema = createProductSchema
+  .omit({ initialQuantity: true, warehouseId: true })
+  .partial()
+  .extend({
+    isActive: z.boolean().optional(),
+  });
 
 export const createRawMaterialSchema = z.object({
   code: z.string().min(1),
@@ -179,6 +184,7 @@ const optionalDateString = z.preprocess(
 export const createSalesOrderSchema = z.object({
   customerId: z.string().uuid(),
   quotationId: z.string().uuid().optional(),
+  salesPersonId: z.string().uuid().optional(),
   requiredDate: optionalDateString,
   notes: z.string().optional(),
   items: z.array(z.object({
@@ -187,6 +193,28 @@ export const createSalesOrderSchema = z.object({
     unitPrice: z.coerce.number().min(0),
     discount: z.coerce.number().min(0).max(100).optional(),
   })).min(1),
+});
+
+export const upsertSalesTargetSchema = z.object({
+  salesPersonId: z.string().uuid(),
+  year: z.coerce.number().int().min(2020).max(2100),
+  month: z.coerce.number().int().min(1).max(12),
+  targetAmount: z.coerce.number().min(0),
+});
+
+export const mySalesQuerySchema = paginationSchema.extend({
+  salesPersonId: z.preprocess(
+    (v) => (v === '' || v === undefined ? undefined : v),
+    z.string().uuid().optional()
+  ),
+  from: z.preprocess(
+    (v) => (v === '' || v === undefined ? undefined : v),
+    z.string().optional()
+  ),
+  to: z.preprocess(
+    (v) => (v === '' || v === undefined ? undefined : v),
+    z.string().optional()
+  ),
 });
 
 export const createPurchaseOrderSchema = z.object({
@@ -448,6 +476,10 @@ export const qualityListQuerySchema = paginationSchema.extend({
     (v) => (v === '' || v === undefined ? undefined : v),
     z.string().optional()
   ),
+  productionOrderId: z.preprocess(
+    (v) => (v === '' || v === undefined ? undefined : v),
+    z.string().uuid().optional()
+  ),
 });
 
 export const updateQualityInspectionSchema = z.object({
@@ -462,12 +494,31 @@ export const salesListQuerySchema = paginationSchema.extend({
     (v) => (v === '' || v === undefined ? undefined : v),
     z.string().optional()
   ),
+  salesPersonId: z.preprocess(
+    (v) => (v === '' || v === undefined ? undefined : v),
+    z.string().uuid().optional()
+  ),
 });
 
 export const deliveryListQuerySchema = paginationSchema.extend({
   status: z.preprocess(
     (v) => (v === '' || v === undefined ? undefined : v),
     z.enum(['PENDING', 'ASSIGNED', 'IN_TRANSIT', 'DELIVERED', 'FAILED', 'RETURNED']).optional()
+  ),
+});
+
+export const salesByPersonQuerySchema = paginationSchema.extend({
+  salesPersonId: z.preprocess(
+    (v) => (v === '' || v === undefined ? undefined : v),
+    z.string().uuid().optional()
+  ),
+  startDate: z.preprocess(
+    (v) => (v === '' || v === undefined ? undefined : v),
+    z.string().optional()
+  ),
+  endDate: z.preprocess(
+    (v) => (v === '' || v === undefined ? undefined : v),
+    z.string().optional()
   ),
 });
 
@@ -542,4 +593,16 @@ export const createJournalEntrySchema = z.object({
 
 export const approveLeaveSchema = z.object({
   status: z.enum(['APPROVED', 'REJECTED', 'CANCELLED']),
+});
+
+export const searchQuerySchema = z.object({
+  q: z.string().min(2).max(100).optional(),
+});
+
+export const grnIdParamSchema = z.object({
+  grnId: z.string().uuid(),
+});
+
+export const orderIdParamSchema = z.object({
+  orderId: z.string().uuid(),
 });

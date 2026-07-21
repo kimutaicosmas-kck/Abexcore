@@ -8,7 +8,7 @@ import { Button, Input, Select } from '../ui';
 import { Product } from '../../types';
 
 const productSchema = z.object({
-  sku: z.string().min(1, 'SKU is required'),
+  sku: z.string().min(1, 'Part number is required'),
   barcode: z.string().optional(),
   name: z.string().min(1, 'Name is required'),
   category: z.enum([
@@ -16,15 +16,22 @@ const productSchema = z.object({
     'HYDRAULIC_FILTER', 'WATER_FILTER', 'INDUSTRIAL_FILTER', 'CUSTOM_FILTER',
   ]),
   description: z.string().optional(),
-  manufacturingCost: z.coerce.number().min(0).optional(),
   sellingPrice: z.coerce.number().min(0).optional(),
   distributorPrice: z.coerce.number().min(0).optional(),
   retailPrice: z.coerce.number().min(0).optional(),
   minStockLevel: z.coerce.number().int().min(0).optional(),
+  initialQuantity: z.coerce.number().int().min(0).optional(),
+  warehouseId: z.string().optional(),
   isActive: z.boolean().optional(),
 });
 
 type ProductFormData = z.infer<typeof productSchema>;
+
+interface StockWarehouse {
+  id: string;
+  code: string;
+  name: string;
+}
 
 interface ProductFormProps {
   product?: Product | null;
@@ -41,12 +48,26 @@ export function ProductForm({ product, onSuccess, onCancel }: ProductFormProps) 
     queryFn: () => productsApi.categories().then((r) => r.data.data as string[]),
   });
 
+  const { data: warehousesData } = useQuery({
+    queryKey: ['product-stock-warehouses'],
+    queryFn: () => productsApi.stockWarehouses().then((r) => r.data.data as StockWarehouse[]),
+    enabled: !isEdit,
+  });
+
   const categoryOptions = (categoriesData || []).map((c) => ({
     value: c,
     label: c.replace(/_/g, ' '),
   }));
 
-  const { register, handleSubmit, formState: { errors } } = useForm<ProductFormData>({
+  const warehouseOptions = [
+    { value: '', label: 'Default finished goods warehouse' },
+    ...(warehousesData || []).map((w) => ({
+      value: w.id,
+      label: `${w.code} - ${w.name}`,
+    })),
+  ];
+
+  const { register, handleSubmit, watch, formState: { errors } } = useForm<ProductFormData>({
     resolver: zodResolver(productSchema),
     defaultValues: product
       ? {
@@ -54,7 +75,6 @@ export function ProductForm({ product, onSuccess, onCancel }: ProductFormProps) 
           barcode: product.barcode || '',
           name: product.name,
           category: product.category as ProductFormData['category'],
-          manufacturingCost: Number(product.manufacturingCost),
           sellingPrice: Number(product.sellingPrice),
           distributorPrice: Number(product.distributorPrice),
           retailPrice: Number(product.retailPrice),
@@ -62,15 +82,30 @@ export function ProductForm({ product, onSuccess, onCancel }: ProductFormProps) 
           description: product.description || '',
           isActive: product.isActive,
         }
-      : { category: 'OIL_FILTER', minStockLevel: 0, isActive: true },
+      : {
+          category: 'OIL_FILTER',
+          minStockLevel: 0,
+          initialQuantity: 0,
+          warehouseId: '',
+          isActive: true,
+        },
   });
 
+  const initialQuantity = Number(watch('initialQuantity') || 0);
+
   const mutation = useMutation({
-    mutationFn: (data: ProductFormData) =>
-      isEdit ? productsApi.update(product!.id, data) : productsApi.create(data),
+    mutationFn: (data: ProductFormData) => {
+      const payload = {
+        ...data,
+        warehouseId: data.warehouseId || undefined,
+      };
+      return isEdit ? productsApi.update(product!.id, payload) : productsApi.create(payload);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['products'] });
       queryClient.invalidateQueries({ queryKey: ['product-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['inventory'] });
+      queryClient.invalidateQueries({ queryKey: ['stock-levels'] });
       if (isEdit) queryClient.invalidateQueries({ queryKey: ['product-detail', product!.id] });
       onSuccess();
     },
@@ -86,15 +121,32 @@ export function ProductForm({ product, onSuccess, onCancel }: ProductFormProps) 
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <Input label="SKU *" {...register('sku')} error={errors.sku?.message} disabled={isEdit} />
+        <Input label="Part number *" {...register('sku')} error={errors.sku?.message} disabled={isEdit} />
         <Input label="Barcode" {...register('barcode')} />
         <Input label="Product Name *" {...register('name')} error={errors.name?.message} className="md:col-span-2" />
         <Select label="Category *" options={categoryOptions} {...register('category')} error={errors.category?.message} />
         <Input label="Min Stock Level" type="number" {...register('minStockLevel')} />
-        <Input label="Manufacturing Cost (KES)" type="number" step="0.01" {...register('manufacturingCost')} />
         <Input label="Selling Price (KES)" type="number" step="0.01" {...register('sellingPrice')} />
         <Input label="Distributor Price (KES)" type="number" step="0.01" {...register('distributorPrice')} />
         <Input label="Retail Price (KES)" type="number" step="0.01" {...register('retailPrice')} />
+        {!isEdit && (
+          <>
+            <Input
+              label="Opening stock quantity"
+              type="number"
+              min={0}
+              step={1}
+              {...register('initialQuantity')}
+              error={errors.initialQuantity?.message}
+            />
+            <Select
+              label="Stock warehouse"
+              options={warehouseOptions}
+              {...register('warehouseId')}
+              disabled={initialQuantity <= 0}
+            />
+          </>
+        )}
         {isEdit && (
           <Select
             label="Status"
@@ -106,6 +158,12 @@ export function ProductForm({ product, onSuccess, onCancel }: ProductFormProps) 
           />
         )}
       </div>
+      {!isEdit && (
+        <p className="text-xs text-slate-500">
+          Enter how many units you have on hand (e.g. 5000). Stock is recorded when the product is created.
+          Use Inventory to adjust stock later.
+        </p>
+      )}
       <Input label="Description" {...register('description')} />
 
       <div className="flex justify-end gap-3 pt-4 border-t">

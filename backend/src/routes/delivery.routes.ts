@@ -41,7 +41,6 @@ import { FinanceInvoiceService } from '../services/finance.service';
 import { SalesOrderService } from '../services/sales-order.service';
 
 import { AccountingService } from '../services/accounting.service';
-
 import { Prisma } from '@prisma/client';
 
 

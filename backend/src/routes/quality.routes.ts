@@ -31,18 +31,20 @@ router.get(
   authorize('quality:read'),
   validate(qualityListQuerySchema, 'query'),
   asyncHandler(async (req: AuthRequest, res: Response) => {
-    const { page, limit, search, status, type } = getQuery<{
+    const { page, limit, search, status, type, productionOrderId } = getQuery<{
       page: number;
       limit: number;
       search?: string;
       status?: string;
       type?: string;
+      productionOrderId?: string;
     }>(req.query);
     const skip = (page - 1) * limit;
 
     const where: Prisma.QualityInspectionWhereInput = {};
     if (status) where.status = status as Prisma.EnumQualityStatusFilter['equals'];
     if (type) where.type = type;
+    if (productionOrderId) where.productionOrderId = productionOrderId;
     if (search) {
       where.OR = [
         { inspectionNo: { contains: search } },

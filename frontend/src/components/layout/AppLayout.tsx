@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
 import { TopNav } from './TopNav';
+import { PwaShell } from '../pwa/PwaShell';
+import { RealtimeSync } from './RealtimeSync';
 
 const SIDEBAR_WIDTH = '15rem';
 const SIDEBAR_COLLAPSED = '4rem';
@@ -37,7 +39,8 @@ export function AppLayout() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-100/80">
+    <div className="min-h-screen bg-slate-100/80 overflow-x-hidden">
+      <RealtimeSync />
       {isMobileOverlay && (
         <button
           type="button"
@@ -59,12 +62,14 @@ export function AppLayout() {
         mobileOpen={mobileOpen}
       />
 
+      <PwaShell />
+
       <main
-        className="pt-14 transition-all duration-300 min-h-screen lg:ml-[var(--sidebar-w)]"
+        className="pt-14 pb-[max(1rem,env(safe-area-inset-bottom))] transition-all duration-300 min-h-screen min-w-0 overflow-x-hidden lg:ml-[var(--sidebar-w)]"
         style={{ '--sidebar-w': sidebarOffset } as React.CSSProperties}
       >
-        <div className="px-4 py-4 sm:px-5 max-w-[1600px] mx-auto">
-          <div key={location.pathname} className="animate-fade-in">
+        <div className="px-4 py-4 sm:px-5 max-w-[1600px] mx-auto min-w-0">
+          <div key={location.pathname} className="animate-fade-in min-w-0">
             <Outlet />
           </div>
         </div>

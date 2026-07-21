@@ -14,7 +14,8 @@
     "docker:down": "docker-compose down",
     "db:migrate": "npm run db:migrate --prefix backend",
     "db:seed": "npm run db:seed --prefix backend",
-    "db:seed:production": "npm run db:seed:production --prefix backend"
+    "db:seed:production": "npm run db:seed:production --prefix backend",
+    "db:backup": "powershell -ExecutionPolicy Bypass -File scripts/backup-mysql.ps1"
   },
   "devDependencies": {
     "@playwright/test": "^1.52.0",

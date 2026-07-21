@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { inventoryApi, productsApi } from '../../services/api';
 import { Button, Input, Select } from '../ui';
 import { Product, RawMaterial } from '../../types';
+import { formatProductOptionLabel } from '../../utils/productDisplay';
 
 const transferSchema = z.object({
   fromWarehouseId: z.string().min(1, 'Source warehouse required'),
@@ -82,7 +83,7 @@ export function StockTransferForm({ onSuccess, onCancel }: StockTransferFormProp
       />
       <Select
         label="Product"
-        options={[{ value: '', label: 'None' }, ...(products || []).map((p) => ({ value: p.id, label: `${p.sku} - ${p.name}` }))]}
+        options={[{ value: '', label: 'None' }, ...(products || []).map((p) => ({ value: p.id, label: formatProductOptionLabel(p) }))]}
         {...register('productId')}
       />
       <Input label="Quantity *" type="number" step="0.001" min={0.001} {...register('quantity')} error={errors.quantity?.message} />

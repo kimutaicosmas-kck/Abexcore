@@ -75,6 +75,7 @@ export interface ApiResponse<T> {
 export interface DashboardKPIs {
   salesToday: number;
   salesThisMonth: number;
+  ordersInPeriod?: number;
   purchaseOrders: number;
   productionOrders: number;
   ordersAwaitingProduction: number;
@@ -96,6 +97,7 @@ export interface DashboardKPIs {
     finance: { overdueInvoices: number; accountsReceivable: number; monthlyProfit: number };
   };
   lastUpdated: string;
+  period?: { from: string; to: string };
 }
 
 export interface DashboardCharts {
@@ -312,6 +314,7 @@ export interface SalesOrder {
   items: SalesOrderItem[];
   invoices?: { id: string; invoiceNumber: string; status: string; totalAmount: number }[];
   deliveries?: { id: string; deliveryNo: string; status: string }[];
+  productionOrders?: { id: string; orderNumber: string; status: string }[];
 }
 
 export interface SalesOrderItem {
@@ -599,6 +602,50 @@ export interface ReportsOverview {
   topCustomers: { id: string; name: string; code: string; orderCount: number }[];
 }
 
+export interface SalesOfficerOption {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+}
+
+export interface SalesByPersonSummary {
+  invoiceCount: number;
+  totalSales: number;
+  totalPaid: number;
+  outstanding: number;
+  bySalesPerson: {
+    id: string;
+    name: string;
+    invoiceCount: number;
+    totalSales: number;
+    totalPaid: number;
+  }[];
+}
+
+export interface SalesByPersonRow {
+  id: string;
+  invoiceNumber: string;
+  orderNumber: string;
+  orderId: string | null;
+  invoiceDate: string;
+  customerId: string | null;
+  customerName: string;
+  customerCode: string;
+  salesPersonId: string | null;
+  salesPersonName: string;
+  totalAmount: number;
+  paidAmount: number;
+  balance: number;
+  status: string;
+}
+
+export interface SalesByPersonReport {
+  summary: SalesByPersonSummary;
+  rows: SalesByPersonRow[];
+  pagination: Pagination;
+}
+
 export interface MaintenanceRequest {
   id: string;
   type: string;
@@ -643,4 +690,47 @@ export interface PayrollRecord {
   netPay: number;
   isPaid: boolean;
   employee: { firstName: string; lastName: string; employeeNo: string };
+}
+
+export interface MySalesSummary {
+  totalSales: number;
+  totalInvoiced: number;
+  totalPaid: number;
+  outstanding: number;
+  invoiceCount: number;
+  monthlyTarget: number;
+  monthInvoiced?: number;
+  achievementPercent: number | null;
+  ordersByStatus: { status: string; count: number; value: number }[];
+}
+
+export interface MySalesOrderRow {
+  id: string;
+  orderNumber: string;
+  customerName: string;
+  customerCode: string;
+  orderDate: string;
+  status: string;
+  totalAmount: number;
+  invoicedAmount: number;
+  paidAmount: number;
+  invoiceCount?: number;
+  isOverInvoiced?: boolean;
+}
+
+export interface MySalesDashboard {
+  salesPerson: { id: string; name: string; email: string };
+  period: { from: string; to: string };
+  summary: MySalesSummary;
+  orders: MySalesOrderRow[];
+  pagination: Pagination;
+}
+
+export interface SalesTargetRow {
+  salesPersonId: string;
+  name: string;
+  email: string;
+  year: number;
+  month: number;
+  targetAmount: number;
 }

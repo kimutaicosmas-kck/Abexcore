@@ -95,13 +95,6 @@ export class ExportService {
         doc.fontSize(9).fillColor('#666').text(`Notes: ${invoice.notes}`);
       }
 
-      doc.fontSize(8).fillColor('#9ca3af').text(
-        'Powered by ApexCore ERP — Designed by ApexCore Technologies',
-        50,
-        doc.page.height - 50,
-        { align: 'center' }
-      );
-
       doc.end();
     });
   }
@@ -170,26 +163,47 @@ export class ExportService {
   static async generateSalesReportExcel(): Promise<Buffer> {
     const invoices = await prisma.invoice.findMany({
       where: { type: 'SALES' },
-      include: { customer: true },
+      include: {
+        customer: true,
+        salesOrder: {
+          include: {
+            createdBy: { select: { firstName: true, lastName: true } },
+          },
+        },
+      },
       orderBy: { invoiceDate: 'desc' },
     });
 
     const workbook = new ExcelJS.Workbook();
     const sheet = workbook.addWorksheet('Sales Report');
 
-    sheet.mergeCells('A1:F1');
+    sheet.mergeCells('A1:G1');
     sheet.getCell('A1').value = 'Sales Report — ApexCore ERP';
     sheet.getCell('A1').font = { bold: true, size: 14 };
     sheet.getCell('A2').value = `Generated: ${new Date().toLocaleString('en-KE')}`;
 
-    const headerRow = sheet.addRow(['Invoice #', 'Customer', 'Date', 'Amount', 'Paid', 'Status']);
+    const headerRow = sheet.addRow([
+      'Invoice #',
+      'Order #',
+      'Sales Person',
+      'Customer',
+      'Date',
+      'Amount',
+      'Paid',
+      'Status',
+    ]);
     headerRow.font = { bold: true };
 
     let total = 0;
     for (const inv of invoices) {
       total += Number(inv.totalAmount);
+      const salesPerson = inv.salesOrder?.createdBy
+        ? `${inv.salesOrder.createdBy.firstName} ${inv.salesOrder.createdBy.lastName}`.trim()
+        : '';
       sheet.addRow([
         inv.invoiceNumber,
+        inv.salesOrder?.orderNumber || '',
+        salesPerson,
         inv.customer?.name || '',
         inv.invoiceDate,
         Number(inv.totalAmount),
@@ -199,9 +213,90 @@ export class ExportService {
     }
 
     sheet.addRow([]);
-    sheet.addRow(['', '', 'Total', total, '', '']);
+    sheet.addRow(['', '', '', '', 'Total', total, '', '']);
 
-    sheet.columns = [{ width: 18 }, { width: 30 }, { width: 15 }, { width: 15 }, { width: 15 }, { width: 12 }];
+    sheet.columns = [
+      { width: 18 },
+      { width: 16 },
+      { width: 22 },
+      { width: 30 },
+      { width: 15 },
+      { width: 15 },
+      { width: 15 },
+      { width: 12 },
+    ];
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    return Buffer.from(buffer);
+  }
+
+  static async generateSalesByPersonExcel(query: {
+    salesPersonId?: string;
+    startDate?: string;
+    endDate?: string;
+  }): Promise<Buffer> {
+    const { SalespersonReportService } = await import('./salesperson-report.service');
+    const rows = await SalespersonReportService.getRowsForExport(query);
+
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet('Sales by Salesperson');
+
+    sheet.mergeCells('A1:I1');
+    sheet.getCell('A1').value = 'Sales by Salesperson — ApexCore ERP';
+    sheet.getCell('A1').font = { bold: true, size: 14 };
+    sheet.getCell('A2').value = `Generated: ${new Date().toLocaleString('en-KE')}`;
+    if (query.startDate || query.endDate) {
+      sheet.getCell('A3').value = `Period: ${query.startDate || 'start'} to ${query.endDate || 'today'}`;
+    }
+
+    const headerRow = sheet.addRow([
+      'Invoice #',
+      'Order #',
+      'Date',
+      'Sales Person',
+      'Customer',
+      'Customer Code',
+      'Amount (KES)',
+      'Paid (KES)',
+      'Balance (KES)',
+      'Status',
+    ]);
+    headerRow.font = { bold: true };
+
+    let total = 0;
+    let paid = 0;
+    for (const row of rows) {
+      total += row.totalAmount;
+      paid += row.paidAmount;
+      sheet.addRow([
+        row.invoiceNumber,
+        row.orderNumber,
+        row.invoiceDate,
+        row.salesPersonName,
+        row.customerName,
+        row.customerCode,
+        row.totalAmount,
+        row.paidAmount,
+        row.balance,
+        row.status,
+      ]);
+    }
+
+    sheet.addRow([]);
+    sheet.addRow(['', '', '', '', '', 'Totals', total, paid, total - paid, '']);
+
+    sheet.columns = [
+      { width: 18 },
+      { width: 16 },
+      { width: 14 },
+      { width: 22 },
+      { width: 28 },
+      { width: 14 },
+      { width: 14 },
+      { width: 14 },
+      { width: 14 },
+      { width: 12 },
+    ];
 
     const buffer = await workbook.xlsx.writeBuffer();
     return Buffer.from(buffer);

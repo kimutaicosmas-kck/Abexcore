@@ -77,8 +77,8 @@ export async function assertCreditLimit(
 
 const ORDER_TRANSITIONS: Record<string, string[]> = {
   PENDING: ['CONFIRMED', 'CANCELLED'],
-  CONFIRMED: ['IN_PRODUCTION', 'READY', 'CANCELLED'],
-  IN_PRODUCTION: ['CANCELLED'],
+  CONFIRMED: ['READY', 'CANCELLED'],
+  IN_PRODUCTION: ['READY', 'CANCELLED'],
   READY: ['CANCELLED'],
   PARTIALLY_DELIVERED: ['CANCELLED'],
   DISPATCHED: ['COMPLETED'],
@@ -93,7 +93,9 @@ export function assertOrderStatusTransition(
   options?: { system?: boolean }
 ): void {
   if (options?.system) {
+    if (current === 'PENDING' && next === 'READY') return;
     if (current === 'CONFIRMED' && next === 'IN_PRODUCTION') return;
+    if (current === 'CONFIRMED' && next === 'READY') return;
     if (current === 'IN_PRODUCTION' && next === 'READY') return;
     if (current === 'READY' && next === 'DISPATCHED') return;
     if (current === 'READY' && next === 'PARTIALLY_DELIVERED') return;

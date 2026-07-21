@@ -98,6 +98,7 @@ enum PaymentMethod {
   BANK_TRANSFER
   CHEQUE
   MPESA
+  COOP_PAYBILL
   CARD
   CREDIT
 }
@@ -203,6 +204,10 @@ model Company {
   currency       String   @default("KES")
   financialYearStart Int  @default(1) @map("financial_year_start")
   vatRate        Decimal  @default(16) @map("vat_rate") @db.Decimal(5, 2)
+  customerVatRate Decimal @default(2) @map("customer_vat_rate") @db.Decimal(5, 2)
+  companyVatRate  Decimal @default(14) @map("company_vat_rate") @db.Decimal(5, 2)
+  qualityModuleEnabled Boolean @default(false) @map("quality_module_enabled")
+  coopPaybillNumber String? @map("coop_paybill_number")
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
 
@@ -348,7 +353,9 @@ model User {
   notifications    Notification[]
   purchaseReqs     PurchaseRequisition[] @relation("CreatedByUser")
   approvedReqs     PurchaseRequisition[] @relation("ApprovedByUser")
-  salesOrders      SalesOrder[]
+  salesOrders      SalesOrder[]      @relation("SalesOrderCreator")
+  assignedSalesOrders SalesOrder[]   @relation("SalesOrderSalesPerson")
+  salesTargets     SalesTarget[]
   productionOrders ProductionOrder[]
 
   @@map("users")
@@ -444,6 +451,8 @@ model Customer {
   warranties    Warranty[]
   opportunities Opportunity[]
 
+  @@index([deletedAt, isActive])
+  @@index([name])
   @@map("customers")
 }
 
@@ -579,6 +588,8 @@ model Product {
   distributorPrice Decimal         @default(0) @map("distributor_price") @db.Decimal(15, 2)
   retailPrice      Decimal         @default(0) @map("retail_price") @db.Decimal(15, 2)
   minStockLevel    Int             @default(0) @map("min_stock_level")
+  isImported       Boolean         @default(false) @map("is_imported")
+  requiresProduction Boolean       @default(false) @map("requires_production")
   isActive         Boolean         @default(true) @map("is_active")
   createdAt        DateTime        @default(now()) @map("created_at")
   updatedAt        DateTime        @updatedAt @map("updated_at")
@@ -591,6 +602,8 @@ model Product {
   productionOrders ProductionOrder[]
   warranties       Warranty[]
 
+  @@index([deletedAt, isActive])
+  @@index([category])
   @@map("products")
 }
 
@@ -821,8 +834,11 @@ model PurchaseOrder {
   quotation SupplierQuotation? @relation(fields: [quotationId], references: [id])
   items     PurchaseOrderItem[]
   receipts  GoodsReceipt[]
-  invoices  Invoice[]
+  invoices      Invoice[]
 
+  @@index([status])
+  @@index([supplierId])
+  @@index([orderDate])
   @@map("purchase_orders")
 }
 
@@ -1025,7 +1041,8 @@ model SalesOrder {
   orderNumber  String      @unique @map("order_number")
   customerId   String      @map("customer_id")
   quotationId  String?     @map("quotation_id")
-  createdById  String      @map("created_by_id")
+  createdById   String      @map("created_by_id")
+  salesPersonId String?     @map("sales_person_id")
   orderDate    DateTime    @default(now()) @map("order_date")
   requiredDate DateTime?   @map("required_date")
   status       OrderStatus @default(PENDING)
@@ -1038,12 +1055,17 @@ model SalesOrder {
 
   customer         Customer          @relation(fields: [customerId], references: [id])
   quotation        SalesQuotation?   @relation(fields: [quotationId], references: [id])
-  createdBy        User              @relation(fields: [createdById], references: [id])
+  createdBy        User              @relation("SalesOrderCreator", fields: [createdById], references: [id])
+  salesPerson      User?             @relation("SalesOrderSalesPerson", fields: [salesPersonId], references: [id])
   items            SalesOrderItem[]
   productionOrders ProductionOrder[]
   invoices         Invoice[]
   deliveries       DeliveryNote[]
 
+  @@index([status])
+  @@index([customerId])
+  @@index([orderDate])
+  @@index([salesPersonId])
   @@map("sales_orders")
 }
 
@@ -1061,6 +1083,21 @@ model SalesOrderItem {
   product    Product    @relation(fields: [productId], references: [id])
 
   @@map("sales_order_items")
+}
+
+model SalesTarget {
+  id            String   @id @default(uuid())
+  salesPersonId String   @map("user_id")
+  year          Int
+  month         Int
+  targetAmount  Decimal  @map("target_amount") @db.Decimal(15, 2)
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  salesPerson User @relation(fields: [salesPersonId], references: [id], onDelete: Cascade)
+
+  @@unique([salesPersonId, year, month])
+  @@map("sales_targets")
 }
 
 // ==================== DELIVERY ====================
@@ -1175,6 +1212,8 @@ model Invoice {
   dueDate         DateTime?     @map("due_date")
   subtotal        Decimal       @default(0) @db.Decimal(15, 2)
   taxAmount       Decimal       @default(0) @map("tax_amount") @db.Decimal(15, 2)
+  customerVatAmount Decimal     @default(0) @map("customer_vat_amount") @db.Decimal(15, 2)
+  companyVatAmount Decimal      @default(0) @map("company_vat_amount") @db.Decimal(15, 2)
   totalAmount     Decimal       @default(0) @map("total_amount") @db.Decimal(15, 2)
   paidAmount      Decimal       @default(0) @map("paid_amount") @db.Decimal(15, 2)
   status          PaymentStatus @default(UNPAID)
@@ -1196,7 +1235,13 @@ model Invoice {
   items         InvoiceItem[]
   payments      Payment[]
   mpesaTransactions MpesaTransaction[]
+  paymentAllocations PaymentAllocation[]
 
+  @@index([status])
+  @@index([customerId])
+  @@index([invoiceDate])
+  @@index([dueDate])
+  @@index([type])
   @@map("invoices")
 }
 
@@ -1232,8 +1277,22 @@ model Payment {
   invoice Invoice? @relation(fields: [invoiceId], references: [id])
   statementLine BankStatementLine?
   mpesaTransaction MpesaTransaction?
+  allocations PaymentAllocation[]
 
   @@map("payments")
+}
+
+model PaymentAllocation {
+  id        String   @id @default(uuid())
+  paymentId String   @map("payment_id")
+  invoiceId String   @map("invoice_id")
+  amount    Decimal  @db.Decimal(15, 2)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  payment Payment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@map("payment_allocations")
 }
 
 // ==================== HR ====================

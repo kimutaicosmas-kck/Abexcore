@@ -18,15 +18,26 @@ import { QualityPage } from './pages/QualityPage';
 import { ReportsPage } from './pages/ReportsPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { DeliveryPage } from './pages/DeliveryPage';
+import { MySalesPage } from './pages/MySalesPage';
+import { SalesTargetsPage } from './pages/SalesTargetsPage';
 import { ChangePasswordPage } from './pages/ChangePasswordPage';
+import { NotFoundPage } from './pages/NotFoundPage';
+import { PermissionRoute } from './components/auth/PermissionRoute';
+import { InactivityMonitor } from './components/auth/InactivityMonitor';
+import { LoadingSpinner, ErrorBoundary } from './components/ui';
+import { LIVE_STALE_MS } from './config/realtime';
 
 const queryClient = new QueryClient({
   defaultOptions: {
-    queries: { retry: 1, refetchOnWindowFocus: false },
+    queries: {
+      retry: 1,
+      refetchOnWindowFocus: true,
+      refetchOnReconnect: true,
+      staleTime: LIVE_STALE_MS,
+      gcTime: 5 * 60_000,
+    },
   },
 });
-
-import { LoadingSpinner } from './components/ui';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading, mustChangePassword } = useAuth();
@@ -62,34 +73,39 @@ function AppRoutes() {
         }
       >
         <Route index element={<DashboardPage />} />
-        <Route path="users" element={<UsersPage />} />
-        <Route path="customers" element={<CustomersPage />} />
-        <Route path="products" element={<ProductsPage />} />
-        <Route path="inventory" element={<InventoryPage />} />
-        <Route path="procurement" element={<ProcurementPage />} />
-        <Route path="production" element={<ProductionPage />} />
-        <Route path="quality" element={<QualityPage />} />
-        <Route path="sales" element={<SalesPage />} />
-        <Route path="delivery" element={<DeliveryPage />} />
-        <Route path="finance" element={<FinancePage />} />
-        <Route path="hr" element={<HRPage />} />
-        <Route path="maintenance" element={<MaintenancePage />} />
-        <Route path="reports" element={<ReportsPage />} />
-        <Route path="settings" element={<SettingsPage />} />
+        <Route path="users" element={<PermissionRoute><UsersPage /></PermissionRoute>} />
+        <Route path="customers" element={<PermissionRoute><CustomersPage /></PermissionRoute>} />
+        <Route path="products" element={<PermissionRoute><ProductsPage /></PermissionRoute>} />
+        <Route path="inventory" element={<PermissionRoute><InventoryPage /></PermissionRoute>} />
+        <Route path="procurement" element={<PermissionRoute><ProcurementPage /></PermissionRoute>} />
+        <Route path="production" element={<PermissionRoute><ProductionPage /></PermissionRoute>} />
+        <Route path="quality" element={<PermissionRoute><QualityPage /></PermissionRoute>} />
+        <Route path="sales" element={<PermissionRoute><SalesPage /></PermissionRoute>} />
+        <Route path="my-sales" element={<PermissionRoute><MySalesPage /></PermissionRoute>} />
+        <Route path="sales-targets" element={<PermissionRoute><SalesTargetsPage /></PermissionRoute>} />
+        <Route path="delivery" element={<PermissionRoute><DeliveryPage /></PermissionRoute>} />
+        <Route path="finance" element={<PermissionRoute><FinancePage /></PermissionRoute>} />
+        <Route path="hr" element={<PermissionRoute><HRPage /></PermissionRoute>} />
+        <Route path="maintenance" element={<PermissionRoute><MaintenancePage /></PermissionRoute>} />
+        <Route path="reports" element={<PermissionRoute><ReportsPage /></PermissionRoute>} />
+        <Route path="settings" element={<PermissionRoute><SettingsPage /></PermissionRoute>} />
       </Route>
-      <Route path="*" element={<Navigate to="/" replace />} />
+      <Route path="*" element={<NotFoundPage />} />
     </Routes>
   );
 }
 
 export default function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
-        <AuthProvider>
-          <AppRoutes />
-        </AuthProvider>
-      </BrowserRouter>
-    </QueryClientProvider>
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <BrowserRouter>
+          <AuthProvider>
+            <InactivityMonitor />
+            <AppRoutes />
+          </AuthProvider>
+        </BrowserRouter>
+      </QueryClientProvider>
+    </ErrorBoundary>
   );
 }

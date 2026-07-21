@@ -22,11 +22,10 @@ import {
   Select,
   Card,
   StatCard,
+  StatGrid,
   Alert,
   EmptyState,
   DataPanel,
-  QuickActionCard,
-  QuickActionGrid,
   TablePagination,
   formatCurrency,
   PageToolbar,
@@ -35,7 +34,9 @@ import { Modal } from '../components/ui/Modal';
 import { ProductForm } from '../components/forms/ProductForm';
 import { BOMForm } from '../components/forms/BOMForm';
 import { useAuth } from '../contexts/AuthContext';
+import { OverviewHint } from '../components/layout/ModuleOverview';
 import { Product, ProductStats } from '../types';
+import { PART_NUMBER_LABEL, formatPartNumberLine } from '../utils/productDisplay';
 
 const tabs = ['Overview', 'Catalog'];
 
@@ -78,7 +79,6 @@ export function ProductsPage() {
   const canCreate = hasPermission('products:create');
   const canUpdate = hasPermission('products:update');
   const canDelete = hasPermission('products:delete');
-
   const { data: stats } = useQuery({
     queryKey: ['product-stats'],
     queryFn: () => productsApi.stats().then((r) => r.data.data as ProductStats),
@@ -143,7 +143,7 @@ export function ProductsPage() {
   const columns = [
     {
       key: 'sku',
-      label: 'SKU',
+      label: PART_NUMBER_LABEL,
       render: (_: unknown, row: Record<string, unknown>) => (
         <div>
           <p className="font-medium">{row.sku as string}</p>
@@ -238,7 +238,7 @@ export function ProductsPage() {
       />
 
       {stats && (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+        <StatGrid>
           <StatCard
             title="Total Products"
             value={stats.total}
@@ -263,38 +263,14 @@ export function ProductsPage() {
             icon={<Layers className="h-5 w-5 text-white" />}
             color="from-orange-500 to-amber-600"
           />
-        </div>
+        </StatGrid>
       )}
 
       <PageToolbar tabs={tabs} activeTab={activeTab} onTabChange={setActiveTab} actions={toolbarActions} />
 
       {activeTab === 0 && (
         <div className="space-y-4">
-          {canCreate && (
-            <QuickActionGrid>
-              <QuickActionCard
-                label="Add product"
-                desc="Register new catalog SKU"
-                icon={Plus}
-                color="bg-emerald-50 text-emerald-600 border-emerald-100"
-                onClick={openAddProduct}
-              />
-              <QuickActionCard
-                label="Missing BOM"
-                desc="Products needing bill of materials"
-                icon={FileText}
-                color="bg-amber-50 text-amber-600 border-amber-100"
-                onClick={() => goToTab(1)}
-              />
-              <QuickActionCard
-                label="Full catalog"
-                desc="Browse all products"
-                icon={ChevronRight}
-                color="bg-violet-50 text-violet-600 border-violet-100"
-                onClick={() => goToTab(1)}
-              />
-            </QuickActionGrid>
-          )}
+          <OverviewHint>Use the tabs above to manage records. Summary counts are shown at the top.</OverviewHint>
 
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
             <Card
@@ -325,7 +301,7 @@ export function ProductsPage() {
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="font-medium text-slate-900 truncate">{product.name}</p>
-                        <p className="text-xs text-slate-500">{product.sku}</p>
+                        <p className="text-xs text-slate-500">{formatPartNumberLine(product.sku)}</p>
                       </div>
                       <Badge variant="warning">Missing</Badge>
                     </li>
@@ -360,41 +336,6 @@ export function ProductsPage() {
               )}
             </Card>
           </div>
-
-          <Card
-            title="Catalog snapshot"
-            action={
-              <Button variant="ghost" size="sm" onClick={() => goToTab(1)}>
-                View all
-              </Button>
-            }
-            padding={false}
-          >
-            {recentProducts.length === 0 && !isLoading ? (
-              <div className="p-6">
-                <EmptyState
-                  title="No products yet"
-                  description="Add products to build your filter catalog."
-                  action={
-                    canCreate ? (
-                      <Button onClick={openAddProduct}>
-                        <Plus className="h-4 w-4 mr-2" />
-                        Add product
-                      </Button>
-                    ) : undefined
-                  }
-                />
-              </div>
-            ) : (
-              <Table
-                columns={columns.filter((c) => c.key !== 'actions')}
-                data={recentProducts}
-                loading={isLoading}
-                onRowClick={(row) => openDetail(row as unknown as Product)}
-                embedded
-              />
-            )}
-          </Card>
         </div>
       )}
 
@@ -406,7 +347,7 @@ export function ProductsPage() {
               onSubmit={(e) => { e.preventDefault(); setSearch(searchInput); setPage(1); }}
             >
               <Input
-                placeholder="Search SKU or name…"
+                placeholder="Search part number or name…"
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
               />
@@ -500,10 +441,9 @@ export function ProductsPage() {
                 <div className="h-24 w-24 rounded-xl bg-surface-muted flex items-center justify-center text-slate-400 text-xs">No image</div>
               )}
               <div className="grid grid-cols-2 gap-3 flex-1 text-sm">
-                <div><p className="text-slate-500">SKU</p><p className="font-semibold">{productDetail.sku}</p></div>
+                <div><p className="text-slate-500">{PART_NUMBER_LABEL}</p><p className="font-semibold">{productDetail.sku}</p></div>
                 <div><p className="text-slate-500">Category</p><Badge variant="info">{productDetail.category.replace(/_/g, ' ')}</Badge></div>
                 <div><p className="text-slate-500">Selling Price</p><p className="font-semibold">{formatCurrency(Number(productDetail.sellingPrice))}</p></div>
-                <div><p className="text-slate-500">Mfg Cost</p><p className="font-semibold">{formatCurrency(Number(productDetail.manufacturingCost))}</p></div>
                 <div><p className="text-slate-500">Min Stock</p><p className="font-semibold">{productDetail.minStockLevel}</p></div>
                 <div><p className="text-slate-500">Status</p><Badge variant={productDetail.isActive ? 'success' : 'danger'}>{productDetail.isActive ? 'Active' : 'Inactive'}</Badge></div>
               </div>
