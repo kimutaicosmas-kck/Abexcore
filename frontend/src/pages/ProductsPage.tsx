@@ -34,7 +34,6 @@ import { Modal } from '../components/ui/Modal';
 import { ProductForm } from '../components/forms/ProductForm';
 import { BOMForm } from '../components/forms/BOMForm';
 import { useAuth } from '../contexts/AuthContext';
-import { OverviewHint } from '../components/layout/ModuleOverview';
 import { Product, ProductStats } from '../types';
 import { PART_NUMBER_LABEL, formatPartNumberLine } from '../utils/productDisplay';
 
@@ -224,10 +223,7 @@ export function ProductsPage() {
 
   return (
     <div className="space-y-1">
-      <PageHeader
-        title="Products"
-        subtitle="Product catalog with BOM, pricing, and image support"
-        action={
+      <PageHeader action={
           stats && stats.withoutBom > 0 ? (
             <Button variant="secondary" size="sm" onClick={() => goToTab(1)}>
               <AlertTriangle className="h-4 w-4 mr-1.5 text-amber-500" />
@@ -270,8 +266,6 @@ export function ProductsPage() {
 
       {activeTab === 0 && (
         <div className="space-y-4">
-          <OverviewHint>Use the tabs above to manage records. Summary counts are shown at the top.</OverviewHint>
-
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
             <Card
               title="Missing BOM"

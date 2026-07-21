@@ -12,6 +12,7 @@ import {
   createJournalEntrySchema,
   salesByPersonQuerySchema,
   mySalesQuerySchema,
+  salesPerformanceQuerySchema,
   upsertSalesTargetSchema,
   grnIdParamSchema,
   orderIdParamSchema,
@@ -480,7 +481,7 @@ router.get(
 
 router.get(
   '/my-sales',
-  authorize('sales:read'),
+  authorizeAny('sales:read', 'reports:read', 'finance:read'),
   validate(mySalesQuerySchema, 'query'),
   asyncHandler(async (req: AuthRequest, res: Response) => {
     const query = getQuery<{
@@ -492,7 +493,10 @@ router.get(
     }>(req.query);
 
     let salesPersonId = query.salesPersonId || req.user!.id;
-    const canViewOthers = req.user!.roleName === 'Super Admin' || req.user!.permissions.includes('reports:read');
+    const canViewOthers =
+      req.user!.roleName === 'Super Admin' ||
+      req.user!.permissions.includes('reports:read') ||
+      req.user!.permissions.includes('finance:read');
     if (salesPersonId !== req.user!.id && !canViewOthers) {
       throw new AppError('You can only view your own sales performance', 403);
     }
@@ -500,6 +504,18 @@ router.get(
     const { MySalesService } = await import('../services/my-sales.service');
     const data = await MySalesService.getDashboard({ ...query, salesPersonId });
     res.json({ success: true, data, pagination: data.pagination });
+  })
+);
+
+router.get(
+  '/sales-performance',
+  authorizeAny('reports:read', 'finance:read'),
+  validate(salesPerformanceQuerySchema, 'query'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const { from, to } = getQuery<{ from?: string; to?: string }>(req.query);
+    const { SalesPerformanceService } = await import('../services/sales-performance.service');
+    const data = await SalesPerformanceService.getTeamPerformance(from, to);
+    res.json({ success: true, data });
   })
 );
 

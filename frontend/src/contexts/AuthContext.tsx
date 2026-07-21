@@ -17,6 +17,7 @@ interface AuthContextType {
   isAuthenticated: boolean;
   isSuperAdmin: boolean;
   isSalesOfficer: boolean;
+  isDriver: boolean;
   mustChangePassword: boolean;
   login: (email: string, password: string, totpCode?: string) => Promise<void>;
   logout: () => Promise<void>;
@@ -118,6 +119,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isAuthenticated: !!user,
         isSuperAdmin: user?.role?.name === 'Super Admin',
         isSalesOfficer: user?.role?.name === 'Sales Officer',
+        isDriver: user?.role?.name === 'Driver',
         mustChangePassword,
         login,
         logout,

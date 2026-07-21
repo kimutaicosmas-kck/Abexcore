@@ -149,6 +149,7 @@ export const customerListQuerySchema = paginationSchema.extend({
 });
 
 export const productListQuerySchema = paginationSchema.extend({
+  limit: z.coerce.number().int().min(1).max(500).default(20),
   category: z.preprocess(
     (v) => (v === '' || v === undefined ? undefined : v),
     z.enum([
@@ -207,6 +208,17 @@ export const mySalesQuerySchema = paginationSchema.extend({
     (v) => (v === '' || v === undefined ? undefined : v),
     z.string().uuid().optional()
   ),
+  from: z.preprocess(
+    (v) => (v === '' || v === undefined ? undefined : v),
+    z.string().optional()
+  ),
+  to: z.preprocess(
+    (v) => (v === '' || v === undefined ? undefined : v),
+    z.string().optional()
+  ),
+});
+
+export const salesPerformanceQuerySchema = z.object({
   from: z.preprocess(
     (v) => (v === '' || v === undefined ? undefined : v),
     z.string().optional()
@@ -312,6 +324,7 @@ export const createEmployeeSchema = z.object({
 export const createDeliverySchema = z.object({
   salesOrderId: z.string().uuid(),
   vehicleId: z.string().uuid().optional(),
+  driverId: z.string().uuid().optional(),
   scheduledDate: z.string().optional(),
   notes: z.string().optional(),
   items: z.array(z.object({

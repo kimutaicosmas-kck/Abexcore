@@ -1,5 +1,5 @@
 import { Router, Response } from 'express';
-import { authenticate, authorize, AuthRequest } from '../middleware/auth';
+import { authenticate, authorize, authorizeProductPicker, AuthRequest } from '../middleware/auth';
 import { validate } from '../middleware/validate';
 import { asyncHandler, AppError } from '../middleware/errorHandler';
 import { auditLog } from '../middleware/auditLog';
@@ -31,7 +31,7 @@ router.get(
 
 router.get(
   '/',
-  authorize('products:read'),
+  authorizeProductPicker,
   validate(productListQuerySchema, 'query'),
   asyncHandler(async (req: AuthRequest, res: Response) => {
     const { page, limit, search, sortBy, sortOrder, category, isActive } = getQuery<{
@@ -80,7 +80,7 @@ router.get(
 
 router.get(
   '/:id',
-  authorize('products:read'),
+  authorizeProductPicker,
   asyncHandler(async (req: AuthRequest, res: Response) => {
     const data = await productService.getById(getParam(req.params.id));
     res.json({ success: true, data });

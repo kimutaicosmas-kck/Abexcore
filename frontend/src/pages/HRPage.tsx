@@ -28,7 +28,6 @@ import { AttendanceForm } from '../components/forms/AttendanceForm';
 import { LeaveForm } from '../components/forms/LeaveForm';
 import { PayrollForm } from '../components/forms/PayrollForm';
 import { useAuth } from '../contexts/AuthContext';
-import { OverviewHint } from '../components/layout/ModuleOverview';
 import { Employee, HrStats, LeaveRequest, PayrollRecord } from '../types';
 
 const tabs = ['Overview', 'Employees', 'Attendance', 'Leave', 'Payroll'];
@@ -198,8 +197,6 @@ export function HRPage() {
   return (
     <div className="space-y-1">
       <PageHeader
-        title="HR"
-        subtitle="Employees, attendance, leave, and payroll"
         action={
           stats && stats.pendingLeave > 0 ? (
             <Button variant="secondary" size="sm" onClick={() => { setLeaveStatus('PENDING'); setLeavePage(1); goToTab(3); }}>
@@ -228,8 +225,6 @@ export function HRPage() {
 
       {activeTab === 0 && (
         <div className="space-y-4">
-          <OverviewHint>Use the tabs above to manage records. Summary counts are shown at the top.</OverviewHint>
-
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
             <Card
               title="Pending leave requests"

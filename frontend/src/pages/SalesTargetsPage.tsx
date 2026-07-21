@@ -3,7 +3,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Target } from 'lucide-react';
 import { financeApi } from '../services/api';
 import {
-  PageHeader,
   Card,
   Button,
   Input,
@@ -14,7 +13,7 @@ import {
 import { SalesTargetRow } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 
-export function SalesTargetsPage() {
+export function SalesTargetsPanel() {
   const { isSuperAdmin } = useAuth();
   const queryClient = useQueryClient();
   const now = new Date();
@@ -41,26 +40,19 @@ export function SalesTargetsPage() {
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['sales-targets'] });
+      queryClient.invalidateQueries({ queryKey: ['sales-performance'] });
       queryClient.invalidateQueries({ queryKey: ['my-sales'] });
     },
   });
 
   if (!isSuperAdmin) {
     return (
-      <div className="space-y-4">
-        <PageHeader title="Sales Targets" subtitle="Monthly targets for sales officers" />
-        <Alert variant="warning">Only Super Admin can assign sales targets.</Alert>
-      </div>
+      <Alert variant="warning">Only Super Admin can assign sales targets.</Alert>
     );
   }
 
   return (
     <div className="space-y-4">
-      <PageHeader
-        title="Sales Targets"
-        subtitle="Set monthly sales targets for each Sales Officer"
-      />
-
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-md">
         <Input label="Year" type="number" value={year} onChange={(e) => setYear(e.target.value)} />
         <Input label="Month" type="number" min={1} max={12} value={month} onChange={(e) => setMonth(e.target.value)} />

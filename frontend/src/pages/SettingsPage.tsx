@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { settingsApi, authApi } from '../services/api';
-import { PageHeader, Card, Button, Input, Alert, PageToolbar, EmptyState } from '../components/ui';
+import { Card, Button, Input, Alert, PageToolbar, EmptyState } from '../components/ui';
 import { useAuth } from '../contexts/AuthContext';
 import { CompanySettings } from '../types';
 
@@ -66,8 +66,6 @@ export function SettingsPage() {
 
   return (
     <div className="space-y-4">
-      <PageHeader title="Settings" subtitle="Company profile, branches, and security" />
-
       <PageToolbar tabs={tabs} activeTab={activeTab} onTabChange={setActiveTab} />
 
       {activeTab === 0 && (

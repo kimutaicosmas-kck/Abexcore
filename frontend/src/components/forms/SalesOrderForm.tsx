@@ -4,11 +4,12 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, Trash2 } from 'lucide-react';
-import { operationsApi, customersApi, productsApi } from '../../services/api';
+import { operationsApi, customersApi } from '../../services/api';
 import { Button, Input, Select } from '../ui';
-import { Customer, Product } from '../../types';
+import { Customer } from '../../types';
 import { useVatRate } from '../../contexts/AuthContext';
 import { formatProductOptionLabel } from '../../utils/productDisplay';
+import { useProductPicker } from '../../hooks/useProductPicker';
 
 const orderItemSchema = z.object({
   productId: z.string().min(1, 'Product required'),
@@ -39,10 +40,7 @@ export function SalesOrderForm({ onSuccess, onCancel }: SalesOrderFormProps) {
     queryFn: () => customersApi.list({ limit: 100 }).then((r) => r.data.data as Customer[]),
   });
 
-  const { data: productsData } = useQuery({
-    queryKey: ['products'],
-    queryFn: () => productsApi.list({ limit: 100 }).then((r) => r.data.data as Product[]),
-  });
+  const { data: productsData, isError: productsError, refetch: refetchProducts } = useProductPicker();
 
   const customerOptions = (customersData || []).map((c) => ({
     value: c.id,
@@ -101,6 +99,15 @@ export function SalesOrderForm({ onSuccess, onCancel }: SalesOrderFormProps) {
 
   return (
     <form onSubmit={handleSubmit((data) => mutation.mutate(data))} className="space-y-4">
+      {productsError && (
+        <div className="p-3 rounded-lg bg-red-50 text-red-700 text-sm">
+          Could not load products.{' '}
+          <button type="button" className="underline font-medium" onClick={() => refetchProducts()}>
+            Retry
+          </button>
+        </div>
+      )}
+
       {mutation.isError && (
         <div className="p-3 rounded-lg bg-red-50 text-red-700 text-sm">
           {apiError?.response?.data?.message || 'Failed to create order. Please check all fields.'}

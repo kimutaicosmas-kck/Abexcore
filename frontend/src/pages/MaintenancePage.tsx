@@ -26,7 +26,6 @@ import { Modal } from '../components/ui/Modal';
 import { MaintenanceForm } from '../components/forms/MaintenanceForm';
 import { MachineForm } from '../components/forms/MachineForm';
 import { useAuth } from '../contexts/AuthContext';
-import { OverviewHint } from '../components/layout/ModuleOverview';
 import { Machine, MaintenanceRequest, MaintenanceStats } from '../types';
 
 const tabs = ['Overview', 'Machines', 'Requests'];
@@ -129,10 +128,7 @@ export function MaintenancePage() {
 
   return (
     <div className="space-y-1">
-      <PageHeader
-        title="Maintenance"
-        subtitle="Machines, schedules, and repair requests"
-        action={
+      <PageHeader action={
           stats && stats.overdueRequests > 0 ? (
             <Button variant="secondary" size="sm" onClick={() => { setStatus('OVERDUE'); setPage(1); goToTab(2); }}>
               <AlertTriangle className="h-4 w-4 mr-1.5 text-red-500" />
@@ -165,8 +161,6 @@ export function MaintenancePage() {
 
       {activeTab === 0 && (
         <div className="space-y-4">
-          <OverviewHint>Use the tabs above to manage records. Summary counts are shown at the top.</OverviewHint>
-
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
             <Card
               title="Overdue & open requests"

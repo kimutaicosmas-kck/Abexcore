@@ -54,7 +54,6 @@ import { InvoiceForm } from '../components/forms/InvoiceForm';
 import { PaymentForm } from '../components/forms/PaymentForm';
 import { JournalEntryForm } from '../components/forms/JournalEntryForm';
 import { useAuth } from '../contexts/AuthContext';
-import { OverviewHint } from '../components/layout/ModuleOverview';
 import { downloadFile } from '../utils/download';
 import { FinanceStats, FinanceOverview, Invoice, Payment } from '../types';
 
@@ -460,8 +459,6 @@ export function FinancePage() {
   return (
     <div className="space-y-1">
       <PageHeader
-        title="Finance"
-        subtitle="Revenue, receivables, payables, payments, and general ledger"
         action={
           stats && stats.overdueInvoices > 0 ? (
             <Button variant="secondary" size="sm" onClick={() => goToTab(1)}>
@@ -498,8 +495,6 @@ export function FinancePage() {
       {/* Overview */}
       {activeTab === 0 && stats && (
         <div className="space-y-4">
-          <OverviewHint>Use the tabs above to manage records. Summary counts are shown at the top.</OverviewHint>
-
           <div className="space-y-4">
             {/* Cash flow */}
             <Card

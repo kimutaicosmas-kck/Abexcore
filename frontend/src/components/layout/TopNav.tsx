@@ -6,6 +6,7 @@ import { financeApi } from '../../services/api';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { GlobalSearch } from './GlobalSearch';
 import { NOTIFICATION_POLL_MS } from '../../config/realtime';
+import { normalizeRoutePath } from '../../config/routeAccess';
 
 interface TopNavProps {
   onMenuClick: () => void;
@@ -16,16 +17,18 @@ interface TopNavProps {
 const routeTitles: Record<string, string> = {
   '/': 'Dashboard',
   '/users': 'Users',
-  '/customers': 'CRM',
+  '/customers': 'Customers',
   '/products': 'Products',
   '/inventory': 'Inventory',
   '/procurement': 'Procurement',
   '/production': 'Production',
   '/quality': 'Quality',
   '/sales': 'Sales',
+  '/my-sales': 'My Sales',
+  '/sales-performance': 'Sales Performance',
   '/delivery': 'Delivery',
   '/finance': 'Finance',
-  '/hr': 'Human Resources',
+  '/hr': 'HR',
   '/maintenance': 'Maintenance',
   '/reports': 'Reports',
   '/settings': 'Settings',
@@ -59,7 +62,7 @@ export function TopNav({ onMenuClick, sidebarOffset }: TopNavProps) {
   const unreadNotifications =
     notifications?.filter((n: { isRead: boolean }) => !n.isRead) || [];
   const unreadCount = unreadNotifications.length;
-  const pageTitle = routeTitles[location.pathname] || 'Workspace';
+  const pageTitle = routeTitles[normalizeRoutePath(location.pathname)] || 'Workspace';
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -88,7 +91,7 @@ export function TopNav({ onMenuClick, sidebarOffset }: TopNavProps) {
           >
             <Menu className="h-5 w-5" />
           </button>
-          <h1 className="hidden sm:block text-sm font-semibold text-slate-800 truncate shrink-0">
+          <h1 className="text-sm font-semibold text-slate-800 truncate shrink-0 max-w-[40vw] sm:max-w-none">
             {pageTitle}
           </h1>
           <div className="hidden md:block flex-1 max-w-md min-w-0 ml-auto sm:ml-0">

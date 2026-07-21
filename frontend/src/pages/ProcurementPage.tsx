@@ -40,7 +40,6 @@ import { SupplierForm } from '../components/forms/SupplierForm';
 import { RfqForm } from '../components/forms/RfqForm';
 import { RfqDetailPanel } from '../components/forms/RfqDetailPanel';
 import { useAuth } from '../contexts/AuthContext';
-import { OverviewHint } from '../components/layout/ModuleOverview';
 import { ProcurementStats, PurchaseOrder, Supplier, GoodsReceipt } from '../types';
 
 const tabs = ['Overview', 'Purchase Orders', 'Requisitions', 'RFQs', 'Goods Receipts', 'Suppliers'];
@@ -431,8 +430,6 @@ export function ProcurementPage() {
   return (
     <div className="space-y-1">
       <PageHeader
-        title="Procurement"
-        subtitle="Requisition → RFQ → PO → goods receipt workflow"
         action={
           stats && stats.pendingRequisitions > 0 ? (
             <Button variant="secondary" size="sm" onClick={() => goToTab(2)}>
@@ -468,8 +465,6 @@ export function ProcurementPage() {
 
       {activeTab === 0 && (
         <div className="space-y-4">
-          <OverviewHint>Use the tabs above to manage records. Summary counts are shown at the top.</OverviewHint>
-
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
             <Card
               title="Pending requisitions"

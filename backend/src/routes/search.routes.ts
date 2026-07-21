@@ -87,7 +87,7 @@ router.get(
           label: o.orderNumber,
           sublabel: o.customer.name,
           type: 'order',
-          href: '/sales',
+          href: `/sales?orderId=${o.id}`,
         })),
         suppliers: suppliers.map((s) => ({ ...s, type: 'supplier', href: '/procurement' })),
       },

@@ -5,6 +5,10 @@ type AxiosLikeError = {
 };
 
 export function getApiErrorMessage(err: unknown): string {
+  if (err == null) {
+    return 'Something went wrong. Please try again.';
+  }
+
   const axiosErr = err as AxiosLikeError;
 
   if (axiosErr.response?.data?.message) {

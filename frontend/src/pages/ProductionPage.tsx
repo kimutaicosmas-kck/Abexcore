@@ -24,8 +24,6 @@ import { Modal } from '../components/ui/Modal';
 import { ProductionOrderForm } from '../components/forms/ProductionOrderForm';
 import { CompleteProductionForm } from '../components/forms/CompleteProductionForm';
 import { useAuth } from '../contexts/AuthContext';
-import { OverviewHint } from '../components/layout/ModuleOverview';
-
 type ProductionStats = {
   activeOrders: number;
   inProgress: number;
@@ -164,8 +162,6 @@ export function ProductionPage() {
   return (
     <div className="space-y-1">
       <PageHeader
-        title="Production"
-        subtitle="Manage production orders, scheduling, and manufacturing execution"
         action={
           stats && stats.inProgress > 0 ? (
             <Button variant="secondary" size="sm" onClick={() => goToTab(1)}>
@@ -209,12 +205,6 @@ export function ProductionPage() {
 
       {activeTab === 0 && (
         <div className="space-y-4">
-          <OverviewHint>
-            Production runs independently of sales orders. Create production orders to manufacture finished goods,
-            complete them with QC, and stock is added to finished goods inventory. Raw material low-stock alerts
-            are sent to the Production Manager.
-          </OverviewHint>
-
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
             <Card
               title="In progress"

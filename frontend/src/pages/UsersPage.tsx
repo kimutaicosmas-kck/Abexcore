@@ -34,7 +34,6 @@ import {
 import { Modal } from '../components/ui/Modal';
 import { UserForm } from '../components/forms/UserForm';
 import { useAuth } from '../contexts/AuthContext';
-import { OverviewHint } from '../components/layout/ModuleOverview';
 import { AuditLogEntry, RoleWithPermissions, User, UserStats } from '../types';
 
 const tabs = ['Overview', 'Users', 'Roles & Permissions', 'Audit Log'];
@@ -270,8 +269,6 @@ export function UsersPage() {
   return (
     <div className="space-y-1">
       <PageHeader
-        title="Users"
-        subtitle="Manage users, roles, permissions, and audit trail"
         action={
           stats && stats.inactive + stats.suspended > 0 ? (
             <Button variant="secondary" size="sm" onClick={() => { setStatusFilter('INACTIVE'); setPage(1); goToTab(1); }}>
@@ -304,8 +301,6 @@ export function UsersPage() {
 
       {activeTab === 0 && (
         <div className="space-y-4">
-          <OverviewHint>Use the tabs above to manage records. Summary counts are shown at the top.</OverviewHint>
-
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
             <Card
               title="Users by role"

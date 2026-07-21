@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { reportsApi } from '../services/api';
 import {
-  PageHeader,
   EmptyState,
   QuickActionCard,
   PageToolbar,
@@ -16,8 +15,6 @@ import { SalesByPersonPanel } from '../components/reports/SalesByPersonPanel';
 import { Modal } from '../components/ui/Modal';
 import { useAuth } from '../contexts/AuthContext';
 import { ReportsOverview } from '../types';
-import { OverviewHint } from '../components/layout/ModuleOverview';
-
 export function ReportsPage() {
   const { hasPermission } = useAuth();
   const [activeSection, setActiveSection] = useState(0);
@@ -65,8 +62,6 @@ export function ReportsPage() {
 
   return (
     <div className="space-y-4">
-      <PageHeader title="Reports" subtitle="Sales performance, exports, and financial statements" />
-
       <QueryErrorAlert error={isError ? error : null} onRetry={() => refetch()} />
       {exportError && <Alert variant="error">{exportError}</Alert>}
 
@@ -80,10 +75,6 @@ export function ReportsPage() {
         <EmptyState title="No report data available" description="Summary metrics will appear once your business has activity." />
       ) : (
         <div className="space-y-4">
-          <OverviewHint>
-            Use <strong>Sales by Person</strong> to filter sales by salesperson, paginate results, and export Excel.
-            Other quick exports are below.
-          </OverviewHint>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {reportTypes.map((report) => (
               <QuickActionCard

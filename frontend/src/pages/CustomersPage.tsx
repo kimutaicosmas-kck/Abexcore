@@ -43,7 +43,6 @@ import { ComplaintResolveForm } from '../components/forms/ComplaintResolveForm';
 import { WarrantyForm } from '../components/forms/WarrantyForm';
 import { ContactForm } from '../components/forms/ContactForm';
 import { useAuth } from '../contexts/AuthContext';
-import { OverviewHint } from '../components/layout/ModuleOverview';
 import { Complaint, CrmStats, Customer, Opportunity, Warranty } from '../types';
 import { formatProductOptionLabel } from '../utils/productDisplay';
 
@@ -455,8 +454,6 @@ export function CustomersPage() {
   return (
     <div className="space-y-1">
       <PageHeader
-        title="Customers"
-        subtitle="Customer relationships, complaints, pipeline, and warranties"
         action={
           stats && stats.complaints.open > 0 ? (
             <Button variant="secondary" size="sm" onClick={() => goToTab(2)}>
@@ -491,8 +488,6 @@ export function CustomersPage() {
 
       {activeTab === 0 && (
         <div className="space-y-4">
-          <OverviewHint>Use the tabs above to manage records. Summary counts are shown at the top.</OverviewHint>
-
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
             <Card
               title="Open complaints"

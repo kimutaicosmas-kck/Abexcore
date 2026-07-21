@@ -357,6 +357,7 @@ model User {
   assignedSalesOrders SalesOrder[]   @relation("SalesOrderSalesPerson")
   salesTargets     SalesTarget[]
   productionOrders ProductionOrder[]
+  assignedDeliveries DeliveryNote[] @relation("DeliveryDriver")
 
   @@map("users")
 }
@@ -1133,6 +1134,7 @@ model DeliveryNote {
 
   salesOrder SalesOrder @relation(fields: [salesOrderId], references: [id])
   vehicle    Vehicle?   @relation(fields: [vehicleId], references: [id])
+  driver     User?      @relation("DeliveryDriver", fields: [driverId], references: [id])
   items      DeliveryItem[]
   invoices   Invoice[]
 

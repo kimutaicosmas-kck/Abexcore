@@ -40,7 +40,6 @@ import { RawMaterialForm } from '../components/forms/RawMaterialForm';
 import { StockAdjustForm } from '../components/forms/StockAdjustForm';
 import { StockTransferForm } from '../components/forms/StockTransferForm';
 import { useAuth } from '../contexts/AuthContext';
-import { OverviewHint } from '../components/layout/ModuleOverview';
 import { InventoryStats, InventoryTransaction, RawMaterial } from '../types';
 import { formatPartNumberLine } from '../utils/productDisplay';
 
@@ -328,8 +327,6 @@ export function InventoryPage() {
   return (
     <div className="space-y-1">
       <PageHeader
-        title="Inventory"
-        subtitle="Monitor stock health, warehouses, materials, and every inventory movement"
         action={
           stats && stats.lowStockCount > 0 ? (
             <Button variant="secondary" size="sm" onClick={() => goToTab(4)}>
@@ -380,8 +377,6 @@ export function InventoryPage() {
       {/* Overview */}
       {activeTab === 0 && (
         <div className="space-y-4">
-          <OverviewHint>Use the tabs above to manage records. Summary counts are shown at the top.</OverviewHint>
-
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
             <Card
               title="Low stock alerts"

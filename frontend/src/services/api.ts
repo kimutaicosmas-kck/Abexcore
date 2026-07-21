@@ -194,6 +194,7 @@ export const deliveryApi = {
   get: (id: string) => api.get(`/delivery/${id}`),
   create: (data: object) => api.post('/delivery', data),
   updateStatus: (id: string, data: object) => api.patch(`/delivery/${id}/status`, data),
+  drivers: () => api.get('/delivery/drivers/list'),
   vehicles: (params?: object) => api.get('/delivery/vehicles', { params }),
   createVehicle: (data: object) => api.post('/delivery/vehicles', data),
 };
@@ -257,6 +258,7 @@ export const financeApi = {
   submitEtims: (invoiceId: string) => api.post(`/finance/invoices/${invoiceId}/submit-etims`),
   vatItaxExport: (params?: object) => api.get('/finance/reports/vat-itax-export', { params }),
   mySales: (params?: object) => api.get('/finance/my-sales', { params }),
+  salesPerformance: (params?: object) => api.get('/finance/sales-performance', { params }),
   salesTargets: (params?: object) => api.get('/finance/sales-targets', { params }),
   upsertSalesTarget: (data: object) => api.put('/finance/sales-targets', data),
   mpesaStatus: () => api.get('/finance/mpesa/status'),

@@ -513,12 +513,14 @@ export interface DeliveryNote {
   id: string;
   deliveryNo: string;
   status: string;
+  driverId?: string | null;
   scheduledDate?: string;
   deliveredAt?: string;
   proofOfDelivery?: string;
   notes?: string;
   salesOrder: SalesOrder & { customer: Customer };
   vehicle?: Vehicle;
+  driver?: { id: string; firstName: string; lastName: string; email: string };
   items: { id: string; productId: string; quantity: number }[];
 }
 
@@ -644,6 +646,37 @@ export interface SalesByPersonReport {
   summary: SalesByPersonSummary;
   rows: SalesByPersonRow[];
   pagination: Pagination;
+}
+
+export interface SalesPerformerRow {
+  rank: number;
+  salesPersonId: string;
+  name: string;
+  email: string;
+  orderCount: number;
+  orderValue: number;
+  invoiceCount: number;
+  invoiced: number;
+  collected: number;
+    outstanding: number;
+    monthlyTarget: number;
+  monthInvoiced: number;
+  achievementPercent: number | null;
+}
+
+export interface SalesTeamPerformance {
+  period: { from: string; to: string };
+  summary: {
+    salesPeople: number;
+    orderCount: number;
+    orderValue: number;
+    invoiceCount: number;
+    invoiced: number;
+    collected: number;
+    outstanding: number;
+    avgAchievement: number | null;
+  };
+  performers: SalesPerformerRow[];
 }
 
 export interface MaintenanceRequest {

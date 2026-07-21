@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Plus,
@@ -10,6 +11,7 @@ import {
   AlertTriangle,
   ChevronRight,
   Download,
+  Target,
 } from 'lucide-react';
 import { financeApi, operationsApi } from '../services/api';
 import { downloadFile } from '../utils/download';
@@ -38,7 +40,6 @@ import { Modal } from '../components/ui/Modal';
 import { SalesOrderForm } from '../components/forms/SalesOrderForm';
 import { QuotationForm } from '../components/forms/QuotationForm';
 import { useAuth } from '../contexts/AuthContext';
-import { OverviewHint } from '../components/layout/ModuleOverview';
 import { SalesOrder, SalesQuotation, SalesStats } from '../types';
 
 const tabs = ['Overview', 'Sales Orders', 'Quotations'];
@@ -70,15 +71,6 @@ const NEXT_STATUS: Record<string, { status: string; label: string }> = {
   DELIVERED: { status: 'COMPLETED', label: 'Complete' },
 };
 
-const STATUS_HINTS: Record<string, string> = {
-  PENDING: 'Confirm checks finished goods stock. If available, stock is reserved and admin is notified to invoice. If not, the order waits until production replenishes stock.',
-  CONFIRMED: 'Finished goods are out of stock. The production team manufactures independently — admin will mark ready when stock is available.',
-  CONFIRMED_SALES: 'Waiting for finished goods. The production team works independently; you will be notified when the order can proceed.',
-  READY: 'Stock reserved. Admin creates the invoice in Finance; the delivery team dispatches after invoicing.',
-  IN_PRODUCTION: 'Legacy status — mark ready when finished goods stock is available.',
-  PARTIALLY_DELIVERED: 'Finish remaining deliveries, then the order can be completed.',
-};
-
 function getNextOrderAction(
   status: string,
   isSalesOfficer: boolean
@@ -96,7 +88,10 @@ function getNextOrderAction(
 export function SalesPage() {
   const queryClient = useQueryClient();
   const { hasPermission, isSalesOfficer } = useAuth();
-  const [activeTab, setActiveTab] = useState(0);
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const orderIdFromUrl = searchParams.get('orderId');
+  const [activeTab, setActiveTab] = useState(orderIdFromUrl ? 1 : 0);
   const [orderPage, setOrderPage] = useState(1);
   const [quotePage, setQuotePage] = useState(1);
   const [orderSearch, setOrderSearch] = useState('');
@@ -114,9 +109,31 @@ export function SalesPage() {
 
   const canCreate = hasPermission('sales:create');
   const canUpdate = hasPermission('sales:update');
+  const canReadSales = hasPermission('sales:read');
+  const canViewPerformance = hasPermission('reports:read') || hasPermission('finance:read');
   const canInvoice = hasPermission('finance:create');
   const canDownloadInvoice = hasPermission('finance:read');
   const [downloadingInvoiceId, setDownloadingInvoiceId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!orderIdFromUrl) return;
+
+    setActiveTab(1);
+    operationsApi
+      .getSalesOrder(orderIdFromUrl)
+      .then((r) => {
+        const order = r.data.data as SalesOrder;
+        setStatusFeedback(null);
+        setSelectedOrder(order);
+        setOrderDetailOpen(true);
+      })
+      .catch(() => {
+        setStatusFeedback({
+          text: 'Could not open the sales order from this notification.',
+          variant: 'error',
+        });
+      });
+  }, [orderIdFromUrl]);
 
   const { data: orderDetail } = useQuery({
     queryKey: ['sales-order', selectedOrder?.id],
@@ -130,6 +147,7 @@ export function SalesPage() {
   const { data: stats } = useQuery({
     queryKey: ['sales-stats'],
     queryFn: () => operationsApi.stats().then((r) => r.data.data as SalesStats),
+    enabled: canReadSales,
   });
 
   const { data: orders, isLoading: ordersLoading } = useQuery({
@@ -138,7 +156,7 @@ export function SalesPage() {
       operationsApi
         .salesOrders({ page: orderPage, limit: 15, search: orderSearch || undefined, status: orderStatus || undefined })
         .then((r) => r.data),
-    enabled: activeTab === 0 || activeTab === 1,
+    enabled: canReadSales && (activeTab === 0 || activeTab === 1),
   });
 
   const { data: quotations, isLoading: quotesLoading } = useQuery({
@@ -147,7 +165,7 @@ export function SalesPage() {
       operationsApi
         .quotations({ page: quotePage, limit: 15, search: quoteSearch || undefined, status: quoteStatus || undefined })
         .then((r) => r.data),
-    enabled: activeTab === 0 || activeTab === 2,
+    enabled: canReadSales && (activeTab === 0 || activeTab === 2),
   });
 
   const convertMutation = useMutation({
@@ -168,25 +186,19 @@ export function SalesPage() {
 
       if (variables.status === 'CONFIRMED') {
         if (fulfillment?.type === 'stock' || newStatus === 'READY') {
-          setStatusFeedback({
-            text: 'Stock available — reserved for this order. Admin will create the invoice in Finance.',
-            variant: 'info',
-          });
+          setStatusFeedback({ text: 'Order confirmed — stock reserved.', variant: 'info' });
         } else {
           const firstShort = fulfillment?.shortages?.[0];
           const detail = firstShort
             ? ` (${firstShort.productName}: need ${firstShort.required}, in stock ${firstShort.available})`
             : '';
           setStatusFeedback({
-            text: `Some items are out of stock${detail} — production team notified to replenish finished goods.`,
+            text: `Out of stock${detail}. Production notified.`,
             variant: 'info',
           });
         }
       } else if (variables.status === 'READY') {
-        setStatusFeedback({
-          text: 'Stock reserved. Create invoice in Finance, then assign delivery.',
-          variant: 'info',
-        });
+        setStatusFeedback({ text: 'Order marked ready.', variant: 'info' });
       } else {
         setStatusFeedback(null);
       }
@@ -225,6 +237,15 @@ export function SalesPage() {
     setStatusFeedback(null);
     setSelectedOrder(order);
     setOrderDetailOpen(true);
+  };
+
+  const closeOrderDetail = () => {
+    setOrderDetailOpen(false);
+    setSelectedOrder(null);
+    setStatusFeedback(null);
+    if (orderIdFromUrl) {
+      navigate('/sales', { replace: true });
+    }
   };
 
   const openQuoteDetail = (quote: SalesQuotation) => {
@@ -355,20 +376,28 @@ export function SalesPage() {
   return (
     <div className="space-y-1">
       <PageHeader
-        title="Sales"
-        subtitle="Quotations, sales orders, and customer order tracking"
         action={
-          stats && stats.pendingQuotations > 0 ? (
-            <Button variant="secondary" size="sm" onClick={() => goToTab(2)}>
-              <FileText className="h-4 w-4 mr-1.5 text-amber-500" />
-              {stats.pendingQuotations} pending quotes
-            </Button>
-          ) : stats && stats.openOrders > 0 ? (
-            <Button variant="secondary" size="sm" onClick={() => goToTab(1)}>
-              <ShoppingCart className="h-4 w-4 mr-1.5 text-primary-500" />
-              {stats.openOrders} open orders
-            </Button>
-          ) : undefined
+          <div className="flex flex-wrap items-center gap-2">
+            {canViewPerformance && (
+              <Link to="/sales-performance">
+                <Button variant="secondary" size="sm">
+                  <Target className="h-4 w-4 mr-1.5" />
+                  Team performance
+                </Button>
+              </Link>
+            )}
+            {stats && stats.pendingQuotations > 0 ? (
+              <Button variant="secondary" size="sm" onClick={() => goToTab(2)}>
+                <FileText className="h-4 w-4 mr-1.5 text-amber-500" />
+                {stats.pendingQuotations} pending quotes
+              </Button>
+            ) : stats && stats.openOrders > 0 ? (
+              <Button variant="secondary" size="sm" onClick={() => goToTab(1)}>
+                <ShoppingCart className="h-4 w-4 mr-1.5 text-primary-500" />
+                {stats.openOrders} open orders
+              </Button>
+            ) : null}
+          </div>
         }
       />
 
@@ -394,11 +423,6 @@ export function SalesPage() {
 
       {activeTab === 0 && (
         <div className="space-y-4">
-          <OverviewHint>
-            Sales officers create and confirm orders. Confirm checks finished goods stock — admin invoices ready orders
-            in Finance and the delivery team dispatches. Production runs separately in the Production module.
-          </OverviewHint>
-
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
             <Card
               title="Open orders"
@@ -585,7 +609,7 @@ export function SalesPage() {
         <QuotationForm onSuccess={() => setQuotationModalOpen(false)} onCancel={() => setQuotationModalOpen(false)} />
       </Modal>
 
-      <Modal open={orderDetailOpen} onClose={() => { setOrderDetailOpen(false); setSelectedOrder(null); setStatusFeedback(null); }} title="Sales Order Details" size="lg">
+      <Modal open={orderDetailOpen} onClose={closeOrderDetail} title="Sales Order Details" size="lg">
         {activeOrder && (
           <div className="space-y-4 text-sm">
             {statusFeedback && <Alert variant={statusFeedback.variant}>{statusFeedback.text}</Alert>}
@@ -650,22 +674,6 @@ export function SalesPage() {
                 ))}
               </Card>
             )}
-            {(() => {
-              const hintKey =
-                activeOrder.status === 'READY'
-                  ? 'READY'
-                  : activeOrder.status === 'CONFIRMED'
-                    ? isSalesOfficer
-                      ? 'CONFIRMED_SALES'
-                      : 'CONFIRMED'
-                    : activeOrder.status;
-              const hint = STATUS_HINTS[hintKey];
-              return hint ? (
-                <Alert variant={activeOrder.status === 'IN_PRODUCTION' ? 'info' : 'warning'}>
-                  {hint}
-                </Alert>
-              ) : null;
-            })()}
             <div className="flex flex-wrap justify-end gap-2 pt-2">
               {canInvoice && !activeOrder.invoices?.length && activeOrder.status === 'READY' && (
                 <Button
@@ -697,11 +705,6 @@ export function SalesPage() {
                 );
               })()}
             </div>
-            {activeOrder.status === 'READY' && !activeOrder.invoices?.length && (
-              <p className="text-xs text-slate-500 text-right">
-                Admin creates the invoice in Finance, then the delivery team dispatches from the Delivery module.
-              </p>
-            )}
           </div>
         )}
       </Modal>

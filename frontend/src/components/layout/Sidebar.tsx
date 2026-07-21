@@ -30,6 +30,7 @@ type NavItem = {
   href: string;
   icon: React.ComponentType<{ className?: string }>;
   permission?: string;
+  permissions?: string[];
 };
 
 type NavGroup = {
@@ -65,6 +66,7 @@ const navigationGroups: NavGroup[] = [
     label: 'Business',
     items: [
       { name: 'Finance', href: '/finance', icon: DollarSign, permission: 'finance:read' },
+      { name: 'Sales Performance', href: '/sales-performance', icon: Target, permissions: ['reports:read', 'finance:read', 'settings:read'] },
       { name: 'HR', href: '/hr', icon: UserCircle, permission: 'hr:read' },
       { name: 'Maintenance', href: '/maintenance', icon: Wrench, permission: 'maintenance:read' },
       { name: 'Reports', href: '/reports', icon: BarChart3, permission: 'reports:read' },
@@ -83,14 +85,11 @@ interface SidebarProps {
 }
 
 export function Sidebar({ collapsed, mobileOpen, onToggle }: SidebarProps) {
-  const { hasPermission, isSalesOfficer, isSuperAdmin } = useAuth();
+  const { hasPermission, isSalesOfficer } = useAuth();
 
   const extraItems: NavItem[] = [
     ...(isSalesOfficer
       ? [{ name: 'My Sales', href: '/my-sales', icon: Target, permission: 'sales:read' as const }]
-      : []),
-    ...(isSuperAdmin
-      ? [{ name: 'Sales Targets', href: '/sales-targets', icon: Target, permission: 'settings:read' as const }]
       : []),
   ];
 
@@ -105,7 +104,12 @@ export function Sidebar({ collapsed, mobileOpen, onToggle }: SidebarProps) {
   const visibleGroups = navigationGroupsWithExtras
     .map((group) => ({
       ...group,
-      items: group.items.filter((item) => !item.permission || hasPermission(item.permission)),
+      items: group.items.filter((item) => {
+        if (item.permissions?.length) {
+          return item.permissions.some((permission) => hasPermission(permission));
+        }
+        return !item.permission || hasPermission(item.permission);
+      }),
     }))
     .filter((group) => group.items.length > 0);
 

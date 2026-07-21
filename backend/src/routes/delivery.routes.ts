@@ -49,6 +49,45 @@ const router = Router();
 
 router.use(authenticate);
 
+function isDriverUser(req: AuthRequest) {
+  return req.user!.roleName === 'Driver';
+}
+
+const DRIVER_STATUS_TRANSITIONS: Record<string, readonly string[]> = {
+  ASSIGNED: ['IN_TRANSIT', 'DELIVERED'],
+  IN_TRANSIT: ['DELIVERED'],
+};
+
+function assertDriverDeliveryAccess(
+  req: AuthRequest,
+  delivery: { driverId: string | null; status: string },
+  nextStatus: string
+) {
+  if (!isDriverUser(req)) return;
+
+  if (delivery.driverId !== req.user!.id) {
+    throw new AppError('You can only update deliveries assigned to you', 403);
+  }
+
+  const allowed = DRIVER_STATUS_TRANSITIONS[delivery.status] || [];
+  if (!allowed.includes(nextStatus)) {
+    throw new AppError(`Drivers cannot change delivery from ${delivery.status} to ${nextStatus}`, 403);
+  }
+}
+
+async function assertActiveDriver(driverId: string) {
+  const driver = await prisma.user.findFirst({
+    where: {
+      id: driverId,
+      deletedAt: null,
+      status: 'ACTIVE',
+      role: { name: 'Driver' },
+    },
+    select: { id: true },
+  });
+  if (!driver) throw new AppError('Selected driver is not active', 400);
+}
+
 
 
 router.get(
@@ -62,6 +101,32 @@ router.get(
     const data = await DeliveryService.getStats();
 
     res.json({ success: true, data });
+
+  })
+
+);
+
+
+
+router.get(
+
+  '/drivers/list',
+
+  authorize('delivery:read'),
+
+  asyncHandler(async (_req: AuthRequest, res: Response) => {
+
+    const drivers = await prisma.user.findMany({
+
+      where: { deletedAt: null, status: 'ACTIVE', role: { name: 'Driver' } },
+
+      select: { id: true, firstName: true, lastName: true, email: true },
+
+      orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
+
+    });
+
+    res.json({ success: true, data: drivers });
 
   })
 
@@ -196,6 +261,10 @@ router.get(
 
     const where: Prisma.DeliveryNoteWhereInput = {};
 
+    if (isDriverUser(req)) {
+      where.driverId = req.user!.id;
+    }
+
     if (status) where.status = status as Prisma.EnumDeliveryStatusFilter['equals'];
 
     if (search) {
@@ -229,6 +298,8 @@ router.get(
           salesOrder: { include: { customer: true } },
 
           vehicle: true,
+
+          driver: { select: { id: true, firstName: true, lastName: true, email: true } },
 
           items: true,
 
@@ -288,6 +359,8 @@ router.get(
 
         vehicle: true,
 
+        driver: { select: { id: true, firstName: true, lastName: true, email: true } },
+
         items: true,
 
       },
@@ -295,6 +368,10 @@ router.get(
     });
 
     if (!data) throw new AppError('Delivery not found', 404);
+
+    if (isDriverUser(req) && data.driverId !== req.user!.id) {
+      throw new AppError('You can only view deliveries assigned to you', 403);
+    }
 
     res.json({ success: true, data });
 
@@ -316,7 +393,15 @@ router.post(
 
   asyncHandler(async (req: AuthRequest, res: Response) => {
 
-    const { salesOrderId, vehicleId, scheduledDate, notes, items } = req.body;
+    if (isDriverUser(req)) {
+      throw new AppError('Drivers cannot create delivery notes', 403);
+    }
+
+    const { salesOrderId, vehicleId, driverId, scheduledDate, notes, items } = req.body;
+
+    if (driverId) {
+      await assertActiveDriver(driverId);
+    }
 
     const count = await prisma.deliveryNote.count();
 
@@ -386,7 +471,9 @@ router.post(
 
           vehicleId,
 
-          status: vehicleId ? 'ASSIGNED' : 'PENDING',
+          driverId,
+
+          status: vehicleId || driverId ? 'ASSIGNED' : 'PENDING',
 
           scheduledDate: scheduledDate ? new Date(scheduledDate) : undefined,
 
@@ -401,6 +488,8 @@ router.post(
           salesOrder: { include: { customer: true } },
 
           vehicle: true,
+
+          driver: { select: { id: true, firstName: true, lastName: true, email: true } },
 
           items: true,
 
@@ -513,13 +602,27 @@ router.patch(
 
     const { status, proofOfDelivery } = req.body;
 
+    const deliveryId = getParam(req.params.id);
+
+    const existing = await prisma.deliveryNote.findUnique({
+
+      where: { id: deliveryId },
+
+      select: { id: true, driverId: true, status: true },
+
+    });
+
+    if (!existing) throw new AppError('Delivery not found', 404);
+
+    assertDriverDeliveryAccess(req, existing, status);
+
 
 
     const delivery = await prisma.$transaction(async (tx) => {
 
       const updated = await tx.deliveryNote.update({
 
-        where: { id: getParam(req.params.id) },
+        where: { id: deliveryId },
 
         data: {
 
@@ -536,6 +639,8 @@ router.patch(
           salesOrder: { include: { customer: true } },
 
           vehicle: true,
+
+          driver: { select: { id: true, firstName: true, lastName: true, email: true } },
 
           items: true,
 

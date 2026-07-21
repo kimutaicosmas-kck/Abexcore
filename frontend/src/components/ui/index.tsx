@@ -379,15 +379,13 @@ export function TabGroup({ tabs, activeIndex, onChange, className }: TabGroupPro
   );
 }
 
-export function PageHeader({ title, subtitle, action }: { title?: string; subtitle?: string; action?: React.ReactNode }) {
-  if (!title && !subtitle && !action) return null;
+/** Page-level actions only — title lives in TopNav. */
+export function PageHeader({ subtitle, action }: { title?: string; subtitle?: string; action?: React.ReactNode }) {
+  if (!subtitle && !action) return null;
   return (
-    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-3">
-      {(title || subtitle) && (
-        <div className="min-w-0">
-          {title && <h2 className="text-lg font-semibold text-slate-900">{title}</h2>}
-          {subtitle && <p className="text-xs text-slate-500 truncate">{subtitle}</p>}
-        </div>
+    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end mb-3">
+      {subtitle && (
+        <p className="text-xs text-slate-500 truncate sm:mr-auto">{subtitle}</p>
       )}
       {action && <div className="flex flex-wrap items-center gap-2 shrink-0">{action}</div>}
     </div>

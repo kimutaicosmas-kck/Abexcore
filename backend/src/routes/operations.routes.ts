@@ -1,5 +1,5 @@
 import { Router, Response } from 'express';
-import { authenticate, authorize, AuthRequest } from '../middleware/auth';
+import { authenticate, authorize, authorizeAny, AuthRequest } from '../middleware/auth';
 import { validate } from '../middleware/validate';
 import { asyncHandler, AppError } from '../middleware/errorHandler';
 import { auditLog } from '../middleware/auditLog';
@@ -26,6 +26,17 @@ import { Prisma } from '@prisma/client';
 const router = Router();
 router.use(authenticate);
 
+type PersonName = { firstName: string; lastName: string };
+
+function salesPersonLabel(order: {
+  salesPerson?: PersonName | null;
+  createdBy?: PersonName | null;
+}) {
+  const person = order.salesPerson || order.createdBy;
+  if (!person) return 'Unassigned';
+  return `${person.firstName} ${person.lastName}`.trim();
+}
+
 router.get(
   '/stats',
   authorize('sales:read'),
@@ -48,7 +59,7 @@ router.get(
 // Sales Orders
 router.get(
   '/orders',
-  authorize('sales:read'),
+  authorizeAny('sales:read', 'finance:read', 'finance:create'),
   validate(salesListQuerySchema, 'query'),
   asyncHandler(async (req: AuthRequest, res: Response) => {
     const { page, limit, search, status, salesPersonId } = getQuery<{
@@ -109,7 +120,7 @@ router.get(
 
 router.get(
   '/orders/:id',
-  authorize('sales:read'),
+  authorizeAny('sales:read', 'finance:read', 'finance:create'),
   asyncHandler(async (req: AuthRequest, res: Response) => {
     const data = await prisma.salesOrder.findUnique({
       where: { id: getParam(req.params.id) },
@@ -275,23 +286,38 @@ router.patch(
       const updated = await tx.salesOrder.update({
         where: { id: orderId },
         data: { status: finalStatus },
-        include: { customer: true, items: { include: { product: true } } },
+        include: {
+          customer: true,
+          items: { include: { product: true } },
+          salesPerson: { select: { firstName: true, lastName: true } },
+          createdBy: { select: { firstName: true, lastName: true } },
+        },
       });
 
       await syncCustomerCreditUsed(existing.customerId, tx);
       return { order: updated, confirmShortages };
     });
 
-    if (isConfirm && order.order.status === 'READY') {
+    if (order.order.status === 'READY' && existing.status !== 'READY') {
       const total = Number(order.order.totalAmount).toLocaleString('en-KE');
+      const salesOrderLink = `/sales?orderId=${order.order.id}`;
+      const salesperson = salesPersonLabel(order.order);
       await NotificationService.notifyAdmins(
         'APPROVAL',
-        `Sales order ${order.order.orderNumber} ready for invoicing`,
-        `${order.order.customer.name} — KES ${total}. Stock reserved — create invoice in Finance, then assign delivery.`,
-        '/finance'
+        `Sales order ${order.order.orderNumber} ready — ${salesperson}`,
+        `${order.order.customer.name} · Sales: ${salesperson} — KES ${total}. Open the order to create an invoice, then assign delivery.`,
+        salesOrderLink
+      );
+      await NotificationService.notifyRole(
+        'Finance Officer',
+        'APPROVAL',
+        `Sales order ${order.order.orderNumber} ready — ${salesperson}`,
+        `${order.order.customer.name} · Sales: ${salesperson} — KES ${total}. Open the order to create an invoice, then assign delivery.`,
+        salesOrderLink
       );
     } else if (isConfirm && order.order.status === 'CONFIRMED') {
       const total = Number(order.order.totalAmount).toLocaleString('en-KE');
+      const salesperson = salesPersonLabel(order.order);
       const shortageSummary = order.confirmShortages
         .slice(0, 3)
         .map((s) => `${s.productName} (need ${s.required}, have ${s.available})`)
@@ -299,15 +325,15 @@ router.patch(
       await NotificationService.notifyRole(
         'Production Manager',
         'LOW_STOCK',
-        `Finished goods needed for ${order.order.orderNumber}`,
-        `Sales order requires: ${shortageSummary}. Continue independent production to replenish finished goods stock.`,
+        `Finished goods needed for ${order.order.orderNumber} — ${salesperson}`,
+        `Sales: ${salesperson}. Order requires: ${shortageSummary}. Continue independent production to replenish finished goods stock.`,
         '/production'
       );
       await NotificationService.notifyAdmins(
         'APPROVAL',
-        `Sales order ${order.order.orderNumber} awaiting stock`,
-        `${order.order.customer.name} — KES ${total}. Out of stock: ${shortageSummary}. Mark ready in Sales when finished goods are available.`,
-        '/sales'
+        `Sales order ${order.order.orderNumber} awaiting stock — ${salesperson}`,
+        `${order.order.customer.name} · Sales: ${salesperson} — KES ${total}. Out of stock: ${shortageSummary}. Mark ready in Sales when finished goods are available.`,
+        `/sales?orderId=${order.order.id}`
       );
     }
 

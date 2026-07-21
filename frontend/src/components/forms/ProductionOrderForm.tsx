@@ -2,7 +2,8 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { operationsApi, productsApi } from '../../services/api';
+import { operationsApi } from '../../services/api';
+import { useProductPicker } from '../../hooks/useProductPicker';
 import { Button, Input, Select } from '../ui';
 import { Machine, Product } from '../../types';
 import { formatProductOptionLabel } from '../../utils/productDisplay';
@@ -33,10 +34,7 @@ interface ProductionOrderFormProps {
 export function ProductionOrderForm({ onSuccess, onCancel }: ProductionOrderFormProps) {
   const queryClient = useQueryClient();
 
-  const { data: productsData } = useQuery({
-    queryKey: ['products'],
-    queryFn: () => productsApi.list({ limit: 100 }).then((r) => r.data.data as Product[]),
-  });
+  const { data: productsData } = useProductPicker();
 
   const { data: machinesData } = useQuery({
     queryKey: ['machines'],

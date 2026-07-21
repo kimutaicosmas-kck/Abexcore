@@ -29,7 +29,6 @@ import {
 } from 'lucide-react';
 import { dashboardApi } from '../services/api';
 import {
-  PageHeader,
   StatCard,
   StatGrid,
   Card,
@@ -101,7 +100,6 @@ export function DashboardPage() {
   if (isLoading) {
     return (
       <div className="space-y-4">
-        <PageHeader title="Dashboard" subtitle="Today at a glance" />
         <LoadingSpinner className="h-48" size="md" />
       </div>
     );
@@ -110,7 +108,6 @@ export function DashboardPage() {
   if (isError || !kpis) {
     return (
       <div className="space-y-4">
-        <PageHeader title="Dashboard" subtitle="Today at a glance" />
         <Alert variant="error">
           Failed to load dashboard.{' '}
           <button type="button" onClick={() => refetch()} className="underline font-medium">
@@ -182,8 +179,6 @@ export function DashboardPage() {
 
   return (
     <div className="space-y-4">
-      <PageHeader title="Dashboard" subtitle="Today at a glance" />
-
       <StatGrid>
         <StatCard title="Sales today" value={formatCurrency(kpis.salesToday)} icon={<DollarSign className="h-5 w-5 text-white" />} color="from-emerald-500 to-teal-600" />
         <StatCard title="Monthly revenue" value={formatCurrency(kpis.monthlyRevenue)} icon={<TrendingUp className="h-5 w-5 text-white" />} color="from-primary-500 to-indigo-600" />

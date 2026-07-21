@@ -6,10 +6,6 @@ export function OverviewLayout({ children }: { children: ReactNode }) {
   return <div className="space-y-4">{children}</div>;
 }
 
-export function OverviewHint({ children }: { children: ReactNode }) {
-  return <p className="text-sm text-slate-500">{children}</p>;
-}
-
 export function OverviewPreviewCard({
   title,
   viewAllLabel = 'View all',

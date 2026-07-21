@@ -24,7 +24,6 @@ import { Modal } from '../components/ui/Modal';
 import { DeliveryForm } from '../components/forms/DeliveryForm';
 import { VehicleForm } from '../components/forms/VehicleForm';
 import { useAuth } from '../contexts/AuthContext';
-import { OverviewHint } from '../components/layout/ModuleOverview';
 import { DeliveryNote, DeliveryStats, Vehicle, VEHICLE_TYPE_OPTIONS, vehicleTypeLabel, VehicleType } from '../types';
 
 const tabs = ['Overview', 'Deliveries', 'Vehicles'];
@@ -64,9 +63,27 @@ const NEXT_DELIVERY_STATUS: Record<string, { status: string; label: string }> = 
   IN_TRANSIT: { status: 'DELIVERED', label: 'Mark Delivered' },
 };
 
+function getDeliveryActions(status: string, isDriver: boolean) {
+  if (isDriver) {
+    if (status === 'ASSIGNED') {
+      return [
+        { status: 'IN_TRANSIT', label: 'Start Trip' },
+        { status: 'DELIVERED', label: 'Mark Delivered' },
+      ];
+    }
+    if (status === 'IN_TRANSIT') {
+      return [{ status: 'DELIVERED', label: 'Mark Delivered' }];
+    }
+    return [];
+  }
+
+  const next = NEXT_DELIVERY_STATUS[status];
+  return next ? [next] : [];
+}
+
 export function DeliveryPage() {
   const queryClient = useQueryClient();
-  const { hasPermission } = useAuth();
+  const { hasPermission, isDriver } = useAuth();
   const [activeTab, setActiveTab] = useState(0);
   const [page, setPage] = useState(1);
   const [vehPage, setVehPage] = useState(1);
@@ -85,8 +102,12 @@ export function DeliveryPage() {
     proofOfDelivery?: string;
   } | null>(null);
 
-  const canCreate = hasPermission('delivery:create');
+  const canCreate = hasPermission('delivery:create') && !isDriver;
   const canUpdate = hasPermission('delivery:update');
+  const visibleTabs = isDriver ? ['My Deliveries'] : tabs;
+  const showOverview = !isDriver && activeTab === 0;
+  const showDeliveries = isDriver ? activeTab === 0 : activeTab === 1;
+  const showVehicles = !isDriver && activeTab === 2;
 
   const { data: stats } = useQuery({
     queryKey: ['delivery-stats'],
@@ -99,7 +120,7 @@ export function DeliveryPage() {
       deliveryApi
         .list({ page, limit: 15, search: search || undefined, status: status || undefined })
         .then((r) => r.data),
-    enabled: activeTab === 0 || activeTab === 1,
+    enabled: isDriver ? activeTab === 0 : activeTab === 0 || activeTab === 1,
   });
 
   const { data: vehicles, isLoading: vehLoading } = useQuery({
@@ -108,7 +129,7 @@ export function DeliveryPage() {
       deliveryApi
         .vehicles({ page: vehPage, limit: 15, search: vehSearch || undefined, type: vehType || undefined })
         .then((r) => r.data),
-    enabled: activeTab === 0 || activeTab === 2,
+    enabled: !isDriver && (activeTab === 0 || activeTab === 2),
   });
 
   const statusMutation = useMutation({
@@ -130,8 +151,8 @@ export function DeliveryPage() {
     setDetailOpen(true);
   };
 
-  const recentDeliveries = activeTab === 0 ? ((deliveries?.data as DeliveryNote[]) || []).slice(0, 6) : [];
-  const activeDeliveries = activeTab === 0
+  const recentDeliveries = showOverview ? ((deliveries?.data as DeliveryNote[]) || []).slice(0, 6) : [];
+  const activeDeliveries = showOverview
     ? ((deliveries?.data as DeliveryNote[]) || []).filter((d) => ['PENDING', 'ASSIGNED', 'IN_TRANSIT'].includes(d.status)).slice(0, 5)
     : [];
 
@@ -175,18 +196,24 @@ export function DeliveryPage() {
       render: (_: unknown, row: Record<string, unknown>) => {
         if (!canUpdate) return null;
         const st = row.status as string;
-        const next = NEXT_DELIVERY_STATUS[st];
-        if (!next) return null;
+        const actions = getDeliveryActions(st, isDriver);
+        if (!actions.length) return null;
+        const primary = actions[actions.length - 1];
         return (
           <Button
             size="sm"
             loading={statusMutation.isPending}
             onClick={(e) => {
               e.stopPropagation();
-              setPendingStatusChange({ id: row.id as string, status: next.status, label: next.label });
+              setPendingStatusChange({
+                id: row.id as string,
+                status: primary.status,
+                label: primary.label,
+                proofOfDelivery: primary.status === 'DELIVERED' ? 'Confirmed by driver' : undefined,
+              });
             }}
           >
-            {next.label}
+            {primary.label}
           </Button>
         );
       },
@@ -209,12 +236,12 @@ export function DeliveryPage() {
 
   const toolbarActions =
     canCreate &&
-    (activeTab === 1 ? (
+    (showDeliveries ? (
       <Button size="sm" onClick={() => setDeliveryModalOpen(true)}>
         <Plus className="h-4 w-4 mr-1.5" />
         Add Delivery
       </Button>
-    ) : activeTab === 2 ? (
+    ) : showVehicles ? (
       <Button size="sm" onClick={() => setVehicleModalOpen(true)}>
         <Plus className="h-4 w-4 mr-1.5" />
         Add Vehicle
@@ -224,8 +251,6 @@ export function DeliveryPage() {
   return (
     <div className="space-y-1">
       <PageHeader
-        title="Delivery"
-        subtitle="Dispatch via motorcycles, trucks, and lorries — delivery notes and proof of delivery"
         action={
           stats && stats.inTransit > 0 ? (
             <Button variant="secondary" size="sm" onClick={() => { setStatus('IN_TRANSIT'); setPage(1); goToTab(1); }}>
@@ -253,16 +278,14 @@ export function DeliveryPage() {
       )}
 
       <PageToolbar
-        tabs={tabs}
+        tabs={visibleTabs}
         activeTab={activeTab}
         onTabChange={(tab) => { setActiveTab(tab); setPage(1); setVehPage(1); }}
         actions={toolbarActions}
       />
 
-      {activeTab === 0 && (
+      {showOverview && (
         <div className="space-y-4">
-          <OverviewHint>Use the tabs above to manage records. Summary counts are shown at the top.</OverviewHint>
-
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
             <Card
               title="Active deliveries"
@@ -369,7 +392,7 @@ export function DeliveryPage() {
         </div>
       )}
 
-      {activeTab === 1 && (
+      {showDeliveries && (
         <DataPanel>
           <div className="p-4 pb-0 flex flex-col sm:flex-row gap-3">
             <Input
@@ -389,7 +412,7 @@ export function DeliveryPage() {
             <div className="p-6">
               <EmptyState
                 title="No deliveries found"
-                description="Create a delivery note from a ready sales order."
+                description={isDriver ? 'Assigned deliveries will appear here.' : 'Create a delivery note from a ready sales order.'}
                 action={
                   canCreate ? (
                     <Button onClick={() => setDeliveryModalOpen(true)}>
@@ -415,7 +438,7 @@ export function DeliveryPage() {
         </DataPanel>
       )}
 
-      {activeTab === 2 && (
+      {showVehicles && (
         <DataPanel>
           <div className="p-4 pb-0 flex flex-col sm:flex-row gap-3">
             <Input
@@ -471,6 +494,9 @@ export function DeliveryPage() {
               <div><p className="text-slate-500">Customer</p><p className="font-semibold">{selected.salesOrder?.customer?.name}</p></div>
               <div><p className="text-slate-500">Sales Order</p><p className="font-semibold">{selected.salesOrder?.orderNumber}</p></div>
               <div><p className="text-slate-500">Vehicle</p><p className="font-semibold">{formatVehicleLabel(selected.vehicle)}</p></div>
+              {selected.driver && (
+                <div><p className="text-slate-500">Driver</p><p className="font-semibold">{selected.driver.firstName} {selected.driver.lastName}</p></div>
+              )}
               <div><p className="text-slate-500">Scheduled</p><p className="font-semibold">{selected.scheduledDate ? formatDate(selected.scheduledDate) : '-'}</p></div>
               <div><p className="text-slate-500">Status</p><Badge variant={getStatusBadge(selected.status)}>{selected.status.replace(/_/g, ' ')}</Badge></div>
               {selected.deliveredAt && (
@@ -487,38 +513,26 @@ export function DeliveryPage() {
                 ))}
               </Card>
             )}
-            {canUpdate && NEXT_DELIVERY_STATUS[selected.status] && (
-              <div className="flex justify-end gap-2">
-                <Button
-                  loading={statusMutation.isPending}
-                  onClick={() =>
-                    setPendingStatusChange({
-                      id: selected.id,
-                      status: NEXT_DELIVERY_STATUS[selected.status].status,
-                      label: NEXT_DELIVERY_STATUS[selected.status].label,
-                    })
-                  }
-                >
-                  {NEXT_DELIVERY_STATUS[selected.status].label}
-                </Button>
-              </div>
-            )}
-            {canUpdate && selected.status === 'IN_TRANSIT' && (
-              <div className="flex justify-end">
-                <Button
-                  variant="secondary"
-                  loading={statusMutation.isPending}
-                  onClick={() =>
-                    setPendingStatusChange({
-                      id: selected.id,
-                      status: 'DELIVERED',
-                      label: 'Mark Delivered with POD',
-                      proofOfDelivery: 'Confirmed by customer',
-                    })
-                  }
-                >
-                  Mark Delivered with POD
-                </Button>
+            {canUpdate && getDeliveryActions(selected.status, isDriver).length > 0 && (
+              <div className="flex flex-wrap justify-end gap-2">
+                {getDeliveryActions(selected.status, isDriver).map((action) => (
+                  <Button
+                    key={action.status}
+                    variant={action.status === 'DELIVERED' ? 'primary' : 'secondary'}
+                    loading={statusMutation.isPending}
+                    onClick={() =>
+                      setPendingStatusChange({
+                        id: selected.id,
+                        status: action.status,
+                        label: action.label,
+                        proofOfDelivery:
+                          action.status === 'DELIVERED' ? 'Confirmed by driver' : undefined,
+                      })
+                    }
+                  >
+                    {action.label}
+                  </Button>
+                ))}
               </div>
             )}
           </div>

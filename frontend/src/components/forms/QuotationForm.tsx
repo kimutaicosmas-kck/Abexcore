@@ -4,9 +4,10 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, Trash2 } from 'lucide-react';
-import { operationsApi, customersApi, productsApi } from '../../services/api';
+import { operationsApi, customersApi } from '../../services/api';
+import { useProductPicker } from '../../hooks/useProductPicker';
 import { Button, Input, Select } from '../ui';
-import { Customer, Product } from '../../types';
+import { Customer } from '../../types';
 import { useVatRate } from '../../contexts/AuthContext';
 import { formatProductOptionLabel } from '../../utils/productDisplay';
 
@@ -39,10 +40,7 @@ export function QuotationForm({ onSuccess, onCancel }: QuotationFormProps) {
     queryFn: () => customersApi.list({ limit: 100 }).then((r) => r.data.data as Customer[]),
   });
 
-  const { data: productsData } = useQuery({
-    queryKey: ['products'],
-    queryFn: () => productsApi.list({ limit: 100 }).then((r) => r.data.data as Product[]),
-  });
+  const { data: productsData } = useProductPicker();
 
   const customerOptions = (customersData || []).map((c) => ({
     value: c.id,

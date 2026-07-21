@@ -32,7 +32,6 @@ import { Modal } from '../components/ui/Modal';
 import { QualityForm } from '../components/forms/QualityForm';
 import { QualityUpdatePanel } from '../components/forms/QualityUpdatePanel';
 import { useAuth } from '../contexts/AuthContext';
-import { OverviewHint } from '../components/layout/ModuleOverview';
 import { QualityInspection, QualityStats } from '../types';
 
 const tabs = ['Overview', 'Inspections'];
@@ -137,8 +136,6 @@ export function QualityPage() {
   return (
     <div className="space-y-1">
       <PageHeader
-        title="Quality"
-        subtitle="Incoming, production, and finished product inspections"
         action={
           stats && stats.pending > 0 ? (
             <Button variant="secondary" size="sm" onClick={() => { setStatus('PENDING'); setPage(1); goToTab(1); }}>
@@ -187,8 +184,6 @@ export function QualityPage() {
 
       {activeTab === 0 && (
         <div className="space-y-4">
-          <OverviewHint>Use the tabs above to manage records. Summary counts are shown at the top.</OverviewHint>
-
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
             <Card
               title="Pending inspections"

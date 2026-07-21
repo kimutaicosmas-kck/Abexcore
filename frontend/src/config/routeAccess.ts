@@ -1,4 +1,4 @@
-export const ROUTE_PERMISSIONS: Record<string, string | undefined> = {
+export const ROUTE_PERMISSIONS: Record<string, string | string[] | undefined> = {
   '/': undefined,
   '/users': 'users:read',
   '/customers': 'customers:read',
@@ -7,9 +7,9 @@ export const ROUTE_PERMISSIONS: Record<string, string | undefined> = {
   '/procurement': 'procurement:read',
   '/production': 'production:read',
   '/quality': 'quality:read',
-  '/sales': 'sales:read',
-  '/my-sales': 'sales:read',
-  '/sales-targets': 'settings:read',
+  '/sales': ['sales:read', 'finance:read', 'finance:create'],
+  '/my-sales': ['sales:read', 'reports:read', 'finance:read'],
+  '/sales-performance': ['reports:read', 'finance:read', 'settings:read'],
   '/delivery': 'delivery:read',
   '/finance': 'finance:read',
   '/hr': 'hr:read',
@@ -32,5 +32,8 @@ export function canAccessRoute(
   const permission = ROUTE_PERMISSIONS[key];
   if (permission === undefined && key in ROUTE_PERMISSIONS) return true;
   if (!permission) return false;
+  if (Array.isArray(permission)) {
+    return permission.some((entry) => hasPermission(entry));
+  }
   return hasPermission(permission);
 }

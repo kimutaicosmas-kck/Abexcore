@@ -1,5 +1,6 @@
 import prisma from '../config/database';
 import { endOfDay, startOfDay } from '../utils/date';
+import { salesPersonOrderFilter } from './my-sales.service';
 import { Prisma } from '@prisma/client';
 
 export interface SalesByPersonQuery {
@@ -18,7 +19,7 @@ function buildInvoiceWhere(query: Pick<SalesByPersonQuery, 'salesPersonId' | 'st
   };
 
   if (query.salesPersonId) {
-    where.salesOrder = { createdById: query.salesPersonId };
+    where.salesOrder = salesPersonOrderFilter(query.salesPersonId);
   }
 
   if (query.startDate || query.endDate) {
@@ -36,6 +37,14 @@ function buildInvoiceWhere(query: Pick<SalesByPersonQuery, 'salesPersonId' | 'st
 
 function formatPersonName(user: { firstName: string; lastName: string }) {
   return `${user.firstName} ${user.lastName}`.trim();
+}
+
+function resolveOrderSalesPerson(order?: {
+  salesPerson: { id: string; firstName: string; lastName: string } | null;
+  createdBy: { id: string; firstName: string; lastName: string };
+} | null) {
+  if (!order) return null;
+  return order.salesPerson || order.createdBy;
 }
 
 export class SalespersonReportService {
@@ -83,6 +92,7 @@ export class SalespersonReportService {
             select: {
               id: true,
               orderNumber: true,
+              salesPerson: { select: { id: true, firstName: true, lastName: true } },
               createdBy: { select: { id: true, firstName: true, lastName: true } },
             },
           },
@@ -103,6 +113,7 @@ export class SalespersonReportService {
               paidAmount: true,
               salesOrder: {
                 select: {
+                  salesPerson: { select: { id: true, firstName: true, lastName: true } },
                   createdBy: { select: { id: true, firstName: true, lastName: true } },
                 },
               },
@@ -114,7 +125,7 @@ export class SalespersonReportService {
       ? []
       : Array.from(
           allForBreakdown.reduce((map, invoice) => {
-            const person = invoice.salesOrder?.createdBy;
+            const person = resolveOrderSalesPerson(invoice.salesOrder);
             if (!person) return map;
 
             const existing = map.get(person.id) ?? {
@@ -142,7 +153,9 @@ export class SalespersonReportService {
           Number(aggregate._sum.totalAmount || 0) - Number(aggregate._sum.paidAmount || 0),
         bySalesPerson,
       },
-      rows: rows.map((invoice) => ({
+      rows: rows.map((invoice) => {
+        const person = resolveOrderSalesPerson(invoice.salesOrder);
+        return {
         id: invoice.id,
         invoiceNumber: invoice.invoiceNumber,
         orderNumber: invoice.salesOrder?.orderNumber || '',
@@ -151,15 +164,14 @@ export class SalespersonReportService {
         customerId: invoice.customer?.id || null,
         customerName: invoice.customer?.name || '',
         customerCode: invoice.customer?.code || '',
-        salesPersonId: invoice.salesOrder?.createdBy.id || null,
-        salesPersonName: invoice.salesOrder?.createdBy
-          ? formatPersonName(invoice.salesOrder.createdBy)
-          : 'Unassigned',
+        salesPersonId: person?.id || null,
+        salesPersonName: person ? formatPersonName(person) : 'Unassigned',
         totalAmount: Number(invoice.totalAmount),
         paidAmount: Number(invoice.paidAmount),
         balance: Number(invoice.totalAmount) - Number(invoice.paidAmount),
         status: invoice.status,
-      })),
+      };
+      }),
       pagination: {
         page: query.page,
         limit: query.limit,
@@ -180,25 +192,27 @@ export class SalespersonReportService {
         salesOrder: {
           select: {
             orderNumber: true,
-            createdBy: { select: { firstName: true, lastName: true } },
+            salesPerson: { select: { id: true, firstName: true, lastName: true } },
+            createdBy: { select: { id: true, firstName: true, lastName: true } },
           },
         },
       },
     });
 
-    return rows.map((invoice) => ({
+    return rows.map((invoice) => {
+      const person = resolveOrderSalesPerson(invoice.salesOrder);
+      return {
       invoiceNumber: invoice.invoiceNumber,
       orderNumber: invoice.salesOrder?.orderNumber || '',
       invoiceDate: invoice.invoiceDate,
       customerName: invoice.customer?.name || '',
       customerCode: invoice.customer?.code || '',
-      salesPersonName: invoice.salesOrder?.createdBy
-        ? formatPersonName(invoice.salesOrder.createdBy)
-        : 'Unassigned',
+      salesPersonName: person ? formatPersonName(person) : 'Unassigned',
       totalAmount: Number(invoice.totalAmount),
       paidAmount: Number(invoice.paidAmount),
       balance: Number(invoice.totalAmount) - Number(invoice.paidAmount),
       status: invoice.status,
-    }));
+    };
+    });
   }
 }

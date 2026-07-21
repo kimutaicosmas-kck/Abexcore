@@ -19,7 +19,7 @@ import { ReportsPage } from './pages/ReportsPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { DeliveryPage } from './pages/DeliveryPage';
 import { MySalesPage } from './pages/MySalesPage';
-import { SalesTargetsPage } from './pages/SalesTargetsPage';
+import { SalesPerformancePage } from './pages/SalesPerformancePage';
 import { ChangePasswordPage } from './pages/ChangePasswordPage';
 import { NotFoundPage } from './pages/NotFoundPage';
 import { PermissionRoute } from './components/auth/PermissionRoute';
@@ -82,7 +82,8 @@ function AppRoutes() {
         <Route path="quality" element={<PermissionRoute><QualityPage /></PermissionRoute>} />
         <Route path="sales" element={<PermissionRoute><SalesPage /></PermissionRoute>} />
         <Route path="my-sales" element={<PermissionRoute><MySalesPage /></PermissionRoute>} />
-        <Route path="sales-targets" element={<PermissionRoute><SalesTargetsPage /></PermissionRoute>} />
+        <Route path="sales-performance" element={<PermissionRoute><SalesPerformancePage /></PermissionRoute>} />
+        <Route path="sales-targets" element={<Navigate to="/sales-performance?tab=targets" replace />} />
         <Route path="delivery" element={<PermissionRoute><DeliveryPage /></PermissionRoute>} />
         <Route path="finance" element={<PermissionRoute><FinancePage /></PermissionRoute>} />
         <Route path="hr" element={<PermissionRoute><HRPage /></PermissionRoute>} />

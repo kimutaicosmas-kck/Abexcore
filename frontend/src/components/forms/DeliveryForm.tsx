@@ -16,6 +16,7 @@ const deliveryItemSchema = z.object({
 const deliverySchema = z.object({
   salesOrderId: z.string().min(1, 'Sales order is required'),
   vehicleId: z.string().optional(),
+  driverId: z.string().optional(),
   scheduledDate: z.string().optional(),
   notes: z.string().optional(),
   items: z.array(deliveryItemSchema).min(1, 'Add at least one item'),
@@ -47,6 +48,14 @@ export function DeliveryForm({ onSuccess, onCancel }: DeliveryFormProps) {
     queryFn: () => deliveryApi.vehicles().then((r) => r.data.data as Vehicle[]),
   });
 
+  const { data: driversData } = useQuery({
+    queryKey: ['delivery-drivers'],
+    queryFn: () =>
+      deliveryApi.drivers().then(
+        (r) => r.data.data as { id: string; firstName: string; lastName: string; email: string }[]
+      ),
+  });
+
   const salesOrderOptions = [
     { value: '', label: 'Select sales order...' },
     ...(salesOrdersData || []).map((o) => ({
@@ -63,11 +72,20 @@ export function DeliveryForm({ onSuccess, onCancel }: DeliveryFormProps) {
     })),
   ];
 
+  const driverOptions = [
+    { value: '', label: 'Select driver…' },
+    ...(driversData || []).map((d) => ({
+      value: d.id,
+      label: `${d.firstName} ${d.lastName}`.trim(),
+    })),
+  ];
+
   const { register, control, handleSubmit, watch, formState: { errors } } = useForm<DeliveryFormData>({
     resolver: zodResolver(deliverySchema),
     defaultValues: {
       salesOrderId: '',
       vehicleId: '',
+      driverId: '',
       items: [{ productId: '', quantity: 1 }],
     },
   });
@@ -96,6 +114,7 @@ export function DeliveryForm({ onSuccess, onCancel }: DeliveryFormProps) {
       const payload = {
         ...data,
         vehicleId: data.vehicleId || undefined,
+        driverId: data.driverId || undefined,
       };
       return deliveryApi.create(payload);
     },
@@ -125,6 +144,7 @@ export function DeliveryForm({ onSuccess, onCancel }: DeliveryFormProps) {
           error={errors.salesOrderId?.message}
         />
         <Select label="Vehicle" options={vehicleOptions} {...register('vehicleId')} />
+        <Select label="Driver" options={driverOptions} {...register('driverId')} />
         <Input label="Scheduled Date" type="date" {...register('scheduledDate')} />
       </div>
 

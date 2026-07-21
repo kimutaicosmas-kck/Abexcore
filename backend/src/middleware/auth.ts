@@ -83,6 +83,15 @@ export const authorize = (...requiredPermissions: string[]) => {
   };
 };
 
+/** Read-only product lists for order/quote/inventory forms (not full catalog admin). */
+export const authorizeProductPicker = authorize(
+  'products:read',
+  'sales:read',
+  'production:read',
+  'inventory:read',
+  'customers:read'
+);
+
 export const requireSuperAdmin = (req: AuthRequest, _res: Response, next: NextFunction) => {
   if (!req.user) return next(new AppError('Authentication required', 401));
   if (req.user.roleName !== 'Super Admin') {
