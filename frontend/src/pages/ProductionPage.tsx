@@ -19,6 +19,7 @@ import {
   getStatusBadge,
   PageToolbar,
   ConfirmDialog,
+  PageQueryStatus,
 } from '../components/ui';
 import { Modal } from '../components/ui/Modal';
 import { ProductionOrderForm } from '../components/forms/ProductionOrderForm';
@@ -28,6 +29,7 @@ type ProductionStats = {
   activeOrders: number;
   inProgress: number;
   scheduled: number;
+  completedInPeriod: number;
   awaitingProduction: number;
 };
 
@@ -53,6 +55,7 @@ export function ProductionPage() {
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [completingOrder, setCompletingOrder] = useState<{
     id: string;
+    productId: string;
     quantity: number;
     orderNumber: string;
   } | null>(null);
@@ -65,7 +68,7 @@ export function ProductionPage() {
     queryFn: () => operationsApi.productionStats().then((r) => r.data.data as ProductionStats),
   });
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['production', page, search, statusFilter],
     queryFn: () =>
       operationsApi
@@ -136,6 +139,7 @@ export function ProductionPage() {
               onClick={() =>
                 setCompletingOrder({
                   id,
+                  productId: (row.product as { id: string })?.id || '',
                   quantity: Number(row.quantity) || 1,
                   orderNumber: String(row.orderNumber || id),
                 })
@@ -160,25 +164,15 @@ export function ProductionPage() {
     ) : undefined);
 
   return (
-    <div className="space-y-1">
-      <PageHeader
-        action={
-          stats && stats.inProgress > 0 ? (
-            <Button variant="secondary" size="sm" onClick={() => goToTab(1)}>
-              <Factory className="h-4 w-4 mr-1.5 text-orange-500" />
-              {stats.inProgress} in progress
-            </Button>
-          ) : undefined
-        }
-      />
-
+    <div className="space-y-4">
+      <PageQueryStatus isError={isError} error={error} onRetry={() => refetch()} />
       {stats && (
         <StatGrid>
           <StatCard
             title="Active orders"
             value={stats.activeOrders}
             icon={<Factory className="h-5 w-5 text-white" />}
-            color="from-primary-500 to-indigo-600"
+            color="from-primary-500 to-primary-700"
           />
           <StatCard
             title="In progress"
@@ -190,7 +184,7 @@ export function ProductionPage() {
             title="Scheduled"
             value={stats.scheduled}
             icon={<Calendar className="h-5 w-5 text-white" />}
-            color="from-violet-500 to-purple-600"
+            color="from-primary-600 to-primary-800"
           />
           <StatCard
             title="Awaiting production"
@@ -198,8 +192,25 @@ export function ProductionPage() {
             icon={<Package className="h-5 w-5 text-white" />}
             color="from-emerald-500 to-teal-600"
           />
+          <StatCard
+            title="Completed (Month)"
+            value={stats.completedInPeriod}
+            icon={<CheckCircle className="h-5 w-5 text-white" />}
+            color="from-slate-600 to-slate-800"
+          />
         </StatGrid>
       )}
+
+      <PageHeader
+        action={
+          stats && stats.inProgress > 0 ? (
+            <Button variant="secondary" size="sm" onClick={() => goToTab(1)}>
+              <Factory className="h-4 w-4 mr-1.5 text-orange-500" />
+              {stats.inProgress} in progress
+            </Button>
+          ) : undefined
+        }
+      />
 
       <PageToolbar tabs={tabs} activeTab={activeTab} onTabChange={setActiveTab} actions={toolbarActions} />
 
@@ -326,6 +337,7 @@ export function ProductionPage() {
         {completingOrder && (
           <CompleteProductionForm
             productionId={completingOrder.id}
+            productId={completingOrder.productId}
             orderQuantity={completingOrder.quantity}
             orderNumber={completingOrder.orderNumber}
             onSuccess={() => setCompletingOrder(null)}

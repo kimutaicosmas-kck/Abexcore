@@ -1,4 +1,4 @@
-import { useId, Children } from 'react';
+import { useId } from 'react';
 import clsx from 'clsx';
 import { ChevronRight } from 'lucide-react';
 
@@ -23,12 +23,12 @@ export function Button({
         'inline-flex items-center justify-center font-medium rounded-xl transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98]',
         {
           'bg-primary-600 text-white hover:bg-primary-700 shadow-sm shadow-primary-600/20 focus:ring-primary-500': variant === 'primary',
-          'bg-white text-slate-700 border border-border hover:bg-surface-muted hover:border-border-strong focus:ring-primary-500 shadow-sm': variant === 'secondary',
+          'bg-white text-primary-800 border border-primary-200 hover:bg-primary-50 hover:border-primary-300 focus:ring-primary-500': variant === 'secondary',
           'bg-red-600 text-white hover:bg-red-700 shadow-sm shadow-red-600/20 focus:ring-red-500': variant === 'danger',
-          'text-slate-600 hover:bg-surface-subtle focus:ring-slate-400': variant === 'ghost',
-          'px-3 py-1.5 text-sm': size === 'sm',
-          'px-4 py-2.5 text-sm': size === 'md',
-          'px-6 py-3 text-base': size === 'lg',
+          'text-primary-700 hover:bg-primary-50 focus:ring-primary-400': variant === 'ghost',
+          'px-3 py-1.5 text-xs': size === 'sm',
+          'px-4 py-2 text-sm': size === 'md',
+          'px-5 py-2.5 text-sm': size === 'lg',
         },
         className
       )}
@@ -65,12 +65,95 @@ export function Input({ label, error, className, id: idProp, ...props }: InputPr
       <input
         id={id}
         className={clsx(
-          'block w-full rounded-xl border border-border bg-white px-3.5 py-2.5 text-sm text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-500/15 transition-all',
+          'block w-full rounded-xl border border-primary-100 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-500/20 transition-all',
           error && 'border-red-400 focus:border-red-400 focus:ring-red-500/15',
           className
         )}
         {...props}
       />
+      {error && <p className="text-sm text-red-600">{error}</p>}
+    </div>
+  );
+}
+
+interface NumberInputProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'type' | 'onChange' | 'value'> {
+  label?: string;
+  error?: string;
+  value?: number | string;
+  onChange?: (value: number) => void;
+  step?: number;
+  min?: number;
+  max?: number;
+}
+
+export function NumberInput({
+  label,
+  error,
+  className,
+  id: idProp,
+  value,
+  onChange,
+  step = 1,
+  min,
+  max,
+  disabled,
+  ...props
+}: NumberInputProps) {
+  const autoId = useId();
+  const id = idProp ?? autoId;
+  const numeric = Number(value ?? 0);
+
+  const adjust = (delta: number) => {
+    if (disabled) return;
+    let next = numeric + delta;
+    if (min != null) next = Math.max(min, next);
+    if (max != null) next = Math.min(max, next);
+    onChange?.(next);
+  };
+
+  return (
+    <div className="space-y-1.5">
+      {label && (
+        <label htmlFor={id} className="block text-sm font-medium text-slate-700">
+          {label}
+        </label>
+      )}
+      <div className="flex items-stretch gap-1">
+        <button
+          type="button"
+          disabled={disabled || (min != null && numeric <= min)}
+          onClick={() => adjust(-step)}
+          className="px-3 rounded-l-xl border border-primary-100 bg-primary-50 text-primary-800 hover:bg-primary-100 disabled:opacity-50"
+          aria-label="Decrease"
+        >
+          −
+        </button>
+        <input
+          id={id}
+          type="number"
+          step={step}
+          min={min}
+          max={max}
+          disabled={disabled}
+          value={value ?? ''}
+          onChange={(e) => onChange?.(Number(e.target.value) || 0)}
+          className={clsx(
+            'block w-full border-y border-primary-100 bg-white px-3 py-2 text-sm text-slate-900 text-center focus:border-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-500/20',
+            error && 'border-red-400',
+            className
+          )}
+          {...props}
+        />
+        <button
+          type="button"
+          disabled={disabled || (max != null && numeric >= max)}
+          onClick={() => adjust(step)}
+          className="px-3 rounded-r-xl border border-primary-100 bg-primary-50 text-primary-800 hover:bg-primary-100 disabled:opacity-50"
+          aria-label="Increase"
+        >
+          +
+        </button>
+      </div>
       {error && <p className="text-sm text-red-600">{error}</p>}
     </div>
   );
@@ -82,13 +165,21 @@ interface SelectProps extends React.SelectHTMLAttributes<HTMLSelectElement> {
   options: { value: string; label: string }[];
 }
 
-export function Select({ label, error, options, className, ...props }: SelectProps) {
+export function Select({ label, error, options, className, id: idProp, ...props }: SelectProps & { id?: string }) {
+  const autoId = useId();
+  const id = idProp ?? autoId;
+
   return (
     <div className="space-y-1.5">
-      {label && <label className="block text-sm font-medium text-slate-700">{label}</label>}
+      {label && (
+        <label htmlFor={id} className="block text-sm font-medium text-slate-700">
+          {label}
+        </label>
+      )}
       <select
+        id={id}
         className={clsx(
-          'block w-full rounded-xl border border-border bg-white px-3.5 py-2.5 text-sm text-slate-900 shadow-sm focus:border-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-500/15 transition-all',
+          'block w-full rounded-xl border border-primary-100 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-500/20 transition-all',
           error && 'border-red-400 focus:border-red-400 focus:ring-red-500/15',
           className
         )}
@@ -115,10 +206,10 @@ interface CardProps {
 
 export function Card({ children, className, title, action, padding = true }: CardProps) {
   return (
-    <div className={clsx('bg-white rounded-2xl border border-border shadow-soft overflow-hidden min-w-0', className)}>
+    <div className={clsx('panel-surface min-w-0', className)}>
       {(title || action) && (
-        <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-border bg-surface-muted/40 min-w-0">
-          {title && <h3 className="text-sm font-semibold text-slate-900 min-w-0 flex-1 truncate">{title}</h3>}
+        <div className="panel-header flex items-center justify-between gap-2 px-4 py-3 min-w-0">
+          {title && <h3 className="text-sm font-semibold text-primary-900 min-w-0 flex-1 truncate">{title}</h3>}
           {action && <div className="shrink-0">{action}</div>}
         </div>
       )}
@@ -135,12 +226,12 @@ interface BadgeProps {
 export function Badge({ children, variant = 'default' }: BadgeProps) {
   return (
     <span
-      className={clsx('inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ring-1 ring-inset', {
-        'bg-slate-100 text-slate-700 ring-slate-200': variant === 'default',
-        'bg-emerald-50 text-emerald-700 ring-emerald-200': variant === 'success',
-        'bg-amber-50 text-amber-700 ring-amber-200': variant === 'warning',
-        'bg-red-50 text-red-700 ring-red-200': variant === 'danger',
-        'bg-sky-50 text-sky-700 ring-sky-200': variant === 'info',
+      className={clsx('inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ring-1 ring-inset', {
+        'bg-primary-50 text-primary-800 ring-primary-200/80': variant === 'default',
+        'bg-emerald-50 text-emerald-800 ring-emerald-200/80': variant === 'success',
+        'bg-amber-50 text-amber-800 ring-amber-200/80': variant === 'warning',
+        'bg-red-50 text-red-800 ring-red-200/80': variant === 'danger',
+        'bg-primary-100 text-primary-800 ring-primary-200/80': variant === 'info',
       })}
     >
       {children}
@@ -156,27 +247,27 @@ interface StatCardProps {
   color?: string;
 }
 
-export function StatCard({ title, value, icon, trend, color = 'from-primary-500 to-primary-600' }: StatCardProps) {
+export function StatCard({ title, value, icon, trend, color = 'bg-primary-600' }: StatCardProps) {
   return (
-    <div className="rounded-xl border border-border bg-white p-2.5 sm:p-3.5 shadow-soft min-w-0 h-full min-h-[6rem] sm:min-h-[6.75rem] flex flex-col snap-start">
-      <div className="flex items-start justify-between gap-1.5 sm:gap-2">
-        <p className="min-w-0 flex-1 text-[10px] sm:text-xs font-medium text-slate-500 leading-snug line-clamp-2 min-h-[1.75rem] sm:min-h-[2rem]">
+    <div className="stat-card flex flex-col gap-2 snap-start">
+      <div className="flex items-start justify-between gap-2">
+        <p className="min-w-0 flex-1 text-[11px] sm:text-xs font-medium text-primary-700/70 uppercase tracking-wide leading-snug line-clamp-2">
           {title}
         </p>
         <div
           className={clsx(
-            'h-8 w-8 sm:h-9 sm:w-9 shrink-0 flex items-center justify-center rounded-lg bg-gradient-to-br text-white [&_svg]:h-4 [&_svg]:w-4 sm:[&_svg]:h-5 sm:[&_svg]:w-5',
-            color
+            'h-9 w-9 sm:h-10 sm:w-10 shrink-0 flex items-center justify-center rounded-lg text-white shadow-sm [&_svg]:h-4 [&_svg]:w-4 sm:[&_svg]:h-5 sm:[&_svg]:w-5',
+            color.includes('from-') ? `bg-gradient-to-br ${color}` : color
           )}
         >
           {icon}
         </div>
       </div>
-      <p className="mt-auto pt-1.5 sm:pt-2 text-[11px] sm:text-sm font-bold tabular-nums text-slate-900 leading-none whitespace-nowrap">
+      <p className="text-lg sm:text-xl font-bold tabular-nums text-primary-950 leading-none tracking-tight">
         {value}
       </p>
       {trend && (
-        <p className={clsx('mt-1 text-[10px] sm:text-xs font-medium whitespace-nowrap', trend.value >= 0 ? 'text-emerald-600' : 'text-red-600')}>
+        <p className={clsx('text-[11px] sm:text-xs font-medium whitespace-nowrap', trend.value >= 0 ? 'text-emerald-600' : 'text-red-600')}>
           {trend.value >= 0 ? '+' : ''}{trend.value}% {trend.label}
         </p>
       )}
@@ -237,12 +328,12 @@ export function Table({ columns, data, loading, onRowClick, embedded = false, re
                 >
                   {primary && (
                     <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="font-semibold text-slate-900 truncate">
+                      <div className="min-w-0 flex-1">
+                        <div className="font-semibold text-slate-900 min-w-0">
                           {primary.render
                             ? primary.render(record[primary.key], record)
                             : String(record[primary.key] ?? '')}
-                        </p>
+                        </div>
                       </div>
                       {dataCols.length > 1 && dataCols[dataCols.length - 1]?.key === 'status' && (
                         <div className="shrink-0">
@@ -262,9 +353,9 @@ export function Table({ columns, data, loading, onRowClick, embedded = false, re
                       return (
                         <div key={col.key} className="flex items-center justify-between gap-3 text-sm">
                           <span className="text-slate-500 shrink-0">{col.label}</span>
-                          <span className="text-slate-800 text-right min-w-0 truncate">
+                          <div className="text-slate-800 text-right min-w-0 max-w-[60%]">
                             {col.render ? col.render(record[col.key], record) : String(record[col.key] ?? '')}
-                          </span>
+                          </div>
                         </div>
                       );
                     })}
@@ -287,11 +378,11 @@ export function Table({ columns, data, loading, onRowClick, embedded = false, re
           <div className={clsx('overflow-x-auto', embedded ? 'px-4 sm:px-0' : undefined)}>
             <table className="min-w-full">
               <thead>
-                <tr className="border-b border-border bg-surface-muted/60">
+                <tr className="border-b border-primary-100 bg-primary-50/80">
                   {columns.map((col) => (
                     <th
                       key={col.key}
-                      className="px-3 sm:px-5 py-3 sm:py-3.5 text-left text-[11px] font-semibold text-slate-500 uppercase tracking-wider whitespace-nowrap"
+                      className="px-3 sm:px-4 py-2.5 text-left text-[11px] font-semibold text-primary-800/70 uppercase tracking-wider whitespace-nowrap"
                     >
                       {col.label}
                     </th>
@@ -306,14 +397,14 @@ export function Table({ columns, data, loading, onRowClick, embedded = false, re
                       key={i}
                       className={clsx(
                         'transition-colors',
-                        onRowClick ? 'cursor-pointer hover:bg-primary-50/40' : 'hover:bg-surface-muted/50'
+                        onRowClick ? 'cursor-pointer hover:bg-primary-50/70' : 'hover:bg-primary-50/40'
                       )}
                       onClick={() => onRowClick?.(record)}
                     >
                       {columns.map((col) => (
                         <td
                           key={col.key}
-                          className="px-3 sm:px-5 py-3 sm:py-4 whitespace-nowrap text-sm text-slate-800 max-w-[12rem] truncate"
+                          className="px-3 sm:px-4 py-2.5 whitespace-nowrap text-sm text-slate-800 max-w-[12rem] truncate"
                         >
                           {col.render ? col.render(record[col.key], record) : String(record[col.key] ?? '')}
                         </td>
@@ -332,7 +423,7 @@ export function Table({ columns, data, loading, onRowClick, embedded = false, re
   if (embedded) return content;
 
   return (
-    <div className="bg-white rounded-2xl border border-border shadow-soft overflow-hidden">
+    <div className="panel-surface ring-1 ring-primary-50">
       {content}
     </div>
   );
@@ -340,7 +431,7 @@ export function Table({ columns, data, loading, onRowClick, embedded = false, re
 
 export function DataPanel({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
-    <div className={clsx('bg-white rounded-2xl border border-border shadow-soft overflow-hidden', className)}>
+    <div className={clsx('panel-surface', className)}>
       {children}
     </div>
   );
@@ -355,21 +446,16 @@ interface TabGroupProps {
 
 export function TabGroup({ tabs, activeIndex, onChange, className }: TabGroupProps) {
   return (
-    <div
-      className={clsx(
-        'flex max-w-full gap-0.5 p-0.5 rounded-lg bg-slate-100 border border-slate-200 overflow-x-auto',
-        className
-      )}
-    >
+    <div className={clsx('page-tabs', className)}>
       {tabs.map((tab, i) => (
         <button
           key={tab}
           onClick={() => onChange(i)}
           className={clsx(
-            'px-3 py-1.5 rounded-md text-xs font-medium transition-colors whitespace-nowrap shrink-0',
+            'px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 whitespace-nowrap shrink-0',
             activeIndex === i
-              ? 'bg-white text-primary-700 shadow-sm'
-              : 'text-slate-600 hover:text-slate-900'
+              ? 'bg-primary-600 text-white shadow-sm shadow-primary-600/25'
+              : 'text-primary-700 hover:bg-white/80 hover:text-primary-800'
           )}
         >
           {tab}
@@ -385,7 +471,7 @@ export function PageHeader({ subtitle, action }: { title?: string; subtitle?: st
   return (
     <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end mb-3">
       {subtitle && (
-        <p className="text-xs text-slate-500 truncate sm:mr-auto">{subtitle}</p>
+        <p className="text-xs text-primary-700/70 truncate sm:mr-auto">{subtitle}</p>
       )}
       {action && <div className="flex flex-wrap items-center gap-2 shrink-0">{action}</div>}
     </div>
@@ -422,7 +508,7 @@ export function Textarea({ label, error, className, ...props }: TextareaProps) {
       {label && <label className="block text-sm font-medium text-slate-700">{label}</label>}
       <textarea
         className={clsx(
-          'block w-full rounded-xl border border-border bg-white px-3.5 py-2.5 text-sm text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-500/15 transition-all resize-y min-h-[80px]',
+          'block w-full rounded-xl border border-primary-100 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-500/20 transition-all resize-y min-h-[72px]',
           error && 'border-red-400 focus:border-red-400 focus:ring-red-500/15',
           className
         )}
@@ -447,7 +533,7 @@ export function Alert({ children, variant = 'info', className }: AlertProps) {
         {
           'bg-emerald-50 text-emerald-800 ring-emerald-200': variant === 'success',
           'bg-red-50 text-red-800 ring-red-200': variant === 'error',
-          'bg-sky-50 text-sky-800 ring-sky-200': variant === 'info',
+          'bg-primary-50 text-primary-900 ring-primary-200': variant === 'info',
           'bg-amber-50 text-amber-900 ring-amber-200': variant === 'warning',
         },
         className
@@ -475,11 +561,11 @@ interface EmptyStateProps {
 
 export function EmptyState({ title, description, action }: EmptyStateProps) {
   return (
-    <div className="flex flex-col items-center justify-center py-12 px-4 text-center rounded-xl border border-dashed border-slate-200 bg-slate-50/50">
-      <div className="h-10 w-10 rounded-xl bg-slate-100 flex items-center justify-center mb-3 text-slate-400 text-lg">—</div>
-      <p className="text-sm font-medium text-slate-700">{title}</p>
-      {description && <p className="text-xs text-slate-500 mt-1 max-w-sm">{description}</p>}
-      {action && <div className="mt-4">{action}</div>}
+    <div className="flex flex-col items-center justify-center py-14 px-4 text-center rounded-xl border border-dashed border-primary-200 bg-primary-50/50">
+      <div className="h-12 w-12 rounded-xl bg-primary-100 flex items-center justify-center mb-4 text-primary-600 text-xl font-light">∅</div>
+      <p className="text-sm font-semibold text-primary-900">{title}</p>
+      {description && <p className="text-xs text-primary-700/70 mt-1 max-w-sm">{description}</p>}
+      {action && <div className="mt-5">{action}</div>}
     </div>
   );
 }
@@ -540,14 +626,14 @@ export function QuickActionCard({
       disabled={disabled}
       title={disabled ? 'View only on dashboard — open from your assigned menu' : undefined}
       className={clsx(
-        'flex items-center gap-4 p-4 rounded-xl border text-left transition-all w-full',
+        'flex items-center gap-4 p-4 rounded-xl border border-primary-100 bg-white text-left transition-all w-full',
         color,
         disabled
-          ? 'opacity-60 cursor-not-allowed hover:shadow-none hover:translate-y-0'
-          : 'hover:shadow-md hover:-translate-y-0.5'
+          ? 'opacity-60 cursor-not-allowed'
+          : 'hover:border-primary-300 hover:bg-primary-50/60 hover:shadow-sm'
       )}
     >
-      <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/80">
+      <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary-50 text-primary-600">
         <Icon className="h-5 w-5" />
       </div>
       <div className="flex-1 min-w-0">
@@ -564,7 +650,7 @@ export function QuickActionGrid({ children }: { children: React.ReactNode }) {
 }
 
 
-/** Single-row stat cards with equal width and height across all modules. */
+/** Responsive stat cards — equal width without stretching to viewport height. */
 export function StatGrid({
   children,
   className,
@@ -572,33 +658,33 @@ export function StatGrid({
   children: React.ReactNode;
   className?: string;
 }) {
-  const count = Math.max(Children.count(children), 1);
-
   return (
     <div
       className={clsx(
-        'mb-4 min-w-0 w-full overflow-x-auto overscroll-x-contain snap-x snap-mandatory scroll-smooth sm:overflow-visible -mx-1 px-1 sm:mx-0 sm:px-0 pb-0.5',
+        'grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-2 sm:gap-3 w-full mb-4 min-w-0',
         className
       )}
     >
-      <div
-        className="grid gap-2 sm:gap-3 items-stretch w-full"
-        style={{ gridTemplateColumns: `repeat(${count}, minmax(9.75rem, 1fr))` }}
-      >
-        {children}
-      </div>
+      {children}
     </div>
   );
 }
 
-export function FormActions({ onCancel, submitLabel = 'Save', loading, cancelLabel = 'Cancel' }: {
+export function FormActions({
+  onCancel,
+  submitLabel = 'Save',
+  loading,
+  cancelLabel = 'Cancel',
+  className,
+}: {
   onCancel: () => void;
   submitLabel?: string;
   loading?: boolean;
   cancelLabel?: string;
+  className?: string;
 }) {
   return (
-    <div className="flex justify-end gap-2 pt-4 border-t border-slate-200">
+    <div className={clsx('flex justify-end gap-3', className)}>
       <Button type="button" variant="secondary" onClick={onCancel}>{cancelLabel}</Button>
       <Button type="submit" loading={loading}>{submitLabel}</Button>
     </div>
@@ -610,10 +696,26 @@ export function SectionTitle({ children, className }: { children: React.ReactNod
 }
 
 export function formatDate(date: string) {
-  return new Date(date).toLocaleDateString('en-KE', {
+  if (!date) return '—';
+  const parsed = new Date(date);
+  if (Number.isNaN(parsed.getTime())) return '—';
+  return parsed.toLocaleDateString('en-KE', {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
+  });
+}
+
+export function formatDateTime(date: string) {
+  if (!date) return '—';
+  const parsed = new Date(date);
+  if (Number.isNaN(parsed.getTime())) return '—';
+  return parsed.toLocaleString('en-KE', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
   });
 }
 
@@ -644,4 +746,6 @@ export function getStatusBadge(status: string) {
 }
 
 export { ConfirmDialog, QueryErrorAlert, getApiErrorMessage } from './ConfirmDialog';
+export { PageQueryStatus } from './PageQueryStatus';
 export { ErrorBoundary } from './ErrorBoundary';
+export { Modal, ModalFormBody } from './Modal';

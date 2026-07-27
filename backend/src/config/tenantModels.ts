@@ -1,0 +1,40 @@
+/** Prisma models that carry a direct `companyId` column and must be tenant-scoped. */
+export const TENANT_SCOPED_MODELS = new Set([
+  'User',
+  'Department',
+  'Customer',
+  'Supplier',
+  'Product',
+  'ProductCategory',
+  'MaterialType',
+  'RawMaterial',
+  'Machine',
+  'Vehicle',
+  'Warehouse',
+  'PurchaseRequisition',
+  'RequestForQuotation',
+  'SalesQuotation',
+  'SalesOrder',
+  'ProductionOrder',
+  'DeliveryTrip',
+  'Invoice',
+  'Payment',
+  'Employee',
+  'Account',
+  'BankStatement',
+  'AuditLog',
+  'Notification',
+  'EmailConfig',
+  'SalesTarget',
+  'JournalEntry',
+  'PurchaseOrder',
+  'GoodsReceipt',
+  'QualityInspection',
+  'Opportunity',
+  'Complaint',
+  'DeliveryNote',
+]);
+
+export function isTenantScopedModel(model: string): boolean {
+  return TENANT_SCOPED_MODELS.has(model);
+}

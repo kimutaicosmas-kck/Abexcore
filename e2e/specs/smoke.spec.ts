@@ -1,5 +1,8 @@
 import { test, expect } from '@playwright/test';
 
+const adminEmail = process.env.E2E_ADMIN_EMAIL || 'kimutaicosmas547@gmail.com';
+const adminPassword = process.env.E2E_ADMIN_PASSWORD || 'Kimutai@44!';
+
 test.describe('ApexCore ERP smoke', () => {
   test('login page loads', async ({ page }) => {
     await page.goto('/login');
@@ -10,8 +13,8 @@ test.describe('ApexCore ERP smoke', () => {
 
   test('admin can sign in and reach dashboard', async ({ page }) => {
     await page.goto('/login');
-    await page.getByLabel('Email').fill('admin@filtererp.co.ke');
-    await page.getByLabel('Password').fill('Admin@123');
+    await page.getByLabel('Email').fill(adminEmail);
+    await page.getByLabel('Password').fill(adminPassword);
     await page.getByRole('button', { name: 'Sign in' }).click();
 
     await expect(page).not.toHaveURL(/\/login/);
@@ -20,8 +23,8 @@ test.describe('ApexCore ERP smoke', () => {
 
   test('finance module loads reconciliation tab', async ({ page }) => {
     await page.goto('/login');
-    await page.getByLabel('Email').fill('admin@filtererp.co.ke');
-    await page.getByLabel('Password').fill('Admin@123');
+    await page.getByLabel('Email').fill(adminEmail);
+    await page.getByLabel('Password').fill(adminPassword);
     await page.getByRole('button', { name: 'Sign in' }).click();
     await expect(page.getByText('Sales Today').first()).toBeVisible({ timeout: 15_000 });
 

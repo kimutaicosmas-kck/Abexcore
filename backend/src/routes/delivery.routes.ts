@@ -14,33 +14,33 @@ import {
 
   updateDeliveryStatusSchema,
 
+  updateDeliveryTripStatusSchema,
+
   deliveryListQuerySchema,
 
   createVehicleSchema,
 
   vehicleListQuerySchema,
 
-  paginationSchema,
-
 } from '../validators/schemas';
 
 import prisma from '../config/database';
 
-import { generateNumber } from '../utils/date';
-
 import { getParam, getQuery } from '../utils/request';
+import { injectTenantData, mergeTenantSalesOrderWhere, requireTenantId } from '../utils/tenant';
 
 import { DeliveryService } from '../services/operations.service';
 
-import { StockMovementService } from '../services/inventory.service';
+import {
+  applyDeliveryNoteStatus,
+  applyDeliveryTripStatus,
+  createDeliveryStop,
+  createMultiOrderDelivery,
+  deliveryStopInclude,
+} from '../services/delivery-trip.service';
 
-import { assertOrderStatusTransition, syncCustomerCreditUsed } from '../utils/credit';
+import { NotificationService } from '../services/notification.service';
 
-import { FinanceInvoiceService } from '../services/finance.service';
-
-import { SalesOrderService } from '../services/sales-order.service';
-
-import { AccountingService } from '../services/accounting.service';
 import { Prisma } from '@prisma/client';
 
 
@@ -72,6 +72,23 @@ function assertDriverDeliveryAccess(
   const allowed = DRIVER_STATUS_TRANSITIONS[delivery.status] || [];
   if (!allowed.includes(nextStatus)) {
     throw new AppError(`Drivers cannot change delivery from ${delivery.status} to ${nextStatus}`, 403);
+  }
+}
+
+function assertDriverTripAccess(
+  req: AuthRequest,
+  trip: { driverId: string | null; status: string },
+  nextStatus: string
+) {
+  if (!isDriverUser(req)) return;
+
+  if (trip.driverId !== req.user!.id) {
+    throw new AppError('You can only update trips assigned to you', 403);
+  }
+
+  const allowed = DRIVER_STATUS_TRANSITIONS[trip.status] || [];
+  if (!allowed.includes(nextStatus)) {
+    throw new AppError(`Drivers cannot change trip from ${trip.status} to ${nextStatus}`, 403);
   }
 }
 
@@ -216,19 +233,135 @@ router.post(
   auditLog('delivery', 'create', 'vehicle'),
 
   asyncHandler(async (req: AuthRequest, res: Response) => {
+    const { registration, type, make, model, capacity, isHired } = req.body;
 
-    const existing = await prisma.vehicle.findUnique({ where: { registration: req.body.registration } });
+    const existing = await prisma.vehicle.findFirst({
+      where: { registration: String(registration).trim() },
+    });
 
     if (existing) throw new AppError('Vehicle registration already exists', 409);
 
-
-
-    const data = await prisma.vehicle.create({ data: req.body });
+    const data = await prisma.vehicle.create({
+      data: injectTenantData({
+        registration: String(registration).trim(),
+        type,
+        make: make?.trim() || null,
+        model: model?.trim() || null,
+        capacity: capacity?.trim() || null,
+        isHired: Boolean(isHired),
+      }),
+    });
 
     res.status(201).json({ success: true, data });
 
   })
 
+);
+
+
+
+router.get(
+  '/trips',
+  authorize('delivery:read'),
+  validate(deliveryListQuerySchema, 'query'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const { page, limit, search, status } = getQuery<{
+      page: number;
+      limit: number;
+      search?: string;
+      status?: string;
+    }>(req.query);
+    const skip = (page - 1) * limit;
+
+    const where: Prisma.DeliveryTripWhereInput = {};
+    if (isDriverUser(req)) {
+      where.driverId = req.user!.id;
+    }
+    if (status) where.status = status as Prisma.EnumDeliveryStatusFilter['equals'];
+    if (search) {
+      where.OR = [
+        { tripNo: { contains: search } },
+        { stops: { some: { deliveryNo: { contains: search } } } },
+        { stops: { some: { salesOrder: { orderNumber: { contains: search } } } } },
+        { stops: { some: { salesOrder: { customer: { name: { contains: search } } } } } },
+      ];
+    }
+
+    const [data, total] = await Promise.all([
+      prisma.deliveryTrip.findMany({
+        where,
+        skip,
+        take: limit,
+        include: {
+          vehicle: true,
+          driver: { select: { id: true, firstName: true, lastName: true, email: true } },
+          stops: {
+            include: deliveryStopInclude,
+            orderBy: { stopSequence: 'asc' },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+      }),
+      prisma.deliveryTrip.count({ where }),
+    ]);
+
+    res.json({
+      success: true,
+      data,
+      pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
+    });
+  })
+);
+
+router.get(
+  '/trips/:id',
+  authorize('delivery:read'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const data = await prisma.deliveryTrip.findUnique({
+      where: { id: getParam(req.params.id) },
+      include: {
+        vehicle: true,
+        driver: { select: { id: true, firstName: true, lastName: true, email: true } },
+        stops: {
+          include: deliveryStopInclude,
+          orderBy: { stopSequence: 'asc' },
+        },
+      },
+    });
+    if (!data) throw new AppError('Delivery trip not found', 404);
+    if (isDriverUser(req) && data.driverId !== req.user!.id) {
+      throw new AppError('You can only view trips assigned to you', 403);
+    }
+    res.json({ success: true, data });
+  })
+);
+
+router.patch(
+  '/trips/:id/status',
+  authorize('delivery:update'),
+  validate(updateDeliveryTripStatusSchema),
+  auditLog('delivery', 'update', 'delivery_trip'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const { status, proofOfDelivery, actualItems } = req.body;
+    const tripId = getParam(req.params.id);
+
+    const existing = await prisma.deliveryTrip.findUnique({
+      where: { id: tripId },
+      select: { id: true, driverId: true, status: true },
+    });
+    if (!existing) throw new AppError('Delivery trip not found', 404);
+    assertDriverTripAccess(req, existing, status);
+
+    const delivery = await prisma.$transaction(async (tx) =>
+      applyDeliveryTripStatus(tx, tripId, status, {
+        proofOfDelivery,
+        actualItems,
+        userId: req.user!.id,
+      })
+    );
+
+    res.json({ success: true, data: delivery });
+  })
 );
 
 
@@ -259,7 +392,9 @@ router.get(
 
 
 
-    const where: Prisma.DeliveryNoteWhereInput = {};
+    const where: Prisma.DeliveryNoteWhereInput = mergeTenantSalesOrderWhere({
+      deliveryTripId: null,
+    });
 
     if (isDriverUser(req)) {
       where.driverId = req.user!.id;
@@ -293,17 +428,7 @@ router.get(
 
         take: limit,
 
-        include: {
-
-          salesOrder: { include: { customer: true } },
-
-          vehicle: true,
-
-          driver: { select: { id: true, firstName: true, lastName: true, email: true } },
-
-          items: true,
-
-        },
+        include: deliveryStopInclude,
 
         orderBy: { createdAt: 'desc' },
 
@@ -339,9 +464,9 @@ router.get(
 
   asyncHandler(async (req: AuthRequest, res: Response) => {
 
-    const data = await prisma.deliveryNote.findUnique({
+    const data = await prisma.deliveryNote.findFirst({
 
-      where: { id: getParam(req.params.id) },
+      where: { id: getParam(req.params.id), salesOrder: { companyId: requireTenantId() } },
 
       include: {
 
@@ -355,6 +480,17 @@ router.get(
 
           },
 
+        },
+
+        deliveryTrip: {
+          include: {
+            vehicle: true,
+            driver: { select: { id: true, firstName: true, lastName: true, email: true } },
+            stops: {
+              include: deliveryStopInclude,
+              orderBy: { stopSequence: 'asc' },
+            },
+          },
         },
 
         vehicle: true,
@@ -397,188 +533,66 @@ router.post(
       throw new AppError('Drivers cannot create delivery notes', 403);
     }
 
-    const { salesOrderId, vehicleId, driverId, scheduledDate, notes, items } = req.body;
+    const { salesOrderId, vehicleId, driverId, scheduledDate, notes, items, orders } = req.body;
 
     if (driverId) {
       await assertActiveDriver(driverId);
     }
 
-    const count = await prisma.deliveryNote.count();
+    if (orders?.length) {
+      const result = await createMultiOrderDelivery(req.user!.id, {
+        vehicleId,
+        driverId,
+        scheduledDate: scheduledDate ? new Date(scheduledDate) : undefined,
+        notes,
+        orders,
+      });
 
-    const deliveryNo = generateNumber('DN', count + 1);
+      if (driverId) {
+        const orderNumbers = result.stops.map((stop) => stop.salesOrder.orderNumber);
+        await NotificationService.notifyDriverDeliveryAssigned({
+          driverId,
+          tripNo: result.trip?.tripNo,
+          deliveryNo: result.stops[0]?.deliveryNo,
+          orderNumbers,
+          scheduledDate: scheduledDate ? new Date(scheduledDate) : null,
+        });
+      }
 
+      if (result.trip) {
+        res.status(201).json({ success: true, data: result.trip, invoices: result.invoices });
+        return;
+      }
 
+      res.status(201).json({
+        success: true,
+        data: result.stops[0],
+        invoice: result.invoices[0],
+      });
+      return;
+    }
 
     const delivery = await prisma.$transaction(async (tx) => {
-
-      const salesOrder = await tx.salesOrder.findUnique({
-
-        where: { id: salesOrderId },
-
-        include: { items: { include: { product: true } } },
-
+      const result = await createDeliveryStop(tx, {
+        salesOrderId,
+        items,
+        vehicleId,
+        driverId,
+        scheduledDate: scheduledDate ? new Date(scheduledDate) : undefined,
+        notes,
+        userId: req.user!.id,
       });
-
-      if (!salesOrder) throw new AppError('Sales order not found', 404);
-
-
-
-      if (!['READY', 'PARTIALLY_DELIVERED'].includes(salesOrder.status)) {
-
-        throw new AppError('Sales order must be READY or PARTIALLY_DELIVERED before dispatch', 400);
-
-      }
-
-
-
-      for (const item of items as { productId: string; quantity: number }[]) {
-
-        const orderItem = salesOrder.items.find((line) => line.productId === item.productId);
-
-        if (!orderItem) {
-
-          throw new AppError(`Product not found on sales order`, 400);
-
-        }
-
-
-
-        const remaining = orderItem.quantity - orderItem.deliveredQty;
-
-        if (item.quantity > remaining) {
-
-          throw new AppError(
-
-            `Delivery quantity exceeds remaining (${remaining} left for ${orderItem.product.name})`,
-
-            400
-
-          );
-
-        }
-
-      }
-
-
-
-      const dn = await tx.deliveryNote.create({
-
-        data: {
-
-          deliveryNo,
-
-          salesOrderId,
-
-          vehicleId,
-
-          driverId,
-
-          status: vehicleId || driverId ? 'ASSIGNED' : 'PENDING',
-
-          scheduledDate: scheduledDate ? new Date(scheduledDate) : undefined,
-
-          notes,
-
-          items: { create: items },
-
-        },
-
-        include: {
-
-          salesOrder: { include: { customer: true } },
-
-          vehicle: true,
-
-          driver: { select: { id: true, firstName: true, lastName: true, email: true } },
-
-          items: true,
-
-        },
-
-      });
-
-
-
-      let cogsTotal = 0;
-
-      for (const item of items as { productId: string; quantity: number }[]) {
-
-        const orderItem = salesOrder.items.find((line) => line.productId === item.productId)!;
-
-        const stockBefore = await tx.stockLevel.findFirst({
-          where: { productId: item.productId },
-          orderBy: { quantity: 'desc' },
-        });
-        const unitCost = stockBefore ? Number(stockBefore.unitCost) : 0;
-
-
-
-        await tx.salesOrderItem.update({
-
-          where: { id: orderItem.id },
-
-          data: { deliveredQty: { increment: item.quantity } },
-
-        });
-
-
-
-        await StockMovementService.deductProductStock(tx, {
-
-          productId: item.productId,
-
-          quantity: item.quantity,
-
-          referenceType: 'delivery_note',
-
-          referenceId: dn.id,
-
-          userId: req.user!.id,
-
-          notes: `Dispatch ${deliveryNo}`,
-
-          releaseReservedQty: item.quantity,
-
-        });
-
-        cogsTotal += item.quantity * unitCost;
-
-      }
-
-      await AccountingService.postCostOfGoodsSold(tx, {
-        reference: deliveryNo,
-        amount: cogsTotal,
-      });
-
-
-
-      const fullyDelivered = await SalesOrderService.isFullyDelivered(tx, salesOrderId);
-
-      const nextStatus = SalesOrderService.resolveStatusAfterDispatch(salesOrder.status, fullyDelivered);
-
-      assertOrderStatusTransition(salesOrder.status, nextStatus, { system: true });
-
-
-
-      await tx.salesOrder.update({
-
-        where: { id: salesOrderId },
-
-        data: { status: nextStatus },
-
-      });
-
-
-
-      const invoice = await FinanceInvoiceService.createSalesInvoiceFromDelivery(tx, dn.id);
-
-
-
-      return { dn, invoice };
-
+      return result;
     });
 
-
+    if (driverId) {
+      await NotificationService.notifyDriverDeliveryAssigned({
+        driverId,
+        deliveryNo: delivery.dn.deliveryNo,
+        orderNumbers: [delivery.dn.salesOrder.orderNumber],
+        scheduledDate: scheduledDate ? new Date(scheduledDate) : null,
+      });
+    }
 
     res.status(201).json({ success: true, data: delivery.dn, invoice: delivery.invoice });
 
@@ -600,13 +614,13 @@ router.patch(
 
   asyncHandler(async (req: AuthRequest, res: Response) => {
 
-    const { status, proofOfDelivery } = req.body;
+    const { status, proofOfDelivery, actualItems } = req.body;
 
     const deliveryId = getParam(req.params.id);
 
-    const existing = await prisma.deliveryNote.findUnique({
+    const existing = await prisma.deliveryNote.findFirst({
 
-      where: { id: deliveryId },
+      where: { id: deliveryId, salesOrder: { companyId: requireTenantId() } },
 
       select: { id: true, driverId: true, status: true },
 
@@ -618,67 +632,13 @@ router.patch(
 
 
 
-    const delivery = await prisma.$transaction(async (tx) => {
-
-      const updated = await tx.deliveryNote.update({
-
-        where: { id: deliveryId },
-
-        data: {
-
-          status,
-
-          proofOfDelivery,
-
-          deliveredAt: status === 'DELIVERED' ? new Date() : undefined,
-
-        },
-
-        include: {
-
-          salesOrder: { include: { customer: true } },
-
-          vehicle: true,
-
-          driver: { select: { id: true, firstName: true, lastName: true, email: true } },
-
-          items: true,
-
-        },
-
-      });
-
-
-
-      if (status === 'DELIVERED') {
-
-        const fullyDelivered = await SalesOrderService.isFullyDelivered(tx, updated.salesOrderId);
-
-        if (fullyDelivered) {
-
-          assertOrderStatusTransition(updated.salesOrder.status, 'DELIVERED', { system: true });
-
-          await tx.salesOrder.update({
-
-            where: { id: updated.salesOrderId },
-
-            data: { status: 'DELIVERED' },
-
-          });
-
-        }
-
-
-
-        await syncCustomerCreditUsed(updated.salesOrder.customerId, tx);
-
-      }
-
-
-
-      return updated;
-
-    });
+    const delivery = await prisma.$transaction(async (tx) =>
+      applyDeliveryNoteStatus(tx, deliveryId, status, {
+        proofOfDelivery,
+        actualItems,
+        userId: req.user!.id,
+      })
+    );
 
 
 
@@ -691,4 +651,3 @@ router.patch(
 
 
 export default router;
-

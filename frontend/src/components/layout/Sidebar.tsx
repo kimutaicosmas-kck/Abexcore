@@ -1,4 +1,5 @@
-import { NavLink } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
+import { useEffect, useRef } from 'react';
 import {
   LayoutDashboard,
   Users,
@@ -21,9 +22,9 @@ import {
 } from 'lucide-react';
 import clsx from 'clsx';
 import { useAuth } from '../../contexts/AuthContext';
-import { ApexCoreLogo } from '../brand/ApexCoreLogo';
+import { isSidebarNavActive } from '../../config/routeAccess';
+import { CompanyBrand } from '../brand/CompanyBrand';
 import { PoweredBy } from '../brand/PoweredBy';
-import { APP_NAME } from '../../constants/brand';
 
 type NavItem = {
   name: string;
@@ -85,7 +86,13 @@ interface SidebarProps {
 }
 
 export function Sidebar({ collapsed, mobileOpen, onToggle }: SidebarProps) {
-  const { hasPermission, isSalesOfficer } = useAuth();
+  const { hasPermission, isSalesOfficer, company } = useAuth();
+  const location = useLocation();
+  const navRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    navRef.current?.scrollTo({ top: 0 });
+  }, [location.pathname]);
 
   const extraItems: NavItem[] = [
     ...(isSalesOfficer
@@ -116,80 +123,121 @@ export function Sidebar({ collapsed, mobileOpen, onToggle }: SidebarProps) {
   return (
     <aside
       className={clsx(
-        'fixed inset-y-0 left-0 z-50 flex flex-col bg-white border-r border-slate-200 shadow-[4px_0_24px_rgba(15,23,42,0.08)] transition-transform duration-300',
-        collapsed ? 'w-16' : 'w-60',
+        'sidebar-shell fixed inset-y-0 left-0 z-50 flex flex-col min-h-0 transition-[width,transform] duration-300 ease-out overflow-hidden',
+        'border-r border-sidebar-border',
+        collapsed ? 'sidebar-collapsed w-[4.5rem]' : 'w-64',
         mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
       )}
     >
-      <div className="flex h-14 shrink-0 items-center justify-between gap-2 border-b border-slate-200 bg-slate-50 px-3">
+      <div className="sidebar-header flex min-h-14 shrink-0 items-center justify-between gap-1.5 px-2.5 py-2.5">
         {!collapsed ? (
           <>
-            <ApexCoreLogo variant="sidebar" className="flex-1" />
+            <CompanyBrand
+              name={company?.name}
+              logo={company?.logo}
+              companySlug={company?.slug}
+              inverted
+              className="flex-1 min-w-0"
+            />
             <button
               onClick={onToggle}
-              className="p-1.5 rounded-lg text-slate-500 hover:text-slate-800 hover:bg-white transition-colors"
+              className="sidebar-toggle-btn shrink-0 p-2 rounded-xl text-sidebar-muted hover:text-white transition-colors"
               aria-label="Collapse sidebar"
             >
               <PanelLeftClose className="h-4 w-4" />
             </button>
           </>
         ) : (
-          <button
-            onClick={onToggle}
-            className="mx-auto p-1 rounded-lg hover:bg-slate-100 transition-colors"
-            aria-label="Expand sidebar"
-            title={APP_NAME}
-          >
-            <ApexCoreLogo variant="mark" size="sm" inverted={false} />
-          </button>
+          <div className="flex w-full flex-col items-center gap-2">
+            <button
+              onClick={onToggle}
+              className="sidebar-toggle-btn p-1 rounded-xl transition-colors"
+              aria-label="Expand sidebar"
+              title={company?.name || 'Expand menu'}
+            >
+              <CompanyBrand
+                name={company?.name}
+                logo={company?.logo}
+                companySlug={company?.slug}
+                collapsed
+                inverted
+                showPlatformFallback={false}
+              />
+            </button>
+            <button
+              onClick={onToggle}
+              className="sidebar-toggle-btn p-1.5 rounded-lg text-sidebar-muted hover:text-white transition-colors"
+              aria-label="Expand sidebar"
+              title="Expand menu"
+            >
+              <PanelLeft className="h-3.5 w-3.5" />
+            </button>
+          </div>
         )}
       </div>
 
-      <nav className="flex-1 overflow-y-auto py-2 px-2 space-y-3">
-        {visibleGroups.map((group) => (
-          <div key={group.label}>
+      <nav ref={navRef} className="sidebar-nav-scroll relative z-[1] flex-1 min-h-0 overflow-y-auto overflow-x-hidden py-2 px-2">
+        {visibleGroups.map((group, groupIndex) => (
+          <div key={group.label} className={groupIndex > 0 ? 'mt-1.5' : undefined}>
+            {groupIndex > 0 && collapsed && <div className="sidebar-group-divider" aria-hidden="true" />}
             {!collapsed && (
-              <p className="px-2.5 mb-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+              <p className="px-2 mb-0.5 mt-1 first:mt-0 text-xs font-bold uppercase tracking-[0.12em] text-sidebar-heading">
                 {group.label}
               </p>
             )}
-            <div className="space-y-0.5">
-              {group.items.map((item) => (
-                <NavLink
+            <div className={clsx('space-y-0.5', collapsed && 'flex flex-col items-center gap-0.5')}>
+              {group.items.map((item) => {
+                const active = isSidebarNavActive(location.pathname, item.href);
+                return (
+                <Link
                   key={item.href}
                   to={item.href}
-                  end={item.href === '/'}
                   title={collapsed ? item.name : undefined}
-                  className={({ isActive }) =>
-                    clsx(
-                      'flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13px] font-medium transition-colors',
-                      isActive
-                        ? 'bg-primary-600 text-white shadow-sm'
-                        : 'text-slate-700 hover:bg-slate-100 hover:text-slate-900'
-                    )
-                  }
-                >
-                  {({ isActive }) => (
-                    <>
-                      <item.icon
-                        className={clsx(
-                          'h-4 w-4 shrink-0',
-                          isActive ? 'text-white' : 'text-slate-500'
-                        )}
-                      />
-                      {!collapsed && <span className="truncate">{item.name}</span>}
-                    </>
+                  aria-label={item.name}
+                  aria-current={active ? 'page' : undefined}
+                  data-active={active ? 'true' : undefined}
+                  className={clsx(
+                    'sidebar-nav-item group flex items-center text-sm font-medium',
+                    collapsed
+                      ? 'justify-center w-10 h-10 p-0'
+                      : 'gap-2.5 w-full px-2 py-1.5',
+                    active
+                      ? 'sidebar-nav-active font-semibold'
+                      : 'sidebar-nav-idle'
                   )}
-                </NavLink>
-              ))}
+                >
+                  <span
+                    className={clsx(
+                      'flex shrink-0 items-center justify-center transition-all duration-200',
+                      collapsed
+                        ? clsx(
+                            'h-full w-full rounded-xl',
+                            active ? 'sidebar-nav-icon-active' : 'sidebar-nav-icon-idle'
+                          )
+                        : clsx(
+                            'rounded-lg h-8 w-8',
+                            active
+                              ? 'sidebar-nav-icon-active'
+                              : 'sidebar-nav-icon-idle'
+                          )
+                    )}
+                  >
+                    <item.icon className={clsx(collapsed ? 'h-[18px] w-[18px]' : 'h-4 w-4')} />
+                  </span>
+                  {!collapsed && (
+                    <span className="sidebar-nav-label truncate leading-snug">{item.name}</span>
+                  )}
+                </Link>
+                );
+              })}
             </div>
           </div>
         ))}
       </nav>
 
       {!collapsed && (
-        <div className="shrink-0 border-t border-slate-200 px-3 py-2.5 bg-slate-50">
-          <PoweredBy centered />
+        <div className="sidebar-footer shrink-0 px-3 py-3">
+          <PoweredBy centered className="text-[11px] leading-snug !text-slate-300" />
         </div>
       )}
     </aside>

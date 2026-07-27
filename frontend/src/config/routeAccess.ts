@@ -19,9 +19,17 @@ export const ROUTE_PERMISSIONS: Record<string, string | string[] | undefined> = 
 };
 
 export function normalizeRoutePath(pathname: string): string {
-  if (!pathname || pathname === '/') return '/';
-  const segment = pathname.split('/').filter(Boolean)[0];
-  return `/${segment}`;
+  const path = pathname.split('?')[0]?.split('#')[0] ?? '/';
+  if (!path || path === '/') return '/';
+  const segment = path.split('/').filter(Boolean)[0];
+  return segment ? `/${segment}` : '/';
+}
+
+/** Match sidebar item to current page — exact segment, avoids /sales matching /sales-performance. */
+export function isSidebarNavActive(pathname: string, href: string): boolean {
+  const current = normalizeRoutePath(pathname);
+  if (href === '/') return current === '/';
+  return current === href;
 }
 
 export function canAccessRoute(

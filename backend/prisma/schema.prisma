@@ -23,31 +23,6 @@ enum CustomerType {
   NGO
 }
 
-enum ProductCategory {
-  OIL_FILTER
-  FUEL_FILTER
-  AIR_FILTER
-  CABIN_FILTER
-  HYDRAULIC_FILTER
-  WATER_FILTER
-  INDUSTRIAL_FILTER
-  CUSTOM_FILTER
-}
-
-enum RawMaterialType {
-  STEEL
-  FILTER_PAPER
-  RUBBER
-  MESH
-  ADHESIVE
-  PLASTIC
-  END_CAP
-  THREAD_PLATE
-  PACKAGING_BOX
-  LABEL
-  OTHER
-}
-
 enum ApprovalStatus {
   DRAFT
   PENDING
@@ -183,6 +158,7 @@ enum NotificationType {
   OVERDUE_PAYMENT
   PRODUCTION_DELAY
   MAINTENANCE
+  DELIVERY
   SYSTEM
 }
 
@@ -190,6 +166,7 @@ enum NotificationType {
 
 model Company {
   id             String   @id @default(uuid())
+  slug           String   @unique
   name           String
   legalName      String?  @map("legal_name")
   registrationNo String?  @map("registration_no")
@@ -208,11 +185,14 @@ model Company {
   companyVatRate  Decimal @default(14) @map("company_vat_rate") @db.Decimal(5, 2)
   qualityModuleEnabled Boolean @default(false) @map("quality_module_enabled")
   coopPaybillNumber String? @map("coop_paybill_number")
+  isActive       Boolean  @default(true) @map("is_active")
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
 
   branches Branch[]
   taxRates TaxRate[]
+  users    User[]
+  departments Department[]
 
   @@map("companies")
 }
@@ -221,7 +201,7 @@ model Branch {
   id        String   @id @default(uuid())
   companyId String   @map("company_id")
   name      String
-  code      String   @unique
+  code      String
   address   String?  @db.Text
   phone     String?
   email     String?
@@ -235,6 +215,7 @@ model Branch {
   users      User[]
   employees  Employee[]
 
+  @@unique([companyId, code])
   @@map("branches")
 }
 
@@ -254,6 +235,7 @@ model TaxRate {
 
 model EmailConfig {
   id        String   @id @default(uuid())
+  companyId String   @map("company_id")
   host      String
   port      Int      @default(587)
   secure    Boolean  @default(false)
@@ -272,15 +254,18 @@ model EmailConfig {
 
 model Department {
   id          String   @id @default(uuid())
-  name        String   @unique
+  companyId   String   @map("company_id")
+  name        String
   description String?  @db.Text
   isActive    Boolean  @default(true) @map("is_active")
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
+  company   Company    @relation(fields: [companyId], references: [id])
   users     User[]
   employees Employee[]
 
+  @@unique([companyId, name])
   @@map("departments")
 }
 
@@ -324,7 +309,8 @@ model RolePermission {
 
 model User {
   id              String     @id @default(uuid())
-  email           String     @unique
+  companyId       String     @map("company_id")
+  email           String
   passwordHash    String     @map("password_hash")
   firstName       String     @map("first_name")
   lastName        String     @map("last_name")
@@ -343,6 +329,7 @@ model User {
   updatedAt       DateTime   @updatedAt @map("updated_at")
   deletedAt       DateTime?  @map("deleted_at")
 
+  company    Company     @relation(fields: [companyId], references: [id])
   role       Role        @relation(fields: [roleId], references: [id])
   department Department? @relation(fields: [departmentId], references: [id])
   branch     Branch?     @relation(fields: [branchId], references: [id])
@@ -358,7 +345,9 @@ model User {
   salesTargets     SalesTarget[]
   productionOrders ProductionOrder[]
   assignedDeliveries DeliveryNote[] @relation("DeliveryDriver")
+  assignedDeliveryTrips DeliveryTrip[] @relation("DeliveryTripDriver")
 
+  @@unique([companyId, email])
   @@map("users")
 }
 
@@ -390,6 +379,7 @@ model LoginHistory {
 
 model AuditLog {
   id         String   @id @default(uuid())
+  companyId  String   @map("company_id")
   userId     String?  @map("user_id")
   action     String
   module     String
@@ -408,6 +398,7 @@ model AuditLog {
 
 model Notification {
   id        String           @id @default(uuid())
+  companyId String           @map("company_id")
   userId    String           @map("user_id")
   type      NotificationType
   title     String
@@ -426,7 +417,8 @@ model Notification {
 
 model Customer {
   id           String       @id @default(uuid())
-  code         String       @unique
+  companyId    String       @map("company_id")
+  code         String
   name         String
   type         CustomerType @default(DEALER)
   email        String?
@@ -452,6 +444,7 @@ model Customer {
   warranties    Warranty[]
   opportunities Opportunity[]
 
+  @@unique([companyId, code])
   @@index([deletedAt, isActive])
   @@index([name])
   @@map("customers")
@@ -474,6 +467,7 @@ model CustomerContact {
 
 model Opportunity {
   id          String         @id @default(uuid())
+  companyId   String         @map("company_id")
   customerId  String         @map("customer_id")
   title       String
   value       Decimal        @db.Decimal(15, 2)
@@ -487,11 +481,13 @@ model Opportunity {
 
   customer Customer @relation(fields: [customerId], references: [id])
 
+  @@index([companyId])
   @@map("opportunities")
 }
 
 model Complaint {
   id          String         @id @default(uuid())
+  companyId   String         @map("company_id")
   customerId  String         @map("customer_id")
   subject     String
   description String         @db.Text
@@ -504,6 +500,7 @@ model Complaint {
 
   customer Customer @relation(fields: [customerId], references: [id])
 
+  @@index([companyId])
   @@map("complaints")
 }
 
@@ -527,7 +524,8 @@ model Warranty {
 
 model Supplier {
   id            String   @id @default(uuid())
-  code          String   @unique
+  companyId     String   @map("company_id")
+  code          String
   name          String
   email         String?
   phone         String?
@@ -551,6 +549,7 @@ model Supplier {
   contracts         SupplierContract[]
   quotations        SupplierQuotation[]
 
+  @@unique([companyId, code])
   @@map("suppliers")
 }
 
@@ -572,12 +571,29 @@ model SupplierContract {
 
 // ==================== PRODUCTS & RAW MATERIALS ====================
 
+model ProductCategory {
+  id        String   @id @default(uuid())
+  companyId String   @map("company_id")
+  name      String
+  sortOrder Int      @default(0) @map("sort_order")
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  products Product[]
+
+  @@unique([companyId, name])
+  @@index([companyId, isActive])
+  @@map("product_categories")
+}
+
 model Product {
   id               String          @id @default(uuid())
-  sku              String          @unique
-  barcode          String?         @unique
+  companyId        String          @map("company_id")
+  sku              String
+  barcode          String?
   name             String
-  category         ProductCategory
+  categoryId       String          @map("category_id")
   description      String?         @db.Text
   weight           Decimal?        @db.Decimal(10, 3)
   length           Decimal?        @db.Decimal(10, 2)
@@ -596,24 +612,45 @@ model Product {
   updatedAt        DateTime        @updatedAt @map("updated_at")
   deletedAt        DateTime?       @map("deleted_at")
 
+  category         ProductCategory @relation(fields: [categoryId], references: [id])
   bom              BillOfMaterial?
   stockLevels      StockLevel[]
   salesOrderItems  SalesOrderItem[]
   quotationItems   QuotationItem[]
   productionOrders ProductionOrder[]
   warranties       Warranty[]
+  qualityInspections QualityInspection[]
 
+  @@unique([companyId, sku])
+  @@unique([companyId, barcode])
   @@index([deletedAt, isActive])
-  @@index([category])
+  @@index([categoryId])
   @@map("products")
 }
 
+model MaterialType {
+  id        String   @id @default(uuid())
+  companyId String   @map("company_id")
+  name      String
+  sortOrder Int      @default(0) @map("sort_order")
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  materials RawMaterial[]
+
+  @@unique([companyId, name])
+  @@index([companyId, isActive])
+  @@map("material_types")
+}
+
 model RawMaterial {
-  id            String          @id @default(uuid())
-  code          String          @unique
+  id            String   @id @default(uuid())
+  companyId     String   @map("company_id")
+  code          String
   name          String
-  type          RawMaterialType
-  description   String?         @db.Text
+  typeId        String   @map("type_id")
+  description   String?  @db.Text
   unit          String          @default("pcs")
   unitCost      Decimal         @default(0) @map("unit_cost") @db.Decimal(15, 4)
   supplierId    String?         @map("supplier_id")
@@ -625,11 +662,14 @@ model RawMaterial {
   updatedAt     DateTime        @updatedAt @map("updated_at")
   deletedAt     DateTime?       @map("deleted_at")
 
+  materialType         MaterialType           @relation(fields: [typeId], references: [id])
   supplier             Supplier?              @relation(fields: [supplierId], references: [id])
   stockLevels          StockLevel[]
   bomItems             BillOfMaterialItem[]
   productionConsumption ProductionConsumption[]
 
+  @@unique([companyId, code])
+  @@index([typeId])
   @@map("raw_materials")
 }
 
@@ -667,8 +707,9 @@ model BillOfMaterialItem {
 
 model Warehouse {
   id        String   @id @default(uuid())
+  companyId String   @map("company_id")
   branchId  String   @map("branch_id")
-  code      String   @unique
+  code      String
   name      String
   type      String   @default("general")
   address   String?  @db.Text
@@ -682,6 +723,7 @@ model Warehouse {
   stockLevels StockLevel[]
   transactions InventoryTransaction[]
 
+  @@unique([companyId, code])
   @@map("warehouses")
 }
 
@@ -749,7 +791,8 @@ model InventoryTransaction {
 
 model PurchaseRequisition {
   id            String         @id @default(uuid())
-  requisitionNo String         @unique @map("requisition_no")
+  companyId     String         @map("company_id")
+  requisitionNo String         @map("requisition_no")
   requestedById String         @map("requested_by_id")
   department    String?
   priority      String         @default("normal")
@@ -766,6 +809,7 @@ model PurchaseRequisition {
   items       PurchaseRequisitionItem[]
   rfqs        RequestForQuotation[]
 
+  @@unique([companyId, requisitionNo])
   @@map("purchase_requisitions")
 }
 
@@ -785,7 +829,8 @@ model PurchaseRequisitionItem {
 
 model RequestForQuotation {
   id            String         @id @default(uuid())
-  rfqNo         String         @unique @map("rfq_no")
+  companyId     String         @map("company_id")
+  rfqNo         String         @map("rfq_no")
   requisitionId String?        @map("requisition_id")
   dueDate       DateTime?      @map("due_date")
   status        ApprovalStatus @default(PENDING)
@@ -796,6 +841,7 @@ model RequestForQuotation {
   requisition PurchaseRequisition? @relation(fields: [requisitionId], references: [id])
   quotations  SupplierQuotation[]
 
+  @@unique([companyId, rfqNo])
   @@map("request_for_quotations")
 }
 
@@ -818,7 +864,8 @@ model SupplierQuotation {
 
 model PurchaseOrder {
   id           String         @id @default(uuid())
-  poNumber     String         @unique @map("po_number")
+  companyId    String         @map("company_id")
+  poNumber     String         @map("po_number")
   supplierId   String         @map("supplier_id")
   quotationId  String?        @map("quotation_id")
   orderDate    DateTime       @default(now()) @map("order_date")
@@ -837,6 +884,7 @@ model PurchaseOrder {
   receipts  GoodsReceipt[]
   invoices      Invoice[]
 
+  @@unique([companyId, poNumber])
   @@index([status])
   @@index([supplierId])
   @@index([orderDate])
@@ -861,7 +909,8 @@ model PurchaseOrderItem {
 
 model GoodsReceipt {
   id              String         @id @default(uuid())
-  grnNumber       String         @unique @map("grn_number")
+  companyId       String         @map("company_id")
+  grnNumber       String         @map("grn_number")
   purchaseOrderId String?        @map("purchase_order_id")
   supplierId      String         @map("supplier_id")
   warehouseId     String         @map("warehouse_id")
@@ -877,6 +926,7 @@ model GoodsReceipt {
   inspections   QualityInspection[]
   invoices      Invoice[]
 
+  @@unique([companyId, grnNumber])
   @@map("goods_receipts")
 }
 
@@ -899,7 +949,8 @@ model GoodsReceiptItem {
 
 model Machine {
   id              String   @id @default(uuid())
-  code            String   @unique
+  companyId       String   @map("company_id")
+  code            String
   name            String
   type            String
   capacity        String?
@@ -914,12 +965,14 @@ model Machine {
   productionOrders ProductionOrder[]
   maintenanceRequests MaintenanceRequest[]
 
+  @@unique([companyId, code])
   @@map("machines")
 }
 
 model ProductionOrder {
   id              String           @id @default(uuid())
-  orderNumber     String           @unique @map("order_number")
+  companyId       String           @map("company_id")
+  orderNumber     String           @map("order_number")
   productId       String           @map("product_id")
   salesOrderId    String?          @map("sales_order_id")
   machineId       String?          @map("machine_id")
@@ -947,6 +1000,7 @@ model ProductionOrder {
   consumption  ProductionConsumption[]
   inspections  QualityInspection[]
 
+  @@unique([companyId, orderNumber])
   @@map("production_orders")
 }
 
@@ -982,10 +1036,12 @@ model ProductionConsumption {
 
 model QualityInspection {
   id                String        @id @default(uuid())
-  inspectionNo      String        @unique @map("inspection_no")
+  companyId         String        @map("company_id")
+  inspectionNo      String        @map("inspection_no")
   type              String
   goodsReceiptId    String?       @map("goods_receipt_id")
   productionOrderId String?       @map("production_order_id")
+  productId         String?       @map("product_id")
   inspectorId       String?       @map("inspector_id")
   status            QualityStatus @default(PENDING)
   result            String?       @db.Text
@@ -996,7 +1052,11 @@ model QualityInspection {
 
   goodsReceipt    GoodsReceipt?    @relation(fields: [goodsReceiptId], references: [id])
   productionOrder ProductionOrder? @relation(fields: [productionOrderId], references: [id])
+  product         Product?         @relation(fields: [productId], references: [id])
 
+  @@unique([companyId, inspectionNo])
+  @@index([companyId, status])
+  @@index([productId, status])
   @@map("quality_inspections")
 }
 
@@ -1004,7 +1064,8 @@ model QualityInspection {
 
 model SalesQuotation {
   id           String         @id @default(uuid())
-  quotationNo  String         @unique @map("quotation_no")
+  companyId    String         @map("company_id")
+  quotationNo  String         @map("quotation_no")
   customerId   String         @map("customer_id")
   validUntil   DateTime?      @map("valid_until")
   status       ApprovalStatus @default(DRAFT)
@@ -1019,6 +1080,7 @@ model SalesQuotation {
   items      QuotationItem[]
   salesOrders SalesOrder[]
 
+  @@unique([companyId, quotationNo])
   @@map("sales_quotations")
 }
 
@@ -1039,7 +1101,8 @@ model QuotationItem {
 
 model SalesOrder {
   id           String      @id @default(uuid())
-  orderNumber  String      @unique @map("order_number")
+  companyId    String      @map("company_id")
+  orderNumber  String      @map("order_number")
   customerId   String      @map("customer_id")
   quotationId  String?     @map("quotation_id")
   createdById   String      @map("created_by_id")
@@ -1063,6 +1126,7 @@ model SalesOrder {
   invoices         Invoice[]
   deliveries       DeliveryNote[]
 
+  @@unique([companyId, orderNumber])
   @@index([status])
   @@index([customerId])
   @@index([orderDate])
@@ -1088,6 +1152,7 @@ model SalesOrderItem {
 
 model SalesTarget {
   id            String   @id @default(uuid())
+  companyId     String   @map("company_id")
   salesPersonId String   @map("user_id")
   year          Int
   month         Int
@@ -1105,23 +1170,50 @@ model SalesTarget {
 
 model Vehicle {
   id           String      @id @default(uuid())
-  registration String      @unique
+  companyId    String      @map("company_id")
+  registration String
   type         VehicleType @default(TRUCK)
   make         String?
   model        String?
   capacity     String?
+  isHired      Boolean     @default(false) @map("is_hired")
   isActive     Boolean     @default(true) @map("is_active")
   createdAt    DateTime    @default(now()) @map("created_at")
 
   deliveries DeliveryNote[]
+  trips      DeliveryTrip[]
 
+  @@unique([companyId, registration])
   @@map("vehicles")
+}
+
+model DeliveryTrip {
+  id            String         @id @default(uuid())
+  companyId     String         @map("company_id")
+  tripNo        String         @map("trip_no")
+  vehicleId     String?        @map("vehicle_id")
+  driverId      String?        @map("driver_id")
+  status        DeliveryStatus @default(PENDING)
+  scheduledDate DateTime?      @map("scheduled_date")
+  notes         String?        @db.Text
+  createdAt     DateTime       @default(now()) @map("created_at")
+  updatedAt     DateTime       @updatedAt @map("updated_at")
+
+  vehicle Vehicle?       @relation(fields: [vehicleId], references: [id])
+  driver  User?          @relation("DeliveryTripDriver", fields: [driverId], references: [id])
+  stops   DeliveryNote[]
+
+  @@unique([companyId, tripNo])
+  @@map("delivery_trips")
 }
 
 model DeliveryNote {
   id           String         @id @default(uuid())
-  deliveryNo   String         @unique @map("delivery_no")
+  companyId    String         @map("company_id")
+  deliveryNo   String         @map("delivery_no")
   salesOrderId String         @map("sales_order_id")
+  deliveryTripId String?      @map("delivery_trip_id")
+  stopSequence Int?           @map("stop_sequence")
   vehicleId    String?        @map("vehicle_id")
   driverId     String?        @map("driver_id")
   status       DeliveryStatus @default(PENDING)
@@ -1132,12 +1224,15 @@ model DeliveryNote {
   createdAt    DateTime       @default(now()) @map("created_at")
   updatedAt    DateTime       @updatedAt @map("updated_at")
 
-  salesOrder SalesOrder @relation(fields: [salesOrderId], references: [id])
-  vehicle    Vehicle?   @relation(fields: [vehicleId], references: [id])
-  driver     User?      @relation("DeliveryDriver", fields: [driverId], references: [id])
-  items      DeliveryItem[]
-  invoices   Invoice[]
+  salesOrder   SalesOrder    @relation(fields: [salesOrderId], references: [id])
+  deliveryTrip DeliveryTrip? @relation(fields: [deliveryTripId], references: [id])
+  vehicle      Vehicle?      @relation(fields: [vehicleId], references: [id])
+  driver       User?         @relation("DeliveryDriver", fields: [driverId], references: [id])
+  items        DeliveryItem[]
+  invoices     Invoice[]
 
+  @@unique([companyId, deliveryNo])
+  @@index([companyId])
   @@map("delivery_notes")
 }
 
@@ -1156,7 +1251,8 @@ model DeliveryItem {
 
 model Account {
   id          String      @id @default(uuid())
-  code        String      @unique
+  companyId   String      @map("company_id")
+  code        String
   name        String
   type        AccountType
   parentId    String?     @map("parent_id")
@@ -1169,20 +1265,28 @@ model Account {
   children Account[]      @relation("AccountHierarchy")
   journalEntries JournalEntryLine[]
 
+  @@unique([companyId, code])
   @@map("accounts")
 }
 
 model JournalEntry {
-  id          String   @id @default(uuid())
-  entryNumber String   @unique @map("entry_number")
-  date        DateTime @default(now())
-  description String?  @db.Text
-  reference   String?
-  isPosted    Boolean  @default(false) @map("is_posted")
-  createdAt   DateTime @default(now()) @map("created_at")
+  id           String   @id @default(uuid())
+  companyId    String   @map("company_id")
+  entryNumber  String   @map("entry_number")
+  date         DateTime @default(now())
+  description  String?  @db.Text
+  reference    String?
+  sourceType   String?  @map("source_type")
+  sourceId     String?  @map("source_id")
+  reversalOfId String?  @map("reversal_of_id")
+  isPosted     Boolean  @default(false) @map("is_posted")
+  createdAt    DateTime @default(now()) @map("created_at")
 
   lines JournalEntryLine[]
 
+  @@unique([companyId, entryNumber])
+  @@index([companyId, sourceType, sourceId])
+  @@index([reversalOfId])
   @@map("journal_entries")
 }
 
@@ -1202,7 +1306,8 @@ model JournalEntryLine {
 
 model Invoice {
   id              String        @id @default(uuid())
-  invoiceNumber   String        @unique @map("invoice_number")
+  companyId       String        @map("company_id")
+  invoiceNumber   String        @map("invoice_number")
   type            InvoiceType   @default(SALES)
   customerId      String?       @map("customer_id")
   supplierId      String?       @map("supplier_id")
@@ -1239,6 +1344,7 @@ model Invoice {
   mpesaTransactions MpesaTransaction[]
   paymentAllocations PaymentAllocation[]
 
+  @@unique([companyId, invoiceNumber])
   @@index([status])
   @@index([customerId])
   @@index([invoiceDate])
@@ -1263,7 +1369,8 @@ model InvoiceItem {
 
 model Payment {
   id            String        @id @default(uuid())
-  paymentNumber String        @unique @map("payment_number")
+  companyId     String        @map("company_id")
+  paymentNumber String        @map("payment_number")
   invoiceId     String?       @map("invoice_id")
   amount        Decimal       @db.Decimal(15, 2)
   method        PaymentMethod @default(BANK_TRANSFER)
@@ -1281,6 +1388,7 @@ model Payment {
   mpesaTransaction MpesaTransaction?
   allocations PaymentAllocation[]
 
+  @@unique([companyId, paymentNumber])
   @@map("payments")
 }
 
@@ -1301,10 +1409,11 @@ model PaymentAllocation {
 
 model Employee {
   id           String   @id @default(uuid())
-  employeeNo   String   @unique @map("employee_no")
+  companyId    String   @map("company_id")
+  employeeNo   String   @map("employee_no")
   firstName    String   @map("first_name")
   lastName     String   @map("last_name")
-  email        String?  @unique
+  email        String?
   phone        String?
   departmentId String?  @map("department_id")
   branchId     String?  @map("branch_id")
@@ -1325,6 +1434,7 @@ model Employee {
   leaveRequests LeaveRequest[]
   payrollRecords PayrollRecord[]
 
+  @@unique([companyId, employeeNo])
   @@map("employees")
 }
 
@@ -1403,7 +1513,8 @@ model MaintenanceRequest {
 
 model BankStatement {
   id              String   @id @default(uuid())
-  statementNumber String   @unique @map("statement_number")
+  companyId       String   @map("company_id")
+  statementNumber String   @map("statement_number")
   bankAccountCode String   @default("1100") @map("bank_account_code")
   periodStart     DateTime @map("period_start")
   periodEnd       DateTime @map("period_end")
@@ -1414,6 +1525,7 @@ model BankStatement {
 
   lines BankStatementLine[]
 
+  @@unique([companyId, statementNumber])
   @@map("bank_statements")
 }
 
@@ -1436,6 +1548,7 @@ model BankStatementLine {
 
 model MpesaTransaction {
   id                 String                 @id @default(uuid())
+  companyId          String                 @map("company_id")
   invoiceId          String?                @map("invoice_id")
   phone              String
   amount             Decimal                @db.Decimal(15, 2)

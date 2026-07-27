@@ -10,6 +10,7 @@ import {
 } from '../validators/schemas';
 import prisma from '../config/database';
 import { getParam, getQuery } from '../utils/request';
+import { requireTenantId } from '../utils/tenant';
 import { MaintenanceService } from '../services/admin.service';
 import { Prisma } from '@prisma/client';
 
@@ -69,7 +70,9 @@ router.post(
   validate(createMachineSchema),
   auditLog('maintenance', 'create', 'machine'),
   asyncHandler(async (req: AuthRequest, res: Response) => {
-    const existing = await prisma.machine.findUnique({ where: { code: req.body.code } });
+    const existing = await prisma.machine.findUnique({
+      where: { companyId_code: { companyId: requireTenantId(), code: req.body.code } },
+    });
     if (existing) throw new AppError('Machine code already exists', 409);
 
     const data = await prisma.machine.create({ data: req.body });

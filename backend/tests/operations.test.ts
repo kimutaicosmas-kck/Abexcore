@@ -1,6 +1,5 @@
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import request from 'supertest';
-import { createApp } from '../src/app';
 import {
   createQualityInspectionSchema,
   updateQualityInspectionSchema,
@@ -13,30 +12,8 @@ import {
   deliveryListQuerySchema,
   createVehicleSchema,
 } from '../src/validators/schemas';
-
-const app = createApp();
-let dbConnected = false;
-let authToken = '';
-
-async function login(): Promise<string> {
-  const res = await request(app)
-    .post('/api/v1/auth/login')
-    .send({ email: 'admin@filtererp.co.ke', password: 'Admin@123' });
-  if (res.status !== 200) throw new Error(`Login failed: ${res.status}`);
-  return res.body.data.accessToken as string;
-}
-
-function authReq(token: string) {
-  return request(app).set('Authorization', `Bearer ${token}`);
-}
-
-beforeAll(async () => {
-  const health = await request(app).get('/api/health');
-  dbConnected = health.body.database === 'connected';
-  if (dbConnected) {
-    authToken = await login();
-  }
-});
+import { authReq } from './helpers/testAuth';
+import { testCtx, itWithDb } from './setup';
 
 describe('Quality schema validation', () => {
   it('validates quality inspection creation', () => {
@@ -46,6 +23,23 @@ describe('Quality schema validation', () => {
       defectsFound: 0,
     });
     expect(result.success).toBe(true);
+  });
+
+  it('validates standalone production inspection with product only', () => {
+    const result = createQualityInspectionSchema.safeParse({
+      type: 'production',
+      productId: '550e8400-e29b-41d4-a716-446655440000',
+      status: 'PENDING',
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('requires product when production inspection has no order link', () => {
+    const result = createQualityInspectionSchema.safeParse({
+      type: 'finished',
+      status: 'PENDING',
+    });
+    expect(result.success).toBe(false);
   });
 
   it('validates quality update', () => {
@@ -113,14 +107,14 @@ describe('Delivery schema validation', () => {
 
 describe('Quality API', () => {
   it('rejects unauthenticated quality stats', async () => {
-    const res = await request(app).get('/api/v1/quality/stats');
+    const res = await request(testCtx.app).get('/api/v1/quality/stats');
     expect(res.status).toBe(401);
   });
 
-  it.skipIf(() => !dbConnected)('returns quality stats and list', async () => {
+  itWithDb('returns quality stats and list', async () => {
     const [stats, list] = await Promise.all([
-      authReq(authToken).get('/api/v1/quality/stats'),
-      authReq(authToken).get('/api/v1/quality?page=1&limit=5'),
+      authReq(testCtx.app, testCtx.authToken).get('/api/v1/quality/stats'),
+      authReq(testCtx.app, testCtx.authToken).get('/api/v1/quality?page=1&limit=5'),
     ]);
     expect(stats.status).toBe(200);
     expect(stats.body.data).toHaveProperty('pending');
@@ -131,21 +125,21 @@ describe('Quality API', () => {
 
 describe('Sales API', () => {
   it('rejects unauthenticated sales stats', async () => {
-    const res = await request(app).get('/api/v1/operations/stats');
+    const res = await request(testCtx.app).get('/api/v1/operations/stats');
     expect(res.status).toBe(401);
   });
 
-  it.skipIf(() => !dbConnected)('returns sales stats', async () => {
-    const res = await authReq(authToken).get('/api/v1/operations/stats');
+  itWithDb('returns sales stats', async () => {
+    const res = await authReq(testCtx.app, testCtx.authToken).get('/api/v1/operations/stats');
     expect(res.status).toBe(200);
     expect(res.body.data).toHaveProperty('openOrders');
     expect(res.body.data).toHaveProperty('pipelineValue');
   });
 
-  it.skipIf(() => !dbConnected)('lists orders and quotations', async () => {
+  itWithDb('lists orders and quotations', async () => {
     const [orders, quotes] = await Promise.all([
-      authReq(authToken).get('/api/v1/operations/orders?page=1&limit=5'),
-      authReq(authToken).get('/api/v1/operations/quotations?page=1&limit=5'),
+      authReq(testCtx.app, testCtx.authToken).get('/api/v1/operations/orders?page=1&limit=5'),
+      authReq(testCtx.app, testCtx.authToken).get('/api/v1/operations/quotations?page=1&limit=5'),
     ]);
     expect(orders.status).toBe(200);
     expect(quotes.status).toBe(200);
@@ -154,15 +148,15 @@ describe('Sales API', () => {
 
 describe('Delivery API', () => {
   it('rejects unauthenticated delivery stats', async () => {
-    const res = await request(app).get('/api/v1/delivery/stats');
+    const res = await request(testCtx.app).get('/api/v1/delivery/stats');
     expect(res.status).toBe(401);
   });
 
-  it.skipIf(() => !dbConnected)('returns delivery stats and list', async () => {
+  itWithDb('returns delivery stats and list', async () => {
     const [stats, list, vehicles] = await Promise.all([
-      authReq(authToken).get('/api/v1/delivery/stats'),
-      authReq(authToken).get('/api/v1/delivery?page=1&limit=5'),
-      authReq(authToken).get('/api/v1/delivery/vehicles?page=1&limit=5'),
+      authReq(testCtx.app, testCtx.authToken).get('/api/v1/delivery/stats'),
+      authReq(testCtx.app, testCtx.authToken).get('/api/v1/delivery?page=1&limit=5'),
+      authReq(testCtx.app, testCtx.authToken).get('/api/v1/delivery/vehicles?page=1&limit=5'),
     ]);
     expect(stats.status).toBe(200);
     expect(stats.body.data).toHaveProperty('pending');

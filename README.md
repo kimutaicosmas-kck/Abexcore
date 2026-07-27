@@ -58,7 +58,7 @@ Enterprise-grade ERP for manufacturing and distribution. Manages the complete bu
 
 ```bash
 # 1. Clone and install
-cd "Amazon ERP"
+cd "APEXCORE ERP"
 npm install
 cd backend && npm install
 cd ../frontend && npm install
@@ -84,12 +84,32 @@ npm run dev
 - Backend API: http://localhost:3001
 - API Docs: http://localhost:3001/api/docs
 
-### Default Login
+### Default Login (platform owner workspace)
 
 ```
-Email: admin@filtererp.co.ke
-Password: Admin@123
+Company slug: owner
+Email: kimutaicosmas547@gmail.com
+Password: Kimutai@44!
 ```
+
+### Enterprise readiness
+
+| Capability | Location |
+|------------|----------|
+| Scheduled DB backups | `.github/workflows/backup-schedule.yml`, `scripts/backup-mysql.sh` |
+| Backup restore test | `scripts/test-backup-restore.sh`, CI job `backup-restore` |
+| Audit logging | `backend/src/utils/audit.ts`, inventory/tenant/auth coverage |
+| OpenAPI (164 routes) | `npm run openapi:generate --prefix backend`, `/api/docs` |
+| Frontend unit tests | `npm test --prefix frontend` |
+| E2E smoke tests | `npm run test:e2e` |
+| Staging deploy | `.github/workflows/deploy-staging.yml` |
+| Compliance docs | `COMPLIANCE.md` |
+| Load tests | `scripts/load-test/health-load.mjs` |
+| Remove legacy demo tenants | `npm run db:purge-legacy` |
+
+### Rename project folder
+
+Close the IDE, then run `scripts/rename-to-apexcore.ps1` to rename `Amazon ERP` → `APEXCORE ERP`.
 
 ### Docker Production
 

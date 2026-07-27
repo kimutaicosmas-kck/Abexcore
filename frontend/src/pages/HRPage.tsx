@@ -195,7 +195,17 @@ export function HRPage() {
     ) : undefined;
 
   return (
-    <div className="space-y-1">
+    <div className="space-y-4">
+      {stats && (
+        <StatGrid>
+          <StatCard title="Employees" value={stats.activeEmployees} icon={<Users className="h-5 w-5 text-white" />} color="from-primary-500 to-primary-700" />
+          <StatCard title="Pending Leave" value={stats.pendingLeave} icon={<Calendar className="h-5 w-5 text-white" />} color="from-amber-500 to-orange-600" />
+          <StatCard title="Payroll Due" value={formatCurrency(stats.payrollDue)} icon={<DollarSign className="h-5 w-5 text-white" />} color="from-emerald-500 to-teal-600" />
+          <StatCard title="Present Today" value={stats.attendanceToday} icon={<UserCheck className="h-5 w-5 text-white" />} color="from-primary-600 to-primary-800" />
+          <StatCard title="Total Headcount" value={stats.totalEmployees} icon={<Users className="h-5 w-5 text-white" />} color="from-slate-600 to-slate-800" />
+        </StatGrid>
+      )}
+
       <PageHeader
         action={
           stats && stats.pendingLeave > 0 ? (
@@ -206,15 +216,6 @@ export function HRPage() {
           ) : undefined
         }
       />
-
-      {stats && (
-        <StatGrid>
-          <StatCard title="Employees" value={stats.activeEmployees} icon={<Users className="h-5 w-5 text-white" />} color="from-primary-500 to-indigo-600" />
-          <StatCard title="Pending Leave" value={stats.pendingLeave} icon={<Calendar className="h-5 w-5 text-white" />} color="from-amber-500 to-orange-600" />
-          <StatCard title="Payroll Due" value={formatCurrency(stats.payrollDue)} icon={<DollarSign className="h-5 w-5 text-white" />} color="from-emerald-500 to-teal-600" />
-          <StatCard title="Present Today" value={stats.attendanceToday} icon={<UserCheck className="h-5 w-5 text-white" />} color="from-violet-500 to-purple-600" />
-        </StatGrid>
-      )}
 
       <PageToolbar
         tabs={tabs}
@@ -279,7 +280,7 @@ export function HRPage() {
                 <ul className="divide-y divide-slate-100">
                   {recentAttendance.map((record: { id: string; employee?: { firstName: string; lastName: string }; status: string; checkIn?: string }) => (
                     <li key={record.id} className="flex items-center gap-3 px-4 py-3">
-                      <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-violet-100 text-violet-600">
+                      <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary-100 text-primary-600">
                         <Clock className="h-4 w-4" />
                       </div>
                       <div className="flex-1 min-w-0">

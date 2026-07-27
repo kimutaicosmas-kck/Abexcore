@@ -80,7 +80,7 @@ const ORDER_TRANSITIONS: Record<string, string[]> = {
   CONFIRMED: ['READY', 'CANCELLED'],
   IN_PRODUCTION: ['READY', 'CANCELLED'],
   READY: ['CANCELLED'],
-  PARTIALLY_DELIVERED: ['CANCELLED'],
+  PARTIALLY_DELIVERED: [],
   DISPATCHED: ['COMPLETED'],
   DELIVERED: ['COMPLETED'],
   COMPLETED: [],
@@ -101,7 +101,9 @@ export function assertOrderStatusTransition(
     if (current === 'READY' && next === 'PARTIALLY_DELIVERED') return;
     if (current === 'PARTIALLY_DELIVERED' && next === 'PARTIALLY_DELIVERED') return;
     if (current === 'PARTIALLY_DELIVERED' && next === 'DISPATCHED') return;
+    if (current === 'PARTIALLY_DELIVERED' && next === 'DELIVERED') return;
     if (current === 'DISPATCHED' && next === 'DELIVERED') return;
+    if (current === 'READY' && next === 'DELIVERED') return;
   }
 
   const allowed = ORDER_TRANSITIONS[current];

@@ -1,0 +1,25 @@
+name: Deploy Staging
+
+on:
+  push:
+    branches: [develop]
+  workflow_dispatch:
+
+jobs:
+  deploy-staging:
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build verification
+        run: |
+          cd backend && npm ci && npx prisma generate && npm run build
+          cd ../frontend && npm ci && npm run build
+
+      - name: Staging deploy instructions
+        run: |
+          echo "Deploy to staging with:"
+          echo "  docker compose build && docker compose up -d"
+          echo "  cd backend && npx prisma migrate deploy"
+          echo "  curl -f \$STAGING_URL/api/health/ready"

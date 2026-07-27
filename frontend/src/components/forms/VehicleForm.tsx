@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { deliveryApi } from '../../services/api';
 import { Alert, Button, Input, Select } from '../ui';
 import { VEHICLE_TYPE_FORM_OPTIONS } from '../../types';
+import { getApiErrorMessage } from '../../utils/apiError';
 
 const vehicleSchema = z.object({
   registration: z.string().min(1, 'Registration is required'),
@@ -12,6 +13,7 @@ const vehicleSchema = z.object({
   make: z.string().optional(),
   model: z.string().optional(),
   capacity: z.string().optional(),
+  isHired: z.boolean().optional(),
 });
 
 type VehicleFormData = z.infer<typeof vehicleSchema>;
@@ -32,13 +34,20 @@ export function VehicleForm({ onSuccess, onCancel }: VehicleFormProps) {
 
   const { register, handleSubmit, watch, formState: { errors } } = useForm<VehicleFormData>({
     resolver: zodResolver(vehicleSchema),
-    defaultValues: { type: 'TRUCK' },
+    defaultValues: { type: 'TRUCK', isHired: false },
   });
 
   const vehicleType = watch('type');
+  const isHired = watch('isHired');
 
   const mutation = useMutation({
-    mutationFn: (data: VehicleFormData) => deliveryApi.createVehicle(data),
+    mutationFn: (data: VehicleFormData) =>
+      deliveryApi.createVehicle({
+        ...data,
+        make: data.make?.trim() || undefined,
+        model: data.model?.trim() || undefined,
+        capacity: data.capacity?.trim() || undefined,
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['vehicles'] });
       queryClient.invalidateQueries({ queryKey: ['delivery-stats'] });
@@ -49,7 +58,7 @@ export function VehicleForm({ onSuccess, onCancel }: VehicleFormProps) {
   return (
     <form onSubmit={handleSubmit((data) => mutation.mutate(data))} className="space-y-4">
       {mutation.isError && (
-        <Alert variant="error">Failed to add vehicle. Registration may already exist.</Alert>
+        <Alert variant="error">{getApiErrorMessage(mutation.error)}</Alert>
       )}
       <Select
         label="Fleet type *"
@@ -57,8 +66,26 @@ export function VehicleForm({ onSuccess, onCancel }: VehicleFormProps) {
         {...register('type')}
         error={errors.type?.message}
       />
+      <label className="flex items-start gap-2 text-sm text-slate-700">
+        <input
+          type="checkbox"
+          className="mt-0.5 h-4 w-4 rounded border-slate-300"
+          {...register('isHired')}
+        />
+        <span>
+          Hired / external vehicle
+          <span className="block text-xs text-slate-500 mt-0.5">
+            Check for lorries hired for long-distance runs — they can be added each time the carrier changes.
+          </span>
+        </span>
+      </label>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <Input label="Registration *" {...register('registration')} error={errors.registration?.message} />
+        <Input
+          label="Registration *"
+          placeholder={isHired ? 'e.g. KCA 456B' : undefined}
+          {...register('registration')}
+          error={errors.registration?.message}
+        />
         <Input label="Make" {...register('make')} />
         <Input label="Model" {...register('model')} />
         <Input

@@ -59,11 +59,11 @@ export function GlobalSearch() {
           setOpen(true);
         }}
         onFocus={() => setOpen(true)}
-        className="w-full pl-9 pr-3 py-2 rounded-lg border border-slate-200 bg-slate-50 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 focus:bg-white transition-all"
+        className="w-full pl-10 pr-3 py-2 rounded-xl border border-primary-100 bg-white text-sm text-primary-950 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 transition-all shadow-sm"
       />
 
       {open && query.length >= 2 && (
-        <div className="absolute top-full mt-2 w-full max-w-[calc(100vw-2rem)] bg-white border border-border rounded-2xl shadow-float z-50 max-h-80 overflow-hidden">
+        <div className="absolute top-full mt-2 w-full max-w-[calc(100vw-2rem)] bg-white border border-primary-100 rounded-2xl shadow-float z-50 max-h-80 overflow-hidden">
           {allResults.length === 0 ? (
             <p className="px-4 py-4 text-sm text-slate-500">No results for &quot;{query}&quot;</p>
           ) : (
@@ -81,7 +81,7 @@ export function GlobalSearch() {
                     key={`${type}-${item.id}`}
                     type="button"
                     onClick={() => handleSelect(item.href as string)}
-                    className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-surface-muted text-left transition-colors"
+                    className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-primary-50/80 text-left transition-colors"
                   >
                     <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-50 text-primary-600 shrink-0">
                       <Icon className="h-4 w-4" />

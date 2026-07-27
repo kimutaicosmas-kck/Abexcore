@@ -64,8 +64,10 @@ export function ApexCoreLogo({
   if (variant === 'sidebar') {
     return (
       <div className={clsx('flex items-center gap-2.5 min-w-0', className)}>
-        <LogoMark inverted={false} className="h-8 w-8" />
-        <p className="font-bold text-sm text-slate-900 tracking-wide truncate">{BRAND_WORDMARK}</p>
+        <LogoMark inverted={inverted} className="h-8 w-8" />
+        <p className={clsx('font-bold text-sm tracking-wide truncate', inverted ? 'text-white' : 'text-slate-900')}>
+          {BRAND_WORDMARK}
+        </p>
       </div>
     );
   }

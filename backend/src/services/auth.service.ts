@@ -4,11 +4,22 @@ import { randomUUID } from 'crypto';
 import speakeasy from 'speakeasy';
 import qrcode from 'qrcode';
 import { config } from '../config';
+import { sanitizeCompanyBrand } from '../utils/platform';
 import prisma from '../config/database';
 import { AppError } from '../middleware/errorHandler';
-import { getCompanySettings } from '../utils/company';
+import { encryptSecret, decryptSecret, hashToken } from '../utils/crypto';
+import { auditAuthFailure, auditAuthSuccess } from '../utils/audit';
 
 const SALT_ROUNDS = 12;
+
+function readTwoFactorSecret(stored: string | null | undefined): string | null {
+  if (!stored) return null;
+  try {
+    return decryptSecret(stored);
+  } catch {
+    return stored;
+  }
+}
 
 export class AuthService {
   static validatePassword(password: string): void {
@@ -29,11 +40,11 @@ export class AuthService {
     }
   }
 
-  static generateTokens(userId: string, email: string, roleId: string) {
-    const accessToken = jwt.sign({ userId, email, roleId }, config.jwt.secret, {
+  static generateTokens(userId: string, email: string, roleId: string, companyId: string) {
+    const accessToken = jwt.sign({ userId, email, roleId, companyId }, config.jwt.secret, {
       expiresIn: config.jwt.expiresIn,
     } as SignOptions);
-    const refreshToken = jwt.sign({ userId, jti: randomUUID() }, config.jwt.refreshSecret, {
+    const refreshToken = jwt.sign({ userId, jti: randomUUID(), companyId }, config.jwt.refreshSecret, {
       expiresIn: config.jwt.refreshExpiresIn,
     } as SignOptions);
     return { accessToken, refreshToken };
@@ -42,54 +53,90 @@ export class AuthService {
   static async login(
     email: string,
     password: string,
+    companySlug?: string,
     totpCode?: string,
     ipAddress?: string,
     userAgent?: string
   ) {
-    const user = await prisma.user.findUnique({
-      where: { email: email.toLowerCase() },
+    const normalizedEmail = email.toLowerCase();
+    let companyId: string | undefined;
+
+    if (companySlug?.trim()) {
+      const company = await prisma.company.findFirst({
+        where: { slug: companySlug.trim().toLowerCase(), isActive: true },
+      });
+      if (!company) throw new AppError('Company not found or inactive', 404);
+      companyId = company.id;
+    }
+
+    const user = await prisma.user.findFirst({
+      where: {
+        email: normalizedEmail,
+        ...(companyId ? { companyId } : {}),
+      },
       include: {
         role: {
           include: { permissions: { include: { permission: true } } },
         },
         department: true,
         branch: true,
+        company: { select: { id: true, slug: true, name: true, logo: true, vatRate: true, currency: true, isActive: true } },
       },
     });
 
-    const loginFail = async () => {
+    const loginFail = async (reason: string) => {
       if (user) {
         await prisma.loginHistory.create({
           data: { userId: user.id, ipAddress, userAgent, success: false },
         });
       }
+      await auditAuthFailure({
+        companyId: user?.companyId || companyId,
+        userId: user?.id,
+        email: normalizedEmail,
+        reason,
+        ipAddress,
+        userAgent,
+      });
       throw new AppError('Invalid email or password', 401);
     };
 
-    if (!user || user.deletedAt || user.status !== 'ACTIVE') await loginFail();
+    if (!user || user.deletedAt || user.status !== 'ACTIVE') await loginFail('invalid_credentials');
+    if (!user!.company?.isActive) throw new AppError('Company account is inactive', 403);
 
     const valid = await bcrypt.compare(password, user!.passwordHash);
-    if (!valid) await loginFail();
+    if (!valid) await loginFail('invalid_password');
 
     if (user!.twoFactorEnabled) {
       if (!totpCode) {
         throw new AppError('Two-factor authentication code required', 403, '2FA_REQUIRED');
       }
+      const secret = readTwoFactorSecret(user!.twoFactorSecret);
       const verified = speakeasy.totp.verify({
-        secret: user!.twoFactorSecret!,
+        secret: secret!,
         encoding: 'base32',
         token: totpCode,
         window: 2,
       });
-      if (!verified) throw new AppError('Invalid 2FA code', 401);
+      if (!verified) {
+        await auditAuthFailure({
+          companyId: user!.companyId,
+          userId: user!.id,
+          email: normalizedEmail,
+          reason: 'invalid_2fa',
+          ipAddress,
+          userAgent,
+        });
+        throw new AppError('Invalid 2FA code', 401);
+      }
     }
 
-    const tokens = this.generateTokens(user!.id, user!.email, user!.roleId);
+    const tokens = this.generateTokens(user!.id, user!.email, user!.roleId, user!.companyId);
 
     await prisma.refreshToken.create({
       data: {
         userId: user!.id,
-        token: tokens.refreshToken,
+        token: hashToken(tokens.refreshToken),
         expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
       },
     });
@@ -103,8 +150,14 @@ export class AuthService {
       data: { userId: user!.id, ipAddress, userAgent, success: true },
     });
 
+    await auditAuthSuccess({
+      companyId: user!.companyId,
+      userId: user!.id,
+      ipAddress,
+    });
+
     const { passwordHash, twoFactorSecret, ...safeUser } = user!;
-    const company = await getCompanySettings();
+    const company = user!.company;
 
     return {
       user: {
@@ -115,7 +168,14 @@ export class AuthService {
       },
       mustChangePassword: user!.mustChangePassword,
       company: company
-        ? { name: company.name, vatRate: Number(company.vatRate), currency: company.currency }
+        ? sanitizeCompanyBrand({
+            id: company.id,
+            slug: company.slug,
+            name: company.name,
+            logo: company.logo,
+            vatRate: Number(company.vatRate),
+            currency: company.currency,
+          })
         : { name: 'Company', vatRate: 16, currency: 'KES' },
       ...tokens,
     };
@@ -123,9 +183,10 @@ export class AuthService {
 
   static async refreshToken(token: string) {
     const decoded = jwt.verify(token, config.jwt.refreshSecret) as { userId: string };
+    const tokenHash = hashToken(token);
 
     const stored = await prisma.refreshToken.findFirst({
-      where: { token, userId: decoded.userId, expiresAt: { gt: new Date() } },
+      where: { token: tokenHash, userId: decoded.userId, expiresAt: { gt: new Date() } },
     });
 
     if (!stored) throw new AppError('Invalid refresh token', 401);
@@ -135,12 +196,12 @@ export class AuthService {
 
     await prisma.refreshToken.delete({ where: { id: stored.id } });
 
-    const tokens = this.generateTokens(user.id, user.email, user.roleId);
+    const tokens = this.generateTokens(user.id, user.email, user.roleId, user.companyId);
 
     await prisma.refreshToken.create({
       data: {
         userId: user.id,
-        token: tokens.refreshToken,
+        token: hashToken(tokens.refreshToken),
         expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
       },
     });
@@ -150,7 +211,9 @@ export class AuthService {
 
   static async logout(userId: string, refreshToken?: string) {
     if (refreshToken) {
-      await prisma.refreshToken.deleteMany({ where: { userId, token: refreshToken } });
+      await prisma.refreshToken.deleteMany({
+        where: { userId, token: hashToken(refreshToken) },
+      });
     } else {
       await prisma.refreshToken.deleteMany({ where: { userId } });
     }
@@ -160,7 +223,7 @@ export class AuthService {
     const secret = speakeasy.generateSecret({ name: 'ApexCore ERP' });
     await prisma.user.update({
       where: { id: userId },
-      data: { twoFactorSecret: secret.base32 },
+      data: { twoFactorSecret: encryptSecret(secret.base32!) },
     });
     const qrCode = await qrcode.toDataURL(secret.otpauth_url!);
     return { secret: secret.base32, qrCode };
@@ -168,10 +231,11 @@ export class AuthService {
 
   static async verify2FA(userId: string, token: string) {
     const user = await prisma.user.findUnique({ where: { id: userId } });
-    if (!user?.twoFactorSecret) throw new AppError('2FA not configured', 400);
+    const secret = readTwoFactorSecret(user?.twoFactorSecret);
+    if (!secret) throw new AppError('2FA not configured', 400);
 
     const verified = speakeasy.totp.verify({
-      secret: user.twoFactorSecret,
+      secret,
       encoding: 'base32',
       token,
       window: 2,
@@ -208,5 +272,18 @@ export class AuthService {
   static hashPassword(password: string) {
     this.validatePassword(password);
     return bcrypt.hash(password, SALT_ROUNDS);
+  }
+
+  /** Migrate legacy plaintext refresh tokens to hashed form (startup maintenance). */
+  static async migrateRefreshTokenHashes() {
+    const tokens = await prisma.refreshToken.findMany({ take: 500 });
+    for (const row of tokens) {
+      if (row.token.length === 64 && /^[a-f0-9]+$/.test(row.token)) continue;
+      const hashed = hashToken(row.token);
+      await prisma.refreshToken.update({
+        where: { id: row.id },
+        data: { token: hashed },
+      });
+    }
   }
 }

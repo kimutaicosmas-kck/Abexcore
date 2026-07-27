@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -13,13 +13,18 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { authApi } from '../services/api';
 import { Alert, Button, Input } from '../components/ui';
 import { ApexCoreLogo } from '../components/brand/ApexCoreLogo';
 import { PoweredBy } from '../components/brand/PoweredBy';
 import { APP_NAME, APP_TAGLINE } from '../constants/brand';
 import { getApiErrorMessage } from '../utils/apiError';
+import { resolveTenantSlugFromHost, resolveTenantSlugFromQuery, buildTenantLoginUrl } from '../utils/tenant';
+import { CompanyLogoMark } from '../components/brand/CompanyBrand';
+import { PLATFORM_COMPANY_SLUG } from '../constants/platform';
 
 const loginSchema = z.object({
+  companySlug: z.string().min(2, 'Company code is required'),
   email: z.string().email('Invalid email'),
   password: z.string().min(1, 'Password is required'),
   totpCode: z.string().optional(),
@@ -38,7 +43,7 @@ const FEATURES = [
     label: 'Inventory control',
     desc: 'Stock, warehouses, and movements',
     icon: Package,
-    color: 'bg-violet-500/15 text-violet-200 border-violet-400/20',
+    color: 'bg-blue-500/15 text-blue-200 border-blue-400/20',
   },
   {
     label: 'Sales & delivery',
@@ -62,26 +67,61 @@ export function LoginPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [needs2FA, setNeeds2FA] = useState(false);
-  const [savedCredentials, setSavedCredentials] = useState({ email: '', password: '' });
+  const [savedCredentials, setSavedCredentials] = useState({ companySlug: '', email: '', password: '' });
+  const [resolvedTenant, setResolvedTenant] = useState<{ slug: string; name: string; logo?: string | null } | null>(null);
+  const [tenantLoading, setTenantLoading] = useState(false);
+  const [tenantError, setTenantError] = useState('');
+
+  const hostSlug = useMemo(
+    () => resolveTenantSlugFromHost() || resolveTenantSlugFromQuery(window.location.search),
+    [searchParams]
+  );
+  const tenantLocked = !!hostSlug;
+  const isPlatformLogin = hostSlug === PLATFORM_COMPANY_SLUG;
+  const platformLoginUrl = buildTenantLoginUrl(PLATFORM_COMPANY_SLUG);
 
   const { register, handleSubmit, formState: { errors }, setValue } = useForm<LoginForm>({
     resolver: zodResolver(loginSchema),
-    defaultValues: { email: '', password: '' },
+    defaultValues: {
+      companySlug: hostSlug || localStorage.getItem('companySlug') || (import.meta.env.DEV ? 'owner' : ''),
+      email: '',
+      password: '',
+    },
   });
+
+  useEffect(() => {
+    if (!hostSlug) return;
+
+    setValue('companySlug', hostSlug);
+    setTenantLoading(true);
+    setTenantError('');
+
+    authApi
+      .resolveTenant(hostSlug)
+      .then(({ data }) => {
+        setResolvedTenant({ slug: data.data.slug, name: data.data.name, logo: data.data.logo });
+      })
+      .catch(() => {
+        setResolvedTenant(null);
+        setTenantError('This workspace URL is not valid or the company is inactive.');
+      })
+      .finally(() => setTenantLoading(false));
+  }, [hostSlug, setValue]);
 
   const onSubmit = async (data: LoginForm) => {
     setLoading(true);
     setError('');
     const email = data.email.trim();
     const password = data.password.trim();
+    const companySlug = (hostSlug || data.companySlug).trim();
     try {
-      await login(email, password, data.totpCode?.trim());
+      await login(companySlug, email, password, data.totpCode?.trim());
       navigate('/');
     } catch (err: unknown) {
       const axiosErr = err as { response?: { data?: { message?: string; code?: string } } };
       if (axiosErr.response?.data?.code === '2FA_REQUIRED') {
         setNeeds2FA(true);
-        setSavedCredentials({ email, password });
+        setSavedCredentials({ companySlug, email, password });
         setError('');
       } else {
         setError(getApiErrorMessage(err));
@@ -95,7 +135,7 @@ export function LoginPage() {
     setLoading(true);
     setError('');
     try {
-      await login(savedCredentials.email, savedCredentials.password, totpCode);
+      await login(savedCredentials.companySlug, savedCredentials.email, savedCredentials.password, totpCode);
       navigate('/');
     } catch (err: unknown) {
       setError(getApiErrorMessage(err));
@@ -105,10 +145,12 @@ export function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex bg-slate-100/80">
+    <div className="min-h-screen flex">
       <div className="hidden lg:flex lg:w-[52%] relative overflow-hidden items-center justify-center p-12">
-        <div className="absolute inset-0 bg-gradient-to-br from-primary-600 via-primary-700 to-indigo-900" />
-        <div className="absolute inset-0 opacity-30 bg-[radial-gradient(circle_at_30%_20%,rgba(255,255,255,0.15),transparent_50%)]" />
+        <div className="absolute inset-0 bg-gradient-to-br from-[#0c1929] via-primary-900 to-[#0c4a6e]" />
+        <div className="absolute inset-0 opacity-40 bg-[radial-gradient(circle_at_20%_30%,rgba(139,92,246,0.45),transparent_45%)]" />
+        <div className="absolute inset-0 opacity-30 bg-[radial-gradient(circle_at_80%_70%,rgba(6,182,212,0.35),transparent_40%)]" />
+        <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-primary-400/50 to-transparent" />
         <div className="relative text-white max-w-lg w-full flex flex-col min-h-[min(640px,80vh)] items-center text-center">
           <div className="flex-1 w-full flex flex-col items-center">
             <ApexCoreLogo inverted size="lg" className="mb-8" />
@@ -141,26 +183,41 @@ export function LoginPage() {
         </div>
       </div>
 
-      <div className="flex-1 flex flex-col items-center justify-center p-6 sm:p-10">
+      <div className="flex-1 flex flex-col items-center justify-center p-6 sm:p-10 bg-transparent">
         <div className="lg:hidden text-center mb-6 w-full flex flex-col items-center">
           <ApexCoreLogo size="md" className="mb-2" />
         </div>
 
         <div className="w-full max-w-md">
-          <div className="bg-white rounded-2xl border border-border shadow-soft overflow-hidden">
-            <div className="h-1.5 bg-gradient-to-r from-primary-500 to-indigo-600" />
+          <div className="bg-white/90 backdrop-blur-xl rounded-2xl border border-white/60 shadow-panel overflow-hidden ring-1 ring-slate-900/[0.04]">
+            <div className="h-1 bg-gradient-to-r from-primary-500 via-primary-600 to-accent-500" />
             <div className="p-8">
               <div className="text-center mb-8">
-                <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-primary-50 text-primary-600 ring-1 ring-primary-100">
-                  <ShieldCheck className="h-6 w-6" />
-                </div>
+                {resolvedTenant && !needs2FA ? (
+                  <div className="mx-auto mb-4 flex justify-center">
+                    <CompanyLogoMark
+                      logo={resolvedTenant.logo}
+                      name={resolvedTenant.name}
+                      companySlug={resolvedTenant.slug}
+                      size="lg"
+                    />
+                  </div>
+                ) : (
+                  <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-primary-50 text-primary-600 ring-1 ring-primary-100">
+                    <ShieldCheck className="h-6 w-6" />
+                  </div>
+                )}
                 <h2 className="text-2xl font-bold tracking-tight text-slate-900">
                   {needs2FA ? 'Two-factor authentication' : 'Sign in'}
                 </h2>
                 <p className="text-slate-500 mt-1.5 text-sm">
                   {needs2FA
                     ? 'Enter the 6-digit code from your authenticator app'
-                    : `Access your ${APP_NAME} workspace`}
+                    : resolvedTenant
+                      ? `Sign in to ${resolvedTenant.name}`
+                      : tenantLocked && tenantLoading
+                        ? 'Loading workspace…'
+                        : `Access your ${APP_NAME} workspace`}
                 </p>
               </div>
 
@@ -171,10 +228,23 @@ export function LoginPage() {
                       Your session expired due to inactivity. Please sign in again.
                     </Alert>
                   )}
+                  {tenantError && <Alert variant="error">{tenantError}</Alert>}
                   {error && <Alert variant="error">{error}</Alert>}
+
+                  {tenantLocked ? (
+                    <input type="hidden" {...register('companySlug')} />
+                  ) : (
+                    <Input
+                      label="Company code"
+                      placeholder="e.g. owner or your-company"
+                      {...register('companySlug')}
+                      error={errors.companySlug?.message}
+                    />
+                  )}
+
                   <Input label="Email" type="email" {...register('email')} error={errors.email?.message} />
                   <Input label="Password" type="password" {...register('password')} error={errors.password?.message} />
-                  <Button type="submit" loading={loading} className="w-full mt-2">
+                  <Button type="submit" loading={loading || tenantLoading} className="w-full mt-2">
                     Sign in
                   </Button>
                 </form>
@@ -209,9 +279,11 @@ export function LoginPage() {
                 </form>
               )}
 
-              {import.meta.env.DEV && !needs2FA && (
+              {import.meta.env.DEV && !needs2FA && isPlatformLogin && (
                 <p className="mt-6 text-center text-xs text-slate-400 border-t border-slate-100 pt-4">
-                  Development mode — use seeded admin credentials
+                  Dev — company code <strong>owner</strong>, email <strong>kimutaicosmas547@gmail.com</strong> / password set in platform config
+                  <br />
+                  Direct URL: <strong>{platformLoginUrl}</strong>
                 </p>
               )}
             </div>

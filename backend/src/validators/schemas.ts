@@ -1,9 +1,22 @@
 import { z } from 'zod';
 
 export const loginSchema = z.object({
+  companySlug: z.string().min(2, 'Company code is required').optional(),
   email: z.string().email('Invalid email address'),
   password: z.string().min(1, 'Password is required'),
   totpCode: z.string().length(6).optional(),
+});
+
+export const registerCompanySchema = z.object({
+  companyName: z.string().min(2, 'Company name is required'),
+  companySlug: z.string().min(2).max(48).optional(),
+  adminEmail: z.string().email('Invalid admin email'),
+  adminPassword: z.string().min(8, 'Password must be at least 8 characters'),
+  adminFirstName: z.string().min(1, 'First name is required'),
+  adminLastName: z.string().min(1, 'Last name is required'),
+  phone: z.string().optional(),
+  country: z.string().optional(),
+  currency: z.string().optional(),
 });
 
 export const refreshTokenSchema = z.object({
@@ -59,22 +72,22 @@ export const createContactSchema = z.object({
 
 export const createProductSchema = z.object({
   sku: z.string().min(1),
-  barcode: z.string().optional(),
+  barcode: z.preprocess(
+    (v) => (typeof v === 'string' && v.trim() === '' ? undefined : v),
+    z.string().optional()
+  ),
   name: z.string().min(1),
-  category: z.enum([
-    'OIL_FILTER', 'FUEL_FILTER', 'AIR_FILTER', 'CABIN_FILTER',
-    'HYDRAULIC_FILTER', 'WATER_FILTER', 'INDUSTRIAL_FILTER', 'CUSTOM_FILTER',
-  ]),
+  categoryId: z.string().uuid('Select a valid category'),
   description: z.string().optional(),
-  weight: z.number().optional(),
-  length: z.number().optional(),
-  width: z.number().optional(),
-  height: z.number().optional(),
-  manufacturingCost: z.number().min(0).optional(),
-  sellingPrice: z.number().min(0).optional(),
-  distributorPrice: z.number().min(0).optional(),
-  retailPrice: z.number().min(0).optional(),
-  minStockLevel: z.number().int().min(0).optional(),
+  weight: z.coerce.number().optional(),
+  length: z.coerce.number().optional(),
+  width: z.coerce.number().optional(),
+  height: z.coerce.number().optional(),
+  manufacturingCost: z.coerce.number().min(0).optional(),
+  sellingPrice: z.coerce.number().min(0).optional(),
+  distributorPrice: z.coerce.number().min(0).optional(),
+  retailPrice: z.coerce.number().min(0).optional(),
+  minStockLevel: z.coerce.number().int().min(0).optional(),
   initialQuantity: z.coerce.number().int().min(0).optional(),
   warehouseId: z.string().uuid().optional(),
 });
@@ -87,12 +100,9 @@ export const updateProductSchema = createProductSchema
   });
 
 export const createRawMaterialSchema = z.object({
-  code: z.string().min(1),
+  code: z.string().min(1).optional(),
   name: z.string().min(1),
-  type: z.enum([
-    'STEEL', 'FILTER_PAPER', 'RUBBER', 'MESH', 'ADHESIVE',
-    'PLASTIC', 'END_CAP', 'THREAD_PLATE', 'PACKAGING_BOX', 'LABEL', 'OTHER',
-  ]),
+  typeId: z.string().uuid('Select a valid material type'),
   description: z.string().optional(),
   unit: z.string().optional(),
   unitCost: z.number().min(0).optional(),
@@ -100,6 +110,10 @@ export const createRawMaterialSchema = z.object({
   minStockLevel: z.number().min(0).optional(),
   reorderQty: z.number().min(0).optional(),
   shelfLifeDays: z.number().int().optional(),
+});
+
+export const createMaterialTypeSchema = z.object({
+  name: z.string().trim().min(1, 'Material type name is required').max(100),
 });
 
 export const createSupplierSchema = z.object({
@@ -119,6 +133,7 @@ export const paginationSchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(20),
   search: z.preprocess((v) => (v === '' ? undefined : v), z.string().optional()),
+  cursor: z.preprocess((v) => (v === '' ? undefined : v), z.string().uuid().optional()),
   sortBy: z.preprocess((v) => (v === '' ? undefined : v), z.string().optional()),
   sortOrder: z.preprocess(
     (v) => (v === '' || v === undefined ? undefined : v),
@@ -148,14 +163,36 @@ export const customerListQuerySchema = paginationSchema.extend({
   ),
 });
 
+export const createProductCategorySchema = z.object({
+  name: z.string().trim().min(1, 'Category name is required').max(100),
+});
+
+export const updateCatalogItemSchema = z
+  .object({
+    name: z.string().trim().min(1, 'Name is required').max(100).optional(),
+    isActive: z.boolean().optional(),
+  })
+  .refine((data) => data.name !== undefined || data.isActive !== undefined, {
+    message: 'Provide a name or active status to update',
+  });
+
+export const reorderCatalogSchema = z.object({
+  ids: z.array(z.string().uuid()).min(1, 'At least one item is required'),
+});
+
+export const deleteCompanySchema = z.object({
+  confirmSlug: z.string().min(1, 'Company code confirmation is required'),
+});
+
+export const resetDemoWorkspaceSchema = z.object({
+  confirmSlug: z.string().min(1, 'Company code confirmation is required'),
+});
+
 export const productListQuerySchema = paginationSchema.extend({
   limit: z.coerce.number().int().min(1).max(500).default(20),
   category: z.preprocess(
     (v) => (v === '' || v === undefined ? undefined : v),
-    z.enum([
-      'OIL_FILTER', 'FUEL_FILTER', 'AIR_FILTER', 'CABIN_FILTER',
-      'HYDRAULIC_FILTER', 'WATER_FILTER', 'INDUSTRIAL_FILTER', 'CUSTOM_FILTER',
-    ]).optional()
+    z.string().uuid().optional()
   ),
   isActive: z.preprocess(
     (v) => (v === '' || v === undefined ? undefined : v === 'true' ? true : v === 'false' ? false : undefined),
@@ -166,7 +203,7 @@ export const productListQuerySchema = paginationSchema.extend({
 export const materialListQuerySchema = paginationSchema.extend({
   type: z.preprocess(
     (v) => (v === '' || v === undefined ? undefined : v),
-    z.string().optional()
+    z.string().uuid().optional()
   ),
 });
 
@@ -181,6 +218,22 @@ const optionalDateString = z.preprocess(
   (v) => (v === '' || v === null || v === undefined ? undefined : v),
   z.string().optional()
 );
+
+export const updateSalesOrderItemsSchema = z.object({
+  items: z
+    .array(
+      z.object({
+        id: z.string().uuid().optional(),
+        productId: z.string().uuid(),
+        quantity: z.coerce.number().int().min(1),
+        unitPrice: z.coerce.number().min(0),
+        discount: z.coerce.number().min(0).max(100).optional(),
+      })
+    )
+    .min(1),
+  adjustmentReason: z.string().min(1, 'Reason for adjustment is required'),
+  notes: z.string().optional(),
+});
 
 export const createSalesOrderSchema = z.object({
   customerId: z.string().uuid(),
@@ -253,6 +306,16 @@ export const createProductionOrderSchema = z.object({
   notes: z.string().optional(),
 });
 
+export const completeProductionSchema = z.object({
+  completedQty: z.coerce.number().int().min(1),
+  rejectedQty: z.coerce.number().int().min(0).optional(),
+  /** Ignored unless it matches finished goods — output always posts to FG warehouse. */
+  warehouseId: z.preprocess(
+    (v) => (v === '' || v === null || v === undefined ? undefined : v),
+    z.string().uuid().optional()
+  ),
+});
+
 export const companySettingsSchema = z.object({
   name: z.string().min(1),
   legalName: z.string().optional(),
@@ -265,6 +328,7 @@ export const companySettingsSchema = z.object({
   website: z.string().optional(),
   currency: z.string().optional(),
   vatRate: z.number().min(0).max(100).optional(),
+  qualityModuleEnabled: z.boolean().optional(),
 });
 
 export const createQuotationSchema = z.object({
@@ -321,27 +385,80 @@ export const createEmployeeSchema = z.object({
   salary: z.number().min(0).optional(),
 });
 
-export const createDeliverySchema = z.object({
-  salesOrderId: z.string().uuid(),
-  vehicleId: z.string().uuid().optional(),
-  driverId: z.string().uuid().optional(),
-  scheduledDate: z.string().optional(),
-  notes: z.string().optional(),
-  items: z.array(z.object({
-    productId: z.string().uuid(),
-    quantity: z.number().int().min(1),
-  })).min(1),
+const deliveryItemInputSchema = z.object({
+  productId: z.string().uuid(),
+  quantity: z.number().int().min(1),
 });
 
-export const createQualityInspectionSchema = z.object({
-  type: z.string().min(1),
-  goodsReceiptId: z.string().uuid().optional(),
-  productionOrderId: z.string().uuid().optional(),
-  status: z.enum(['PENDING', 'PASSED', 'FAILED', 'CONDITIONAL']).optional(),
-  result: z.string().optional(),
-  defectsFound: z.number().int().min(0).optional(),
-  correctiveAction: z.string().optional(),
+const deliveryOrderInputSchema = z.object({
+  salesOrderId: z.string().uuid(),
+  items: z.array(deliveryItemInputSchema).min(1),
 });
+
+export const createDeliverySchema = z
+  .object({
+    salesOrderId: z.string().uuid().optional(),
+    vehicleId: z.string().uuid().optional(),
+    driverId: z.string().uuid().optional(),
+    scheduledDate: z.string().optional(),
+    notes: z.string().optional(),
+    items: z.array(deliveryItemInputSchema).optional(),
+    orders: z.array(deliveryOrderInputSchema).optional(),
+  })
+  .refine(
+    (data) => {
+      if (data.orders?.length) return true;
+      return !!(data.salesOrderId && data.items?.length);
+    },
+    { message: 'Provide orders[] or salesOrderId with items[]' }
+  );
+
+export const updateDeliveryTripStatusSchema = z.object({
+  status: z.enum(['PENDING', 'ASSIGNED', 'IN_TRANSIT', 'DELIVERED', 'FAILED', 'RETURNED']),
+  proofOfDelivery: z.string().optional(),
+  actualItems: z
+    .array(
+      z.object({
+        deliveryNoteId: z.string().uuid(),
+        items: z.array(
+          z.object({
+            productId: z.string().uuid(),
+            quantity: z.coerce.number().int().min(0),
+          })
+        ),
+      })
+    )
+    .optional(),
+});
+
+const optionalUuid = z.preprocess(
+  (v) => (v === '' || v === null || v === undefined ? undefined : v),
+  z.string().uuid().optional()
+);
+
+export const createQualityInspectionSchema = z
+  .object({
+    type: z.string().min(1),
+    goodsReceiptId: optionalUuid,
+    productionOrderId: optionalUuid,
+    productId: optionalUuid,
+    status: z.enum(['PENDING', 'PASSED', 'FAILED', 'CONDITIONAL']).optional(),
+    result: z.string().optional(),
+    defectsFound: z.number().int().min(0).optional(),
+    correctiveAction: z.string().optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.type === 'incoming' && !data.goodsReceiptId && !data.productId) {
+      return;
+    }
+    if ((data.type === 'production' || data.type === 'finished') && !data.productionOrderId && !data.productId) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Select a product for surplus-stock inspections, or link a production order',
+        path: ['productId'],
+      });
+    }
+  });
 
 export const createMaintenanceSchema = z.object({
   machineId: z.string().uuid(),
@@ -493,6 +610,10 @@ export const qualityListQuerySchema = paginationSchema.extend({
     (v) => (v === '' || v === undefined ? undefined : v),
     z.string().uuid().optional()
   ),
+  productId: z.preprocess(
+    (v) => (v === '' || v === undefined ? undefined : v),
+    z.string().uuid().optional()
+  ),
 });
 
 export const updateQualityInspectionSchema = z.object({
@@ -510,6 +631,13 @@ export const salesListQuerySchema = paginationSchema.extend({
   salesPersonId: z.preprocess(
     (v) => (v === '' || v === undefined ? undefined : v),
     z.string().uuid().optional()
+  ),
+});
+
+export const productionListQuerySchema = paginationSchema.extend({
+  status: z.preprocess(
+    (v) => (v === '' || v === undefined ? undefined : v),
+    z.string().optional()
   ),
 });
 
@@ -538,6 +666,14 @@ export const salesByPersonQuerySchema = paginationSchema.extend({
 export const updateDeliveryStatusSchema = z.object({
   status: z.enum(['PENDING', 'ASSIGNED', 'IN_TRANSIT', 'DELIVERED', 'FAILED', 'RETURNED']),
   proofOfDelivery: z.string().optional(),
+  actualItems: z
+    .array(
+      z.object({
+        productId: z.string().uuid(),
+        quantity: z.coerce.number().int().min(0),
+      })
+    )
+    .optional(),
 });
 
 export const vehicleListQuerySchema = paginationSchema.extend({
@@ -553,6 +689,7 @@ export const createVehicleSchema = z.object({
   make: z.string().optional(),
   model: z.string().optional(),
   capacity: z.string().optional(),
+  isHired: z.boolean().optional(),
 });
 
 export const financeListQuerySchema = paginationSchema.extend({
@@ -602,6 +739,16 @@ export const createJournalEntrySchema = z.object({
     debit: z.coerce.number().min(0).default(0),
     credit: z.coerce.number().min(0).default(0),
   })).min(2),
+}).superRefine((data, ctx) => {
+  const totalDebit = data.lines.reduce((sum, line) => sum + Number(line.debit || 0), 0);
+  const totalCredit = data.lines.reduce((sum, line) => sum + Number(line.credit || 0), 0);
+  if (Math.abs(totalDebit - totalCredit) > 0.009) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: `Debits (${totalDebit.toFixed(2)}) must equal credits (${totalCredit.toFixed(2)})`,
+      path: ['lines'],
+    });
+  }
 });
 
 export const approveLeaveSchema = z.object({

@@ -1,11 +1,22 @@
 import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { User } from '../types';
-import { authApi } from '../services/api';
+import { authApi, refreshAccessToken, clearStoredSession, isAccessTokenExpired } from '../services/api';
 import { canAccessRoute as checkRouteAccess } from '../config/routeAccess';
 import { clearUserActivity, getLastActivityAt, isInactivityExpired, markUserActivity } from '../config/session';
+import { PLATFORM_COMPANY_SLUG } from '../constants/platform';
+
+function parseCompany(data: unknown): CompanyConfig | null {
+  if (!data || typeof data !== 'object') return null;
+  const c = data as CompanyConfig;
+  if (!c.name) return null;
+  return c;
+}
 
 export interface CompanyConfig {
+  id?: string;
+  slug?: string;
   name: string;
+  logo?: string | null;
   vatRate: number;
   currency: string;
 }
@@ -16,10 +27,11 @@ interface AuthContextType {
   isLoading: boolean;
   isAuthenticated: boolean;
   isSuperAdmin: boolean;
+  isPlatformOwner: boolean;
   isSalesOfficer: boolean;
   isDriver: boolean;
   mustChangePassword: boolean;
-  login: (email: string, password: string, totpCode?: string) => Promise<void>;
+  login: (companySlug: string, email: string, password: string, totpCode?: string) => Promise<void>;
   logout: () => Promise<void>;
   hasPermission: (permission: string) => boolean;
   canAccessRoute: (pathname: string) => boolean;
@@ -39,49 +51,66 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const refreshUser = useCallback(async () => {
     const { data } = await authApi.me();
     setUser(data.data);
+    setCompany(parseCompany(data.data.company));
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
+
     const loadSession = async () => {
-      const token = localStorage.getItem('accessToken');
+      const accessToken = localStorage.getItem('accessToken');
       const refreshToken = localStorage.getItem('refreshToken');
 
-      if (!token && !refreshToken) {
+      if (!accessToken && !refreshToken) {
         setIsLoading(false);
         return;
       }
 
       if (isInactivityExpired()) {
-        localStorage.removeItem('accessToken');
-        localStorage.removeItem('refreshToken');
+        clearStoredSession();
         clearUserActivity();
         setIsLoading(false);
         return;
       }
 
       try {
+        if (!accessToken || isAccessTokenExpired(accessToken)) {
+          if (!refreshToken) throw new Error('Session expired');
+          const refreshed = await refreshAccessToken();
+          if (!refreshed) throw new Error('Session expired');
+        }
+
         const { data } = await authApi.me();
+        if (cancelled) return;
         setUser(data.data);
+        setCompany(parseCompany(data.data.company));
         if (getLastActivityAt() == null) {
           markUserActivity();
         }
       } catch {
-        localStorage.removeItem('accessToken');
-        localStorage.removeItem('refreshToken');
+        if (cancelled) return;
+        clearStoredSession();
         clearUserActivity();
         setUser(null);
+        setCompany(null);
       } finally {
-        setIsLoading(false);
+        if (!cancelled) setIsLoading(false);
       }
     };
 
     loadSession();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  const login = async (email: string, password: string, totpCode?: string) => {
-    const { data } = await authApi.login(email, password, totpCode);
+  const login = async (companySlug: string, email: string, password: string, totpCode?: string) => {
+    const { data } = await authApi.login(companySlug, email, password, totpCode);
     localStorage.setItem('accessToken', data.data.accessToken);
     localStorage.setItem('refreshToken', data.data.refreshToken);
+    if (data.data.company?.slug) {
+      localStorage.setItem('companySlug', data.data.company.slug);
+    }
     markUserActivity();
     setUser(data.data.user);
     setMustChangePassword(!!data.data.mustChangePassword);
@@ -99,8 +128,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem('refreshToken');
     clearUserActivity();
     setUser(null);
+    setCompany(null);
     setMustChangePassword(false);
   };
+
+  const isPlatformOwner =
+    user?.role?.name === 'Super Admin' && company?.slug === PLATFORM_COMPANY_SLUG;
 
   const hasPermission = (permission: string) => {
     if (!user) return false;
@@ -118,6 +151,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isLoading,
         isAuthenticated: !!user,
         isSuperAdmin: user?.role?.name === 'Super Admin',
+        isPlatformOwner,
         isSalesOfficer: user?.role?.name === 'Sales Officer',
         isDriver: user?.role?.name === 'Driver',
         mustChangePassword,

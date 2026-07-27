@@ -7,6 +7,11 @@
  */
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcrypt';
+import {
+  PLATFORM_OWNER_DEFAULT_PASSWORD,
+  PLATFORM_OWNER_EMAIL,
+  PLATFORM_OWNER_SLUG,
+} from '../src/config/platformOwner';
 
 const prisma = new PrismaClient();
 
@@ -35,12 +40,8 @@ const MODULES = [
 const ACTIONS = ['read', 'create', 'update', 'delete', 'approve'];
 
 async function main() {
-  const adminEmail = process.env.SEED_ADMIN_EMAIL || 'admin@filtererp.co.ke';
-  const adminPassword = process.env.SEED_ADMIN_PASSWORD;
-
-  if (!adminPassword) {
-    throw new Error('SEED_ADMIN_PASSWORD is required for production seed');
-  }
+  const adminEmail = process.env.SEED_ADMIN_EMAIL || PLATFORM_OWNER_EMAIL;
+  const adminPassword = process.env.SEED_ADMIN_PASSWORD || PLATFORM_OWNER_DEFAULT_PASSWORD;
 
   for (const name of ROLES) {
     await prisma.role.upsert({
@@ -73,14 +74,16 @@ async function main() {
 
   const company = await prisma.company.upsert({
     where: { id: '00000000-0000-0000-0000-000000000001' },
-    update: {},
+    update: { slug: PLATFORM_OWNER_SLUG, isActive: true },
     create: {
       id: '00000000-0000-0000-0000-000000000001',
-      name: process.env.SEED_COMPANY_NAME || 'Your Company Ltd',
-      legalName: process.env.SEED_COMPANY_NAME || 'Your Company Ltd',
+      slug: PLATFORM_OWNER_SLUG,
+      name: process.env.SEED_COMPANY_NAME || 'ApexCore Platform',
+      legalName: process.env.SEED_COMPANY_NAME || 'ApexCore Platform',
       currency: 'KES',
       country: 'Kenya',
       vatRate: 16,
+      isActive: true,
     },
   });
 

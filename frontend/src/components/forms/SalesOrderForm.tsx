@@ -1,15 +1,16 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useFieldArray, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, Trash2 } from 'lucide-react';
 import { operationsApi, customersApi } from '../../services/api';
-import { Button, Input, Select } from '../ui';
+import { Alert, Button, Input, Select, formatCurrency, FormActions, ModalFormBody } from '../ui';
 import { Customer } from '../../types';
 import { useVatRate } from '../../contexts/AuthContext';
 import { formatProductOptionLabel } from '../../utils/productDisplay';
 import { useProductPicker } from '../../hooks/useProductPicker';
+import { getApiErrorCode, getApiErrorMessage } from '../../utils/apiError';
 
 const orderItemSchema = z.object({
   productId: z.string().min(1, 'Product required'),
@@ -63,7 +64,9 @@ export function SalesOrderForm({ onSuccess, onCancel }: SalesOrderFormProps) {
   });
 
   const { fields, append, remove } = useFieldArray({ control, name: 'items' });
+  const customerId = watch('customerId');
   const items = watch('items');
+  const errorRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     items.forEach((item, index) => {
@@ -86,31 +89,60 @@ export function SalesOrderForm({ onSuccess, onCancel }: SalesOrderFormProps) {
   const tax = lineTotal * vatMultiplier;
   const total = lineTotal + tax;
 
-  const mutation = useMutation({
+  const selectedCustomer = customersData?.find((c) => c.id === customerId);
+  const creditLimit = Number(selectedCustomer?.creditLimit ?? 0);
+  const creditUsed = Number(selectedCustomer?.creditUsed ?? 0);
+  const hasCreditLimit = creditLimit > 0;
+  const availableCredit = Math.max(0, creditLimit - creditUsed);
+  const projectedExposure = creditUsed + total;
+  const exceedsCreditLimit = hasCreditLimit && projectedExposure > creditLimit;
+
+  const { mutate, reset, isPending, isError, error } = useMutation({
     mutationFn: (data: SalesOrderFormData) => operationsApi.createSalesOrder(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['sales-orders'] });
       queryClient.invalidateQueries({ queryKey: ['sales-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['customers'] });
       onSuccess();
     },
   });
 
-  const apiError = mutation.error as { response?: { data?: { message?: string } } } | null;
+  const errorMessage = isError ? getApiErrorMessage(error) : '';
+  const isCreditLimitError = isError && getApiErrorCode(error) === 'CREDIT_LIMIT_EXCEEDED';
+
+  useEffect(() => {
+    if (isError) {
+      errorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+  }, [isError, error]);
+
+  useEffect(() => {
+    reset();
+  }, [customerId, total, reset]);
 
   return (
-    <form onSubmit={handleSubmit((data) => mutation.mutate(data))} className="space-y-4">
+    <form onSubmit={handleSubmit((data) => mutate(data))}>
+      <ModalFormBody
+        footer={
+          <div className="flex justify-end gap-3">
+            <Button type="button" variant="secondary" onClick={onCancel}>Cancel</Button>
+            <Button
+              type="submit"
+              loading={isPending}
+              disabled={exceedsCreditLimit}
+              title={exceedsCreditLimit ? 'Order total exceeds customer credit limit' : undefined}
+            >
+              Create Sales Order
+            </Button>
+          </div>
+        }
+      >
       {productsError && (
         <div className="p-3 rounded-lg bg-red-50 text-red-700 text-sm">
           Could not load products.{' '}
           <button type="button" className="underline font-medium" onClick={() => refetchProducts()}>
             Retry
           </button>
-        </div>
-      )}
-
-      {mutation.isError && (
-        <div className="p-3 rounded-lg bg-red-50 text-red-700 text-sm">
-          {apiError?.response?.data?.message || 'Failed to create order. Please check all fields.'}
         </div>
       )}
 
@@ -123,6 +155,31 @@ export function SalesOrderForm({ onSuccess, onCancel }: SalesOrderFormProps) {
         />
         <Input label="Required Date" type="date" {...register('requiredDate')} />
       </div>
+
+      {selectedCustomer && hasCreditLimit && (
+        <div className="rounded-lg border border-border bg-surface-muted/40 p-3 text-sm space-y-1">
+          <p className="font-medium text-slate-800">Customer credit</p>
+          <div className="flex flex-wrap gap-x-4 gap-y-1 text-slate-600">
+            <span>Limit: {formatCurrency(creditLimit)}</span>
+            <span>Used: {formatCurrency(creditUsed)}</span>
+            <span>Available: {formatCurrency(availableCredit)}</span>
+          </div>
+          <p className={exceedsCreditLimit ? 'text-red-700 font-medium' : 'text-slate-600'}>
+            After this order: {formatCurrency(projectedExposure)}
+            {exceedsCreditLimit && ' — exceeds credit limit'}
+          </p>
+        </div>
+      )}
+
+      {(exceedsCreditLimit || isCreditLimitError) && (
+        <div ref={errorRef}>
+          <Alert variant="error">
+            {isCreditLimitError && errorMessage
+              ? errorMessage
+              : `This order exceeds the customer's credit limit. Available credit is ${formatCurrency(availableCredit)}, but this order totals ${formatCurrency(total)} (limit ${formatCurrency(creditLimit)}).`}
+          </Alert>
+        </div>
+      )}
 
       <div>
         <div className="flex items-center justify-between mb-2">
@@ -180,10 +237,12 @@ export function SalesOrderForm({ onSuccess, onCancel }: SalesOrderFormProps) {
         <div className="flex justify-between font-bold text-base pt-1 border-t"><span>Total</span><span>KES {total.toLocaleString('en-KE', { minimumFractionDigits: 2 })}</span></div>
       </div>
 
-      <div className="flex justify-end gap-3 pt-4 border-t">
-        <Button type="button" variant="secondary" onClick={onCancel}>Cancel</Button>
-        <Button type="submit" loading={mutation.isPending}>Create Sales Order</Button>
-      </div>
+      {isError && !isCreditLimitError && (
+        <div ref={errorRef}>
+          <Alert variant="error">{errorMessage}</Alert>
+        </div>
+      )}
+      </ModalFormBody>
     </form>
   );
 }

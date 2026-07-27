@@ -1,51 +1,90 @@
-import { useEffect, useMemo } from 'react';
-import { useFieldArray, useForm } from 'react-hook-form';
+import { useMemo, useState } from 'react';
+import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Container, Trash2 } from 'lucide-react';
 import { deliveryApi, operationsApi } from '../../services/api';
-import { Button, Input, Select } from '../ui';
+import { Alert, Button, Input, Select, formatCurrency } from '../ui';
 import { SalesOrder, Vehicle, vehicleTypeLabel } from '../../types';
 import { formatProductOptionLabel } from '../../utils/productDisplay';
+import { getApiErrorMessage } from '../../utils/apiError';
 
-const deliveryItemSchema = z.object({
-  productId: z.string().min(1, 'Product is required'),
-  quantity: z.coerce.number().int().min(1),
-});
-
-const deliverySchema = z.object({
-  salesOrderId: z.string().min(1, 'Sales order is required'),
+const tripSchema = z.object({
   vehicleId: z.string().optional(),
   driverId: z.string().optional(),
   scheduledDate: z.string().optional(),
   notes: z.string().optional(),
-  items: z.array(deliveryItemSchema).min(1, 'Add at least one item'),
 });
 
-type DeliveryFormData = z.infer<typeof deliverySchema>;
+type TripFormData = z.infer<typeof tripSchema>;
+
+type TripOrder = {
+  salesOrderId: string;
+  orderNumber: string;
+  customerName: string;
+  items: { productId: string; quantity: number; label: string; remaining: number }[];
+};
 
 interface DeliveryFormProps {
   onSuccess: () => void;
   onCancel: () => void;
 }
 
+function buildOrderItems(order: SalesOrder): TripOrder['items'] {
+  return (order.items || [])
+    .map((item) => {
+      const remaining = item.quantity - (item.deliveredQty || 0);
+      if (remaining <= 0) return null;
+      return {
+        productId: item.productId,
+        quantity: remaining,
+        remaining,
+        label: item.product ? formatProductOptionLabel(item.product) : item.productId,
+      };
+    })
+    .filter((item): item is TripOrder['items'][number] => item !== null);
+}
+
+function orderToTripOrder(order: SalesOrder): TripOrder | null {
+  const items = buildOrderItems(order);
+  if (items.length === 0) return null;
+  return {
+    salesOrderId: order.id,
+    orderNumber: order.orderNumber,
+    customerName: order.customer.name,
+    items,
+  };
+}
+
+function formatVehicleOption(v: Vehicle) {
+  const hired = v.isHired ? ' · Hired' : '';
+  const detail = v.make ? ` (${v.make}${v.model ? ` ${v.model}` : ''})` : '';
+  return `${vehicleTypeLabel(v.type)} · ${v.registration}${detail}${hired}`;
+}
+
 export function DeliveryForm({ onSuccess, onCancel }: DeliveryFormProps) {
   const queryClient = useQueryClient();
+  const [tripOrders, setTripOrders] = useState<TripOrder[]>([]);
+  const [orderSearch, setOrderSearch] = useState('');
+  const [showHiredLorryForm, setShowHiredLorryForm] = useState(false);
+  const [hiredRegistration, setHiredRegistration] = useState('');
+  const [hiredCarrier, setHiredCarrier] = useState('');
 
-  const { data: salesOrdersData } = useQuery({
+  const { data: salesOrdersData, isLoading: ordersLoading } = useQuery({
     queryKey: ['sales-orders-deliverable'],
     queryFn: async () => {
       const [ready, partial] = await Promise.all([
         operationsApi.salesOrders({ limit: 100, status: 'READY' }).then((r) => r.data.data as SalesOrder[]),
         operationsApi.salesOrders({ limit: 100, status: 'PARTIALLY_DELIVERED' }).then((r) => r.data.data as SalesOrder[]),
       ]);
-      return [...ready, ...partial];
+      return [...ready, ...partial].filter((order) => buildOrderItems(order).length > 0);
     },
   });
 
   const { data: vehiclesData } = useQuery({
     queryKey: ['vehicles'],
-    queryFn: () => deliveryApi.vehicles().then((r) => r.data.data as Vehicle[]),
+    queryFn: () => deliveryApi.vehicles({ limit: 100 }).then((r) => r.data.data as Vehicle[]),
   });
 
   const { data: driversData } = useQuery({
@@ -56,20 +95,26 @@ export function DeliveryForm({ onSuccess, onCancel }: DeliveryFormProps) {
       ),
   });
 
-  const salesOrderOptions = [
-    { value: '', label: 'Select sales order...' },
-    ...(salesOrdersData || []).map((o) => ({
-      value: o.id,
-      label: `${o.orderNumber} - ${o.customer.name} (${o.status.replace(/_/g, ' ')})`,
-    })),
-  ];
+  const selectedOrderIds = useMemo(() => new Set(tripOrders.map((o) => o.salesOrderId)), [tripOrders]);
+
+  const filteredReadyOrders = useMemo(() => {
+    const q = orderSearch.trim().toLowerCase();
+    if (!q) return salesOrdersData || [];
+    return (salesOrdersData || []).filter(
+      (order) =>
+        order.orderNumber.toLowerCase().includes(q) ||
+        order.customer.name.toLowerCase().includes(q) ||
+        order.customer.code?.toLowerCase().includes(q)
+    );
+  }, [salesOrdersData, orderSearch]);
+
+  const companyVehicles = (vehiclesData || []).filter((v) => !v.isHired);
+  const hiredVehicles = (vehiclesData || []).filter((v) => v.isHired);
 
   const vehicleOptions = [
-    { value: '', label: 'Unassigned — assign motorcycle, truck, or lorry later' },
-    ...(vehiclesData || []).map((v) => ({
-      value: v.id,
-      label: `${vehicleTypeLabel(v.type)} · ${v.registration}${v.make ? ` (${v.make}${v.model ? ` ${v.model}` : ''})` : ''}`,
-    })),
+    { value: '', label: 'Unassigned — assign vehicle later' },
+    ...companyVehicles.map((v) => ({ value: v.id, label: formatVehicleOption(v) })),
+    ...hiredVehicles.map((v) => ({ value: v.id, label: formatVehicleOption(v) })),
   ];
 
   const driverOptions = [
@@ -80,46 +125,94 @@ export function DeliveryForm({ onSuccess, onCancel }: DeliveryFormProps) {
     })),
   ];
 
-  const { register, control, handleSubmit, watch, formState: { errors } } = useForm<DeliveryFormData>({
-    resolver: zodResolver(deliverySchema),
+  const { register, handleSubmit, setValue, watch, formState: { errors } } = useForm<TripFormData>({
+    resolver: zodResolver(tripSchema),
     defaultValues: {
-      salesOrderId: '',
       vehicleId: '',
       driverId: '',
-      items: [{ productId: '', quantity: 1 }],
     },
   });
 
-  const { fields, replace } = useFieldArray({ control, name: 'items' });
-  const salesOrderId = watch('salesOrderId');
+  const selectedVehicleId = watch('vehicleId');
 
-  const selectedOrder = useMemo(
-    () => salesOrdersData?.find((o) => o.id === salesOrderId),
-    [salesOrderId, salesOrdersData]
-  );
-
-  useEffect(() => {
-    if (selectedOrder?.items?.length) {
-      replace(
-        selectedOrder.items.map((item) => ({
-          productId: item.productId,
-          quantity: Math.max(1, item.quantity - (item.deliveredQty || 0)),
-        }))
-      );
+  const toggleOrder = (order: SalesOrder, checked: boolean) => {
+    if (checked) {
+      const tripOrder = orderToTripOrder(order);
+      if (!tripOrder) return;
+      setTripOrders((prev) => [...prev.filter((o) => o.salesOrderId !== order.id), tripOrder]);
+      return;
     }
-  }, [selectedOrder, replace]);
+    setTripOrders((prev) => prev.filter((o) => o.salesOrderId !== order.id));
+  };
+
+  const selectAllVisible = () => {
+    const next = [...tripOrders];
+    const ids = new Set(next.map((o) => o.salesOrderId));
+    for (const order of filteredReadyOrders) {
+      if (ids.has(order.id)) continue;
+      const tripOrder = orderToTripOrder(order);
+      if (tripOrder) next.push(tripOrder);
+    }
+    setTripOrders(next);
+  };
+
+  const clearSelection = () => setTripOrders([]);
+
+  const removeOrder = (salesOrderId: string) => {
+    setTripOrders((prev) => prev.filter((o) => o.salesOrderId !== salesOrderId));
+  };
+
+  const updateItemQty = (salesOrderId: string, productId: string, quantity: number) => {
+    setTripOrders((prev) =>
+      prev.map((order) => {
+        if (order.salesOrderId !== salesOrderId) return order;
+        return {
+          ...order,
+          items: order.items.map((item) =>
+            item.productId === productId
+              ? { ...item, quantity: Math.min(Math.max(1, quantity), item.remaining) }
+              : item
+          ),
+        };
+      })
+    );
+  };
+
+  const addHiredLorryMutation = useMutation({
+    mutationFn: () =>
+      deliveryApi.createVehicle({
+        registration: hiredRegistration.trim(),
+        type: 'LORRY',
+        make: hiredCarrier.trim() || 'Hired carrier',
+        isHired: true,
+      }),
+    onSuccess: (res) => {
+      queryClient.invalidateQueries({ queryKey: ['vehicles'] });
+      queryClient.invalidateQueries({ queryKey: ['delivery-stats'] });
+      setValue('vehicleId', res.data.data.id);
+      setShowHiredLorryForm(false);
+      setHiredRegistration('');
+      setHiredCarrier('');
+    },
+  });
 
   const mutation = useMutation({
-    mutationFn: (data: DeliveryFormData) => {
+    mutationFn: (data: TripFormData) => {
       const payload = {
-        ...data,
         vehicleId: data.vehicleId || undefined,
         driverId: data.driverId || undefined,
+        scheduledDate: data.scheduledDate || undefined,
+        notes: data.notes || undefined,
+        orders: tripOrders.map((order) => ({
+          salesOrderId: order.salesOrderId,
+          items: order.items.map(({ productId, quantity }) => ({ productId, quantity })),
+        })),
       };
       return deliveryApi.create(payload);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['deliveries'] });
+      queryClient.invalidateQueries({ queryKey: ['delivery-trips'] });
       queryClient.invalidateQueries({ queryKey: ['delivery-stats'] });
       queryClient.invalidateQueries({ queryKey: ['sales-orders'] });
       queryClient.invalidateQueries({ queryKey: ['sales-orders-deliverable'] });
@@ -128,76 +221,198 @@ export function DeliveryForm({ onSuccess, onCancel }: DeliveryFormProps) {
     },
   });
 
+  const canSubmit = tripOrders.length > 0;
+  const allVisibleSelected =
+    filteredReadyOrders.length > 0 &&
+    filteredReadyOrders.every((order) => selectedOrderIds.has(order.id));
+
   return (
-    <form onSubmit={handleSubmit((data) => mutation.mutate(data))} className="space-y-4">
-      {mutation.isError && (
-        <div className="p-3 rounded-lg bg-red-50 text-red-700 text-sm">
-          Failed to create delivery. Check quantities against remaining order balance.
-        </div>
-      )}
+    <form
+      onSubmit={handleSubmit((data) => {
+        if (!canSubmit) return;
+        mutation.mutate(data);
+      })}
+      className="space-y-4"
+    >
+      {mutation.isError && <Alert variant="error">{getApiErrorMessage(mutation.error)}</Alert>}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <Select
-          label="Sales Order *"
-          options={salesOrderOptions}
-          {...register('salesOrderId')}
-          error={errors.salesOrderId?.message}
-        />
-        <Select label="Vehicle" options={vehicleOptions} {...register('vehicleId')} />
+        <div className="space-y-2">
+          <Select label="Vehicle" options={vehicleOptions} {...register('vehicleId')} />
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            onClick={() => setShowHiredLorryForm((v) => !v)}
+          >
+            <Container className="h-4 w-4 mr-1.5" />
+            {showHiredLorryForm ? 'Cancel hired lorry' : 'Add hired lorry'}
+          </Button>
+          {showHiredLorryForm && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50/60 p-3 space-y-2">
+              <p className="text-xs text-amber-900">
+                Long-distance runs often use external lorries. Add the plate number for this trip — it will appear in your vehicle list.
+              </p>
+              <Input
+                label="Lorry registration *"
+                placeholder="e.g. KCA 456B"
+                value={hiredRegistration}
+                onChange={(e) => setHiredRegistration(e.target.value)}
+              />
+              <Input
+                label="Carrier / owner (optional)"
+                placeholder="e.g. TransEast Logistics"
+                value={hiredCarrier}
+                onChange={(e) => setHiredCarrier(e.target.value)}
+              />
+              {addHiredLorryMutation.isError && (
+                <Alert variant="error">{getApiErrorMessage(addHiredLorryMutation.error)}</Alert>
+              )}
+              <Button
+                type="button"
+                size="sm"
+                loading={addHiredLorryMutation.isPending}
+                disabled={!hiredRegistration.trim()}
+                onClick={() => addHiredLorryMutation.mutate()}
+              >
+                Save & select lorry
+              </Button>
+            </div>
+          )}
+          {selectedVehicleId && hiredVehicles.some((v) => v.id === selectedVehicleId) && (
+            <p className="text-xs text-amber-800">Selected vehicle is marked as a hired lorry.</p>
+          )}
+        </div>
         <Select label="Driver" options={driverOptions} {...register('driverId')} />
         <Input label="Scheduled Date" type="date" {...register('scheduledDate')} />
       </div>
 
-      <div>
-        <label className="text-sm font-medium text-gray-700 mb-2 block">Delivery Items *</label>
-        {errors.items?.message && (
-          <p className="text-sm text-red-600 mb-2">{errors.items.message}</p>
-        )}
-
-        <div className="space-y-3">
-          {fields.map((field, index) => {
-            const orderItem = selectedOrder?.items.find(
-              (item) => item.productId === watch(`items.${index}.productId`)
-            );
-            const remaining = orderItem
-              ? orderItem.quantity - (orderItem.deliveredQty || 0)
-              : null;
-            const productLabel = orderItem?.product
-              ? formatProductOptionLabel(orderItem.product)
-              : 'Product';
-
-            return (
-              <div key={field.id} className="grid grid-cols-2 gap-4 p-3 bg-gray-50 rounded-lg">
-                <input type="hidden" {...register(`items.${index}.productId`)} />
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">Product</label>
-                  <p className="text-sm font-medium">{productLabel}</p>
-                  {remaining !== null && (
-                    <p className="text-xs text-slate-500 mt-1">Remaining: {remaining}</p>
-                  )}
-                </div>
-                <Input
-                  label={index === 0 ? 'Quantity' : undefined}
-                  type="number"
-                  min={1}
-                  max={remaining ?? undefined}
-                  {...register(`items.${index}.quantity`)}
-                />
-              </div>
-            );
-          })}
+      <div className="rounded-lg border border-border p-4 space-y-3">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+          <div>
+            <p className="text-sm font-medium text-slate-800">Ready orders — tick to include on this trip</p>
+            <p className="text-xs text-slate-500 mt-1">
+              Select one or more orders. One motorcycle, truck, or lorry can deliver all checked orders in a single run.
+            </p>
+          </div>
+          <div className="flex gap-2 shrink-0">
+            <Button type="button" variant="secondary" size="sm" onClick={selectAllVisible} disabled={allVisibleSelected}>
+              Select all
+            </Button>
+            <Button type="button" variant="ghost" size="sm" onClick={clearSelection} disabled={tripOrders.length === 0}>
+              Clear
+            </Button>
+          </div>
         </div>
+
+        <Input
+          placeholder="Search ready orders…"
+          value={orderSearch}
+          onChange={(e) => setOrderSearch(e.target.value)}
+        />
+
+        <div className="max-h-56 overflow-y-auto rounded-lg border border-slate-200 divide-y divide-slate-100">
+          {ordersLoading ? (
+            <p className="p-4 text-sm text-slate-500">Loading ready orders…</p>
+          ) : filteredReadyOrders.length === 0 ? (
+            <p className="p-4 text-sm text-slate-500">No ready orders available for delivery.</p>
+          ) : (
+            filteredReadyOrders.map((order) => {
+              const checked = selectedOrderIds.has(order.id);
+              const remainingLines = buildOrderItems(order).length;
+              const totalRemaining = (order.items || []).reduce(
+                (sum, item) => sum + Math.max(0, item.quantity - (item.deliveredQty || 0)),
+                0
+              );
+              const totalOrdered = (order.items || []).reduce((sum, item) => sum + item.quantity, 0);
+              const partial = totalRemaining < totalOrdered;
+              return (
+                <label
+                  key={order.id}
+                  className="flex items-start gap-3 p-3 hover:bg-slate-50 cursor-pointer"
+                >
+                  <input
+                    type="checkbox"
+                    className="mt-1 h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
+                    checked={checked}
+                    onChange={(e) => toggleOrder(order, e.target.checked)}
+                  />
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-slate-900">{order.orderNumber}</p>
+                    <p className="text-xs text-slate-500">
+                      {order.customer.name} · {order.status.replace(/_/g, ' ')} · {remainingLines} line
+                      {remainingLines === 1 ? '' : 's'} · {formatCurrency(Number(order.totalAmount))}
+                    </p>
+                    {partial && (
+                      <p className="text-xs text-amber-700 mt-0.5">
+                        Partial delivery — {totalRemaining} of {totalOrdered} units still to deliver
+                      </p>
+                    )}
+                  </div>
+                </label>
+              );
+            })
+          )}
+        </div>
+
+        <p className="text-sm text-slate-600">
+          {tripOrders.length === 0
+            ? 'No orders selected yet — tick the checkboxes above.'
+            : `${tripOrders.length} order${tripOrders.length === 1 ? '' : 's'} selected for this trip.`}
+        </p>
+
+        {tripOrders.length > 0 && (
+          <div className="space-y-3">
+            {tripOrders.map((order) => (
+              <div key={order.salesOrderId} className="rounded-lg bg-slate-50 p-3 space-y-2">
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <p className="font-medium text-slate-900">{order.orderNumber}</p>
+                    <p className="text-xs text-slate-500">{order.customerName}</p>
+                  </div>
+                  <Button type="button" variant="ghost" size="sm" onClick={() => removeOrder(order.salesOrderId)}>
+                    <Trash2 className="h-4 w-4 text-red-500" />
+                  </Button>
+                </div>
+                <div className="space-y-2">
+                  {order.items.map((item) => (
+                    <div key={item.productId} className="grid grid-cols-1 sm:grid-cols-2 gap-2 items-end">
+                      <div>
+                        <p className="text-sm">{item.label}</p>
+                        <p className="text-xs text-slate-500">Remaining: {item.remaining}</p>
+                      </div>
+                      <Input
+                        label="Qty"
+                        type="number"
+                        min={1}
+                        max={item.remaining}
+                        value={item.quantity}
+                        onChange={(e) =>
+                          updateItemQty(order.salesOrderId, item.productId, Number(e.target.value))
+                        }
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
-      <Input label="Notes" {...register('notes')} />
+      <Input label="Notes" {...register('notes')} error={errors.notes?.message} />
 
       <p className="text-xs text-slate-500">
-        A sales invoice is auto-created for the quantities on this delivery note.
+        {tripOrders.length > 1
+          ? 'A delivery trip is created with one stop per checked order. A sales invoice is auto-created for each stop.'
+          : 'A sales invoice is auto-created for the quantities on this delivery note.'}
       </p>
 
       <div className="flex justify-end gap-3 pt-4 border-t">
         <Button type="button" variant="secondary" onClick={onCancel}>Cancel</Button>
-        <Button type="submit" loading={mutation.isPending}>Create Delivery</Button>
+        <Button type="submit" loading={mutation.isPending} disabled={!canSubmit}>
+          {tripOrders.length > 1 ? `Create Trip (${tripOrders.length} orders)` : 'Create Delivery'}
+        </Button>
       </div>
     </form>
   );

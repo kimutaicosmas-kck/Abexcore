@@ -55,6 +55,7 @@ import { PaymentForm } from '../components/forms/PaymentForm';
 import { JournalEntryForm } from '../components/forms/JournalEntryForm';
 import { useAuth } from '../contexts/AuthContext';
 import { downloadFile } from '../utils/download';
+import { getApiErrorMessage } from '../utils/apiError';
 import { FinanceStats, FinanceOverview, Invoice, Payment } from '../types';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, Title, Tooltip, Legend, Filler);
@@ -63,7 +64,7 @@ const chartDefaults = {
   responsive: true,
   maintainAspectRatio: false,
   plugins: {
-    legend: { labels: { usePointStyle: true, boxWidth: 8, font: { family: 'Inter', size: 11 } } },
+    legend: { labels: { usePointStyle: true, boxWidth: 8, font: { family: 'Plus Jakarta Sans', size: 11 } } },
   },
 };
 
@@ -206,11 +207,11 @@ export function FinancePage() {
   });
 
   const importStatementMutation = useMutation({
-    mutationFn: (csvText: string) => {
+    mutationFn: (payload: { csvText?: string; pdfBase64?: string }) => {
       const today = new Date();
       const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
       return financeApi.importBankStatement({
-        csvText,
+        ...payload,
         periodStart: monthStart.toISOString().slice(0, 10),
         periodEnd: today.toISOString().slice(0, 10),
       });
@@ -397,7 +398,7 @@ export function FinancePage() {
           {
             label: 'Net cash flow',
             data: overview.cashFlow.trend.map((d) => d.net),
-            borderColor: '#6366f1',
+            borderColor: '#2563eb',
             backgroundColor: 'rgba(99, 102, 241, 0.1)',
             fill: true,
             tension: 0.35,
@@ -457,7 +458,17 @@ export function FinancePage() {
   ) : undefined;
 
   return (
-    <div className="space-y-1">
+    <div className="space-y-4">
+      {stats && (
+        <StatGrid>
+          <StatCard title="Monthly Revenue" value={formatCurrency(stats.monthlyRevenue)} icon={<TrendingUp className="h-5 w-5 text-white" />} color="from-emerald-500 to-teal-600" />
+          <StatCard title="Receivable" value={formatCurrency(stats.accountsReceivable)} icon={<Wallet className="h-5 w-5 text-white" />} color="from-primary-500 to-primary-700" />
+          <StatCard title="Payable" value={formatCurrency(stats.accountsPayable)} icon={<TrendingDown className="h-5 w-5 text-white" />} color="from-red-500 to-rose-600" />
+          <StatCard title="Overdue" value={stats.overdueInvoices} icon={<AlertCircle className="h-5 w-5 text-white" />} color="from-amber-500 to-orange-600" />
+          <StatCard title="Total Sales" value={formatCurrency(stats.totalSales)} icon={<Receipt className="h-5 w-5 text-white" />} color="from-primary-600 to-primary-800" />
+        </StatGrid>
+      )}
+
       <PageHeader
         action={
           stats && stats.overdueInvoices > 0 ? (
@@ -468,17 +479,6 @@ export function FinancePage() {
           ) : undefined
         }
       />
-
-      {stats && (
-        <StatGrid>
-          <StatCard title="Monthly Revenue" value={formatCurrency(stats.monthlyRevenue)} icon={<TrendingUp className="h-5 w-5 text-white" />} color="from-emerald-500 to-teal-600" />
-          <StatCard title="Receivable" value={formatCurrency(stats.accountsReceivable)} icon={<Wallet className="h-5 w-5 text-white" />} color="from-primary-500 to-indigo-600" />
-          <StatCard title="Payable" value={formatCurrency(stats.accountsPayable)} icon={<TrendingDown className="h-5 w-5 text-white" />} color="from-red-500 to-rose-600" />
-          <StatCard title="Overdue" value={stats.overdueInvoices} icon={<AlertCircle className="h-5 w-5 text-white" />} color="from-amber-500 to-orange-600" />
-          <StatCard title="Total Sales" value={formatCurrency(stats.totalSales)} icon={<Receipt className="h-5 w-5 text-white" />} color="from-violet-500 to-purple-600" />
-          <StatCard title="Journal Entries" value={stats.journalEntries} icon={<BookOpen className="h-5 w-5 text-white" />} color="from-slate-600 to-slate-700" />
-        </StatGrid>
-      )}
 
       <PageToolbar
         tabs={tabs}
@@ -535,8 +535,8 @@ export function FinancePage() {
                       options={{
                         ...chartDefaults,
                         scales: {
-                          x: { grid: { display: false }, ticks: { maxTicksLimit: 10, font: { size: 10 } } },
-                          y: { beginAtZero: true, ticks: { font: { size: 10 } } },
+                          x: { grid: { display: false }, ticks: { maxTicksLimit: 10, font: { size: 10, family: 'Plus Jakarta Sans' } } },
+                          y: { beginAtZero: true, ticks: { font: { size: 10, family: 'Plus Jakarta Sans' } } },
                         },
                         plugins: { ...chartDefaults.plugins, legend: { position: 'top' } },
                       }}
@@ -549,7 +549,7 @@ export function FinancePage() {
                         ...chartDefaults,
                         scales: {
                           x: { display: false },
-                          y: { ticks: { font: { size: 10 } } },
+                          y: { ticks: { font: { size: 10, family: 'Plus Jakarta Sans' } } },
                         },
                         plugins: { ...chartDefaults.plugins, legend: { display: false } },
                       }}
@@ -583,9 +583,9 @@ export function FinancePage() {
                         <div key={b.key} className="rounded-xl border border-slate-100 bg-slate-50/80 p-3 min-w-0">
                           <div className={`h-1 w-full rounded-full ${b.color} mb-2`} style={{ opacity: Math.max(0.25, pct / 100) }} />
                           <p className="text-xs font-medium text-slate-700 line-clamp-2">{b.label}</p>
-                          <p className="text-[10px] text-slate-400 mb-1">{b.sub}</p>
+                          <p className="text-xs text-slate-400 mb-1">{b.sub}</p>
                           <p className="text-xs sm:text-sm font-bold text-slate-900 tabular-nums break-words">{formatCurrency(bucket.amount)}</p>
-                          <p className="text-[10px] text-slate-500">{bucket.count} invoice{bucket.count !== 1 ? 's' : ''}</p>
+                          <p className="text-xs text-slate-500">{bucket.count} invoice{bucket.count !== 1 ? 's' : ''}</p>
                         </div>
                       );
                     })}
@@ -598,8 +598,8 @@ export function FinancePage() {
                           indexAxis: 'y' as const,
                           ...chartDefaults,
                           scales: {
-                            x: { beginAtZero: true, ticks: { font: { size: 10 } } },
-                            y: { grid: { display: false }, ticks: { font: { size: 11 } } },
+                            x: { beginAtZero: true, ticks: { font: { size: 10, family: 'Plus Jakarta Sans' } } },
+                            y: { grid: { display: false }, ticks: { font: { size: 10, family: 'Plus Jakarta Sans' } } },
                           },
                           plugins: { ...chartDefaults.plugins, legend: { display: false } },
                         }}
@@ -716,6 +716,7 @@ export function FinancePage() {
               columns={invoiceColumns}
               data={(invoices?.data as Invoice[]) || []}
               loading={invLoading}
+              responsive
               onRowClick={(row) => openInvoiceDetail(row as unknown as Invoice)}
               embedded
             />
@@ -752,7 +753,7 @@ export function FinancePage() {
               />
             </div>
           ) : (
-            <Table columns={paymentColumns} data={payments?.data || []} loading={payLoading} embedded />
+            <Table columns={paymentColumns} data={payments?.data || []} loading={payLoading} responsive embedded />
           )}
           <div className="px-4 pb-4">
             <TablePagination pagination={payments?.pagination} page={payPage} onPageChange={setPayPage} label="payments" />
@@ -793,6 +794,7 @@ export function FinancePage() {
               ]}
               data={journalEntries?.data || []}
               loading={journalLoading}
+              responsive
               onRowClick={(row) => { setSelectedJournal(row); setJournalDetailOpen(true); }}
               embedded
             />
@@ -824,7 +826,7 @@ export function FinancePage() {
             </Card>
           ))}
           {!accounts?.length && (
-            <EmptyState title="No accounts" description="Run database seed to create the chart of accounts." />
+            <EmptyState title="No accounts" description="Chart of accounts is missing for this company. Contact your administrator or re-run tenant setup." />
           )}
         </div>
       )}
@@ -840,22 +842,48 @@ export function FinancePage() {
           </StatGrid>
           {canUpdate && (
             <div className="mb-4 p-4 bg-white rounded-xl border border-slate-200 space-y-3">
-              <p className="text-sm font-medium text-slate-700">Import bank statement (CSV: date, description, reference, amount)</p>
+              <p className="text-sm font-medium text-slate-700">
+                Import bank statement (CSV or PDF: date, description, reference, amount)
+              </p>
+              {(importStatementMutation.isError || autoMatchMutation.isError) && (
+                <Alert variant="error">
+                  {getApiErrorMessage(importStatementMutation.error || autoMatchMutation.error)}
+                </Alert>
+              )}
               <textarea
                 className="w-full min-h-[80px] text-sm border border-slate-200 rounded-lg p-2 font-mono"
                 placeholder="date,description,reference,amount&#10;2026-07-01,Deposit,REF001,1500"
                 id="bank-csv-import"
               />
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <label className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm cursor-pointer hover:bg-slate-50">
+                  <input
+                    type="file"
+                    accept=".pdf,application/pdf"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      const reader = new FileReader();
+                      reader.onload = () => {
+                        const base64 = (reader.result as string).split(',')[1];
+                        if (base64) importStatementMutation.mutate({ pdfBase64: base64 });
+                      };
+                      reader.readAsDataURL(file);
+                      e.target.value = '';
+                    }}
+                  />
+                  Import PDF
+                </label>
                 <Button
                   size="sm"
                   loading={importStatementMutation.isPending}
                   onClick={() => {
                     const el = document.getElementById('bank-csv-import') as HTMLTextAreaElement | null;
-                    if (el?.value.trim()) importStatementMutation.mutate(el.value.trim());
+                    if (el?.value.trim()) importStatementMutation.mutate({ csvText: el.value.trim() });
                   }}
                 >
-                  Import statement
+                  Import CSV
                 </Button>
                 {reconciliation.latestStatement?.id && (
                   <Button

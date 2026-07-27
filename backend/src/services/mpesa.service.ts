@@ -1,5 +1,6 @@
 import { config } from '../config';
 import { AppError } from '../middleware/errorHandler';
+import { resilientFetch } from '../utils/resilientFetch';
 
 /**
  * Safaricom Daraja M-Pesa STK Push integration.
@@ -37,9 +38,9 @@ export class MpesaService {
     const secret = process.env.MPESA_CONSUMER_SECRET!;
     const auth = Buffer.from(`${key}:${secret}`).toString('base64');
 
-    const res = await fetch(`${this.getBaseUrl()}/oauth/v1/generate?grant_type=client_credentials`, {
+    const res = await resilientFetch(`${this.getBaseUrl()}/oauth/v1/generate?grant_type=client_credentials`, {
       headers: { Authorization: `Basic ${auth}` },
-    });
+    }, { service: 'mpesa', timeoutMs: 10_000, retries: 2 });
 
     if (!res.ok) {
       throw new AppError('Failed to obtain M-Pesa OAuth token', 502);
@@ -82,7 +83,7 @@ export class MpesaService {
     const password = Buffer.from(`${shortcode}${passkey}${timestamp}`).toString('base64');
     const token = await this.getAccessToken();
 
-    const res = await fetch(`${this.getBaseUrl()}/mpesa/stkpush/v1/processrequest`, {
+    const res = await resilientFetch(`${this.getBaseUrl()}/mpesa/stkpush/v1/processrequest`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${token}`,
@@ -101,7 +102,7 @@ export class MpesaService {
         AccountReference: opts.accountReference.slice(0, 12),
         TransactionDesc: opts.description.slice(0, 13),
       }),
-    });
+    }, { service: 'mpesa', timeoutMs: 15_000, retries: 1 });
 
     const data = (await res.json()) as {
       CheckoutRequestID?: string;

@@ -17,6 +17,10 @@ function getTransporter() {
 }
 
 export class EmailService {
+  static isConfigured(): boolean {
+    return !!(config.smtp.user && config.smtp.pass);
+  }
+
   static async send(to: string, subject: string, html: string): Promise<boolean> {
     const transport = getTransporter();
     if (!transport) {

@@ -52,7 +52,7 @@ router.get(
               ],
             },
             take: 5,
-            select: { id: true, sku: true, name: true, category: true },
+            select: { id: true, sku: true, name: true, category: { select: { name: true } } },
           })
         : Promise.resolve([]),
       canSales

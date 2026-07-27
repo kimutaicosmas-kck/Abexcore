@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { AppLayout } from './components/layout/AppLayout';
 import { LoginPage } from './pages/LoginPage';
+import { RegisterCompanyPage } from './pages/RegisterCompanyPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { UsersPage } from './pages/UsersPage';
 import { CustomersPage } from './pages/CustomersPage';
@@ -59,10 +60,21 @@ function PasswordChangeRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+function PlatformOwnerRoute({ children }: { children: React.ReactNode }) {
+  const { isAuthenticated, isLoading, isPlatformOwner, mustChangePassword } = useAuth();
+
+  if (isLoading) return <LoadingSpinner className="min-h-screen" size="lg" />;
+  if (!isAuthenticated) return <Navigate to="/login" replace />;
+  if (mustChangePassword) return <Navigate to="/change-password" replace />;
+  if (!isPlatformOwner) return <Navigate to="/" replace />;
+  return <>{children}</>;
+}
+
 function AppRoutes() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/register" element={<Navigate to="/admin/register-company" replace />} />
       <Route path="/change-password" element={<PasswordChangeRoute><ChangePasswordPage /></PasswordChangeRoute>} />
       <Route
         path="/"
@@ -90,6 +102,14 @@ function AppRoutes() {
         <Route path="maintenance" element={<PermissionRoute><MaintenancePage /></PermissionRoute>} />
         <Route path="reports" element={<PermissionRoute><ReportsPage /></PermissionRoute>} />
         <Route path="settings" element={<PermissionRoute><SettingsPage /></PermissionRoute>} />
+        <Route
+          path="admin/register-company"
+          element={
+            <PlatformOwnerRoute>
+              <RegisterCompanyPage />
+            </PlatformOwnerRoute>
+          }
+        />
       </Route>
       <Route path="*" element={<NotFoundPage />} />
     </Routes>

@@ -19,14 +19,20 @@ import {
   getStatusBadge,
   PageToolbar,
   ConfirmDialog,
+  PageQueryStatus,
 } from '../components/ui';
 import { Modal } from '../components/ui/Modal';
 import { DeliveryForm } from '../components/forms/DeliveryForm';
 import { VehicleForm } from '../components/forms/VehicleForm';
 import { useAuth } from '../contexts/AuthContext';
-import { DeliveryNote, DeliveryStats, Vehicle, VEHICLE_TYPE_OPTIONS, vehicleTypeLabel, VehicleType } from '../types';
+import { DeliveryNote, DeliveryStats, DeliveryTrip, Vehicle, VEHICLE_TYPE_OPTIONS, vehicleTypeLabel, VehicleType } from '../types';
+import { getApiErrorMessage } from '../utils/apiError';
 
 const tabs = ['Overview', 'Deliveries', 'Vehicles'];
+
+type DeliveryListRow =
+  | { kind: 'trip'; id: string; createdAt: string; trip: DeliveryTrip }
+  | { kind: 'note'; id: string; createdAt: string; note: DeliveryNote };
 
 const STATUS_OPTIONS = [
   { value: '', label: 'All statuses' },
@@ -40,9 +46,19 @@ const STATUS_OPTIONS = [
 
 const VEHICLE_TYPE_COLORS: Record<VehicleType, string> = {
   MOTORCYCLE: 'from-sky-500 to-cyan-600',
-  TRUCK: 'from-primary-500 to-indigo-600',
+  TRUCK: 'from-primary-500 to-primary-700',
   LORRY: 'from-amber-500 to-orange-600',
 };
+
+function deliveryRowTime(iso?: string): number {
+  if (!iso) return 0;
+  const t = new Date(iso).getTime();
+  return Number.isNaN(t) ? 0 : t;
+}
+
+function sortDeliveryRows(rows: DeliveryListRow[]): DeliveryListRow[] {
+  return [...rows].sort((a, b) => deliveryRowTime(b.createdAt) - deliveryRowTime(a.createdAt));
+}
 
 function vehicleTypeBadgeVariant(type: string): 'info' | 'success' | 'warning' {
   if (type === 'MOTORCYCLE') return 'info';
@@ -94,13 +110,26 @@ export function DeliveryPage() {
   const [deliveryModalOpen, setDeliveryModalOpen] = useState(false);
   const [vehicleModalOpen, setVehicleModalOpen] = useState(false);
   const [selected, setSelected] = useState<DeliveryNote | null>(null);
+  const [selectedTrip, setSelectedTrip] = useState<DeliveryTrip | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
   const [pendingStatusChange, setPendingStatusChange] = useState<{
     id: string;
+    kind: 'note' | 'trip';
     status: string;
     label: string;
     proofOfDelivery?: string;
   } | null>(null);
+  const [deliverConfirm, setDeliverConfirm] = useState<{
+    id: string;
+    kind: 'note' | 'trip';
+    label: string;
+    stops: {
+      deliveryNoteId: string;
+      title: string;
+      items: { productId: string; dispatchedQty: number }[];
+    }[];
+  } | null>(null);
+  const [actualQtys, setActualQtys] = useState<Record<string, number>>({});
 
   const canCreate = hasPermission('delivery:create') && !isDriver;
   const canUpdate = hasPermission('delivery:update');
@@ -114,7 +143,7 @@ export function DeliveryPage() {
     queryFn: () => deliveryApi.stats().then((r) => r.data.data as DeliveryStats),
   });
 
-  const { data: deliveries, isLoading } = useQuery({
+  const { data: deliveries, isLoading, isError: deliveriesError, error: deliveriesErr, refetch: refetchDeliveries } = useQuery({
     queryKey: ['deliveries', page, search, status],
     queryFn: () =>
       deliveryApi
@@ -123,7 +152,33 @@ export function DeliveryPage() {
     enabled: isDriver ? activeTab === 0 : activeTab === 0 || activeTab === 1,
   });
 
-  const { data: vehicles, isLoading: vehLoading } = useQuery({
+  const { data: trips, isLoading: tripsLoading, isError: tripsError, error: tripsErr, refetch: refetchTrips } = useQuery({
+    queryKey: ['delivery-trips', page, search, status],
+    queryFn: () =>
+      deliveryApi
+        .trips({ page, limit: 15, search: search || undefined, status: status || undefined })
+        .then((r) => r.data),
+    enabled: isDriver ? activeTab === 0 : activeTab === 0 || activeTab === 1,
+  });
+
+  const listRows: DeliveryListRow[] = sortDeliveryRows([
+    ...(((trips?.data as DeliveryTrip[]) || []).map((trip) => ({
+      kind: 'trip' as const,
+      id: trip.id,
+      createdAt: trip.createdAt || trip.stops[0]?.createdAt || '',
+      trip,
+    }))),
+    ...(((deliveries?.data as DeliveryNote[]) || [])
+      .filter((note) => !note.deliveryTripId)
+      .map((note) => ({
+        kind: 'note' as const,
+        id: note.id,
+        createdAt: note.createdAt || note.scheduledDate || '',
+        note,
+      }))),
+  ]);
+
+  const { data: vehicles, isLoading: vehLoading, isError: vehiclesError, error: vehiclesErr, refetch: refetchVehicles } = useQuery({
     queryKey: ['vehicles', vehPage, vehSearch, vehType],
     queryFn: () =>
       deliveryApi
@@ -133,69 +188,220 @@ export function DeliveryPage() {
   });
 
   const statusMutation = useMutation({
-    mutationFn: ({ id, status, proofOfDelivery }: { id: string; status: string; proofOfDelivery?: string }) =>
-      deliveryApi.updateStatus(id, { status, proofOfDelivery }),
+    mutationFn: ({
+      id,
+      kind,
+      status,
+      proofOfDelivery,
+      actualItems,
+      tripActualItems,
+    }: {
+      id: string;
+      kind: 'note' | 'trip';
+      status: string;
+      proofOfDelivery?: string;
+      actualItems?: { productId: string; quantity: number }[];
+      tripActualItems?: { deliveryNoteId: string; items: { productId: string; quantity: number }[] }[];
+    }) =>
+      kind === 'trip'
+        ? deliveryApi.updateTripStatus(id, { status, proofOfDelivery, actualItems: tripActualItems })
+        : deliveryApi.updateStatus(id, { status, proofOfDelivery, actualItems }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['deliveries'] });
+      queryClient.invalidateQueries({ queryKey: ['delivery-trips'] });
       queryClient.invalidateQueries({ queryKey: ['delivery-stats'] });
       queryClient.invalidateQueries({ queryKey: ['sales-orders'] });
       setDetailOpen(false);
       setSelected(null);
+      setSelectedTrip(null);
     },
   });
 
   const goToTab = (index: number) => setActiveTab(index);
 
-  const openDetail = (note: DeliveryNote) => {
-    setSelected(note);
+  const buildDeliverStops = (note?: DeliveryNote | null, trip?: DeliveryTrip | null) => {
+    if (note) {
+      return [
+        {
+          deliveryNoteId: note.id,
+          title: `${note.deliveryNo} · ${note.salesOrder?.orderNumber || 'Order'}`,
+          items: (note.items || []).map((item) => ({
+            productId: item.productId,
+            dispatchedQty: item.quantity,
+          })),
+        },
+      ];
+    }
+    if (trip) {
+      return trip.stops.map((stop) => ({
+        deliveryNoteId: stop.id,
+        title: `${stop.deliveryNo} · ${stop.salesOrder.orderNumber}`,
+        items: (stop.items || []).map((item) => ({
+          productId: item.productId,
+          dispatchedQty: item.quantity,
+        })),
+      }));
+    }
+    return [];
+  };
+
+  const openDeliverConfirm = (
+    id: string,
+    kind: 'note' | 'trip',
+    label: string,
+    note?: DeliveryNote | null,
+    trip?: DeliveryTrip | null
+  ) => {
+    const stops = buildDeliverStops(note, trip);
+    const initialQtys: Record<string, number> = {};
+    for (const stop of stops) {
+      for (const item of stop.items) {
+        initialQtys[`${stop.deliveryNoteId}:${item.productId}`] = item.dispatchedQty;
+      }
+    }
+    setActualQtys(initialQtys);
+    setDeliverConfirm({ id, kind, label, stops });
+  };
+
+  const submitDeliverConfirm = () => {
+    if (!deliverConfirm) return;
+    if (deliverConfirm.kind === 'trip') {
+      const tripActualItems = deliverConfirm.stops.map((stop) => ({
+        deliveryNoteId: stop.deliveryNoteId,
+        items: stop.items.map((item) => ({
+          productId: item.productId,
+          quantity: actualQtys[`${stop.deliveryNoteId}:${item.productId}`] ?? item.dispatchedQty,
+        })),
+      }));
+      statusMutation.mutate(
+        {
+          id: deliverConfirm.id,
+          kind: 'trip',
+          status: 'DELIVERED',
+          proofOfDelivery: 'Confirmed by driver',
+          tripActualItems,
+        },
+        { onSettled: () => setDeliverConfirm(null) }
+      );
+      return;
+    }
+
+    const stop = deliverConfirm.stops[0];
+    statusMutation.mutate(
+      {
+        id: deliverConfirm.id,
+        kind: 'note',
+        status: 'DELIVERED',
+        proofOfDelivery: 'Confirmed by driver',
+        actualItems: stop.items.map((item) => ({
+          productId: item.productId,
+          quantity: actualQtys[`${stop.deliveryNoteId}:${item.productId}`] ?? item.dispatchedQty,
+        })),
+      },
+      { onSettled: () => setDeliverConfirm(null) }
+    );
+  };
+
+  const requestStatusChange = (
+    change: { id: string; kind: 'note' | 'trip'; status: string; label: string; proofOfDelivery?: string },
+    note?: DeliveryNote | null,
+    trip?: DeliveryTrip | null
+  ) => {
+    if (change.status === 'DELIVERED') {
+      openDeliverConfirm(change.id, change.kind, change.label, note, trip);
+      return;
+    }
+    setPendingStatusChange(change);
+  };
+
+  const openDetail = (row: DeliveryListRow) => {
+    if (row.kind === 'trip') {
+      setSelectedTrip(row.trip);
+      setSelected(null);
+    } else {
+      setSelected(row.note);
+      setSelectedTrip(null);
+    }
     setDetailOpen(true);
   };
 
-  const recentDeliveries = showOverview ? ((deliveries?.data as DeliveryNote[]) || []).slice(0, 6) : [];
+  const recentDeliveries = showOverview ? listRows.slice(0, 6) : [];
   const activeDeliveries = showOverview
-    ? ((deliveries?.data as DeliveryNote[]) || []).filter((d) => ['PENDING', 'ASSIGNED', 'IN_TRANSIT'].includes(d.status)).slice(0, 5)
+    ? sortDeliveryRows(
+        listRows.filter((row) => {
+          const st = row.kind === 'trip' ? row.trip.status : row.note.status;
+          return ['PENDING', 'ASSIGNED', 'IN_TRANSIT'].includes(st);
+        })
+      ).slice(0, 5)
     : [];
 
   const deliveryColumns = [
-    { key: 'deliveryNo', label: 'Delivery #' },
+    {
+      key: 'deliveryNo',
+      label: 'Delivery #',
+      render: (_: unknown, row: Record<string, unknown>) => {
+        const listRow = row as unknown as DeliveryListRow;
+        if (listRow.kind === 'trip') return listRow.trip.tripNo;
+        return listRow.note.deliveryNo;
+      },
+    },
     {
       key: 'customer',
-      label: 'Customer',
-      render: (_: unknown, row: Record<string, unknown>) =>
-        (row.salesOrder as { customer: { name: string } })?.customer?.name || '-',
+      label: 'Customer / Orders',
+      render: (_: unknown, row: Record<string, unknown>) => {
+        const listRow = row as unknown as DeliveryListRow;
+        if (listRow.kind === 'trip') {
+          const labels = listRow.trip.stops.map(
+            (stop) => `${stop.salesOrder.orderNumber} (${stop.salesOrder.customer.name})`
+          );
+          return labels.join(' · ') || '-';
+        }
+        return listRow.note.salesOrder?.customer?.name || '-';
+      },
     },
     {
       key: 'order',
-      label: 'Sales Order',
-      render: (_: unknown, row: Record<string, unknown>) =>
-        (row.salesOrder as { orderNumber: string })?.orderNumber || '-',
+      label: 'Stops',
+      render: (_: unknown, row: Record<string, unknown>) => {
+        const listRow = row as unknown as DeliveryListRow;
+        if (listRow.kind === 'trip') return `${listRow.trip.stops.length} orders`;
+        return listRow.note.salesOrder?.orderNumber || '-';
+      },
     },
     {
       key: 'vehicle',
       label: 'Vehicle',
       render: (_: unknown, row: Record<string, unknown>) => {
-        const vehicle = row.vehicle as { registration: string; type?: string; make?: string; model?: string } | undefined;
+        const listRow = row as unknown as DeliveryListRow;
+        const vehicle = listRow.kind === 'trip' ? listRow.trip.vehicle : listRow.note.vehicle;
         return formatVehicleLabel(vehicle);
       },
     },
     {
       key: 'scheduledDate',
       label: 'Scheduled',
-      render: (val: unknown) => (val ? formatDate(val as string) : '-'),
+      render: (_: unknown, row: Record<string, unknown>) => {
+        const listRow = row as unknown as DeliveryListRow;
+        const date = listRow.kind === 'trip' ? listRow.trip.scheduledDate : listRow.note.scheduledDate;
+        return date ? formatDate(date) : '-';
+      },
     },
     {
       key: 'status',
       label: 'Status',
-      render: (val: unknown) => (
-        <Badge variant={getStatusBadge(val as string)}>{(val as string).replace(/_/g, ' ')}</Badge>
-      ),
+      render: (_: unknown, row: Record<string, unknown>) => {
+        const listRow = row as unknown as DeliveryListRow;
+        const st = listRow.kind === 'trip' ? listRow.trip.status : listRow.note.status;
+        return <Badge variant={getStatusBadge(st)}>{st.replace(/_/g, ' ')}</Badge>;
+      },
     },
     {
       key: 'actions',
       label: 'Actions',
       render: (_: unknown, row: Record<string, unknown>) => {
         if (!canUpdate) return null;
-        const st = row.status as string;
+        const listRow = row as unknown as DeliveryListRow;
+        const st = listRow.kind === 'trip' ? listRow.trip.status : listRow.note.status;
         const actions = getDeliveryActions(st, isDriver);
         if (!actions.length) return null;
         const primary = actions[actions.length - 1];
@@ -205,12 +411,17 @@ export function DeliveryPage() {
             loading={statusMutation.isPending}
             onClick={(e) => {
               e.stopPropagation();
-              setPendingStatusChange({
-                id: row.id as string,
-                status: primary.status,
-                label: primary.label,
-                proofOfDelivery: primary.status === 'DELIVERED' ? 'Confirmed by driver' : undefined,
-              });
+              requestStatusChange(
+                {
+                  id: listRow.id,
+                  kind: listRow.kind,
+                  status: primary.status,
+                  label: primary.label,
+                  proofOfDelivery: primary.status === 'DELIVERED' ? 'Confirmed by driver' : undefined,
+                },
+                listRow.kind === 'note' ? listRow.note : null,
+                listRow.kind === 'trip' ? listRow.trip : null
+              );
             }}
           >
             {primary.label}
@@ -229,7 +440,13 @@ export function DeliveryPage() {
       ),
     },
     { key: 'registration', label: 'Registration' },
-    { key: 'make', label: 'Make' },
+    {
+      key: 'isHired',
+      label: 'Ownership',
+      render: (val: unknown) =>
+        val ? <Badge variant="warning">Hired</Badge> : <Badge variant="success">Company</Badge>,
+    },
+    { key: 'make', label: 'Make / Carrier' },
     { key: 'model', label: 'Model' },
     { key: 'capacity', label: 'Capacity' },
   ];
@@ -239,7 +456,7 @@ export function DeliveryPage() {
     (showDeliveries ? (
       <Button size="sm" onClick={() => setDeliveryModalOpen(true)}>
         <Plus className="h-4 w-4 mr-1.5" />
-        Add Delivery
+        Add Delivery Trip
       </Button>
     ) : showVehicles ? (
       <Button size="sm" onClick={() => setVehicleModalOpen(true)}>
@@ -249,7 +466,32 @@ export function DeliveryPage() {
     ) : undefined);
 
   return (
-    <div className="space-y-1">
+    <div className="space-y-4">
+      <PageQueryStatus
+        isError={deliveriesError || tripsError || vehiclesError}
+        error={deliveriesErr || tripsErr || vehiclesErr}
+        onRetry={() => {
+          void refetchDeliveries();
+          void refetchTrips();
+          void refetchVehicles();
+        }}
+      />
+      {stats && (
+        <StatGrid>
+          <StatCard title="Pending" value={stats.pending} icon={<Package className="h-5 w-5 text-white" />} color="from-amber-500 to-orange-600" />
+          <StatCard title="In Transit" value={stats.inTransit} icon={<Truck className="h-5 w-5 text-white" />} color="from-primary-500 to-primary-700" />
+          <StatCard title="Delivered Today" value={stats.deliveredToday} icon={<MapPin className="h-5 w-5 text-white" />} color="from-emerald-500 to-teal-600" />
+          <StatCard title="Motorcycles" value={stats.motorcycles ?? 0} icon={<Bike className="h-5 w-5 text-white" />} color="from-sky-500 to-cyan-600" />
+          <StatCard title="Trucks" value={stats.trucks ?? 0} icon={<Truck className="h-5 w-5 text-white" />} color="from-primary-600 to-primary-800" />
+        </StatGrid>
+      )}
+
+      {statusMutation.isError && (
+        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {getApiErrorMessage(statusMutation.error)}
+        </div>
+      )}
+
       <PageHeader
         action={
           stats && stats.inTransit > 0 ? (
@@ -265,17 +507,6 @@ export function DeliveryPage() {
           ) : undefined
         }
       />
-
-      {stats && (
-        <StatGrid>
-          <StatCard title="Pending" value={stats.pending} icon={<Package className="h-5 w-5 text-white" />} color="from-amber-500 to-orange-600" />
-          <StatCard title="In Transit" value={stats.inTransit} icon={<Truck className="h-5 w-5 text-white" />} color="from-primary-500 to-indigo-600" />
-          <StatCard title="Delivered Today" value={stats.deliveredToday} icon={<MapPin className="h-5 w-5 text-white" />} color="from-emerald-500 to-teal-600" />
-          <StatCard title="Motorcycles" value={stats.motorcycles ?? 0} icon={<Bike className="h-5 w-5 text-white" />} color="from-sky-500 to-cyan-600" />
-          <StatCard title="Trucks" value={stats.trucks ?? 0} icon={<Truck className="h-5 w-5 text-white" />} color="from-violet-500 to-purple-600" />
-          <StatCard title="Lorries" value={stats.lorries ?? 0} icon={<Container className="h-5 w-5 text-white" />} color="from-amber-500 to-orange-600" />
-        </StatGrid>
-      )}
 
       <PageToolbar
         tabs={visibleTabs}
@@ -304,22 +535,30 @@ export function DeliveryPage() {
                 </div>
               ) : (
                 <ul className="divide-y divide-slate-100">
-                  {activeDeliveries.map((note) => (
+                  {activeDeliveries.map((row) => {
+                    const label = row.kind === 'trip' ? row.trip.tripNo : row.note.deliveryNo;
+                    const subtitle =
+                      row.kind === 'trip'
+                        ? `${row.trip.stops.length} orders`
+                        : row.note.salesOrder?.customer?.name || '—';
+                    const st = row.kind === 'trip' ? row.trip.status : row.note.status;
+                    return (
                     <li
-                      key={note.id}
+                      key={row.id}
                       className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 cursor-pointer"
-                      onClick={() => openDetail(note)}
+                      onClick={() => openDetail(row)}
                     >
                       <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-100 text-amber-600">
                         <AlertTriangle className="h-4 w-4" />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="font-medium text-slate-900 truncate">{note.deliveryNo}</p>
-                        <p className="text-xs text-slate-500">{note.salesOrder?.customer?.name || '—'}</p>
+                        <p className="font-medium text-slate-900 truncate">{label}</p>
+                        <p className="text-xs text-slate-500">{subtitle}</p>
                       </div>
-                      <Badge variant={getStatusBadge(note.status)}>{note.status.replace(/_/g, ' ')}</Badge>
+                      <Badge variant={getStatusBadge(st)}>{st.replace(/_/g, ' ')}</Badge>
                     </li>
-                  ))}
+                    );
+                  })}
                 </ul>
               )}
             </Card>
@@ -340,22 +579,32 @@ export function DeliveryPage() {
                 </div>
               ) : (
                 <ul className="divide-y divide-slate-100">
-                  {recentDeliveries.map((note) => (
+                  {recentDeliveries.map((row) => {
+                    const label = row.kind === 'trip' ? row.trip.tripNo : row.note.deliveryNo;
+                    const subtitle =
+                      row.kind === 'trip'
+                        ? `${row.trip.stops.length} orders`
+                        : row.note.salesOrder?.orderNumber || '—';
+                    const date =
+                      row.kind === 'trip' ? row.trip.scheduledDate : row.note.scheduledDate;
+                    const st = row.kind === 'trip' ? row.trip.status : row.note.status;
+                    return (
                     <li
-                      key={note.id}
+                      key={row.id}
                       className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 cursor-pointer"
-                      onClick={() => openDetail(note)}
+                      onClick={() => openDetail(row)}
                     >
-                      <Badge variant={getStatusBadge(note.status)}>{note.status.replace(/_/g, ' ')}</Badge>
+                      <Badge variant={getStatusBadge(st)}>{st.replace(/_/g, ' ')}</Badge>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm text-slate-800 truncate">{note.deliveryNo}</p>
-                        <p className="text-xs text-slate-400">{note.salesOrder?.orderNumber || '—'}</p>
+                        <p className="text-sm text-slate-800 truncate">{label}</p>
+                        <p className="text-xs text-slate-400">{subtitle}</p>
                       </div>
                       <span className="text-xs text-slate-500 shrink-0">
-                        {note.scheduledDate ? formatDate(note.scheduledDate) : '—'}
+                        {date ? formatDate(date) : '—'}
                       </span>
                     </li>
-                  ))}
+                    );
+                  })}
                 </ul>
               )}
             </Card>
@@ -408,16 +657,16 @@ export function DeliveryPage() {
               className="sm:w-44"
             />
           </div>
-          {(deliveries?.data?.length || 0) === 0 && !isLoading ? (
+          {(listRows.length || 0) === 0 && !isLoading && !tripsLoading ? (
             <div className="p-6">
               <EmptyState
                 title="No deliveries found"
-                description={isDriver ? 'Assigned deliveries will appear here.' : 'Create a delivery note from a ready sales order.'}
+                description={isDriver ? 'Assigned deliveries will appear here.' : 'Create a delivery trip from one or more ready sales orders.'}
                 action={
                   canCreate ? (
                     <Button onClick={() => setDeliveryModalOpen(true)}>
                       <Plus className="h-4 w-4 mr-2" />
-                      Add Delivery
+                      Add Delivery Trip
                     </Button>
                   ) : undefined
                 }
@@ -426,14 +675,26 @@ export function DeliveryPage() {
           ) : (
             <Table
               columns={deliveryColumns}
-              data={(deliveries?.data as DeliveryNote[]) || []}
-              loading={isLoading}
-              onRowClick={(row) => openDetail(row as unknown as DeliveryNote)}
+              data={listRows}
+              loading={isLoading || tripsLoading}
+              onRowClick={(row) => openDetail(row as unknown as DeliveryListRow)}
               embedded
             />
           )}
           <div className="px-4 pb-4">
-            <TablePagination pagination={deliveries?.pagination} page={page} onPageChange={setPage} label="deliveries" />
+            <TablePagination
+              pagination={{
+                page,
+                total: (deliveries?.pagination?.total || 0) + (trips?.pagination?.total || 0),
+                totalPages: Math.max(
+                  deliveries?.pagination?.totalPages || 1,
+                  trips?.pagination?.totalPages || 1
+                ),
+              }}
+              page={page}
+              onPageChange={setPage}
+              label="deliveries"
+            />
           </div>
         </DataPanel>
       )}
@@ -478,7 +739,7 @@ export function DeliveryPage() {
         </DataPanel>
       )}
 
-      <Modal open={deliveryModalOpen} onClose={() => setDeliveryModalOpen(false)} title="Add Delivery" size="xl">
+      <Modal open={deliveryModalOpen} onClose={() => setDeliveryModalOpen(false)} title="Add Delivery Trip" size="xl">
         <DeliveryForm onSuccess={() => setDeliveryModalOpen(false)} onCancel={() => setDeliveryModalOpen(false)} />
       </Modal>
 
@@ -486,8 +747,101 @@ export function DeliveryPage() {
         <VehicleForm onSuccess={() => setVehicleModalOpen(false)} onCancel={() => setVehicleModalOpen(false)} />
       </Modal>
 
-      <Modal open={detailOpen} onClose={() => { setDetailOpen(false); setSelected(null); }} title="Delivery Details" size="lg">
-        {selected && (
+      <Modal open={detailOpen} onClose={() => { setDetailOpen(false); setSelected(null); setSelectedTrip(null); }} title={selectedTrip ? 'Delivery Trip Details' : 'Delivery Details'} size="lg">
+        {selectedTrip && (
+          <div className="space-y-4 text-sm">
+            <div className="grid grid-cols-2 gap-4">
+              <div><p className="text-slate-500">Trip #</p><p className="font-semibold">{selectedTrip.tripNo}</p></div>
+              <div><p className="text-slate-500">Orders</p><p className="font-semibold">{selectedTrip.stops.length}</p></div>
+              <div><p className="text-slate-500">Vehicle</p><p className="font-semibold">{formatVehicleLabel(selectedTrip.vehicle)}</p></div>
+              {selectedTrip.driver && (
+                <div><p className="text-slate-500">Driver</p><p className="font-semibold">{selectedTrip.driver.firstName} {selectedTrip.driver.lastName}</p></div>
+              )}
+              <div><p className="text-slate-500">Scheduled</p><p className="font-semibold">{selectedTrip.scheduledDate ? formatDate(selectedTrip.scheduledDate) : '-'}</p></div>
+              <div><p className="text-slate-500">Status</p><Badge variant={getStatusBadge(selectedTrip.status)}>{selectedTrip.status.replace(/_/g, ' ')}</Badge></div>
+            </div>
+
+            <Card title="Stops">
+              {selectedTrip.stops.map((stop) => (
+                <div key={stop.id} className="py-3 border-b border-border/60 last:border-0">
+                  <div className="flex items-center justify-between gap-2">
+                    <div>
+                      <p className="font-medium">{stop.salesOrder.orderNumber}</p>
+                      <p className="text-xs text-slate-500">{stop.salesOrder.customer.name} · {stop.deliveryNo}</p>
+                    </div>
+                    <Badge variant={getStatusBadge(stop.status)}>{stop.status.replace(/_/g, ' ')}</Badge>
+                  </div>
+                  {stop.items?.length > 0 && (
+                    <div className="mt-2 space-y-1 text-xs text-slate-600">
+                      {stop.items.map((item) => (
+                        <div key={item.id} className="flex justify-between">
+                          <span>Product {item.productId.slice(0, 8)}…</span>
+                          <span>Qty: {item.quantity}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {canUpdate && getDeliveryActions(stop.status, isDriver).length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {getDeliveryActions(stop.status, isDriver).map((action) => (
+                        <Button
+                          key={`${stop.id}-${action.status}`}
+                          size="sm"
+                          variant={action.status === 'DELIVERED' ? 'primary' : 'secondary'}
+                          loading={statusMutation.isPending}
+                          onClick={() =>
+                            requestStatusChange(
+                              {
+                                id: stop.id,
+                                kind: 'note',
+                                status: action.status,
+                                label: action.label,
+                                proofOfDelivery:
+                                  action.status === 'DELIVERED' ? 'Confirmed by driver' : undefined,
+                              },
+                              stop
+                            )
+                          }
+                        >
+                          {action.label} stop
+                        </Button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </Card>
+
+            {canUpdate && getDeliveryActions(selectedTrip.status, isDriver).length > 0 && (
+              <div className="flex flex-wrap justify-end gap-2">
+                {getDeliveryActions(selectedTrip.status, isDriver).map((action) => (
+                  <Button
+                    key={action.status}
+                    variant={action.status === 'DELIVERED' ? 'primary' : 'secondary'}
+                    loading={statusMutation.isPending}
+                    onClick={() =>
+                      requestStatusChange(
+                        {
+                          id: selectedTrip.id,
+                          kind: 'trip',
+                          status: action.status,
+                          label: action.label,
+                          proofOfDelivery:
+                            action.status === 'DELIVERED' ? 'Confirmed by driver' : undefined,
+                        },
+                        null,
+                        selectedTrip
+                      )
+                    }
+                  >
+                    {action.label} entire trip
+                  </Button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+        {selected && !selectedTrip && (
           <div className="space-y-4 text-sm">
             <div className="grid grid-cols-2 gap-4">
               <div><p className="text-slate-500">Delivery #</p><p className="font-semibold">{selected.deliveryNo}</p></div>
@@ -521,13 +875,17 @@ export function DeliveryPage() {
                     variant={action.status === 'DELIVERED' ? 'primary' : 'secondary'}
                     loading={statusMutation.isPending}
                     onClick={() =>
-                      setPendingStatusChange({
-                        id: selected.id,
-                        status: action.status,
-                        label: action.label,
-                        proofOfDelivery:
-                          action.status === 'DELIVERED' ? 'Confirmed by driver' : undefined,
-                      })
+                      requestStatusChange(
+                        {
+                          id: selected.id,
+                          kind: 'note',
+                          status: action.status,
+                          label: action.label,
+                          proofOfDelivery:
+                            action.status === 'DELIVERED' ? 'Confirmed by driver' : undefined,
+                        },
+                        selected
+                      )
                     }
                   >
                     {action.label}
@@ -539,8 +897,64 @@ export function DeliveryPage() {
         )}
       </Modal>
 
+      <Modal
+        open={!!deliverConfirm}
+        onClose={() => setDeliverConfirm(null)}
+        title="Confirm delivered quantities"
+        size="md"
+      >
+        {deliverConfirm && (
+          <div className="space-y-4 text-sm">
+            <p className="text-slate-600">
+              Enter what the customer actually received. If less than dispatched, the difference returns to stock and the invoice is adjusted.
+            </p>
+            {deliverConfirm.stops.map((stop) => (
+              <div key={stop.deliveryNoteId} className="rounded-lg border border-border p-3 space-y-2">
+                <p className="font-medium text-slate-900">{stop.title}</p>
+                {stop.items.map((item) => {
+                  const key = `${stop.deliveryNoteId}:${item.productId}`;
+                  return (
+                    <div key={key} className="grid grid-cols-2 gap-2 items-end">
+                      <div>
+                        <p className="text-xs text-slate-500">Product</p>
+                        <p className="font-mono text-xs">{item.productId.slice(0, 8)}…</p>
+                        <p className="text-xs text-slate-500">Dispatched: {item.dispatchedQty}</p>
+                      </div>
+                      <Input
+                        label="Delivered qty"
+                        type="number"
+                        min={0}
+                        max={item.dispatchedQty}
+                        value={actualQtys[key] ?? item.dispatchedQty}
+                        onChange={(e) =>
+                          setActualQtys((prev) => ({
+                            ...prev,
+                            [key]: Math.min(
+                              item.dispatchedQty,
+                              Math.max(0, Number(e.target.value) || 0)
+                            ),
+                          }))
+                        }
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+            ))}
+            <div className="flex justify-end gap-3 pt-2">
+              <Button type="button" variant="secondary" onClick={() => setDeliverConfirm(null)}>
+                Cancel
+              </Button>
+              <Button type="button" loading={statusMutation.isPending} onClick={submitDeliverConfirm}>
+                {deliverConfirm.label}
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
       <ConfirmDialog
-        open={!!pendingStatusChange}
+        open={!!pendingStatusChange && pendingStatusChange.status !== 'DELIVERED'}
         title="Update delivery status?"
         message={
           pendingStatusChange
@@ -555,6 +969,7 @@ export function DeliveryPage() {
           statusMutation.mutate(
             {
               id: pendingStatusChange.id,
+              kind: pendingStatusChange.kind,
               status: pendingStatusChange.status,
               proofOfDelivery: pendingStatusChange.proofOfDelivery,
             },

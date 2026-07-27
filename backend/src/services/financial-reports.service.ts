@@ -1,31 +1,47 @@
 import prisma from '../config/database';
 import { startOfMonth, endOfDay, subMonths } from '../utils/date';
+import { AccountingService } from './accounting.service';
 
 export class FinancialReportsService {
   static async getProfitAndLoss(startDate?: Date, endDate?: Date) {
     const start = startDate || startOfMonth(new Date());
     const end = endDate || endOfDay(new Date());
 
-    const [salesInvoices, purchaseInvoices, incomeAccounts, expenseAccounts] = await Promise.all([
+    const [revenue, cogs, expenseAccounts, salesInvoices, purchaseInvoices] = await Promise.all([
+      AccountingService.getAccountActivityInPeriod('4100', start, end),
+      AccountingService.getAccountActivityInPeriod('5100', start, end),
+      prisma.account.findMany({ where: { type: 'EXPENSE', isActive: true, NOT: { code: '5100' } } }),
       prisma.invoice.aggregate({
         where: { type: 'SALES', invoiceDate: { gte: start, lte: end }, status: { not: 'REFUNDED' } },
-        _sum: { totalAmount: true, taxAmount: true, subtotal: true },
+        _sum: { taxAmount: true },
       }),
       prisma.invoice.aggregate({
         where: { type: 'PURCHASE', invoiceDate: { gte: start, lte: end } },
-        _sum: { totalAmount: true, taxAmount: true, subtotal: true },
+        _sum: { taxAmount: true },
       }),
-      prisma.account.findMany({ where: { type: 'INCOME', isActive: true } }),
-      prisma.account.findMany({ where: { type: 'EXPENSE', isActive: true } }),
     ]);
 
-    const revenue = Number(salesInvoices._sum.subtotal || 0);
-    const cogs = Number(purchaseInvoices._sum.subtotal || 0);
+    const operatingExpenseRows = await Promise.all(
+      expenseAccounts.map(async (account) => ({
+        code: account.code,
+        name: account.name,
+        amount: await AccountingService.getAccountActivityInPeriod(account.code, start, end),
+      }))
+    );
+
+    const operatingExpenses = operatingExpenseRows.reduce((sum, row) => sum + row.amount, 0);
+    const otherIncomeAccounts = await prisma.account.findMany({
+      where: { type: 'INCOME', isActive: true, NOT: { code: '4100' } },
+    });
+    const otherIncomeRows = await Promise.all(
+      otherIncomeAccounts.map(async (account) => ({
+        code: account.code,
+        name: account.name,
+        amount: await AccountingService.getAccountActivityInPeriod(account.code, start, end),
+      }))
+    );
+    const otherIncome = otherIncomeRows.reduce((sum, row) => sum + row.amount, 0);
     const grossProfit = revenue - cogs;
-    const operatingExpenses = expenseAccounts.reduce((s, a) => s + Number(a.balance), 0);
-    const otherIncome = incomeAccounts
-      .filter((a) => !a.code.startsWith('4100'))
-      .reduce((s, a) => s + Number(a.balance), 0);
     const netProfit = grossProfit - operatingExpenses + otherIncome;
 
     return {
@@ -34,10 +50,13 @@ export class FinancialReportsService {
       costOfGoodsSold: cogs,
       grossProfit,
       operatingExpenses,
+      operatingExpenseBreakdown: operatingExpenseRows.filter((row) => row.amount !== 0),
       otherIncome,
+      otherIncomeBreakdown: otherIncomeRows.filter((row) => row.amount !== 0),
       netProfit,
       vatCollected: Number(salesInvoices._sum.taxAmount || 0),
       vatPaid: Number(purchaseInvoices._sum.taxAmount || 0),
+      source: 'ledger',
     };
   }
 
@@ -62,7 +81,7 @@ export class FinancialReportsService {
     const totalLiabilities = sum(grouped.liabilities);
     const totalEquity = sum(grouped.equity);
 
-    const [receivables, payables] = await Promise.all([
+    const [receivables, payables, trialBalance] = await Promise.all([
       prisma.invoice.aggregate({
         where: { type: 'SALES', status: { in: ['UNPAID', 'PARTIAL', 'OVERDUE'] } },
         _sum: { totalAmount: true },
@@ -71,6 +90,7 @@ export class FinancialReportsService {
         where: { type: 'PURCHASE', status: { in: ['UNPAID', 'PARTIAL', 'OVERDUE'] } },
         _sum: { totalAmount: true },
       }),
+      AccountingService.getTrialBalance(asOf),
     ]);
 
     return {
@@ -83,7 +103,9 @@ export class FinancialReportsService {
       totalEquity,
       accountsReceivable: Number(receivables._sum.totalAmount || 0),
       accountsPayable: Number(payables._sum.totalAmount || 0),
-      balanced: Math.abs(totalAssets - (totalLiabilities + totalEquity)) < 0.01,
+      balanced: trialBalance.balanced,
+      trialBalance,
+      source: 'ledger',
     };
   }
 

@@ -1,0 +1,402 @@
+import { DeliveryStatus, Prisma } from '@prisma/client';
+import prisma from '../config/database';
+import { AppError } from '../middleware/errorHandler';
+import { nextDeliveryNoteNumber, nextDeliveryTripNumber } from '../utils/numbering';
+import { assertOrderStatusTransition, syncCustomerCreditUsed } from '../utils/credit';
+import { StockMovementService } from './inventory.service';
+import { FinanceInvoiceService } from './finance.service';
+import { SalesOrderService } from './sales-order.service';
+import { AccountingService } from './accounting.service';
+
+type TxClient = Prisma.TransactionClient;
+
+export type DeliveryItemInput = { productId: string; quantity: number };
+export type ActualDeliveryItemInput = { productId: string; quantity: number };
+
+async function reconcileDeliveryActualQuantities(
+  tx: TxClient,
+  deliveryId: string,
+  userId: string,
+  actualItems?: ActualDeliveryItemInput[]
+) {
+  if (!actualItems?.length) return;
+
+  const delivery = await tx.deliveryNote.findUnique({
+    where: { id: deliveryId },
+    include: {
+      items: true,
+      salesOrder: { include: { items: true } },
+    },
+  });
+  if (!delivery) throw new AppError('Delivery not found', 404);
+
+  for (const item of delivery.items) {
+    const actualEntry = actualItems.find((a) => a.productId === item.productId);
+    const actualQty = actualEntry?.quantity ?? item.quantity;
+
+    if (actualQty > item.quantity) {
+      throw new AppError(
+        `Delivered quantity (${actualQty}) cannot exceed dispatched quantity (${item.quantity})`,
+        400
+      );
+    }
+
+    if (actualQty === item.quantity) continue;
+
+    const shortfall = item.quantity - actualQty;
+    const orderItem = delivery.salesOrder.items.find((line) => line.productId === item.productId);
+    if (!orderItem) continue;
+
+    await tx.deliveryItem.update({
+      where: { id: item.id },
+      data: { quantity: actualQty },
+    });
+
+    await tx.salesOrderItem.update({
+      where: { id: orderItem.id },
+      data: { deliveredQty: { decrement: shortfall } },
+    });
+
+    await StockMovementService.addProductStock(tx, {
+      productId: item.productId,
+      quantity: shortfall,
+      referenceType: 'delivery_shortfall',
+      referenceId: deliveryId,
+      userId,
+      notes: `${shortfall} unit(s) not accepted on ${delivery.deliveryNo} — returned to stock`,
+    });
+  }
+
+  await FinanceInvoiceService.recalculateDeliveryInvoice(tx, deliveryId);
+}
+
+export type CreateStopInput = {
+  salesOrderId: string;
+  items: DeliveryItemInput[];
+  vehicleId?: string;
+  driverId?: string;
+  scheduledDate?: Date;
+  notes?: string;
+  deliveryTripId?: string;
+  stopSequence?: number;
+  userId: string;
+};
+
+const STOP_INCLUDE = {
+  salesOrder: { include: { customer: true } },
+  vehicle: true,
+  driver: { select: { id: true, firstName: true, lastName: true, email: true } },
+  items: true,
+  deliveryTrip: { select: { id: true, tripNo: true, status: true } },
+} as const;
+
+type DeliveryStopNote = Prisma.DeliveryNoteGetPayload<{ include: typeof STOP_INCLUDE }>;
+
+function resolveInitialStatus(vehicleId?: string, driverId?: string): DeliveryStatus {
+  return vehicleId || driverId ? 'ASSIGNED' : 'PENDING';
+}
+
+export async function createDeliveryStop(
+  tx: TxClient,
+  input: CreateStopInput
+): Promise<{ dn: DeliveryStopNote; invoice: Awaited<ReturnType<typeof FinanceInvoiceService.createSalesInvoiceFromDelivery>> }> {
+  const {
+    salesOrderId,
+    items,
+    vehicleId,
+    driverId,
+    scheduledDate,
+    notes,
+    deliveryTripId,
+    stopSequence,
+    userId,
+  } = input;
+
+  const salesOrder = await tx.salesOrder.findUnique({
+    where: { id: salesOrderId },
+    include: { items: { include: { product: true } } },
+  });
+  if (!salesOrder) throw new AppError('Sales order not found', 404);
+
+  if (!['READY', 'PARTIALLY_DELIVERED'].includes(salesOrder.status)) {
+    throw new AppError('Sales order must be READY or PARTIALLY_DELIVERED before dispatch', 400);
+  }
+
+  for (const item of items) {
+    const orderItem = salesOrder.items.find((line) => line.productId === item.productId);
+    if (!orderItem) {
+      throw new AppError('Product not found on sales order', 400);
+    }
+
+    const remaining = orderItem.quantity - orderItem.deliveredQty;
+    if (item.quantity > remaining) {
+      throw new AppError(
+        `Delivery quantity exceeds remaining (${remaining} left for ${orderItem.product.name})`,
+        400
+      );
+    }
+  }
+
+  const deliveryNo = await nextDeliveryNoteNumber(tx);
+  const status = resolveInitialStatus(vehicleId, driverId);
+
+  const dn = await tx.deliveryNote.create({
+    data: {
+      companyId: salesOrder.companyId,
+      deliveryNo,
+      salesOrderId,
+      deliveryTripId,
+      stopSequence,
+      vehicleId,
+      driverId,
+      status,
+      scheduledDate,
+      notes,
+      items: { create: items },
+    },
+    include: STOP_INCLUDE,
+  });
+
+  let cogsTotal = 0;
+  for (const item of items) {
+    const orderItem = salesOrder.items.find((line) => line.productId === item.productId)!;
+    const stockBefore = await tx.stockLevel.findFirst({
+      where: { productId: item.productId },
+      orderBy: { quantity: 'desc' },
+    });
+    const unitCost = stockBefore ? Number(stockBefore.unitCost) : 0;
+
+    await tx.salesOrderItem.update({
+      where: { id: orderItem.id },
+      data: { deliveredQty: { increment: item.quantity } },
+    });
+
+    await StockMovementService.deductProductStock(tx, {
+      productId: item.productId,
+      quantity: item.quantity,
+      referenceType: 'delivery_note',
+      referenceId: dn.id,
+      userId,
+      notes: `Dispatch ${deliveryNo}`,
+      releaseReservedQty: item.quantity,
+    });
+    cogsTotal += item.quantity * unitCost;
+  }
+
+  await AccountingService.postCostOfGoodsSold(tx, {
+    reference: deliveryNo,
+    amount: cogsTotal,
+  });
+
+  const fullyDelivered = await SalesOrderService.isFullyDelivered(tx, salesOrderId);
+  const nextStatus = SalesOrderService.resolveStatusAfterDispatch(salesOrder.status, fullyDelivered);
+  assertOrderStatusTransition(salesOrder.status, nextStatus, { system: true });
+
+  await tx.salesOrder.update({
+    where: { id: salesOrderId },
+    data: { status: nextStatus },
+  });
+
+  await SalesOrderService.syncOrderDeliveryStatus(tx, salesOrderId);
+
+  const invoice = await FinanceInvoiceService.createSalesInvoiceFromDelivery(tx, dn.id);
+
+  return { dn, invoice };
+}
+
+export async function syncDeliveryTripStatus(tx: TxClient, tripId: string) {
+  const stops = await tx.deliveryNote.findMany({
+    where: { deliveryTripId: tripId },
+    select: { status: true },
+  });
+  if (stops.length === 0) return;
+
+  const statuses = stops.map((s) => s.status);
+  let tripStatus: DeliveryStatus = 'PENDING';
+
+  if (statuses.every((s) => s === 'DELIVERED')) {
+    tripStatus = 'DELIVERED';
+  } else if (statuses.some((s) => s === 'IN_TRANSIT')) {
+    tripStatus = 'IN_TRANSIT';
+  } else if (statuses.some((s) => s === 'ASSIGNED')) {
+    tripStatus = 'ASSIGNED';
+  } else if (statuses.some((s) => s === 'FAILED')) {
+    tripStatus = 'FAILED';
+  } else if (statuses.some((s) => s === 'RETURNED')) {
+    tripStatus = 'RETURNED';
+  }
+
+  await tx.deliveryTrip.update({
+    where: { id: tripId },
+    data: { status: tripStatus },
+  });
+}
+
+export async function applyDeliveryNoteStatus(
+  tx: TxClient,
+  deliveryId: string,
+  status: DeliveryStatus,
+  options?: { proofOfDelivery?: string; actualItems?: ActualDeliveryItemInput[]; userId?: string }
+) {
+  const proofOfDelivery = options?.proofOfDelivery;
+  const actualItems = options?.actualItems;
+  const userId = options?.userId;
+
+  if (status === 'DELIVERED' && actualItems?.length && userId) {
+    await reconcileDeliveryActualQuantities(tx, deliveryId, userId, actualItems);
+  }
+
+  const updated = await tx.deliveryNote.update({
+    where: { id: deliveryId },
+    data: {
+      status,
+      proofOfDelivery,
+      deliveredAt: status === 'DELIVERED' ? new Date() : undefined,
+    },
+    include: STOP_INCLUDE,
+  });
+
+  if (status === 'DELIVERED') {
+    await SalesOrderService.syncOrderDeliveryStatus(tx, updated.salesOrderId);
+    await syncCustomerCreditUsed(updated.salesOrder.customerId, tx);
+  }
+
+  if (updated.deliveryTripId) {
+    await syncDeliveryTripStatus(tx, updated.deliveryTripId);
+  }
+
+  return updated;
+}
+
+export async function applyDeliveryTripStatus(
+  tx: TxClient,
+  tripId: string,
+  status: DeliveryStatus,
+  options?: {
+    proofOfDelivery?: string;
+    actualItems?: { deliveryNoteId: string; items: ActualDeliveryItemInput[] }[];
+    userId?: string;
+  }
+) {
+  const proofOfDelivery = options?.proofOfDelivery;
+  const actualItemsByStop = options?.actualItems;
+  const userId = options?.userId;
+
+  const trip = await tx.deliveryTrip.findUnique({
+    where: { id: tripId },
+    include: { stops: { select: { id: true, status: true } } },
+  });
+  if (!trip) throw new AppError('Delivery trip not found', 404);
+
+  await tx.deliveryTrip.update({
+    where: { id: tripId },
+    data: {
+      status,
+      ...(status === 'DELIVERED' ? {} : {}),
+    },
+  });
+
+  for (const stop of trip.stops) {
+    if (stop.status === status) continue;
+    if (status === 'DELIVERED' && stop.status === 'DELIVERED') continue;
+    if (status === 'IN_TRANSIT' && !['ASSIGNED', 'PENDING', 'IN_TRANSIT'].includes(stop.status)) continue;
+    if (status === 'ASSIGNED' && !['PENDING', 'ASSIGNED'].includes(stop.status)) continue;
+
+    await applyDeliveryNoteStatus(tx, stop.id, status, {
+      proofOfDelivery,
+      actualItems: actualItemsByStop?.find((entry) => entry.deliveryNoteId === stop.id)?.items,
+      userId,
+    });
+  }
+
+  return tx.deliveryTrip.findUnique({
+    where: { id: tripId },
+    include: {
+      vehicle: true,
+      driver: { select: { id: true, firstName: true, lastName: true, email: true } },
+      stops: { include: STOP_INCLUDE, orderBy: { stopSequence: 'asc' } },
+    },
+  });
+}
+
+export async function createMultiOrderDelivery(
+  userId: string,
+  input: {
+    vehicleId?: string;
+    driverId?: string;
+    scheduledDate?: Date;
+    notes?: string;
+    orders: { salesOrderId: string; items: DeliveryItemInput[] }[];
+  }
+) {
+  if (input.orders.length === 0) {
+    throw new AppError('Add at least one order to the delivery', 400);
+  }
+
+  const orderIds = input.orders.map((o) => o.salesOrderId);
+  if (new Set(orderIds).size !== orderIds.length) {
+    throw new AppError('Each sales order can only appear once on a delivery trip', 400);
+  }
+
+  return prisma.$transaction(async (tx) => {
+    const scheduledDate = input.scheduledDate;
+    const initialStatus = resolveInitialStatus(input.vehicleId, input.driverId);
+
+    let trip: Awaited<ReturnType<typeof tx.deliveryTrip.create>> | null = null;
+    if (input.orders.length > 1) {
+      const anchorOrder = await tx.salesOrder.findUnique({
+        where: { id: input.orders[0].salesOrderId },
+        select: { companyId: true },
+      });
+      if (!anchorOrder) throw new AppError('Sales order not found', 404);
+
+      trip = await tx.deliveryTrip.create({
+        data: {
+          companyId: anchorOrder.companyId,
+          tripNo: await nextDeliveryTripNumber(tx, anchorOrder.companyId),
+          vehicleId: input.vehicleId,
+          driverId: input.driverId,
+          status: initialStatus,
+          scheduledDate,
+          notes: input.notes,
+        },
+      });
+    }
+
+    const stops: Awaited<ReturnType<typeof createDeliveryStop>>[] = [];
+    for (let i = 0; i < input.orders.length; i++) {
+      const order = input.orders[i];
+      const result = await createDeliveryStop(tx, {
+        salesOrderId: order.salesOrderId,
+        items: order.items,
+        vehicleId: input.vehicleId,
+        driverId: input.driverId,
+        scheduledDate,
+        notes: input.notes,
+        deliveryTripId: trip?.id,
+        stopSequence: trip ? i + 1 : undefined,
+        userId,
+      });
+      stops.push(result);
+    }
+
+    const tripWithStops = trip
+      ? await tx.deliveryTrip.findUnique({
+          where: { id: trip.id },
+          include: {
+            vehicle: true,
+            driver: { select: { id: true, firstName: true, lastName: true, email: true } },
+            stops: { include: STOP_INCLUDE, orderBy: { stopSequence: 'asc' } },
+          },
+        })
+      : null;
+
+    return {
+      trip: tripWithStops,
+      stops: stops.map((s) => s.dn),
+      invoices: stops.map((s) => s.invoice),
+    };
+  });
+}
+
+export const deliveryStopInclude = STOP_INCLUDE;

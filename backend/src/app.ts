@@ -28,6 +28,7 @@ import maintenanceRoutes from './routes/maintenance.routes';
 import searchRoutes from './routes/search.routes';
 import mpesaRoutes from './routes/mpesa.routes';
 import realtimeRoutes from './routes/realtime.routes';
+import tenantRoutes from './routes/tenant.routes';
 
 export function createApp() {
   const app = express();
@@ -103,14 +104,48 @@ export function createApp() {
     });
   }
 
+  app.get('/api/health/live', (_req, res) => {
+    res.json({
+      status: 'ok',
+      version: '2.1.0',
+      timezone: config.timezone,
+      timestamp: new Date().toISOString(),
+    });
+  });
+
+  app.get('/api/health/ready', async (_req, res) => {
+    const { IntegrationRegistry } = await import('./services/integrations/registry');
+    let database = 'connected';
+    try {
+      const { default: prismaClient } = await import('./config/database');
+      await prismaClient.$queryRaw`SELECT 1`;
+    } catch {
+      database = 'disconnected';
+    }
+
+    const integrations = IntegrationRegistry.getStatuses();
+    const ready = database === 'connected';
+
+    res.status(ready ? 200 : 503).json({
+      status: ready ? 'ok' : 'degraded',
+      version: '2.1.0',
+      database,
+      integrations,
+      timezone: config.timezone,
+      timestamp: new Date().toISOString(),
+    });
+  });
+
   app.get('/api/health', async (_req, res) => {
     try {
-      const { default: prisma } = await import('./config/database');
-      await prisma.$queryRaw`SELECT 1`;
+      const { default: prismaClient } = await import('./config/database');
+      const { IntegrationRegistry } = await import('./services/integrations/registry');
+      await prismaClient.$queryRaw`SELECT 1`;
       res.json({
         status: 'ok',
         version: '2.1.0',
         database: 'connected',
+        integrations: IntegrationRegistry.getStatuses(),
         timezone: config.timezone,
         timestamp: new Date().toISOString(),
       });
@@ -142,6 +177,7 @@ export function createApp() {
   apiRouter.use('/maintenance', maintenanceRoutes);
   apiRouter.use('/search', searchRoutes);
   apiRouter.use('/realtime', realtimeRoutes);
+  apiRouter.use('/tenant', tenantRoutes);
 
   app.use('/api/v1', apiRouter);
   app.use(notFound);

@@ -1,8 +1,13 @@
 type AxiosLikeError = {
-  response?: { data?: { message?: string }; status?: number };
+  response?: { data?: { message?: string; code?: string }; status?: number };
   code?: string;
   message?: string;
 };
+
+export function getApiErrorCode(err: unknown): string | undefined {
+  if (err == null) return undefined;
+  return (err as AxiosLikeError).response?.data?.code;
+}
 
 export function getApiErrorMessage(err: unknown): string {
   if (err == null) {

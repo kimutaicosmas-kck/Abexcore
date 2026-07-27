@@ -37,3 +37,21 @@ export async function nextPaymentNumber(tx: TxClient): Promise<string> {
   });
   return generateNumber('PAY', maxSequenceFromNumbers(rows.map((r) => r.paymentNumber), 'PAY') + 1);
 }
+
+export async function nextDeliveryNoteNumber(tx: TxClient): Promise<string> {
+  const year = new Date().getFullYear();
+  const rows = await tx.deliveryNote.findMany({
+    where: { deliveryNo: { startsWith: `DN-${year}-` } },
+    select: { deliveryNo: true },
+  });
+  return generateNumber('DN', maxSequenceFromNumbers(rows.map((r) => r.deliveryNo), 'DN') + 1);
+}
+
+export async function nextDeliveryTripNumber(tx: TxClient, companyId: string): Promise<string> {
+  const year = new Date().getFullYear();
+  const rows = await tx.deliveryTrip.findMany({
+    where: { companyId, tripNo: { startsWith: `TR-${year}-` } },
+    select: { tripNo: true },
+  });
+  return generateNumber('TR', maxSequenceFromNumbers(rows.map((r) => r.tripNo), 'TR') + 1);
+}

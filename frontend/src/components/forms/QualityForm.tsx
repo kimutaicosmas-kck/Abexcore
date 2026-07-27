@@ -3,13 +3,15 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { qualityApi, inventoryApi, operationsApi } from '../../services/api';
+import { useProductPicker } from '../../hooks/useProductPicker';
 import { Button, Input, Select } from '../ui';
 import { ProductionOrder } from '../../types';
+import { formatProductOptionLabel } from '../../utils/productDisplay';
 
 const qualityTypeOptions = [
-  { value: 'incoming', label: 'Incoming' },
-  { value: 'production', label: 'Production' },
-  { value: 'finished', label: 'Finished' },
+  { value: 'incoming', label: 'Incoming (procurement)' },
+  { value: 'production', label: 'Production output' },
+  { value: 'finished', label: 'Finished goods' },
 ];
 
 const qualityStatusOptions = [
@@ -19,14 +21,25 @@ const qualityStatusOptions = [
   { value: 'CONDITIONAL', label: 'Conditional' },
 ];
 
-const qualitySchema = z.object({
-  type: z.string().min(1, 'Type is required'),
-  goodsReceiptId: z.string().optional(),
-  productionOrderId: z.string().optional(),
-  status: z.enum(['PENDING', 'PASSED', 'FAILED', 'CONDITIONAL']).optional(),
-  result: z.string().optional(),
-  defectsFound: z.coerce.number().int().min(0).optional(),
-});
+const qualitySchema = z
+  .object({
+    type: z.string().min(1, 'Type is required'),
+    goodsReceiptId: z.string().optional(),
+    productionOrderId: z.string().optional(),
+    productId: z.string().optional(),
+    status: z.enum(['PENDING', 'PASSED', 'FAILED', 'CONDITIONAL']).optional(),
+    result: z.string().optional(),
+    defectsFound: z.coerce.number().int().min(0).optional(),
+  })
+  .superRefine((data, ctx) => {
+    if ((data.type === 'production' || data.type === 'finished') && !data.productionOrderId && !data.productId) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Select a product for surplus-stock inspections, or link a production order',
+        path: ['productId'],
+      });
+    }
+  });
 
 type QualityFormData = z.infer<typeof qualitySchema>;
 
@@ -54,6 +67,8 @@ export function QualityForm({ onSuccess, onCancel }: QualityFormProps) {
     queryFn: () => operationsApi.production({ limit: 100 }).then((r) => r.data.data as ProductionOrder[]),
   });
 
+  const { data: productsData } = useProductPicker();
+
   const goodsReceiptOptions = [
     { value: '', label: 'None' },
     ...(goodsReceiptsData || [])
@@ -62,20 +77,30 @@ export function QualityForm({ onSuccess, onCancel }: QualityFormProps) {
   ];
 
   const productionOptions = [
-    { value: '', label: 'None' },
+    { value: '', label: 'None — surplus / batch inspection' },
     ...(productionData || []).map((po) => ({ value: po.id, label: po.orderNumber })),
   ];
 
-  const { register, handleSubmit, formState: { errors } } = useForm<QualityFormData>({
+  const productOptions = [
+    { value: '', label: 'Select product…' },
+    ...(productsData || []).map((p) => ({ value: p.id, label: formatProductOptionLabel(p) })),
+  ];
+
+  const { register, handleSubmit, watch, formState: { errors } } = useForm<QualityFormData>({
     resolver: zodResolver(qualitySchema),
     defaultValues: {
-      type: 'incoming',
+      type: 'production',
       status: 'PENDING',
       goodsReceiptId: '',
       productionOrderId: '',
+      productId: '',
       defectsFound: 0,
     },
   });
+
+  const inspectionType = watch('type');
+  const isIncoming = inspectionType === 'incoming';
+  const isProductionOutput = inspectionType === 'production' || inspectionType === 'finished';
 
   const mutation = useMutation({
     mutationFn: (data: QualityFormData) => {
@@ -83,6 +108,7 @@ export function QualityForm({ onSuccess, onCancel }: QualityFormProps) {
         ...data,
         goodsReceiptId: data.goodsReceiptId || undefined,
         productionOrderId: data.productionOrderId || undefined,
+        productId: data.productId || undefined,
       };
       return qualityApi.create(payload);
     },
@@ -101,14 +127,30 @@ export function QualityForm({ onSuccess, onCancel }: QualityFormProps) {
         </div>
       )}
 
+      <p className="text-xs text-slate-500">
+        Production inspections do not require a sales or production order. Select a product for surplus-stock runs, or link a production order when available.
+      </p>
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Select label="Type *" options={qualityTypeOptions} {...register('type')} error={errors.type?.message} />
         <Select label="Status" options={qualityStatusOptions} {...register('status')} />
-        <Select label="Goods Receipt" options={goodsReceiptOptions} {...register('goodsReceiptId')} />
-        <Select label="Production Order" options={productionOptions} {...register('productionOrderId')} />
+        {isIncoming && (
+          <Select label="Goods Receipt" options={goodsReceiptOptions} {...register('goodsReceiptId')} />
+        )}
+        {isProductionOutput && (
+          <>
+            <Select
+              label="Product"
+              options={productOptions}
+              {...register('productId')}
+              error={errors.productId?.message}
+            />
+            <Select label="Production Order (optional)" options={productionOptions} {...register('productionOrderId')} />
+          </>
+        )}
         <Input label="Defects Found" type="number" min={0} {...register('defectsFound')} />
       </div>
-      <Input label="Result" {...register('result')} />
+      <Input label="Result" {...register('result')} placeholder="Inspection notes, batch reference, etc." />
 
       <div className="flex justify-end gap-3 pt-4 border-t">
         <Button type="button" variant="secondary" onClick={onCancel}>Cancel</Button>

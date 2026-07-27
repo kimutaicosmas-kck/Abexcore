@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, Trash2 } from 'lucide-react';
 import { financeApi } from '../../services/api';
 import { Button, Input, Select } from '../ui';
+import { getApiErrorMessage } from '../../utils/apiError';
 
 const lineSchema = z.object({
   accountId: z.string().min(1, 'Account is required'),
@@ -97,7 +98,7 @@ export function JournalEntryForm({ onSuccess, onCancel }: JournalEntryFormProps)
     <form onSubmit={handleSubmit((data) => mutation.mutate(data))} className="space-y-4">
       {mutation.isError && (
         <div className="p-3 rounded-lg bg-red-50 text-red-700 text-sm">
-          Failed to post journal entry. Please try again.
+          {getApiErrorMessage(mutation.error)}
         </div>
       )}
       {errors.lines?.message && (

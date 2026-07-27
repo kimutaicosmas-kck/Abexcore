@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
-import { Target, TrendingUp, Wallet, Receipt } from 'lucide-react';
+import { Target, TrendingUp, Wallet, Receipt, AlertCircle } from 'lucide-react';
 import { financeApi } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import { getApiErrorMessage } from '../utils/apiError';
@@ -168,19 +168,6 @@ export function MySalesPage() {
 
   return (
     <div className="space-y-4">
-      {!canLoadDashboard && !authLoading && (
-        <Alert variant="warning">
-          Open <strong>My Sales</strong> as a Sales Officer, or use <strong>Details</strong> on Sales Performance to
-          view a salesperson&apos;s results.
-        </Alert>
-      )}
-
-      {data?.salesPerson && salesPersonId && (
-        <p className="text-sm text-slate-600">
-          Viewing performance for <span className="font-semibold text-slate-900">{data.salesPerson.name}</span>
-        </p>
-      )}
-
       {summary && (
         <StatGrid>
           <StatCard
@@ -193,13 +180,13 @@ export function MySalesPage() {
             title="Invoiced"
             value={formatCurrency(summary.totalInvoiced)}
             icon={<Receipt className="h-5 w-5 text-white" />}
-            color="from-primary-500 to-indigo-600"
+            color="from-primary-500 to-primary-700"
           />
           <StatCard
             title="Collected"
             value={formatCurrency(summary.totalPaid)}
             icon={<Wallet className="h-5 w-5 text-white" />}
-            color="from-violet-500 to-purple-600"
+            color="from-primary-600 to-primary-800"
           />
           <StatCard
             title="Monthly target"
@@ -207,7 +194,26 @@ export function MySalesPage() {
             icon={<Target className="h-5 w-5 text-white" />}
             color="from-amber-500 to-orange-600"
           />
+          <StatCard
+            title="Outstanding"
+            value={formatCurrency(summary.outstanding)}
+            icon={<AlertCircle className="h-5 w-5 text-white" />}
+            color="from-slate-600 to-slate-800"
+          />
         </StatGrid>
+      )}
+
+      {!canLoadDashboard && !authLoading && (
+        <Alert variant="warning">
+          Open <strong>My Sales</strong> as a Sales Officer, or use <strong>Details</strong> on Sales Performance to
+          view a salesperson&apos;s results.
+        </Alert>
+      )}
+
+      {data?.salesPerson && salesPersonId && (
+        <p className="text-sm text-slate-600">
+          Viewing performance for <span className="font-semibold text-slate-900">{data.salesPerson.name}</span>
+        </p>
       )}
 
       <Card title="Date range">

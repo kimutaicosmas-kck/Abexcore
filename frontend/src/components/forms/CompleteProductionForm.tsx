@@ -4,14 +4,13 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { operationsApi, inventoryApi, qualityApi } from '../../services/api';
-import { Button, Input, Select, getApiErrorMessage } from '../ui';
+import { Button, Input, getApiErrorMessage } from '../ui';
 import { useAuth } from '../../contexts/AuthContext';
 import { QualityInspection } from '../../types';
 
 const completeProductionSchema = z.object({
   completedQty: z.coerce.number().int().min(1, 'Completed quantity must be at least 1'),
   rejectedQty: z.coerce.number().int().min(0).optional(),
-  warehouseId: z.string().min(1, 'Warehouse is required'),
 });
 
 type CompleteProductionFormData = z.infer<typeof completeProductionSchema>;
@@ -20,10 +19,12 @@ interface Warehouse {
   id: string;
   name: string;
   code: string;
+  type: string;
 }
 
 interface CompleteProductionFormProps {
   productionId: string;
+  productId: string;
   orderQuantity?: number;
   orderNumber?: string;
   onSuccess: () => void;
@@ -32,6 +33,7 @@ interface CompleteProductionFormProps {
 
 export function CompleteProductionForm({
   productionId,
+  productId,
   orderQuantity,
   orderNumber,
   onSuccess,
@@ -46,10 +48,12 @@ export function CompleteProductionForm({
     queryFn: () => inventoryApi.warehouses().then((r) => r.data.data as Warehouse[]),
   });
 
+  const finishedGoodsWarehouse = warehousesData?.find((w) => w.type === 'finished_goods');
+
   const {
-    data: inspections,
-    isLoading: inspectionsLoading,
-    refetch: refetchInspections,
+    data: linkedInspections,
+    isLoading: linkedLoading,
+    refetch: refetchLinked,
   } = useQuery({
     queryKey: ['quality', 'production', productionId],
     queryFn: () =>
@@ -57,6 +61,29 @@ export function CompleteProductionForm({
         .list({ productionOrderId: productionId, limit: 5 })
         .then((r) => r.data.data as QualityInspection[]),
   });
+
+  const {
+    data: standaloneInspections,
+    isLoading: standaloneLoading,
+    refetch: refetchStandalone,
+  } = useQuery({
+    queryKey: ['quality', 'product', productId, 'standalone'],
+    queryFn: () =>
+      qualityApi
+        .list({ productId, limit: 10 })
+        .then((r) =>
+          (r.data.data as QualityInspection[]).filter((i) => !i.productionOrder && (i.type === 'production' || i.type === 'finished'))
+        ),
+    enabled: !!productId,
+  });
+
+  const inspections = [...(linkedInspections || []), ...(standaloneInspections || [])];
+  const inspectionsLoading = linkedLoading || standaloneLoading;
+
+  const refetchInspections = () => {
+    refetchLinked();
+    refetchStandalone();
+  };
 
   const ensureInspectionMutation = useMutation({
     mutationFn: () =>
@@ -74,13 +101,21 @@ export function CompleteProductionForm({
     if (inspectionsLoading || ensureInspectionMutation.isPending || ensureInspectionMutation.isError) {
       return;
     }
-    if (inspections && inspections.length === 0) {
+    const hasLinked = linkedInspections && linkedInspections.length > 0;
+    const hasStandalonePassed = standaloneInspections?.some((i) => i.status === 'PASSED');
+    if (!hasLinked && !hasStandalonePassed) {
       ensureInspectionMutation.mutate();
     }
-  }, [inspections, inspectionsLoading, ensureInspectionMutation.isPending, ensureInspectionMutation.isError]);
+  }, [
+    linkedInspections,
+    standaloneInspections,
+    inspectionsLoading,
+    ensureInspectionMutation.isPending,
+    ensureInspectionMutation.isError,
+  ]);
 
-  const passedInspection = inspections?.find((i) => i.status === 'PASSED');
-  const pendingInspection = inspections?.find((i) => i.status === 'PENDING');
+  const passedInspection = inspections.find((i) => i.status === 'PASSED');
+  const pendingInspection = inspections.find((i) => i.status === 'PENDING');
 
   const passQcMutation = useMutation({
     mutationFn: (inspectionId: string) =>
@@ -95,17 +130,11 @@ export function CompleteProductionForm({
     },
   });
 
-  const warehouseOptions = [
-    { value: '', label: 'Select warehouse...' },
-    ...(warehousesData || []).map((w) => ({ value: w.id, label: `${w.code} - ${w.name}` })),
-  ];
-
   const { register, handleSubmit, formState: { errors } } = useForm<CompleteProductionFormData>({
     resolver: zodResolver(completeProductionSchema),
     defaultValues: {
       completedQty: orderQuantity && orderQuantity > 0 ? orderQuantity : 1,
       rejectedQty: 0,
-      warehouseId: '',
     },
   });
 
@@ -138,10 +167,10 @@ export function CompleteProductionForm({
         <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-900 text-sm space-y-2">
           <p className="font-medium">Quality inspection required</p>
           <p>
-            A passed quality check is required before production can be completed.
+            Pass a quality check linked to this order, or a standalone product inspection for surplus stock.
             {pendingInspection
               ? ' Mark the pending inspection as passed to continue.'
-              : ' Create and pass a quality inspection to continue.'}
+              : ' Create and pass a quality inspection in Quality to continue.'}
           </p>
           {canPassQc && pendingInspection && (
             <Button
@@ -159,7 +188,8 @@ export function CompleteProductionForm({
         </div>
       ) : (
         <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm">
-          Quality check passed ({passedInspection?.inspectionNo}). You can complete production.
+          Quality check passed ({passedInspection?.inspectionNo}
+          {passedInspection?.productionOrder ? '' : ' — surplus stock inspection'}). You can complete production.
         </div>
       )}
 
@@ -175,6 +205,18 @@ export function CompleteProductionForm({
         </div>
       )}
 
+      <div className="p-3 rounded-lg bg-primary-50/80 border border-primary-100 text-sm text-primary-900">
+        <p className="font-medium">Output warehouse</p>
+        <p className="text-primary-800/90 mt-0.5">
+          {finishedGoodsWarehouse
+            ? `${finishedGoodsWarehouse.code} — ${finishedGoodsWarehouse.name}`
+            : 'Finished goods warehouse (configured automatically)'}
+        </p>
+        <p className="text-xs text-primary-700/70 mt-1">
+          Completed units are always posted to finished goods stock so sales can reserve them.
+        </p>
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Input
           label="Completed Quantity *"
@@ -189,13 +231,6 @@ export function CompleteProductionForm({
           type="number"
           min={0}
           {...register('rejectedQty')}
-          disabled={qcBlocked}
-        />
-        <Select
-          label="Warehouse *"
-          options={warehouseOptions}
-          {...register('warehouseId')}
-          error={errors.warehouseId?.message}
           disabled={qcBlocked}
         />
       </div>

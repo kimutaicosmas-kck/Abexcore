@@ -2,11 +2,13 @@ import prisma from '../config/database';
 import { startOfDay, startOfMonth, endOfDay, subDays } from '../utils/date';
 import { getNetAccountsReceivable } from '../utils/finance-metrics';
 import { InvoiceMaintenanceService } from './invoice-maintenance.service';
+import { mergeTenantWarehouseWhere, requireTenantId } from '../utils/tenant';
 
 export class DashboardService {
   static async getKPIs(userId: string) {
     await InvoiceMaintenanceService.markOverdueInvoices();
 
+    const companyId = requireTenantId();
     const today = startOfDay(new Date());
     const monthStart = startOfMonth(new Date());
     const monthEnd = endOfDay(new Date());
@@ -50,10 +52,10 @@ export class DashboardService {
       prisma.salesOrder.count({ where: { status: 'CONFIRMED' } }),
       prisma.rawMaterial.findMany({
         where: { isActive: true, deletedAt: null },
-        include: { stockLevels: true },
+        include: { stockLevels: { where: { warehouse: { companyId } } } },
       }),
       prisma.stockLevel.aggregate({
-        where: { productId: { not: null } },
+        where: mergeTenantWarehouseWhere({ productId: { not: null } }),
         _sum: { quantity: true },
       }),
       prisma.salesOrder.findMany({
@@ -66,24 +68,25 @@ export class DashboardService {
         _count: { id: true },
       }),
       prisma.purchaseRequisition.count({ where: { status: 'PENDING' } }),
-      prisma.leaveRequest.count({ where: { status: 'PENDING' } }),
-      prisma.complaint.count({ where: { status: { in: ['PENDING', 'DRAFT'] } } }),
+      prisma.leaveRequest.count({ where: { status: 'PENDING', employee: { companyId } } }),
+      prisma.complaint.count({ where: { status: { in: ['PENDING', 'DRAFT'] }, customer: { companyId } } }),
       prisma.requestForQuotation.count({ where: { status: 'PENDING' } }),
       prisma.invoice.count({
         where: { type: 'SALES', status: 'OVERDUE' },
       }),
       prisma.notification.count({ where: { userId, isRead: false } }),
-      prisma.attendance.count({ where: { date: today } }),
+      prisma.attendance.count({ where: { date: today, employee: { companyId } } }),
       prisma.employee.count({ where: { isActive: true, deletedAt: null } }),
-      prisma.opportunity.count({ where: { status: { in: ['PENDING', 'APPROVED'] } } }),
+      prisma.opportunity.count({ where: { status: { in: ['PENDING', 'APPROVED'] }, customer: { companyId } } }),
       prisma.opportunity.aggregate({
-        where: { status: { in: ['PENDING', 'APPROVED'] } },
+        where: { status: { in: ['PENDING', 'APPROVED'] }, customer: { companyId } },
         _sum: { value: true },
       }),
       getNetAccountsReceivable(),
     ]);
 
     const inventoryValue = await prisma.stockLevel.findMany({
+      where: mergeTenantWarehouseWhere(),
       include: { product: true, rawMaterial: true },
     });
 
@@ -100,6 +103,7 @@ export class DashboardService {
       where: {
         deliveryNote: {
           createdAt: { gte: monthStart, lte: monthEnd },
+          salesOrder: { companyId },
         },
       },
       select: { productId: true, quantity: true },
@@ -117,19 +121,28 @@ export class DashboardService {
 
     const products = await prisma.product.findMany({
       where: { id: { in: topProductIds } },
-      select: { id: true, name: true, sku: true, category: true },
+      select: { id: true, name: true, sku: true, category: { select: { name: true } } },
     });
 
-    const topSelling = topProductIds.map((productId) => ({
-      ...products.find((p) => p.id === productId),
-      quantitySold: productQtyMap.get(productId) || 0,
-    }));
+    const topSelling = topProductIds
+      .map((productId) => {
+        const product = products.find((p) => p.id === productId);
+        if (!product) return null;
+        return {
+          id: product.id,
+          name: product.name,
+          sku: product.sku,
+          quantitySold: productQtyMap.get(productId) || 0,
+        };
+      })
+      .filter((item): item is NonNullable<typeof item> => item !== null);
 
     const categoryQtyMap = new Map<string, number>();
     for (const item of deliveryItems) {
       const product = products.find((p) => p.id === item.productId);
       if (!product) continue;
-      categoryQtyMap.set(product.category, (categoryQtyMap.get(product.category) || 0) + item.quantity);
+      const categoryName = product.category?.name || 'Uncategorized';
+      categoryQtyMap.set(categoryName, (categoryQtyMap.get(categoryName) || 0) + item.quantity);
     }
 
     const productCategories = [...categoryQtyMap.entries()]
@@ -175,7 +188,7 @@ export class DashboardService {
       monthlyRevenue: revenue,
       monthlyProfit: revenue - expenses,
       monthlyExpenses: expenses,
-      topSellingFilters: topSelling,
+      topSellingProducts: topSelling,
       productCategories,
       recentOrders: recentOrders.map((o) => ({
         id: o.id,
@@ -217,6 +230,7 @@ export class DashboardService {
   }
 
   static async getChartData(days = 30) {
+    const companyId = requireTenantId();
     const safeDays = Math.min(Math.max(days, 7), 90);
     const start = startOfDay(subDays(new Date(), safeDays - 1));
     const end = endOfDay(new Date());
@@ -232,7 +246,10 @@ export class DashboardService {
       }),
       prisma.deliveryItem.findMany({
         where: {
-          deliveryNote: { createdAt: { gte: start, lte: end } },
+          deliveryNote: {
+            createdAt: { gte: start, lte: end },
+            salesOrder: { companyId },
+          },
         },
         select: { productId: true, quantity: true },
       }),
@@ -241,14 +258,15 @@ export class DashboardService {
     const productIds = [...new Set(deliveryItems.map((item) => item.productId))];
     const products = await prisma.product.findMany({
       where: { id: { in: productIds } },
-      select: { id: true, category: true },
+      select: { id: true, categoryId: true, category: { select: { name: true } } },
     });
 
     const categoryQtyMap = new Map<string, number>();
     for (const item of deliveryItems) {
       const product = products.find((p) => p.id === item.productId);
       if (!product) continue;
-      categoryQtyMap.set(product.category, (categoryQtyMap.get(product.category) || 0) + item.quantity);
+      const categoryName = product.category?.name || 'Uncategorized';
+      categoryQtyMap.set(categoryName, (categoryQtyMap.get(categoryName) || 0) + item.quantity);
     }
 
     const productionByCategory = [...categoryQtyMap.entries()].map(([category, count]) => ({

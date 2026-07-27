@@ -1,5 +1,5 @@
 {
-  "name": "filter-erp-backend",
+  "name": "apexcore-erp-backend",
   "version": "2.0.0",
   "description": "ApexCore ERP Backend API — Designed by ApexCore Technologies",
   "main": "dist/index.js",
@@ -11,9 +11,12 @@
     "db:migrate": "prisma migrate dev",
     "db:migrate:prod": "prisma migrate deploy",
     "db:seed": "tsx prisma/seed.ts",
+    "db:seed:demo": "tsx scripts/seed-demo-data.ts",
     "db:refresh-roles": "tsx scripts/refresh-role-permissions.ts",
     "db:seed:production": "tsx prisma/seed.production.ts",
+    "db:purge-legacy": "tsx scripts/purge-legacy-tenants.ts",
     "db:studio": "prisma studio",
+    "openapi:generate": "tsx scripts/generate-openapi-paths.ts",
     "test": "vitest run",
     "test:watch": "vitest"
   },
@@ -34,6 +37,7 @@
     "jsonwebtoken": "^9.0.2",
     "multer": "^1.4.5-lts.1",
     "nodemailer": "^6.10.0",
+    "pdf-parse": "^2.4.5",
     "pdfkit": "^0.16.0",
     "qrcode": "^1.5.4",
     "sharp": "^0.35.3",

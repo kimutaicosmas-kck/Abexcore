@@ -21,6 +21,7 @@ import {
   getStatusBadge,
   PageToolbar,
   ConfirmDialog,
+  PageQueryStatus,
 } from '../components/ui';
 import { Modal } from '../components/ui/Modal';
 import { MaintenanceForm } from '../components/forms/MaintenanceForm';
@@ -58,13 +59,13 @@ export function MaintenancePage() {
     queryFn: () => maintenanceApi.stats().then((r) => r.data.data as MaintenanceStats),
   });
 
-  const { data: machines, isLoading: machLoading } = useQuery({
+  const { data: machines, isLoading: machLoading, isError: machError, error: machErr, refetch: refetchMachines } = useQuery({
     queryKey: ['maintenance-machines', page, search],
     queryFn: () => maintenanceApi.machines({ page, limit: 12, search: search || undefined }).then((r) => r.data),
     enabled: activeTab === 0 || activeTab === 1,
   });
 
-  const { data: requests, isLoading: reqLoading } = useQuery({
+  const { data: requests, isLoading: reqLoading, isError: reqError, error: reqErr, refetch: refetchRequests } = useQuery({
     queryKey: ['maintenance-requests', page, search, status],
     queryFn: () =>
       maintenanceApi.requests({ page, limit: 15, search: search || undefined, status: status || undefined }).then((r) => r.data),
@@ -127,7 +128,25 @@ export function MaintenancePage() {
     ) : undefined);
 
   return (
-    <div className="space-y-1">
+    <div className="space-y-4">
+      <PageQueryStatus
+        isError={machError || reqError}
+        error={machErr || reqErr}
+        onRetry={() => {
+          void refetchMachines();
+          void refetchRequests();
+        }}
+      />
+      {stats && (
+        <StatGrid>
+          <StatCard title="Machines" value={stats.totalMachines} icon={<Cog className="h-5 w-5 text-white" />} color="from-primary-500 to-primary-700" />
+          <StatCard title="Operational" value={stats.operational} icon={<CheckCircle2 className="h-5 w-5 text-white" />} color="from-emerald-500 to-teal-600" />
+          <StatCard title="Open Requests" value={stats.openRequests} icon={<Wrench className="h-5 w-5 text-white" />} color="from-amber-500 to-orange-600" />
+          <StatCard title="Overdue" value={stats.overdueRequests} icon={<AlertTriangle className="h-5 w-5 text-white" />} color="from-red-500 to-rose-600" />
+          <StatCard title="Completed (Month)" value={stats.completedMonth} icon={<Calendar className="h-5 w-5 text-white" />} color="from-slate-600 to-slate-800" />
+        </StatGrid>
+      )}
+
       <PageHeader action={
           stats && stats.overdueRequests > 0 ? (
             <Button variant="secondary" size="sm" onClick={() => { setStatus('OVERDUE'); setPage(1); goToTab(2); }}>
@@ -142,15 +161,6 @@ export function MaintenancePage() {
           ) : undefined
         }
       />
-
-      {stats && (
-        <StatGrid>
-          <StatCard title="Machines" value={stats.totalMachines} icon={<Cog className="h-5 w-5 text-white" />} color="from-primary-500 to-indigo-600" />
-          <StatCard title="Operational" value={stats.operational} icon={<CheckCircle2 className="h-5 w-5 text-white" />} color="from-emerald-500 to-teal-600" />
-          <StatCard title="Open Requests" value={stats.openRequests} icon={<Wrench className="h-5 w-5 text-white" />} color="from-amber-500 to-orange-600" />
-          <StatCard title="Overdue" value={stats.overdueRequests} icon={<AlertTriangle className="h-5 w-5 text-white" />} color="from-red-500 to-rose-600" />
-        </StatGrid>
-      )}
 
       <PageToolbar
         tabs={tabs}

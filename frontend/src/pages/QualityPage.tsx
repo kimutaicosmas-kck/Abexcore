@@ -106,7 +106,11 @@ export function QualityPage() {
       render: (_: unknown, row: Record<string, unknown>) => {
         const gr = row.goodsReceipt as { grnNumber: string } | undefined;
         const po = row.productionOrder as { orderNumber: string } | undefined;
-        return gr?.grnNumber || po?.orderNumber || '—';
+        const product = row.product as { name: string; sku: string } | undefined;
+        if (gr?.grnNumber) return gr.grnNumber;
+        if (po?.orderNumber) return po.orderNumber;
+        if (product?.name) return product.sku ? `${product.sku} — ${product.name}` : product.name;
+        return '—';
       },
     },
     {
@@ -134,23 +138,7 @@ export function QualityPage() {
     ) : undefined);
 
   return (
-    <div className="space-y-1">
-      <PageHeader
-        action={
-          stats && stats.pending > 0 ? (
-            <Button variant="secondary" size="sm" onClick={() => { setStatus('PENDING'); setPage(1); goToTab(1); }}>
-              <ClipboardCheck className="h-4 w-4 mr-1.5 text-amber-500" />
-              {stats.pending} pending
-            </Button>
-          ) : stats && stats.failed > 0 ? (
-            <Button variant="secondary" size="sm" onClick={() => { setStatus('FAILED'); setPage(1); goToTab(1); }}>
-              <XCircle className="h-4 w-4 mr-1.5 text-red-500" />
-              {stats.failed} failed
-            </Button>
-          ) : undefined
-        }
-      />
-
+    <div className="space-y-4">
       {stats && (
         <StatGrid>
           <StatCard
@@ -175,10 +163,32 @@ export function QualityPage() {
             title="Pass Rate"
             value={`${stats.passRate}%`}
             icon={<Percent className="h-5 w-5 text-white" />}
-            color="from-primary-500 to-indigo-600"
+            color="from-primary-500 to-primary-700"
+          />
+          <StatCard
+            title="Total Inspections"
+            value={stats.total}
+            icon={<ClipboardCheck className="h-5 w-5 text-white" />}
+            color="from-slate-600 to-slate-800"
           />
         </StatGrid>
       )}
+
+      <PageHeader
+        action={
+          stats && stats.pending > 0 ? (
+            <Button variant="secondary" size="sm" onClick={() => { setStatus('PENDING'); setPage(1); goToTab(1); }}>
+              <ClipboardCheck className="h-4 w-4 mr-1.5 text-amber-500" />
+              {stats.pending} pending
+            </Button>
+          ) : stats && stats.failed > 0 ? (
+            <Button variant="secondary" size="sm" onClick={() => { setStatus('FAILED'); setPage(1); goToTab(1); }}>
+              <XCircle className="h-4 w-4 mr-1.5 text-red-500" />
+              {stats.failed} failed
+            </Button>
+          ) : undefined
+        }
+      />
 
       <PageToolbar tabs={tabs} activeTab={activeTab} onTabChange={setActiveTab} actions={toolbarActions} />
 
@@ -345,6 +355,9 @@ export function QualityPage() {
               )}
               {selected.productionOrder && (
                 <div><p className="text-slate-500">Production Order</p><p className="font-semibold">{selected.productionOrder.orderNumber}</p></div>
+              )}
+              {selected.product && !selected.productionOrder && (
+                <div><p className="text-slate-500">Product</p><p className="font-semibold">{selected.product.sku} — {selected.product.name}</p></div>
               )}
             </div>
             {selected.result && (

@@ -1,20 +1,18 @@
+import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AxiosError } from 'axios';
 import { productsApi } from '../../services/api';
-import { Button, Input, Select } from '../ui';
-import { Product } from '../../types';
+import { Button, Input, Select, NumberInput } from '../ui';
+import { Product, ProductCategoryOption } from '../../types';
 
 const productSchema = z.object({
   sku: z.string().min(1, 'Part number is required'),
   barcode: z.string().optional(),
   name: z.string().min(1, 'Name is required'),
-  category: z.enum([
-    'OIL_FILTER', 'FUEL_FILTER', 'AIR_FILTER', 'CABIN_FILTER',
-    'HYDRAULIC_FILTER', 'WATER_FILTER', 'INDUSTRIAL_FILTER', 'CUSTOM_FILTER',
-  ]),
+  categoryId: z.string().uuid('Select a category'),
   description: z.string().optional(),
   sellingPrice: z.coerce.number().min(0).optional(),
   distributorPrice: z.coerce.number().min(0).optional(),
@@ -42,10 +40,12 @@ interface ProductFormProps {
 export function ProductForm({ product, onSuccess, onCancel }: ProductFormProps) {
   const queryClient = useQueryClient();
   const isEdit = !!product;
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [categoryError, setCategoryError] = useState('');
 
   const { data: categoriesData } = useQuery({
     queryKey: ['product-categories'],
-    queryFn: () => productsApi.categories().then((r) => r.data.data as string[]),
+    queryFn: () => productsApi.categories().then((r) => r.data.data as ProductCategoryOption[]),
   });
 
   const { data: warehousesData } = useQuery({
@@ -55,8 +55,8 @@ export function ProductForm({ product, onSuccess, onCancel }: ProductFormProps) 
   });
 
   const categoryOptions = (categoriesData || []).map((c) => ({
-    value: c,
-    label: c.replace(/_/g, ' '),
+    value: c.id,
+    label: c.name,
   }));
 
   const warehouseOptions = [
@@ -67,14 +67,16 @@ export function ProductForm({ product, onSuccess, onCancel }: ProductFormProps) 
     })),
   ];
 
-  const { register, handleSubmit, watch, formState: { errors } } = useForm<ProductFormData>({
+  const defaultCategoryId = product?.categoryId || product?.category?.id || categoriesData?.[0]?.id || '';
+
+  const { register, handleSubmit, watch, setValue, formState: { errors } } = useForm<ProductFormData>({
     resolver: zodResolver(productSchema),
     defaultValues: product
       ? {
           sku: product.sku,
           barcode: product.barcode || '',
           name: product.name,
-          category: product.category as ProductFormData['category'],
+          categoryId: defaultCategoryId,
           sellingPrice: Number(product.sellingPrice),
           distributorPrice: Number(product.distributorPrice),
           retailPrice: Number(product.retailPrice),
@@ -83,7 +85,7 @@ export function ProductForm({ product, onSuccess, onCancel }: ProductFormProps) 
           isActive: product.isActive,
         }
       : {
-          category: 'OIL_FILTER',
+          categoryId: defaultCategoryId,
           minStockLevel: 0,
           initialQuantity: 0,
           warehouseId: '',
@@ -93,10 +95,32 @@ export function ProductForm({ product, onSuccess, onCancel }: ProductFormProps) 
 
   const initialQuantity = Number(watch('initialQuantity') || 0);
 
+  useEffect(() => {
+    if (!isEdit && categoriesData?.[0]?.id) {
+      setValue('categoryId', categoriesData[0].id, { shouldValidate: true });
+    }
+  }, [categoriesData, isEdit, setValue]);
+
+  const createCategoryMutation = useMutation({
+    mutationFn: (name: string) => productsApi.createCategory({ name }),
+    onSuccess: (res) => {
+      queryClient.invalidateQueries({ queryKey: ['product-categories'] });
+      setValue('categoryId', res.data.data.id, { shouldValidate: true });
+      setNewCategoryName('');
+      setCategoryError('');
+    },
+    onError: (err: unknown) => {
+      setCategoryError(
+        (err as AxiosError<{ message?: string }>).response?.data?.message || 'Failed to add category.'
+      );
+    },
+  });
+
   const mutation = useMutation({
     mutationFn: (data: ProductFormData) => {
       const payload = {
         ...data,
+        barcode: data.barcode?.trim() || undefined,
         warehouseId: data.warehouseId || undefined,
       };
       return isEdit ? productsApi.update(product!.id, payload) : productsApi.create(payload);
@@ -124,19 +148,53 @@ export function ProductForm({ product, onSuccess, onCancel }: ProductFormProps) 
         <Input label="Part number *" {...register('sku')} error={errors.sku?.message} disabled={isEdit} />
         <Input label="Barcode" {...register('barcode')} />
         <Input label="Product Name *" {...register('name')} error={errors.name?.message} className="md:col-span-2" />
-        <Select label="Category *" options={categoryOptions} {...register('category')} error={errors.category?.message} />
-        <Input label="Min Stock Level" type="number" {...register('minStockLevel')} />
+        <div className="md:col-span-2 space-y-2">
+          <Select
+            label="Category *"
+            options={categoryOptions.length ? categoryOptions : [{ value: '', label: 'No categories yet' }]}
+            {...register('categoryId')}
+            error={errors.categoryId?.message}
+            disabled={!categoryOptions.length}
+          />
+          <div className="flex flex-col sm:flex-row gap-2">
+            <Input
+              label="Add category"
+              placeholder="e.g. Electronics, Clothing, Food"
+              value={newCategoryName}
+              onChange={(e) => setNewCategoryName(e.target.value)}
+              error={categoryError}
+            />
+            <Button
+              type="button"
+              variant="secondary"
+              className="sm:mt-6"
+              loading={createCategoryMutation.isPending}
+              disabled={!newCategoryName.trim()}
+              onClick={() => createCategoryMutation.mutate(newCategoryName.trim())}
+            >
+              Add category
+            </Button>
+          </div>
+        </div>
+        <NumberInput
+          label="Min Stock Level"
+          min={0}
+          step={1}
+          value={watch('minStockLevel') ?? 0}
+          onChange={(v) => setValue('minStockLevel', v, { shouldValidate: true })}
+          error={errors.minStockLevel?.message}
+        />
         <Input label="Selling Price (KES)" type="number" step="0.01" {...register('sellingPrice')} />
         <Input label="Distributor Price (KES)" type="number" step="0.01" {...register('distributorPrice')} />
         <Input label="Retail Price (KES)" type="number" step="0.01" {...register('retailPrice')} />
         {!isEdit && (
           <>
-            <Input
+            <NumberInput
               label="Opening stock quantity"
-              type="number"
               min={0}
               step={1}
-              {...register('initialQuantity')}
+              value={watch('initialQuantity') ?? 0}
+              onChange={(v) => setValue('initialQuantity', v, { shouldValidate: true })}
               error={errors.initialQuantity?.message}
             />
             <Select

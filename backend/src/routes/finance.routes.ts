@@ -24,7 +24,9 @@ import { getParam, getQuery } from '../utils/request';
 import { FinanceService, ReportsService } from '../services/admin.service';
 import { AccountingService } from '../services/accounting.service';
 import { FinanceInvoiceService, FinancePaymentService } from '../services/finance.service';
-import { getVatRate, calcTax } from '../utils/company';
+import { SalesOrderService } from '../services/sales-order.service';
+import { getCompanySettings, getVatRate, calcTax } from '../utils/company';
+import { injectTenantData, requireTenantId } from '../utils/tenant';
 import { syncCustomerCreditUsed } from '../utils/credit';
 import { InvoiceMaintenanceService } from '../services/invoice-maintenance.service';
 import { BankReconciliationService } from '../services/bank-reconciliation.service';
@@ -38,12 +40,21 @@ router.get(
   '/config',
   authorizeAny('finance:read', 'sales:read', 'settings:read', 'customers:read'),
   asyncHandler(async (_req: AuthRequest, res: Response) => {
-    const company = await prisma.company.findFirst({
-      select: { name: true, legalName: true, vatRate: true, currency: true, taxPin: true, email: true, phone: true, address: true },
-    });
+    const company = await getCompanySettings(requireTenantId());
     res.json({
       success: true,
-      data: company ?? { name: 'Company', vatRate: 16, currency: 'KES' },
+      data: company
+        ? {
+            name: company.name,
+            legalName: company.legalName,
+            vatRate: Number(company.vatRate),
+            currency: company.currency,
+            taxPin: company.taxPin,
+            email: company.email,
+            phone: company.phone,
+            address: company.address,
+          }
+        : { name: 'Company', vatRate: 16, currency: 'KES' },
     });
   })
 );
@@ -82,9 +93,8 @@ router.get(
   '/company',
   authorize('settings:read'),
   asyncHandler(async (_req: AuthRequest, res: Response) => {
-    const company = await prisma.company.findFirst({
-      include: { branches: true, taxRates: true },
-    });
+    const company = await getCompanySettings(requireTenantId());
+    if (!company) throw new AppError('Company not found', 404);
     res.json({ success: true, data: company });
   })
 );
@@ -95,10 +105,12 @@ router.put(
   validate(companySettingsSchema),
   auditLog('settings', 'update', 'company'),
   asyncHandler(async (req: AuthRequest, res: Response) => {
-    const existing = await prisma.company.findFirst();
-    const company = existing
-      ? await prisma.company.update({ where: { id: existing.id }, data: req.body })
-      : await prisma.company.create({ data: req.body });
+    const companyId = requireTenantId();
+    const company = await prisma.company.update({
+      where: { id: companyId },
+      data: req.body,
+      include: { branches: true, taxRates: true },
+    });
     res.json({ success: true, data: company });
   })
 );
@@ -137,14 +149,14 @@ router.get(
   asyncHandler(async (req: AuthRequest, res: Response) => {
     await InvoiceMaintenanceService.markOverdueInvoices();
 
-    const { page, limit, search, type, status } = getQuery<{
+    const { page, limit, search, type, status, cursor } = getQuery<{
       page: number;
       limit: number;
       search?: string;
       type?: string;
       status?: string;
+      cursor?: string;
     }>(req.query);
-    const skip = (page - 1) * limit;
 
     const where: Prisma.InvoiceWhereInput = {};
     if (type) where.type = type as Prisma.EnumInvoiceTypeFilter['equals'];
@@ -156,6 +168,32 @@ router.get(
         { supplier: { name: { contains: search } } },
       ];
     }
+
+    if (cursor) {
+      const { buildCursorResult } = await import('../utils/cursorPagination');
+      const rows = await prisma.invoice.findMany({
+        where,
+        take: limit + 1,
+        cursor: { id: cursor },
+        skip: 1,
+        include: { customer: true, supplier: true, items: true, payments: true },
+        orderBy: { createdAt: 'desc' },
+      });
+      const pageResult = buildCursorResult(rows, limit);
+      res.json({
+        success: true,
+        data: pageResult.data,
+        pagination: {
+          limit: pageResult.limit,
+          nextCursor: pageResult.nextCursor,
+          prevCursor: pageResult.prevCursor,
+          hasMore: pageResult.hasMore,
+        },
+      });
+      return;
+    }
+
+    const skip = (page - 1) * limit;
 
     const [data, total] = await Promise.all([
       prisma.invoice.findMany({
@@ -208,9 +246,25 @@ router.post(
     const totalAmount = subtotal + taxAmount;
 
     const invoice = await prisma.$transaction(async (tx) => {
+      if (type === 'SALES' && salesOrderId) {
+        const order = await tx.salesOrder.findUnique({
+          where: { id: salesOrderId },
+          include: { items: { include: { product: true } } },
+        });
+        if (!order) throw new AppError('Sales order not found', 404);
+        await SalesOrderService.validateOrderLinesForInvoicing(
+          tx,
+          order.items.map((item) => ({
+            productId: item.productId,
+            quantity: item.quantity,
+            product: item.product,
+          }))
+        );
+      }
+
       const invoiceNumber = await nextInvoiceNumber(tx, type === 'SALES' ? 'INV' : 'PINV');
       const inv = await tx.invoice.create({
-        data: {
+        data: injectTenantData({
           invoiceNumber,
           type,
           customerId,
@@ -230,12 +284,13 @@ router.post(
               totalPrice: item.quantity * item.unitPrice,
             })),
           },
-        },
+        }),
         include: { customer: true, supplier: true, items: true },
       });
 
       if (type === 'SALES') {
         await AccountingService.postSalesInvoice(tx, {
+          id: inv.id,
           invoiceNumber: inv.invoiceNumber,
           subtotal: Number(inv.subtotal),
           taxAmount: Number(inv.taxAmount),
@@ -631,37 +686,46 @@ router.post(
   auditLog('finance', 'create', 'journal_entry'),
   asyncHandler(async (req: AuthRequest, res: Response) => {
     const { date, description, reference, lines } = req.body;
-    const count = await prisma.journalEntry.count();
-    const entryNumber = generateNumber('JE', count + 1);
+    const { AccountingService } = await import('../services/accounting.service');
 
-    const entry = await prisma.$transaction(async (tx) => {
-      const je = await tx.journalEntry.create({
-        data: {
-          entryNumber,
-          date: date ? new Date(date) : new Date(),
-          description,
-          reference,
-          isPosted: true,
-          lines: { create: lines },
-        },
-        include: { lines: { include: { account: true } } },
-      });
-
-      for (const line of lines) {
-        const account = await tx.account.findUnique({ where: { id: line.accountId } });
-        if (account) {
-          const change = Number(line.debit) - Number(line.credit);
-          await tx.account.update({
-            where: { id: line.accountId },
-            data: { balance: { increment: change } },
-          });
-        }
-      }
-
-      return je;
-    });
+    const entry = await prisma.$transaction(async (tx) =>
+      AccountingService.createJournalEntry(tx, {
+        date: date ? new Date(date) : new Date(),
+        description,
+        reference,
+        sourceType: 'MANUAL',
+        lines: lines.map((line: { accountId: string; debit: number; credit: number }) => ({
+          accountId: line.accountId,
+          debit: line.debit,
+          credit: line.credit,
+        })),
+      })
+    );
 
     res.status(201).json({ success: true, data: entry });
+  })
+);
+
+router.get(
+  '/reports/trial-balance',
+  authorize('reports:read'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const { AccountingService } = await import('../services/accounting.service');
+    const asOf = req.query.asOf ? new Date(String(req.query.asOf)) : undefined;
+    const data = await AccountingService.getTrialBalance(asOf);
+    res.json({ success: true, data });
+  })
+);
+
+router.get(
+  '/reports/general-ledger/:accountCode',
+  authorize('reports:read'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const { AccountingService } = await import('../services/accounting.service');
+    const start = req.query.start ? new Date(String(req.query.start)) : undefined;
+    const end = req.query.end ? new Date(String(req.query.end)) : undefined;
+    const data = await AccountingService.getGeneralLedger(getParam(req.params.accountCode), start, end);
+    res.json({ success: true, data });
   })
 );
 
@@ -725,9 +789,10 @@ router.post(
   authorize('finance:update'),
   auditLog('finance', 'create', 'bank_statement'),
   asyncHandler(async (req: AuthRequest, res: Response) => {
-    const { csvText, periodStart, periodEnd, openingBalance, closingBalance, bankAccountCode, notes } =
+    const { csvText, pdfBase64, periodStart, periodEnd, openingBalance, closingBalance, bankAccountCode, notes } =
       req.body as {
-        csvText: string;
+        csvText?: string;
+        pdfBase64?: string;
         periodStart: string;
         periodEnd: string;
         openingBalance?: number;
@@ -736,12 +801,13 @@ router.post(
         notes?: string;
       };
 
-    if (!csvText || !periodStart || !periodEnd) {
-      throw new AppError('csvText, periodStart, and periodEnd are required', 400);
+    if ((!csvText && !pdfBase64) || !periodStart || !periodEnd) {
+      throw new AppError('Provide csvText or pdfBase64, plus periodStart and periodEnd', 400);
     }
 
     const statement = await BankReconciliationService.importStatement({
       csvText,
+      pdfBase64,
       periodStart: new Date(periodStart),
       periodEnd: new Date(periodEnd),
       openingBalance,

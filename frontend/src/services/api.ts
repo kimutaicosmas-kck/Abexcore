@@ -12,6 +12,9 @@ const api = axios.create({
 api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   const token = localStorage.getItem('accessToken');
   if (token) config.headers.Authorization = `Bearer ${token}`;
+  if (config.data instanceof FormData) {
+    delete config.headers['Content-Type'];
+  }
   return config;
 });
 
@@ -25,24 +28,19 @@ api.interceptors.response.use(
   },
   async (error: AxiosError) => {
     const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
-    const url = originalRequest.url || '';
+    const url = originalRequest?.url || '';
     const isAuthEndpoint = url.includes('/auth/login') || url.includes('/auth/refresh');
-    if (error.response?.status === 401 && !originalRequest._retry && !isAuthEndpoint) {
+    const isSessionProbe = url.includes('/auth/me');
+    const onLoginPage = window.location.pathname === '/login';
+
+    if (error.response?.status === 401 && originalRequest && !originalRequest._retry && !isAuthEndpoint) {
       originalRequest._retry = true;
-      const refreshToken = localStorage.getItem('refreshToken');
-      if (refreshToken) {
-        try {
-          const { data } = await axios.post(`${API_BASE_URL}/auth/refresh`, { refreshToken });
-          localStorage.setItem('accessToken', data.data.accessToken);
-          localStorage.setItem('refreshToken', data.data.refreshToken);
-          originalRequest.headers.Authorization = `Bearer ${data.data.accessToken}`;
-          return api(originalRequest);
-        } catch {
-          localStorage.removeItem('accessToken');
-          localStorage.removeItem('refreshToken');
-          window.location.href = '/login';
-        }
-      } else {
+      const refreshed = await refreshAccessToken();
+      if (refreshed) {
+        originalRequest.headers.Authorization = `Bearer ${localStorage.getItem('accessToken')}`;
+        return api(originalRequest);
+      }
+      if (!isSessionProbe && !onLoginPage) {
         window.location.href = '/login';
       }
     }
@@ -52,9 +50,42 @@ api.interceptors.response.use(
 
 export default api;
 
+/** Refresh tokens using the stored refresh token. Returns false if refresh fails. */
+export async function refreshAccessToken(): Promise<boolean> {
+  const refreshToken = localStorage.getItem('refreshToken');
+  if (!refreshToken) return false;
+
+  try {
+    const { data } = await axios.post(`${API_BASE_URL}/auth/refresh`, { refreshToken });
+    localStorage.setItem('accessToken', data.data.accessToken);
+    localStorage.setItem('refreshToken', data.data.refreshToken);
+    return true;
+  } catch {
+    localStorage.removeItem('accessToken');
+    localStorage.removeItem('refreshToken');
+    return false;
+  }
+}
+
+export function isAccessTokenExpired(token: string): boolean {
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1])) as { exp?: number };
+    if (!payload.exp) return false;
+    return payload.exp * 1000 < Date.now() + 30_000;
+  } catch {
+    return true;
+  }
+}
+
+export function clearStoredSession() {
+  localStorage.removeItem('accessToken');
+  localStorage.removeItem('refreshToken');
+}
+
 export const authApi = {
-  login: (email: string, password: string, totpCode?: string) =>
-    api.post('/auth/login', { email, password, totpCode }),
+  login: (companySlug: string, email: string, password: string, totpCode?: string) =>
+    api.post('/auth/login', { companySlug, email, password, totpCode }),
+  resolveTenant: (slug: string) => api.get(`/auth/resolve-tenant/${encodeURIComponent(slug)}`),
   logout: (refreshToken?: string) => api.post('/auth/logout', { refreshToken }),
   me: () => api.get('/auth/me'),
   changePassword: (currentPassword: string, newPassword: string) =>
@@ -116,14 +147,17 @@ export const productsApi = {
   update: (id: string, data: object) => api.put(`/products/${id}`, data),
   delete: (id: string) => api.delete(`/products/${id}`),
   categories: () => api.get('/products/categories/list'),
+  manageCategories: () => api.get('/products/categories/manage'),
+  createCategory: (data: { name: string }) => api.post('/products/categories', data),
+  updateCategory: (id: string, data: { name?: string; isActive?: boolean }) =>
+    api.patch(`/products/categories/${id}`, data),
+  deactivateCategory: (id: string) => api.delete(`/products/categories/${id}`),
+  reorderCategories: (ids: string[]) => api.put('/products/categories/reorder', { ids }),
   stockWarehouses: () => api.get('/products/warehouses/stock'),
-  saveBOM: (id: string, data: object) => api.post(`/products/${id}/bom`, data),
   uploadImage: (id: string, file: File) => {
     const form = new FormData();
     form.append('image', file);
-    return api.post(`/products/${id}/image`, form, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    });
+    return api.post(`/products/${id}/image`, form);
   },
 };
 
@@ -133,6 +167,12 @@ export const inventoryApi = {
   transactions: (params?: object) => api.get('/inventory/transactions', { params }),
   materials: (params?: object) => api.get('/inventory/materials', { params }),
   lowStock: () => api.get('/inventory/materials/low-stock'),
+  materialTypes: () => api.get('/inventory/materials/types/list'),
+  manageMaterialTypes: () => api.get('/inventory/materials/types/manage'),
+  createMaterialType: (data: { name: string }) => api.post('/inventory/materials/types', data),
+  updateMaterialType: (id: string, data: { name?: string; isActive?: boolean }) =>
+    api.patch(`/inventory/materials/types/${id}`, data),
+  reorderMaterialTypes: (ids: string[]) => api.put('/inventory/materials/types/reorder', { ids }),
   createMaterial: (data: object) => api.post('/inventory/materials', data),
   updateMaterial: (id: string, data: object) => api.put(`/inventory/materials/${id}`, data),
   suppliers: (params?: object) => api.get('/inventory/suppliers', { params }),
@@ -174,6 +214,7 @@ export const operationsApi = {
   createSalesOrder: (data: object) => api.post('/operations/orders', data),
   updateOrderStatus: (id: string, status: string) =>
     api.patch(`/operations/orders/${id}/status`, { status }),
+  updateOrderItems: (id: string, data: object) => api.patch(`/operations/orders/${id}/items`, data),
   generateProductionFromOrder: (orderId: string) =>
     api.post(`/operations/orders/${orderId}/generate-production`),
   quotations: (params?: object) => api.get('/operations/quotations', { params }),
@@ -191,9 +232,12 @@ export const operationsApi = {
 export const deliveryApi = {
   stats: () => api.get('/delivery/stats'),
   list: (params?: object) => api.get('/delivery', { params }),
+  trips: (params?: object) => api.get('/delivery/trips', { params }),
+  getTrip: (id: string) => api.get(`/delivery/trips/${id}`),
   get: (id: string) => api.get(`/delivery/${id}`),
   create: (data: object) => api.post('/delivery', data),
   updateStatus: (id: string, data: object) => api.patch(`/delivery/${id}/status`, data),
+  updateTripStatus: (id: string, data: object) => api.patch(`/delivery/trips/${id}/status`, data),
   drivers: () => api.get('/delivery/drivers/list'),
   vehicles: (params?: object) => api.get('/delivery/vehicles', { params }),
   createVehicle: (data: object) => api.post('/delivery/vehicles', data),
@@ -278,6 +322,23 @@ export const reportsApi = {
 export const settingsApi = {
   company: () => api.get('/finance/company'),
   updateCompany: (data: object) => api.put('/finance/company', data),
+};
+
+export const tenantApi = {
+  workspace: () => api.get('/tenant/workspace'),
+  updateWorkspace: (data: object) => api.patch('/tenant/workspace', data),
+  resetDemoWorkspace: (confirmSlug: string) =>
+    api.post('/tenant/workspace/reset-demo', { confirmSlug }),
+  seedDemoData: () => api.post('/tenant/workspace/seed-demo'),
+  team: () => api.get('/tenant/team'),
+  inviteUser: (data: object) => api.post('/tenant/invite-user', data),
+  listCompanies: () => api.get('/tenant/companies'),
+  updateCompanyStatus: (id: string, isActive: boolean) =>
+    api.patch(`/tenant/companies/${id}/status`, { isActive }),
+  deleteCompany: (id: string, confirmSlug: string) =>
+    api.delete(`/tenant/companies/${id}`, { data: { confirmSlug } }),
+  registerCompany: (formData: FormData) => api.post('/tenant/companies', formData),
+  uploadLogo: (formData: FormData) => api.post('/tenant/logo', formData),
 };
 
 export const qualityApi = {

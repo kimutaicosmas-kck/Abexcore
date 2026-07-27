@@ -1,6 +1,7 @@
 import prisma from '../config/database';
 import { AppError } from '../middleware/errorHandler';
 import { endOfDay, startOfDay } from '../utils/date';
+import { injectTenantData } from '../utils/tenant';
 import { Prisma } from '@prisma/client';
 
 export function salesPersonOrderFilter(salesPersonId: string): Prisma.SalesOrderWhereInput {
@@ -210,7 +211,7 @@ export class MySalesService {
 
     const target = await prisma.salesTarget.upsert({
       where: { salesPersonId_year_month: { salesPersonId, year, month } },
-      create: { salesPersonId, year, month, targetAmount },
+      create: injectTenantData({ salesPersonId, year, month, targetAmount }),
       update: { targetAmount },
     });
 

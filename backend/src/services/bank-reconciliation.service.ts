@@ -2,6 +2,7 @@ import { Prisma } from '@prisma/client';
 import prisma from '../config/database';
 import { generateNumber } from '../utils/date';
 import { AppError } from '../middleware/errorHandler';
+import { requireTenantId } from '../utils/tenant';
 
 type TxClient = Prisma.TransactionClient;
 
@@ -13,6 +14,68 @@ export type BankStatementCsvLine = {
 };
 
 export class BankReconciliationService {
+  static parseUnstructuredText(text: string): BankStatementCsvLine[] {
+    const lines = text
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean);
+
+    const results: BankStatementCsvLine[] = [];
+
+    for (const line of lines) {
+      if (/^date[,|\s]/i.test(line) || /^description/i.test(line)) continue;
+
+      const dateMatch = line.match(/(\d{4}-\d{2}-\d{2}|\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}|\d{1,2}\s+\w{3}\s+\d{4})/);
+      const amountMatches = [...line.matchAll(/-?\d[\d,]*(?:\.\d{2})?/g)].map((m) =>
+        Number(m[0].replace(/,/g, ''))
+      ).filter((n) => !Number.isNaN(n));
+
+      if (!dateMatch || amountMatches.length === 0) continue;
+
+      const parsedDate = new Date(dateMatch[1]);
+      if (Number.isNaN(parsedDate.getTime())) continue;
+
+      const amount = amountMatches[amountMatches.length - 1];
+      const description = line
+        .replace(dateMatch[0], '')
+        .replace(String(amountMatches[amountMatches.length - 1]), '')
+        .replace(/[,|]/g, ' ')
+        .trim();
+
+      results.push({
+        transactionDate: parsedDate,
+        description: description || undefined,
+        amount,
+      });
+    }
+
+    if (results.length === 0) {
+      throw new AppError('No valid transactions found in statement text', 400);
+    }
+
+    return results;
+  }
+
+  static async parsePdf(buffer: Buffer): Promise<BankStatementCsvLine[]> {
+    const { PDFParse } = await import('pdf-parse');
+    const parser = new PDFParse({ data: buffer });
+    const data = await parser.getText();
+    try {
+      return this.parseCsv(data.text);
+    } catch {
+      return this.parseUnstructuredText(data.text);
+    } finally {
+      await parser.destroy();
+    }
+  }
+
+  static parseStatementText(text: string): BankStatementCsvLine[] {
+    try {
+      return this.parseCsv(text);
+    } catch {
+      return this.parseUnstructuredText(text);
+    }
+  }
   static parseCsv(csvText: string): BankStatementCsvLine[] {
     const lines = csvText
       .split(/\r?\n/)
@@ -76,7 +139,8 @@ export class BankReconciliationService {
 
   static async importStatement(
     opts: {
-      csvText: string;
+      csvText?: string;
+      pdfBase64?: string;
       periodStart: Date;
       periodEnd: Date;
       openingBalance?: number;
@@ -86,12 +150,22 @@ export class BankReconciliationService {
     },
     tx: TxClient = prisma
   ) {
-    const parsed = this.parseCsv(opts.csvText);
+    let parsed: BankStatementCsvLine[];
+    if (opts.pdfBase64) {
+      parsed = await this.parsePdf(Buffer.from(opts.pdfBase64, 'base64'));
+    } else if (opts.csvText) {
+      parsed = this.parseStatementText(opts.csvText);
+    } else {
+      throw new AppError('csvText or pdfBase64 is required', 400);
+    }
+
+    const companyId = requireTenantId();
     const count = await tx.bankStatement.count();
     const statementNumber = generateNumber('BST', count + 1);
 
     const statement = await tx.bankStatement.create({
       data: {
+        companyId,
         statementNumber,
         bankAccountCode: opts.bankAccountCode || '1100',
         periodStart: opts.periodStart,

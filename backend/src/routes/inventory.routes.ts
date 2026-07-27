@@ -2,21 +2,28 @@ import { Router, Response } from 'express';
 import { authenticate, authorize, AuthRequest } from '../middleware/auth';
 import { validate } from '../middleware/validate';
 import { asyncHandler, AppError } from '../middleware/errorHandler';
+import { mutationAudit } from '../middleware/mutationAudit';
 import { auditLog } from '../middleware/auditLog';
-import { createRawMaterialSchema, createSupplierSchema, createRequisitionSchema, createGoodsReceiptSchema, createPurchaseOrderSchema, stockAdjustSchema, stockTransferSchema, cycleCountSchema, updateSupplierQuotationSchema, paginationSchema, materialListQuerySchema, procurementListQuerySchema } from '../validators/schemas';
+import { createRawMaterialSchema, createSupplierSchema, createRequisitionSchema, createGoodsReceiptSchema, createPurchaseOrderSchema, stockAdjustSchema, stockTransferSchema, cycleCountSchema, updateSupplierQuotationSchema, paginationSchema, materialListQuerySchema, procurementListQuerySchema, createMaterialTypeSchema, updateCatalogItemSchema, reorderCatalogSchema } from '../validators/schemas';
 import { createCrudService } from '../utils/crud';
 import prisma from '../config/database';
 import { generateNumber } from '../utils/date';
 import { getParam, getQuery } from '../utils/request';
+import { mergeTenantWarehouseWhere, injectTenantData, requireTenantId } from '../utils/tenant';
 import { NotificationService } from '../services/notification.service';
 import { InventoryService } from '../services/catalog.service';
 import { StockMovementService } from '../services/inventory.service';
 import { AccountingService } from '../services/accounting.service';
 import { ProcurementService } from '../services/procurement.service';
-import { Prisma } from '@prisma/client';
+import { Prisma, TransactionType } from '@prisma/client';
 
 const router = Router();
 router.use(authenticate);
+router.use(mutationAudit('inventory'));
+
+function checkLowStockAlerts() {
+  NotificationService.runLowStockCheckForAllCompanies().catch(() => undefined);
+}
 
 router.get(
   '/stats',
@@ -44,15 +51,17 @@ router.get(
     const { page, limit, search } = getQuery<{ page: number; limit: number; search?: string }>(req.query);
     const skip = (page - 1) * limit;
 
-    const where: Prisma.InventoryTransactionWhereInput = search
-      ? {
-          OR: [
-            { notes: { contains: search } },
-            { referenceType: { contains: search } },
-            { batchNumber: { contains: search } },
-          ],
-        }
-      : {};
+    const where: Prisma.InventoryTransactionWhereInput = mergeTenantWarehouseWhere(
+      search
+        ? {
+            OR: [
+              { notes: { contains: search } },
+              { referenceType: { contains: search } },
+              { batchNumber: { contains: search } },
+            ],
+          }
+        : {}
+    );
 
     const [data, total] = await Promise.all([
       prisma.inventoryTransaction.findMany({
@@ -73,24 +82,116 @@ router.get(
 
 // Raw Materials
 const materialService = createCrudService('rawMaterial', ['name', 'code'], {
+  materialType: { select: { id: true, name: true } },
   supplier: true,
   stockLevels: { include: { warehouse: true } },
 });
+
+router.get('/materials/types/list', authorize('inventory:read'), asyncHandler(async (_req: AuthRequest, res: Response) => {
+  const types = await prisma.materialType.findMany({
+    where: { isActive: true },
+    select: { id: true, name: true, sortOrder: true },
+    orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+  });
+  res.json({ success: true, data: types });
+}));
+
+router.post('/materials/types', authorize('inventory:create'), validate(createMaterialTypeSchema), asyncHandler(async (req: AuthRequest, res: Response) => {
+  const name = req.body.name.trim();
+  const existing = await prisma.materialType.findFirst({ where: { name } });
+  if (existing) throw new AppError('A material type with this name already exists', 409);
+
+  const maxSort = await prisma.materialType.aggregate({ _max: { sortOrder: true } });
+  const materialType = await prisma.materialType.create({
+    data: injectTenantData({ name, sortOrder: (maxSort._max.sortOrder ?? -1) + 1 }),
+    select: { id: true, name: true, sortOrder: true, isActive: true },
+  });
+  res.status(201).json({ success: true, data: materialType });
+}));
+
+router.get('/materials/types/manage', authorize('inventory:read'), asyncHandler(async (_req: AuthRequest, res: Response) => {
+  const types = await prisma.materialType.findMany({
+    select: {
+      id: true,
+      name: true,
+      sortOrder: true,
+      isActive: true,
+      _count: { select: { materials: true } },
+    },
+    orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+  });
+  res.json({
+    success: true,
+    data: types.map((t) => ({
+      id: t.id,
+      name: t.name,
+      sortOrder: t.sortOrder,
+      isActive: t.isActive,
+      usageCount: t._count.materials,
+    })),
+  });
+}));
+
+router.put('/materials/types/reorder', authorize('inventory:update'), validate(reorderCatalogSchema), asyncHandler(async (req: AuthRequest, res: Response) => {
+  const { ids } = req.body as { ids: string[] };
+  const existing = await prisma.materialType.findMany({
+    where: { id: { in: ids } },
+    select: { id: true },
+  });
+  if (existing.length !== ids.length) {
+    throw new AppError('One or more material types were not found', 400);
+  }
+
+  await prisma.$transaction(
+    ids.map((id, index) =>
+      prisma.materialType.update({ where: { id }, data: { sortOrder: index } })
+    )
+  );
+
+  res.json({ success: true, message: 'Material types reordered' });
+}));
+
+router.patch('/materials/types/:id', authorize('inventory:update'), validate(updateCatalogItemSchema), asyncHandler(async (req: AuthRequest, res: Response) => {
+  const id = getParam(req.params.id);
+  const materialType = await prisma.materialType.findFirst({ where: { id } });
+  if (!materialType) throw new AppError('Material type not found', 404);
+
+  const { name, isActive } = req.body as { name?: string; isActive?: boolean };
+  if (name && name !== materialType.name) {
+    const duplicate = await prisma.materialType.findFirst({ where: { name } });
+    if (duplicate) throw new AppError('A material type with this name already exists', 409);
+  }
+
+  const updated = await prisma.materialType.update({
+    where: { id },
+    data: {
+      ...(name !== undefined ? { name } : {}),
+      ...(isActive !== undefined ? { isActive } : {}),
+    },
+    select: { id: true, name: true, sortOrder: true, isActive: true },
+  });
+  res.json({ success: true, data: updated });
+}));
 
 router.get('/materials', authorize('inventory:read'), validate(materialListQuerySchema, 'query'), asyncHandler(async (req: AuthRequest, res: Response) => {
   const { page, limit, search, sortBy, sortOrder, type } = getQuery<{
     page: number; limit: number; search?: string; sortBy?: string; sortOrder?: 'asc' | 'desc'; type?: string;
   }>(req.query);
   const where: Record<string, unknown> = {};
-  if (type) where.type = type;
+  if (type) where.typeId = type;
   const result = await materialService.list({ page, limit, search, sortBy, sortOrder, where });
   res.json({ success: true, ...result });
 }));
 
 router.get('/materials/low-stock', authorize('inventory:read'), asyncHandler(async (_req: AuthRequest, res: Response) => {
+  const companyId = requireTenantId();
   const materials = await prisma.rawMaterial.findMany({
     where: { isActive: true, deletedAt: null },
-    include: { stockLevels: true, supplier: true },
+    include: {
+      stockLevels: { where: { warehouse: { companyId } } },
+      supplier: true,
+      materialType: true,
+    },
   });
   const lowStock = materials.filter((m) => {
     const total = m.stockLevels.reduce((s, sl) => s + Number(sl.quantity), 0);
@@ -100,11 +201,27 @@ router.get('/materials/low-stock', authorize('inventory:read'), asyncHandler(asy
 }));
 
 router.post('/materials', authorize('inventory:create'), validate(createRawMaterialSchema), asyncHandler(async (req: AuthRequest, res: Response) => {
-  const data = await materialService.create(req.body);
+  const payload = { ...req.body };
+  const materialType = await prisma.materialType.findFirst({
+    where: { id: payload.typeId, isActive: true },
+  });
+  if (!materialType) throw new AppError('Invalid material type', 400);
+
+  if (!payload.code?.trim()) {
+    const count = await prisma.rawMaterial.count();
+    payload.code = generateNumber('RM', count + 1);
+  }
+  const data = await materialService.create(payload);
   res.status(201).json({ success: true, data });
 }));
 
 router.put('/materials/:id', authorize('inventory:update'), validate(createRawMaterialSchema.partial()), asyncHandler(async (req: AuthRequest, res: Response) => {
+  if (req.body.typeId) {
+    const materialType = await prisma.materialType.findFirst({
+      where: { id: req.body.typeId, isActive: true },
+    });
+    if (!materialType) throw new AppError('Invalid material type', 400);
+  }
   const data = await materialService.update(getParam(req.params.id), req.body);
   res.json({ success: true, data });
 }));
@@ -142,16 +259,18 @@ router.get('/stock-levels', authorize('inventory:read'), validate(paginationSche
   const { page, limit, search } = getQuery<{ page: number; limit: number; search?: string }>(req.query);
   const skip = (page - 1) * limit;
 
-  const where: Prisma.StockLevelWhereInput = search
-    ? {
-        OR: [
-          { product: { name: { contains: search } } },
-          { rawMaterial: { name: { contains: search } } },
-          { warehouse: { name: { contains: search } } },
-          { batchNumber: { contains: search } },
-        ],
-      }
-    : {};
+  const where: Prisma.StockLevelWhereInput = mergeTenantWarehouseWhere(
+    search
+      ? {
+          OR: [
+            { product: { name: { contains: search } } },
+            { rawMaterial: { name: { contains: search } } },
+            { warehouse: { name: { contains: search } } },
+            { batchNumber: { contains: search } },
+          ],
+        }
+      : {}
+  );
 
   const [data, total] = await Promise.all([
     prisma.stockLevel.findMany({
@@ -230,6 +349,7 @@ router.post('/adjust', authorize('inventory:update'), validate(stockAdjustSchema
     return stockLevel;
   });
 
+  checkLowStockAlerts();
   res.json({ success: true, data: transaction });
 }));
 
@@ -299,11 +419,12 @@ router.post('/cycle-counts', authorize('inventory:update'), validate(cycleCountS
   });
 
   res.status(201).json({ success: true, data: adjustments });
+  checkLowStockAlerts();
 }));
 
 router.get('/transfers', authorize('inventory:read'), asyncHandler(async (_req: AuthRequest, res: Response) => {
   const data = await prisma.inventoryTransaction.findMany({
-    where: { type: 'TRANSFER', quantity: { gt: 0 } },
+    where: mergeTenantWarehouseWhere({ type: TransactionType.TRANSFER, quantity: { gt: 0 } }),
     include: { warehouse: { select: { name: true, code: true } } },
     orderBy: { createdAt: 'desc' },
     take: 100,
@@ -413,6 +534,7 @@ router.post('/transfers', authorize('inventory:update'), validate(stockTransferS
   });
 
   res.status(201).json({ success: true, data: result });
+  checkLowStockAlerts();
 }));
 
 // Purchase Orders
@@ -457,7 +579,7 @@ router.post('/purchase-orders', authorize('procurement:create'), validate(create
   const totalAmount = subtotal + taxAmount;
 
   const po = await prisma.purchaseOrder.create({
-    data: {
+    data: injectTenantData({
       poNumber,
       supplierId,
       expectedDate: expectedDate ? new Date(expectedDate) : undefined,
@@ -471,7 +593,7 @@ router.post('/purchase-orders', authorize('procurement:create'), validate(create
           totalPrice: item.quantity * item.unitPrice,
         })),
       },
-    },
+    }),
     include: { supplier: true, items: true },
   });
 
@@ -516,7 +638,7 @@ router.post('/requisitions', authorize('procurement:create'), validate(createReq
   const requisitionNo = generateNumber('PR', count + 1);
 
   const req_ = await prisma.purchaseRequisition.create({
-    data: {
+    data: injectTenantData({
       requisitionNo,
       requestedById: req.user!.id,
       department,
@@ -525,7 +647,7 @@ router.post('/requisitions', authorize('procurement:create'), validate(createReq
       notes,
       status: 'PENDING',
       items: { create: items },
-    },
+    }),
     include: { items: true, requestedBy: { select: { firstName: true, lastName: true } } },
   });
 
@@ -611,7 +733,7 @@ router.post('/requisitions/:id/rfq', authorize('procurement:create'), asyncHandl
   };
 
   const rfq = await prisma.requestForQuotation.create({
-    data: {
+    data: injectTenantData({
       rfqNo,
       requisitionId,
       dueDate: dueDate ? new Date(dueDate) : undefined,
@@ -625,7 +747,7 @@ router.post('/requisitions/:id/rfq', authorize('procurement:create'), asyncHandl
             })),
           }
         : undefined,
-    },
+    }),
     include: {
       requisition: true,
       quotations: { include: { supplier: true } },
@@ -684,7 +806,7 @@ router.patch('/rfqs/:id/award', authorize('procurement:update'), asyncHandler(as
       const totalAmount = subtotal + taxAmount;
 
       await tx.purchaseOrder.create({
-        data: {
+        data: injectTenantData({
           poNumber,
           supplierId: winningQuote.supplierId,
           quotationId,
@@ -704,7 +826,7 @@ router.patch('/rfqs/:id/award', authorize('procurement:update'), asyncHandler(as
                 : Number(item.estimatedCost) / Number(item.quantity) || 0,
             })),
           },
-        },
+        }),
       });
     }
 
@@ -768,7 +890,7 @@ router.post('/goods-receipts', authorize('procurement:create'), validate(createG
 
   const receipt = await prisma.$transaction(async (tx) => {
     const gr = await tx.goodsReceipt.create({
-      data: {
+      data: injectTenantData({
         grnNumber,
         purchaseOrderId,
         supplierId,
@@ -777,7 +899,7 @@ router.post('/goods-receipts', authorize('procurement:create'), validate(createG
         status: 'PENDING',
         inspectionStatus: 'PENDING',
         items: { create: items },
-      },
+      }),
       include: { items: true, supplier: true },
     });
 
@@ -846,7 +968,7 @@ router.post('/goods-receipts/:id/post-to-stock', authorize('procurement:update')
     return updated;
   });
 
-  NotificationService.runLowStockCheck().catch(() => undefined);
+  checkLowStockAlerts();
 
   res.json({ success: true, data: receipt });
 }));

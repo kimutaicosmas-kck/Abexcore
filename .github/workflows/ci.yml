@@ -54,7 +54,12 @@ jobs:
           DATABASE_URL: mysql://erp_user:erp_password@127.0.0.1:3306/filter_erp_test
           SEED_MODE: demo
           MPESA_ENV: stub
+          DATA_ENCRYPTION_KEY: ci-test-encryption-key-32-characters-min
         run: npm run db:seed
+
+      - name: Generate OpenAPI paths
+        working-directory: backend
+        run: npm run openapi:generate
 
       - name: Build backend
         working-directory: backend
@@ -66,9 +71,27 @@ jobs:
           DATABASE_URL: mysql://erp_user:erp_password@127.0.0.1:3306/filter_erp_test
           JWT_SECRET: test-secret-minimum-32-characters-long
           JWT_REFRESH_SECRET: test-refresh-secret-min-32-chars
+          DATA_ENCRYPTION_KEY: ci-test-encryption-key-32-characters-min
           NODE_ENV: test
           MPESA_ENV: stub
         run: npm test
+
+      - name: Load test health endpoints
+        working-directory: backend
+        env:
+          DATABASE_URL: mysql://erp_user:erp_password@127.0.0.1:3306/filter_erp_test
+          JWT_SECRET: test-secret-minimum-32-characters-long
+          JWT_REFRESH_SECRET: test-refresh-secret-min-32-chars
+          DATA_ENCRYPTION_KEY: ci-test-encryption-key-32-characters-min
+          NODE_ENV: test
+          MPESA_ENV: stub
+        run: |
+          npm start &
+          for i in $(seq 1 30); do
+            curl -sf http://127.0.0.1:3001/api/health/live && break
+            sleep 1
+          done
+          node ../scripts/load-test/health-load.mjs http://127.0.0.1:3001 25
 
   frontend:
     runs-on: ubuntu-latest
@@ -85,13 +108,145 @@ jobs:
         working-directory: frontend
         run: npm ci
 
+      - name: Run frontend unit tests
+        working-directory: frontend
+        run: npm test
+
       - name: Build frontend
         working-directory: frontend
         run: npm run build
 
-  docker:
+  e2e:
     runs-on: ubuntu-latest
     needs: [backend, frontend]
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: rootpassword
+          MYSQL_DATABASE: filter_erp_test
+          MYSQL_USER: erp_user
+          MYSQL_PASSWORD: erp_password
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: |
+          npm ci
+          npm ci --prefix backend
+          npm ci --prefix frontend
+
+      - name: Prepare database
+        working-directory: backend
+        env:
+          DATABASE_URL: mysql://erp_user:erp_password@127.0.0.1:3306/filter_erp_test
+          MPESA_ENV: stub
+          DATA_ENCRYPTION_KEY: ci-test-encryption-key-32-characters-min
+        run: |
+          npx prisma generate
+          npx prisma db push --skip-generate
+          npm run db:seed
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Start backend
+        working-directory: backend
+        env:
+          DATABASE_URL: mysql://erp_user:erp_password@127.0.0.1:3306/filter_erp_test
+          JWT_SECRET: test-secret-minimum-32-characters-long
+          JWT_REFRESH_SECRET: test-refresh-secret-min-32-chars
+          DATA_ENCRYPTION_KEY: ci-test-encryption-key-32-characters-min
+          NODE_ENV: test
+          MPESA_ENV: stub
+          PORT: 3001
+        run: |
+          npm run build
+          npm start &
+          for i in $(seq 1 45); do
+            curl -sf http://127.0.0.1:3001/api/health/ready && break
+            sleep 1
+          done
+
+      - name: Start frontend
+        working-directory: frontend
+        run: |
+          npm run build
+          npm run preview -- --host 127.0.0.1 --port 5173 &
+          for i in $(seq 1 30); do
+            curl -sf http://127.0.0.1:5173/login && break
+            sleep 1
+          done
+
+      - name: Run Playwright smoke tests
+        env:
+          PLAYWRIGHT_BASE_URL: http://127.0.0.1:5173
+          E2E_ADMIN_EMAIL: kimutaicosmas547@gmail.com
+          E2E_ADMIN_PASSWORD: Kimutai@44!
+        run: npm run test:e2e
+
+  backup-restore:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: rootpassword
+          MYSQL_DATABASE: filter_erp_test
+          MYSQL_USER: erp_user
+          MYSQL_PASSWORD: erp_password
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install MySQL client
+        run: sudo apt-get update && sudo apt-get install -y default-mysql-client gzip
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Seed database for backup test
+        working-directory: backend
+        env:
+          DATABASE_URL: mysql://erp_user:erp_password@127.0.0.1:3306/filter_erp_test
+          MPESA_ENV: stub
+        run: |
+          npm ci
+          npx prisma generate
+          npx prisma db push --skip-generate
+          npm run db:seed
+
+      - name: Backup and restore round-trip
+        env:
+          DATABASE_URL: mysql://erp_user:erp_password@127.0.0.1:3306/filter_erp_test
+          BACKUP_DIR: ./backups/ci-test
+        run: bash scripts/test-backup-restore.sh
+
+  docker:
+    runs-on: ubuntu-latest
+    needs: [backend, frontend, e2e, backup-restore]
     steps:
       - uses: actions/checkout@v4
       - name: Build Docker images

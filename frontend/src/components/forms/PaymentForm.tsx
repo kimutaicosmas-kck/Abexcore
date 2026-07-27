@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { financeApi } from '../../services/api';
 import { Button, Input, Select, Alert } from '../ui';
+import { getApiErrorMessage } from '../../utils/apiError';
 import { Invoice } from '../../types';
 import { formatCurrency } from '../ui';
 
@@ -102,7 +103,7 @@ export function PaymentForm({ onSuccess, onCancel, invoiceId: preselectedId }: P
   return (
     <form onSubmit={handleSubmit((data) => mutation.mutate(data))} className="space-y-4">
       {mutation.isError && (
-        <Alert variant="error">Failed to record payment. Check amount and reference.</Alert>
+        <Alert variant="error">{getApiErrorMessage(mutation.error)}</Alert>
       )}
 
       <Select

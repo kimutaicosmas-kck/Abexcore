@@ -1,6 +1,5 @@
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import request from 'supertest';
-import { createApp } from '../src/app';
 import {
   companySettingsSchema,
   financeListQuerySchema,
@@ -13,28 +12,8 @@ import {
   createMachineSchema,
   createMaintenanceSchema,
 } from '../src/validators/schemas';
-
-const app = createApp();
-let dbConnected = false;
-let authToken = '';
-
-async function login(): Promise<string> {
-  const res = await request(app)
-    .post('/api/v1/auth/login')
-    .send({ email: 'admin@filtererp.co.ke', password: 'Admin@123' });
-  if (res.status !== 200) throw new Error(`Login failed: ${res.status}`);
-  return res.body.data.accessToken as string;
-}
-
-function authReq(token: string) {
-  return request(app).set('Authorization', `Bearer ${token}`);
-}
-
-beforeAll(async () => {
-  const health = await request(app).get('/api/health');
-  dbConnected = health.body.database === 'connected';
-  if (dbConnected) authToken = await login();
-});
+import { authReq } from './helpers/testAuth';
+import { testCtx, itWithDb } from './setup';
 
 describe('Finance schema validation', () => {
   it('validates company settings', () => {
@@ -83,12 +62,12 @@ describe('Maintenance schema validation', () => {
 
 describe('Finance API', () => {
   it('rejects unauthenticated finance stats', async () => {
-    expect((await request(app).get('/api/v1/finance/stats')).status).toBe(401);
+    expect((await request(testCtx.app).get('/api/v1/finance/stats')).status).toBe(401);
   });
-  it.skipIf(() => !dbConnected)('returns finance stats and invoices', async () => {
+  itWithDb('returns finance stats and invoices', async () => {
     const [stats, invoices] = await Promise.all([
-      authReq(authToken).get('/api/v1/finance/stats'),
-      authReq(authToken).get('/api/v1/finance/invoices?page=1&limit=5'),
+      authReq(testCtx.app, testCtx.authToken).get('/api/v1/finance/stats'),
+      authReq(testCtx.app, testCtx.authToken).get('/api/v1/finance/invoices?page=1&limit=5'),
     ]);
     expect(stats.status).toBe(200);
     expect(stats.body.data).toHaveProperty('monthlyRevenue');
@@ -97,10 +76,10 @@ describe('Finance API', () => {
 });
 
 describe('HR API', () => {
-  it.skipIf(() => !dbConnected)('returns HR stats and employees', async () => {
+  itWithDb('returns HR stats and employees', async () => {
     const [stats, employees] = await Promise.all([
-      authReq(authToken).get('/api/v1/hr/stats'),
-      authReq(authToken).get('/api/v1/hr/employees?page=1&limit=5'),
+      authReq(testCtx.app, testCtx.authToken).get('/api/v1/hr/stats'),
+      authReq(testCtx.app, testCtx.authToken).get('/api/v1/hr/employees?page=1&limit=5'),
     ]);
     expect(stats.status).toBe(200);
     expect(employees.status).toBe(200);
@@ -108,18 +87,18 @@ describe('HR API', () => {
 });
 
 describe('Maintenance API', () => {
-  it.skipIf(() => !dbConnected)('returns maintenance stats', async () => {
-    const res = await authReq(authToken).get('/api/v1/maintenance/stats');
+  itWithDb('returns maintenance stats', async () => {
+    const res = await authReq(testCtx.app, testCtx.authToken).get('/api/v1/maintenance/stats');
     expect(res.status).toBe(200);
     expect(res.body.data).toHaveProperty('totalMachines');
   });
 });
 
 describe('Reports & Settings API', () => {
-  it.skipIf(() => !dbConnected)('returns reports summary and company settings', async () => {
+  itWithDb('returns reports summary and company settings', async () => {
     const [summary, company] = await Promise.all([
-      authReq(authToken).get('/api/v1/finance/reports/summary'),
-      authReq(authToken).get('/api/v1/finance/company'),
+      authReq(testCtx.app, testCtx.authToken).get('/api/v1/finance/reports/summary'),
+      authReq(testCtx.app, testCtx.authToken).get('/api/v1/finance/company'),
     ]);
     expect(summary.status).toBe(200);
     expect(summary.body.data).toHaveProperty('topCustomers');

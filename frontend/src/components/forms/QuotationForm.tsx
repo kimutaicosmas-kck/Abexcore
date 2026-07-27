@@ -6,7 +6,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, Trash2 } from 'lucide-react';
 import { operationsApi, customersApi } from '../../services/api';
 import { useProductPicker } from '../../hooks/useProductPicker';
-import { Button, Input, Select } from '../ui';
+import { Button, Input, Select, FormActions, ModalFormBody } from '../ui';
 import { Customer } from '../../types';
 import { useVatRate } from '../../contexts/AuthContext';
 import { formatProductOptionLabel } from '../../utils/productDisplay';
@@ -96,7 +96,16 @@ export function QuotationForm({ onSuccess, onCancel }: QuotationFormProps) {
   });
 
   return (
-    <form onSubmit={handleSubmit((data) => mutation.mutate(data))} className="space-y-4">
+    <form onSubmit={handleSubmit((data) => mutation.mutate(data))}>
+      <ModalFormBody
+        footer={
+          <FormActions
+            onCancel={onCancel}
+            submitLabel="Create Quotation"
+            loading={mutation.isPending}
+          />
+        }
+      >
       {mutation.isError && (
         <div className="p-3 rounded-lg bg-red-50 text-red-700 text-sm">
           Failed to create quotation. Please check all fields.
@@ -168,11 +177,7 @@ export function QuotationForm({ onSuccess, onCancel }: QuotationFormProps) {
         <div className="flex justify-between"><span>VAT ({vatRate}%)</span><span>KES {tax.toLocaleString('en-KE', { minimumFractionDigits: 2 })}</span></div>
         <div className="flex justify-between font-bold text-base pt-1 border-t"><span>Total</span><span>KES {total.toLocaleString('en-KE', { minimumFractionDigits: 2 })}</span></div>
       </div>
-
-      <div className="flex justify-end gap-3 pt-4 border-t">
-        <Button type="button" variant="secondary" onClick={onCancel}>Cancel</Button>
-        <Button type="submit" loading={mutation.isPending}>Create Quotation</Button>
-      </div>
+      </ModalFormBody>
     </form>
   );
 }

@@ -1,59 +1,3013 @@
 paths:
+  /auth/2fa/setup:
+    post:
+      tags: [Auth]
+      summary: POST /auth/2fa/setup
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /auth/2fa/verify:
+    post:
+      tags: [Auth]
+      summary: POST /auth/2fa/verify
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /auth/change-password:
+    post:
+      tags: [Auth]
+      summary: POST /auth/change-password
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
   /auth/login:
     post:
       tags: [Auth]
-      summary: Authenticate user
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [email, password]
-              properties:
-                email: { type: string, format: email }
-                password: { type: string }
-                totpCode: { type: string }
+      summary: POST /auth/login
       responses:
         '200':
-          description: Login successful
+          description: Success
+        '400':
+          description: Validation error
         '401':
-          description: Invalid credentials
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /auth/logout:
+    post:
+      tags: [Auth]
+      summary: POST /auth/logout
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /auth/me:
+    get:
+      tags: [Auth]
+      summary: GET /auth/me
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
   /auth/refresh:
     post:
       tags: [Auth]
-      summary: Refresh access token
+      summary: POST /auth/refresh
       responses:
         '200':
-          description: New tokens issued
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /auth/resolve-tenant/{slug}:
+    get:
+      tags: [Auth]
+      summary: GET /auth/resolve-tenant/{slug}
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /crm/complaints:
+    get:
+      tags: [CRM]
+      summary: GET /crm/complaints
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+    post:
+      tags: [CRM]
+      summary: POST /crm/complaints
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /crm/complaints/{id}:
+    get:
+      tags: [CRM]
+      summary: GET /crm/complaints/{id}
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /crm/complaints/{id}/resolve:
+    patch:
+      tags: [CRM]
+      summary: PATCH /crm/complaints/{id}/resolve
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /crm/opportunities:
+    get:
+      tags: [CRM]
+      summary: GET /crm/opportunities
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+    post:
+      tags: [CRM]
+      summary: POST /crm/opportunities
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /crm/opportunities/{id}:
+    get:
+      tags: [CRM]
+      summary: GET /crm/opportunities/{id}
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+    put:
+      tags: [CRM]
+      summary: PUT /crm/opportunities/{id}
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /crm/opportunities/{id}/advance:
+    patch:
+      tags: [CRM]
+      summary: PATCH /crm/opportunities/{id}/advance
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /crm/stats:
+    get:
+      tags: [CRM]
+      summary: GET /crm/stats
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /crm/warranties:
+    get:
+      tags: [CRM]
+      summary: GET /crm/warranties
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+    post:
+      tags: [CRM]
+      summary: POST /crm/warranties
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /customers/:
+    get:
+      tags: [Customers]
+      summary: GET /customers/
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+    post:
+      tags: [Customers]
+      summary: POST /customers/
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /customers/{id}:
+    get:
+      tags: [Customers]
+      summary: GET /customers/{id}
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+    put:
+      tags: [Customers]
+      summary: PUT /customers/{id}
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+    delete:
+      tags: [Customers]
+      summary: DELETE /customers/{id}
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /customers/{id}/contacts:
+    post:
+      tags: [Customers]
+      summary: POST /customers/{id}/contacts
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /customers/{id}/contacts/{contactId}:
+    delete:
+      tags: [Customers]
+      summary: DELETE /customers/{id}/contacts/{contactId}
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /customers/{id}/orders:
+    get:
+      tags: [Customers]
+      summary: GET /customers/{id}/orders
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /dashboard/charts:
+    get:
+      tags: [Dashboard]
+      summary: GET /dashboard/charts
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
   /dashboard/kpis:
     get:
       tags: [Dashboard]
-      summary: Dashboard KPIs
+      summary: GET /dashboard/kpis
       security:
         - bearerAuth: []
       responses:
         '200':
-          description: KPI data
-  /search:
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /delivery/:
     get:
-      tags: [Search]
-      summary: Global search
+      tags: [Delivery]
+      summary: GET /delivery/
       security:
         - bearerAuth: []
-      parameters:
-        - in: query
-          name: q
-          schema: { type: string, minLength: 2 }
       responses:
         '200':
-          description: Grouped search results
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+    post:
+      tags: [Delivery]
+      summary: POST /delivery/
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /delivery/drivers/list:
+    get:
+      tags: [Delivery]
+      summary: GET /delivery/drivers/list
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /delivery/stats:
+    get:
+      tags: [Delivery]
+      summary: GET /delivery/stats
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /delivery/trips:
+    get:
+      tags: [Delivery]
+      summary: GET /delivery/trips
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /delivery/trips/{id}:
+    get:
+      tags: [Delivery]
+      summary: GET /delivery/trips/{id}
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /delivery/trips/{id}/status:
+    patch:
+      tags: [Delivery]
+      summary: PATCH /delivery/trips/{id}/status
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /delivery/vehicles:
+    get:
+      tags: [Delivery]
+      summary: GET /delivery/vehicles
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+    post:
+      tags: [Delivery]
+      summary: POST /delivery/vehicles
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /delivery/{id}:
+    get:
+      tags: [Delivery]
+      summary: GET /delivery/{id}
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /delivery/{id}/status:
+    patch:
+      tags: [Delivery]
+      summary: PATCH /delivery/{id}/status
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /finance/accounts:
+    get:
+      tags: [Finance]
+      summary: GET /finance/accounts
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /finance/bank-reconciliation:
+    get:
+      tags: [Finance]
+      summary: GET /finance/bank-reconciliation
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /finance/bank-reconciliation/auto-match/{statementId}:
+    post:
+      tags: [Finance]
+      summary: POST /finance/bank-reconciliation/auto-match/{statementId}
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /finance/bank-statements/import:
+    post:
+      tags: [Finance]
+      summary: POST /finance/bank-statements/import
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /finance/company:
+    get:
+      tags: [Finance]
+      summary: GET /finance/company
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+    put:
+      tags: [Finance]
+      summary: PUT /finance/company
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /finance/config:
+    get:
+      tags: [Finance]
+      summary: GET /finance/config
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
   /finance/invoices:
     get:
       tags: [Finance]
-      summary: List invoices
+      summary: GET /finance/invoices
       security:
         - bearerAuth: []
       responses:
         '200':
-          description: Paginated invoices
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+    post:
+      tags: [Finance]
+      summary: POST /finance/invoices
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /finance/invoices/from-grn/{grnId}:
+    post:
+      tags: [Finance]
+      summary: POST /finance/invoices/from-grn/{grnId}
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /finance/invoices/from-order/{orderId}:
+    post:
+      tags: [Finance]
+      summary: POST /finance/invoices/from-order/{orderId}
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /finance/invoices/{id}:
+    get:
+      tags: [Finance]
+      summary: GET /finance/invoices/{id}
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /finance/invoices/{id}/excel:
+    get:
+      tags: [Finance]
+      summary: GET /finance/invoices/{id}/excel
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /finance/invoices/{id}/pdf:
+    get:
+      tags: [Finance]
+      summary: GET /finance/invoices/{id}/pdf
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /finance/invoices/{id}/submit-etims:
+    post:
+      tags: [Finance]
+      summary: POST /finance/invoices/{id}/submit-etims
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /finance/journal-entries:
+    get:
+      tags: [Finance]
+      summary: GET /finance/journal-entries
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+    post:
+      tags: [Finance]
+      summary: POST /finance/journal-entries
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /finance/kra/validate-pin:
+    post:
+      tags: [Finance]
+      summary: POST /finance/kra/validate-pin
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /finance/maintenance/mark-overdue:
+    post:
+      tags: [Finance]
+      summary: POST /finance/maintenance/mark-overdue
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /finance/mpesa/callback:
+    post:
+      tags: [M-Pesa]
+      summary: POST /finance/mpesa/callback
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /finance/mpesa/status:
+    get:
+      tags: [M-Pesa]
+      summary: GET /finance/mpesa/status
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /finance/mpesa/stk-push:
+    post:
+      tags: [M-Pesa]
+      summary: POST /finance/mpesa/stk-push
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /finance/mpesa/transactions/{id}:
+    get:
+      tags: [M-Pesa]
+      summary: GET /finance/mpesa/transactions/{id}
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /finance/my-sales:
+    get:
+      tags: [Finance]
+      summary: GET /finance/my-sales
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /finance/notifications:
+    get:
+      tags: [Finance]
+      summary: GET /finance/notifications
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /finance/notifications/{id}/read:
+    patch:
+      tags: [Finance]
+      summary: PATCH /finance/notifications/{id}/read
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /finance/overview:
+    get:
+      tags: [Finance]
+      summary: GET /finance/overview
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /finance/payments:
+    post:
+      tags: [Finance]
+      summary: POST /finance/payments
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+    get:
+      tags: [Finance]
+      summary: GET /finance/payments
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /finance/payments/{id}/reconcile:
+    patch:
+      tags: [Finance]
+      summary: PATCH /finance/payments/{id}/reconcile
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /finance/payments/{id}/unreconcile:
+    patch:
+      tags: [Finance]
+      summary: PATCH /finance/payments/{id}/unreconcile
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /finance/reports/balance-sheet:
+    get:
+      tags: [Finance]
+      summary: GET /finance/reports/balance-sheet
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /finance/reports/cash-flow:
+    get:
+      tags: [Finance]
+      summary: GET /finance/reports/cash-flow
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /finance/reports/general-ledger/{accountCode}:
+    get:
+      tags: [Finance]
+      summary: GET /finance/reports/general-ledger/{accountCode}
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /finance/reports/inventory/excel:
+    get:
+      tags: [Finance]
+      summary: GET /finance/reports/inventory/excel
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /finance/reports/profit-loss:
+    get:
+      tags: [Finance]
+      summary: GET /finance/reports/profit-loss
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /finance/reports/sales-by-person:
+    get:
+      tags: [Finance]
+      summary: GET /finance/reports/sales-by-person
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /finance/reports/sales-by-person/excel:
+    get:
+      tags: [Finance]
+      summary: GET /finance/reports/sales-by-person/excel
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /finance/reports/sales-by-person/sales-officers:
+    get:
+      tags: [Finance]
+      summary: GET /finance/reports/sales-by-person/sales-officers
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /finance/reports/sales/excel:
+    get:
+      tags: [Finance]
+      summary: GET /finance/reports/sales/excel
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /finance/reports/summary:
+    get:
+      tags: [Finance]
+      summary: GET /finance/reports/summary
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /finance/reports/trial-balance:
+    get:
+      tags: [Finance]
+      summary: GET /finance/reports/trial-balance
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /finance/reports/vat:
+    get:
+      tags: [Finance]
+      summary: GET /finance/reports/vat
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /finance/reports/vat-itax-export:
+    get:
+      tags: [Finance]
+      summary: GET /finance/reports/vat-itax-export
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /finance/sales-performance:
+    get:
+      tags: [Finance]
+      summary: GET /finance/sales-performance
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /finance/sales-targets:
+    get:
+      tags: [Finance]
+      summary: GET /finance/sales-targets
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+    put:
+      tags: [Finance]
+      summary: PUT /finance/sales-targets
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /finance/stats:
+    get:
+      tags: [Finance]
+      summary: GET /finance/stats
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /health:
+    get:
+      tags: [Health]
+      summary: Combined health check
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /health/live:
+    get:
+      tags: [Health]
+      summary: Liveness probe
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /health/ready:
+    get:
+      tags: [Health]
+      summary: Readiness probe
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /hr/attendance:
+    get:
+      tags: [HR]
+      summary: GET /hr/attendance
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+    post:
+      tags: [HR]
+      summary: POST /hr/attendance
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /hr/employees:
+    get:
+      tags: [HR]
+      summary: GET /hr/employees
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+    post:
+      tags: [HR]
+      summary: POST /hr/employees
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /hr/employees/{id}:
+    get:
+      tags: [HR]
+      summary: GET /hr/employees/{id}
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+    put:
+      tags: [HR]
+      summary: PUT /hr/employees/{id}
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /hr/leave:
+    get:
+      tags: [HR]
+      summary: GET /hr/leave
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+    post:
+      tags: [HR]
+      summary: POST /hr/leave
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /hr/leave/{id}/approve:
+    patch:
+      tags: [HR]
+      summary: PATCH /hr/leave/{id}/approve
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /hr/payroll:
+    get:
+      tags: [HR]
+      summary: GET /hr/payroll
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+    post:
+      tags: [HR]
+      summary: POST /hr/payroll
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /hr/payroll/calculate:
+    post:
+      tags: [HR]
+      summary: POST /hr/payroll/calculate
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /hr/payroll/{id}/pay:
+    patch:
+      tags: [HR]
+      summary: PATCH /hr/payroll/{id}/pay
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /hr/stats:
+    get:
+      tags: [HR]
+      summary: GET /hr/stats
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /inventory/adjust:
+    post:
+      tags: [Inventory]
+      summary: POST /inventory/adjust
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /inventory/cycle-counts:
+    post:
+      tags: [Inventory]
+      summary: POST /inventory/cycle-counts
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /inventory/goods-receipts:
+    get:
+      tags: [Inventory]
+      summary: GET /inventory/goods-receipts
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+    post:
+      tags: [Inventory]
+      summary: POST /inventory/goods-receipts
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /inventory/goods-receipts/{id}/post-to-stock:
+    post:
+      tags: [Inventory]
+      summary: POST /inventory/goods-receipts/{id}/post-to-stock
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /inventory/materials:
+    get:
+      tags: [Inventory]
+      summary: GET /inventory/materials
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+    post:
+      tags: [Inventory]
+      summary: POST /inventory/materials
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /inventory/materials/low-stock:
+    get:
+      tags: [Inventory]
+      summary: GET /inventory/materials/low-stock
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /inventory/materials/types:
+    post:
+      tags: [Inventory]
+      summary: POST /inventory/materials/types
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /inventory/materials/types/list:
+    get:
+      tags: [Inventory]
+      summary: GET /inventory/materials/types/list
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /inventory/materials/types/manage:
+    get:
+      tags: [Inventory]
+      summary: GET /inventory/materials/types/manage
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /inventory/materials/types/reorder:
+    put:
+      tags: [Inventory]
+      summary: PUT /inventory/materials/types/reorder
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /inventory/materials/types/{id}:
+    patch:
+      tags: [Inventory]
+      summary: PATCH /inventory/materials/types/{id}
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /inventory/materials/{id}:
+    put:
+      tags: [Inventory]
+      summary: PUT /inventory/materials/{id}
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /inventory/procurement-stats:
+    get:
+      tags: [Inventory]
+      summary: GET /inventory/procurement-stats
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /inventory/purchase-orders:
+    get:
+      tags: [Inventory]
+      summary: GET /inventory/purchase-orders
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+    post:
+      tags: [Inventory]
+      summary: POST /inventory/purchase-orders
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /inventory/quotations/{id}:
+    patch:
+      tags: [Inventory]
+      summary: PATCH /inventory/quotations/{id}
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /inventory/requisitions:
+    get:
+      tags: [Inventory]
+      summary: GET /inventory/requisitions
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+    post:
+      tags: [Inventory]
+      summary: POST /inventory/requisitions
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /inventory/requisitions/{id}/approve:
+    patch:
+      tags: [Inventory]
+      summary: PATCH /inventory/requisitions/{id}/approve
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /inventory/requisitions/{id}/rfq:
+    post:
+      tags: [Inventory]
+      summary: POST /inventory/requisitions/{id}/rfq
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /inventory/rfqs:
+    get:
+      tags: [Inventory]
+      summary: GET /inventory/rfqs
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /inventory/rfqs/{id}/award:
+    patch:
+      tags: [Inventory]
+      summary: PATCH /inventory/rfqs/{id}/award
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /inventory/stats:
+    get:
+      tags: [Inventory]
+      summary: GET /inventory/stats
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /inventory/stock-levels:
+    get:
+      tags: [Inventory]
+      summary: GET /inventory/stock-levels
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /inventory/suppliers:
+    get:
+      tags: [Inventory]
+      summary: GET /inventory/suppliers
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+    post:
+      tags: [Inventory]
+      summary: POST /inventory/suppliers
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /inventory/suppliers/{id}:
+    put:
+      tags: [Inventory]
+      summary: PUT /inventory/suppliers/{id}
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /inventory/transactions:
+    get:
+      tags: [Inventory]
+      summary: GET /inventory/transactions
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /inventory/transfers:
+    get:
+      tags: [Inventory]
+      summary: GET /inventory/transfers
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+    post:
+      tags: [Inventory]
+      summary: POST /inventory/transfers
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /inventory/warehouses:
+    get:
+      tags: [Inventory]
+      summary: GET /inventory/warehouses
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /maintenance/machines:
+    get:
+      tags: [Maintenance]
+      summary: GET /maintenance/machines
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+    post:
+      tags: [Maintenance]
+      summary: POST /maintenance/machines
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /maintenance/requests:
+    get:
+      tags: [Maintenance]
+      summary: GET /maintenance/requests
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+    post:
+      tags: [Maintenance]
+      summary: POST /maintenance/requests
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /maintenance/requests/{id}:
+    get:
+      tags: [Maintenance]
+      summary: GET /maintenance/requests/{id}
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /maintenance/requests/{id}/complete:
+    patch:
+      tags: [Maintenance]
+      summary: PATCH /maintenance/requests/{id}/complete
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /maintenance/stats:
+    get:
+      tags: [Maintenance]
+      summary: GET /maintenance/stats
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /operations/machines:
+    get:
+      tags: [Operations]
+      summary: GET /operations/machines
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /operations/orders:
+    get:
+      tags: [Operations]
+      summary: GET /operations/orders
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+    post:
+      tags: [Operations]
+      summary: POST /operations/orders
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /operations/orders/{id}:
+    get:
+      tags: [Operations]
+      summary: GET /operations/orders/{id}
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /operations/orders/{id}/generate-production:
+    post:
+      tags: [Operations]
+      summary: POST /operations/orders/{id}/generate-production
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /operations/orders/{id}/items:
+    patch:
+      tags: [Operations]
+      summary: PATCH /operations/orders/{id}/items
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /operations/orders/{id}/status:
+    patch:
+      tags: [Operations]
+      summary: PATCH /operations/orders/{id}/status
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /operations/production:
+    get:
+      tags: [Operations]
+      summary: GET /operations/production
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+    post:
+      tags: [Operations]
+      summary: POST /operations/production
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /operations/production-stats:
+    get:
+      tags: [Operations]
+      summary: GET /operations/production-stats
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /operations/production/{id}/complete:
+    post:
+      tags: [Operations]
+      summary: POST /operations/production/{id}/complete
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /operations/production/{id}/start:
+    post:
+      tags: [Operations]
+      summary: POST /operations/production/{id}/start
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /operations/quotations:
+    get:
+      tags: [Operations]
+      summary: GET /operations/quotations
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+    post:
+      tags: [Operations]
+      summary: POST /operations/quotations
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /operations/quotations/{id}:
+    get:
+      tags: [Operations]
+      summary: GET /operations/quotations/{id}
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /operations/quotations/{id}/convert:
+    post:
+      tags: [Operations]
+      summary: POST /operations/quotations/{id}/convert
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /operations/stats:
+    get:
+      tags: [Operations]
+      summary: GET /operations/stats
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /products/:
+    get:
+      tags: [Products]
+      summary: GET /products/
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+    post:
+      tags: [Products]
+      summary: POST /products/
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /products/categories:
+    post:
+      tags: [Products]
+      summary: POST /products/categories
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /products/categories/list:
+    get:
+      tags: [Products]
+      summary: GET /products/categories/list
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /products/categories/manage:
+    get:
+      tags: [Products]
+      summary: GET /products/categories/manage
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /products/categories/reorder:
+    put:
+      tags: [Products]
+      summary: PUT /products/categories/reorder
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /products/categories/{id}:
+    patch:
+      tags: [Products]
+      summary: PATCH /products/categories/{id}
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+    delete:
+      tags: [Products]
+      summary: DELETE /products/categories/{id}
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /products/stats:
+    get:
+      tags: [Products]
+      summary: GET /products/stats
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /products/warehouses/stock:
+    get:
+      tags: [Products]
+      summary: GET /products/warehouses/stock
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /products/{id}:
+    get:
+      tags: [Products]
+      summary: GET /products/{id}
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+    put:
+      tags: [Products]
+      summary: PUT /products/{id}
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+    delete:
+      tags: [Products]
+      summary: DELETE /products/{id}
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /products/{id}/image:
+    post:
+      tags: [Products]
+      summary: POST /products/{id}/image
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /quality/:
+    get:
+      tags: [Quality]
+      summary: GET /quality/
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+    post:
+      tags: [Quality]
+      summary: POST /quality/
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /quality/stats:
+    get:
+      tags: [Quality]
+      summary: GET /quality/stats
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /quality/{id}:
+    get:
+      tags: [Quality]
+      summary: GET /quality/{id}
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+    patch:
+      tags: [Quality]
+      summary: PATCH /quality/{id}
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /realtime/events:
+    get:
+      tags: [Realtime]
+      summary: GET /realtime/events
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /search/:
+    get:
+      tags: [Search]
+      summary: GET /search/
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /tenant/companies:
+    get:
+      tags: [Tenant]
+      summary: GET /tenant/companies
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+    post:
+      tags: [Tenant]
+      summary: POST /tenant/companies
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /tenant/companies/{id}:
+    delete:
+      tags: [Tenant]
+      summary: DELETE /tenant/companies/{id}
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /tenant/companies/{id}/status:
+    patch:
+      tags: [Tenant]
+      summary: PATCH /tenant/companies/{id}/status
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /tenant/invite-user:
+    post:
+      tags: [Tenant]
+      summary: POST /tenant/invite-user
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /tenant/logo:
+    post:
+      tags: [Tenant]
+      summary: POST /tenant/logo
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /tenant/team:
+    get:
+      tags: [Tenant]
+      summary: GET /tenant/team
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /tenant/workspace:
+    get:
+      tags: [Tenant]
+      summary: GET /tenant/workspace
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+    patch:
+      tags: [Tenant]
+      summary: PATCH /tenant/workspace
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /tenant/workspace/reset-demo:
+    post:
+      tags: [Tenant]
+      summary: POST /tenant/workspace/reset-demo
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /tenant/workspace/seed-demo:
+    post:
+      tags: [Tenant]
+      summary: POST /tenant/workspace/seed-demo
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /users/:
+    get:
+      tags: [Users]
+      summary: GET /users/
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+    post:
+      tags: [Users]
+      summary: POST /users/
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /users/audit-logs:
+    get:
+      tags: [Users]
+      summary: GET /users/audit-logs
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /users/branches:
+    get:
+      tags: [Users]
+      summary: GET /users/branches
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /users/departments:
+    get:
+      tags: [Users]
+      summary: GET /users/departments
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /users/roles:
+    get:
+      tags: [Users]
+      summary: GET /users/roles
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /users/stats:
+    get:
+      tags: [Users]
+      summary: GET /users/stats
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /users/{id}:
+    get:
+      tags: [Users]
+      summary: GET /users/{id}
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+    put:
+      tags: [Users]
+      summary: PUT /users/{id}
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+    delete:
+      tags: [Users]
+      summary: DELETE /users/{id}
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden

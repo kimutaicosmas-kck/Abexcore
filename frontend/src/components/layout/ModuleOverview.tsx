@@ -36,8 +36,8 @@ export function OverviewPreviewCard({
       padding={false}
     >
       {isEmpty ? (
-        <div className="p-6 text-center text-sm text-slate-500">
-          <p className="font-medium text-slate-700">{emptyTitle}</p>
+        <div className="p-6 text-center text-sm text-primary-700/70">
+          <p className="font-medium text-primary-900">{emptyTitle}</p>
           {emptyDescription && <p className="text-xs mt-1">{emptyDescription}</p>}
         </div>
       ) : (

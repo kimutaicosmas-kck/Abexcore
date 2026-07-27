@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Download, Users } from 'lucide-react';
 import { reportsApi } from '../../services/api';
@@ -21,7 +21,7 @@ import {
 import { SalesByPersonReport, SalesOfficerOption } from '../../types';
 import { downloadFile } from '../../utils/download';
 
-export function SalesByPersonPanel() {
+export function SalesByPersonPanel({ toolbar }: { toolbar?: ReactNode }) {
   const [page, setPage] = useState(1);
   const [salesPersonId, setSalesPersonId] = useState('');
   const [startDate, setStartDate] = useState('');
@@ -105,6 +105,43 @@ export function SalesByPersonPanel() {
 
   return (
     <div className="space-y-4">
+      {report && (
+        <StatGrid>
+          <StatCard
+            title="Invoices"
+            value={report.summary.invoiceCount}
+            icon={<Users className="h-5 w-5 text-white" />}
+            color="from-primary-500 to-primary-700"
+          />
+          <StatCard
+            title="Total sales"
+            value={formatCurrency(report.summary.totalSales)}
+            icon={<Users className="h-5 w-5 text-white" />}
+            color="from-emerald-500 to-teal-600"
+          />
+          <StatCard
+            title="Collected"
+            value={formatCurrency(report.summary.totalPaid)}
+            icon={<Users className="h-5 w-5 text-white" />}
+            color="from-primary-600 to-primary-800"
+          />
+          <StatCard
+            title="Outstanding"
+            value={formatCurrency(report.summary.outstanding)}
+            icon={<Users className="h-5 w-5 text-white" />}
+            color="from-amber-500 to-orange-600"
+          />
+          <StatCard
+            title="Salespeople"
+            value={report.summary.bySalesPerson.length}
+            icon={<Users className="h-5 w-5 text-white" />}
+            color="from-slate-600 to-slate-800"
+          />
+        </StatGrid>
+      )}
+
+      {toolbar}
+
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 flex-1">
           <Select
@@ -141,54 +178,23 @@ export function SalesByPersonPanel() {
         </Button>
       </div>
 
-      {report && (
-        <>
-          <StatGrid>
-            <StatCard
-              title="Invoices"
-              value={report.summary.invoiceCount}
-              icon={<Users className="h-5 w-5 text-white" />}
-              color="from-primary-500 to-indigo-600"
-            />
-            <StatCard
-              title="Total sales"
-              value={formatCurrency(report.summary.totalSales)}
-              icon={<Users className="h-5 w-5 text-white" />}
-              color="from-emerald-500 to-teal-600"
-            />
-            <StatCard
-              title="Collected"
-              value={formatCurrency(report.summary.totalPaid)}
-              icon={<Users className="h-5 w-5 text-white" />}
-              color="from-violet-500 to-purple-600"
-            />
-            <StatCard
-              title="Outstanding"
-              value={formatCurrency(report.summary.outstanding)}
-              icon={<Users className="h-5 w-5 text-white" />}
-              color="from-amber-500 to-orange-600"
-            />
-          </StatGrid>
-
-          {!salesPersonId && report.summary.bySalesPerson.length > 0 && (
-            <Card title="Totals by sales person" padding={false}>
-              <ul className="divide-y divide-slate-100">
-                {report.summary.bySalesPerson.map((person) => (
-                  <li key={person.id} className="flex items-center justify-between px-4 py-3 text-sm">
-                    <div>
-                      <p className="font-medium text-slate-900">{person.name}</p>
-                      <p className="text-xs text-slate-500">{person.invoiceCount} invoices</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-semibold tabular-nums">{formatCurrency(person.totalSales)}</p>
-                      <p className="text-xs text-slate-500">Paid {formatCurrency(person.totalPaid)}</p>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            </Card>
-          )}
-        </>
+      {report && !salesPersonId && report.summary.bySalesPerson.length > 0 && (
+        <Card title="Totals by sales person" padding={false}>
+          <ul className="divide-y divide-slate-100">
+            {report.summary.bySalesPerson.map((person) => (
+              <li key={person.id} className="flex items-center justify-between px-4 py-3 text-sm">
+                <div>
+                  <p className="font-medium text-slate-900">{person.name}</p>
+                  <p className="text-xs text-slate-500">{person.invoiceCount} invoices</p>
+                </div>
+                <div className="text-right">
+                  <p className="font-semibold tabular-nums">{formatCurrency(person.totalSales)}</p>
+                  <p className="text-xs text-slate-500">Paid {formatCurrency(person.totalPaid)}</p>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </Card>
       )}
 
       <DataPanel>

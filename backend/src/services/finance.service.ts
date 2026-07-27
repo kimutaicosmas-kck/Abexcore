@@ -4,8 +4,44 @@ import { getVatRate, calcTax } from '../utils/company';
 import { AccountingService } from './accounting.service';
 import { syncCustomerCreditUsed } from '../utils/credit';
 import { nextInvoiceNumber, nextPaymentNumber } from '../utils/numbering';
+import { SalesOrderService } from './sales-order.service';
 
 type TxClient = Prisma.TransactionClient;
+
+function capInvoiceAmounts(
+  subtotal: number,
+  vatRate: number,
+  remainingToInvoice: number,
+  invoiceLines: {
+    description: string;
+    quantity: number;
+    unitPrice: number;
+    taxRate: number;
+    totalPrice: number;
+  }[]
+) {
+  const taxAmount = calcTax(subtotal, vatRate);
+  const totalAmount = subtotal + taxAmount;
+
+  if (totalAmount <= remainingToInvoice + 0.01) {
+    return { subtotal, taxAmount, totalAmount, invoiceLines };
+  }
+
+  const cappedTotal = Math.max(0, remainingToInvoice);
+  const cappedSubtotal = cappedTotal / (1 + vatRate / 100);
+  const cappedTax = cappedTotal - cappedSubtotal;
+  const ratio = subtotal > 0 ? cappedSubtotal / subtotal : 0;
+
+  return {
+    subtotal: cappedSubtotal,
+    taxAmount: cappedTax,
+    totalAmount: cappedTotal,
+    invoiceLines: invoiceLines.map((line) => ({
+      ...line,
+      totalPrice: line.totalPrice * ratio,
+    })),
+  };
+}
 
 export class FinanceInvoiceService {
   static async createSalesInvoiceFromDelivery(tx: TxClient, deliveryNoteId: string) {
@@ -30,17 +66,48 @@ export class FinanceInvoiceService {
     if (existing) return existing;
 
     const order = delivery.salesOrder;
-    const orderLevelInvoice = order.invoices.find((inv) => !inv.deliveryNoteId);
-    if (orderLevelInvoice) {
-      return tx.invoice.findUniqueOrThrow({
-        where: { id: orderLevelInvoice.id },
-        include: { customer: true, items: true },
-      });
-    }
 
+    await SalesOrderService.validateOrderLinesForInvoicing(
+      tx,
+      delivery.items.map((deliveryItem) => {
+        const orderItem = order.items.find((item) => item.productId === deliveryItem.productId);
+        if (!orderItem) {
+          throw new AppError('Delivery product not found on sales order', 400);
+        }
+        return {
+          productId: deliveryItem.productId,
+          quantity: deliveryItem.quantity,
+          product: orderItem.product,
+        };
+      }),
+      { requireStock: false }
+    );
+
+    const orderTotal = Number(order.totalAmount);
     const alreadyInvoiced = order.invoices
       .filter((inv) => inv.deliveryNoteId !== deliveryNoteId)
       .reduce((sum, inv) => sum + Number(inv.totalAmount), 0);
+    const remainingToInvoice = orderTotal - alreadyInvoiced;
+
+    if (remainingToInvoice <= 0.01) {
+      const priorInvoice =
+        order.invoices.find((inv) => !inv.deliveryNoteId) ||
+        order.invoices.find((inv) => inv.deliveryNoteId && inv.deliveryNoteId !== delivery.id);
+      if (priorInvoice) {
+        if (!priorInvoice.deliveryNoteId) {
+          await tx.invoice.update({
+            where: { id: priorInvoice.id },
+            data: { deliveryNoteId: delivery.id },
+          });
+        }
+        return tx.invoice.findUniqueOrThrow({
+          where: { id: priorInvoice.id },
+          include: { customer: true, items: true },
+        });
+      }
+      return null;
+    }
+
     const vatRate = await getVatRate();
     let subtotal = 0;
 
@@ -64,38 +131,31 @@ export class FinanceInvoiceService {
       };
     });
 
-    const taxAmount = calcTax(subtotal, vatRate);
-    const totalAmount = subtotal + taxAmount;
-
-    const orderTotal = Number(order.totalAmount);
-    if (alreadyInvoiced + totalAmount > orderTotal + 0.01) {
-      throw new AppError(
-        `Invoice total would exceed order value (KES ${Math.max(0, orderTotal - alreadyInvoiced).toFixed(2)} remaining to invoice)`,
-        400
-      );
-    }
+    const capped = capInvoiceAmounts(subtotal, vatRate, remainingToInvoice, invoiceLines);
 
     const invoiceNumber = await nextInvoiceNumber(tx, 'INV');
     const paymentTerms = Number(order.customer?.paymentTerms || 30);
 
     const inv = await tx.invoice.create({
       data: {
+        companyId: order.companyId,
         invoiceNumber,
         type: 'SALES',
         customerId: order.customerId,
         salesOrderId: order.id,
         deliveryNoteId: delivery.id,
-        subtotal,
-        taxAmount,
-        totalAmount,
+        subtotal: capped.subtotal,
+        taxAmount: capped.taxAmount,
+        totalAmount: capped.totalAmount,
         dueDate: new Date(Date.now() + paymentTerms * 24 * 60 * 60 * 1000),
         fiscalStatus: 'PENDING',
-        items: { create: invoiceLines },
+        items: { create: capped.invoiceLines },
       },
       include: { customer: true, items: true },
     });
 
     await AccountingService.postSalesInvoice(tx, {
+      id: inv.id,
       invoiceNumber: inv.invoiceNumber,
       subtotal: Number(inv.subtotal),
       taxAmount: Number(inv.taxAmount),
@@ -104,6 +164,68 @@ export class FinanceInvoiceService {
 
     await syncCustomerCreditUsed(order.customerId, tx);
     return inv;
+  }
+
+  static async recalculateDeliveryInvoice(tx: TxClient, deliveryNoteId: string) {
+    const delivery = await tx.deliveryNote.findUnique({
+      where: { id: deliveryNoteId },
+      include: {
+        items: true,
+        salesOrder: {
+          include: {
+            items: { include: { product: true } },
+            customer: true,
+            invoices: { where: { type: 'SALES' }, select: { id: true, totalAmount: true, deliveryNoteId: true } },
+          },
+        },
+      },
+    });
+    if (!delivery) throw new AppError('Delivery note not found', 404);
+
+    const invoice = await tx.invoice.findFirst({
+      where: { deliveryNoteId, type: 'SALES' },
+      include: { items: true, payments: true },
+    });
+    if (!invoice) return null;
+    if (Number(invoice.paidAmount) > 0 || invoice.payments.length > 0) {
+      throw new AppError('Cannot adjust invoice after payments have been recorded', 400);
+    }
+
+    const order = delivery.salesOrder;
+    const vatRate = await getVatRate();
+    let subtotal = 0;
+    const invoiceLines = delivery.items.map((deliveryItem) => {
+      const orderItem = order.items.find((item) => item.productId === deliveryItem.productId);
+      if (!orderItem) throw new AppError('Delivery product not found on sales order', 400);
+      const unitPrice = Number(orderItem.unitPrice);
+      const discount = Number(orderItem.discount || 0);
+      const lineSubtotal = deliveryItem.quantity * unitPrice * (1 - discount / 100);
+      subtotal += lineSubtotal;
+      return {
+        description: orderItem.product.name,
+        quantity: deliveryItem.quantity,
+        unitPrice,
+        taxRate: vatRate,
+        totalPrice: lineSubtotal,
+      };
+    });
+
+    const taxAmount = calcTax(subtotal, vatRate);
+    const totalAmount = subtotal + taxAmount;
+
+    await tx.invoiceItem.deleteMany({ where: { invoiceId: invoice.id } });
+    await tx.invoice.update({
+      where: { id: invoice.id },
+      data: {
+        subtotal,
+        taxAmount,
+        totalAmount,
+        items: { create: invoiceLines },
+      },
+    });
+
+    await syncCustomerCreditUsed(order.customerId, tx);
+    return tx.invoice.findUnique({ where: { id: invoice.id }, include: { items: true } });
   }
 
   static async createSalesInvoiceFromOrder(tx: TxClient, orderId: string) {
@@ -126,12 +248,26 @@ export class FinanceInvoiceService {
       throw new AppError('Order has deliveries — invoice is created automatically when you dispatch goods', 400);
     }
 
+    if (order.items.length === 0) {
+      throw new AppError('Cannot create invoice: order has no products', 400);
+    }
+
+    await SalesOrderService.validateOrderLinesForInvoicing(
+      tx,
+      order.items.map((item) => ({
+        productId: item.productId,
+        quantity: item.quantity,
+        product: item.product,
+      }))
+    );
+
     const vatRate = await getVatRate();
     const invoiceNumber = await nextInvoiceNumber(tx, 'INV');
     const paymentTerms = Number(order.customer?.paymentTerms || 30);
 
     const inv = await tx.invoice.create({
       data: {
+        companyId: order.companyId,
         invoiceNumber,
         type: 'SALES',
         customerId: order.customerId,
@@ -155,6 +291,7 @@ export class FinanceInvoiceService {
     });
 
     await AccountingService.postSalesInvoice(tx, {
+      id: inv.id,
       invoiceNumber: inv.invoiceNumber,
       subtotal: Number(inv.subtotal),
       taxAmount: Number(inv.taxAmount),
@@ -192,6 +329,7 @@ export class FinanceInvoiceService {
 
     const inv = await tx.invoice.create({
       data: {
+        companyId: grn.companyId,
         invoiceNumber,
         type: 'PURCHASE',
         supplierId: grn.supplierId,
@@ -215,6 +353,7 @@ export class FinanceInvoiceService {
     });
 
     await AccountingService.postPurchaseInvoice(tx, {
+      id: inv.id,
       invoiceNumber: inv.invoiceNumber,
       subtotal: Number(inv.subtotal),
       taxAmount: Number(inv.taxAmount),
@@ -239,8 +378,12 @@ export class FinancePaymentService {
   ) {
     const paymentNumber = await nextPaymentNumber(tx);
 
+    const invoice = await tx.invoice.findUnique({ where: { id: opts.invoiceId } });
+    if (!invoice) throw new AppError('Invoice not found', 404);
+
     const p = await tx.payment.create({
       data: {
+        companyId: invoice.companyId,
         paymentNumber,
         invoiceId: opts.invoiceId,
         amount: opts.amount,
@@ -249,9 +392,6 @@ export class FinancePaymentService {
         notes: opts.notes,
       },
     });
-
-    const invoice = await tx.invoice.findUnique({ where: { id: opts.invoiceId } });
-    if (!invoice) throw new AppError('Invoice not found', 404);
 
     const balance = Number(invoice.totalAmount) - Number(invoice.paidAmount);
     if (Number(opts.amount) > balance + 0.01) {
@@ -268,7 +408,7 @@ export class FinancePaymentService {
     if (invoice.type === 'SALES') {
       await AccountingService.postPayment(
         tx,
-        { paymentNumber: p.paymentNumber, amount: Number(p.amount), method: p.method },
+        { id: p.id, paymentNumber: p.paymentNumber, amount: Number(p.amount), method: p.method },
         invoice.invoiceNumber
       );
       if (invoice.customerId) {
@@ -279,7 +419,7 @@ export class FinancePaymentService {
     if (invoice.type === 'PURCHASE') {
       await AccountingService.postSupplierPayment(
         tx,
-        { paymentNumber: p.paymentNumber, amount: Number(p.amount), method: p.method },
+        { id: p.id, paymentNumber: p.paymentNumber, amount: Number(p.amount), method: p.method },
         invoice.invoiceNumber
       );
     }

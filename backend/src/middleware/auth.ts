@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken';
 import { config } from '../config';
 import prisma from '../config/database';
 import { AppError } from './errorHandler';
+import { runWithTenant } from '../utils/tenant';
 
 export interface AuthRequest extends Request {
   user?: {
@@ -10,6 +11,8 @@ export interface AuthRequest extends Request {
     email: string;
     roleId: string;
     roleName: string;
+    companyId: string;
+    companySlug?: string;
     permissions: string[];
   };
 }
@@ -30,6 +33,7 @@ export const authenticate = async (
       userId: string;
       email: string;
       roleId: string;
+      companyId?: string;
     };
 
     const user = await prisma.user.findUnique({
@@ -40,22 +44,29 @@ export const authenticate = async (
             permissions: { include: { permission: true } },
           },
         },
+        company: { select: { id: true, slug: true, isActive: true } },
       },
     });
 
     if (!user) throw new AppError('User not found or inactive', 401);
+    if (!user.company?.isActive) throw new AppError('Company account is inactive', 403);
+    if (decoded.companyId && decoded.companyId !== user.companyId) {
+      throw new AppError('Session is not valid for this company', 401);
+    }
 
     req.user = {
       id: user.id,
       email: user.email,
       roleId: user.roleId,
       roleName: user.role.name,
+      companyId: user.companyId,
+      companySlug: user.company.slug,
       permissions: user.role.permissions.map(
         (rp) => `${rp.permission.module}:${rp.permission.action}`
       ),
     };
 
-    next();
+    runWithTenant({ companyId: user.companyId }, () => next());
   } catch (error) {
     if (error instanceof jwt.JsonWebTokenError) {
       next(new AppError('Invalid or expired token', 401));
@@ -97,6 +108,29 @@ export const requireSuperAdmin = (req: AuthRequest, _res: Response, next: NextFu
   if (req.user.roleName !== 'Super Admin') {
     return next(new AppError('Super Admin access required', 403));
   }
+  next();
+};
+
+/** Only the platform owner (Super Admin of the platform company) can register tenants. */
+export const requirePlatformOwner = async (
+  req: AuthRequest,
+  _res: Response,
+  next: NextFunction
+) => {
+  if (!req.user) return next(new AppError('Authentication required', 401));
+  if (req.user.roleName !== 'Super Admin') {
+    return next(new AppError('Only the platform owner can perform this action', 403));
+  }
+
+  const company = await prisma.company.findUnique({
+    where: { id: req.user.companyId },
+    select: { slug: true, isActive: true },
+  });
+
+  if (!company?.isActive || company.slug !== config.platformCompanySlug) {
+    return next(new AppError('Only the platform owner can perform this action', 403));
+  }
+
   next();
 };
 

@@ -1,7 +1,7 @@
 {
-  "name": "filter-manufacturing-erp",
-  "version": "1.0.0",
-  "description": "Enterprise ERP for filter manufacturing - Kenya",
+  "name": "apexcore-erp",
+  "version": "2.1.0",
+  "description": "ApexCore ERP — enterprise manufacturing and distribution ERP",
   "private": true,
   "scripts": {
     "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
@@ -10,12 +10,15 @@
     "build": "npm run build --prefix backend && npm run build --prefix frontend",
     "test:e2e": "playwright test --config e2e/playwright.config.ts",
     "test:e2e:ui": "playwright test --config e2e/playwright.config.ts --ui",
+    "load-test": "node scripts/load-test/health-load.mjs",
     "docker:up": "docker-compose up -d",
     "docker:down": "docker-compose down",
     "db:migrate": "npm run db:migrate --prefix backend",
     "db:seed": "npm run db:seed --prefix backend",
     "db:seed:production": "npm run db:seed:production --prefix backend",
-    "db:backup": "powershell -ExecutionPolicy Bypass -File scripts/backup-mysql.ps1"
+    "db:purge-legacy": "npm run db:purge-legacy --prefix backend",
+    "db:backup": "powershell -ExecutionPolicy Bypass -File scripts/backup-mysql.ps1",
+    "db:backup:test-restore": "bash scripts/test-backup-restore.sh"
   },
   "devDependencies": {
     "@playwright/test": "^1.52.0",

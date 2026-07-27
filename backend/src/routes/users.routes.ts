@@ -148,8 +148,12 @@ router.get(
   authorize('users:read'),
   validate(paginationSchema, 'query'),
   asyncHandler(async (req: AuthRequest, res: Response) => {
-    const { page, limit, search } = getQuery<{ page: number; limit: number; search?: string }>(req.query);
-    const skip = (page - 1) * limit;
+    const { page, limit, search, cursor } = getQuery<{
+      page: number;
+      limit: number;
+      search?: string;
+      cursor?: string;
+    }>(req.query);
 
     const where: Prisma.AuditLogWhereInput = search
       ? {
@@ -161,6 +165,31 @@ router.get(
           ],
         }
       : {};
+
+    if (cursor) {
+      const { buildCursorResult } = await import('../utils/cursorPagination');
+      const rows = await prisma.auditLog.findMany({
+        where,
+        take: limit + 1,
+        ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+        include: { user: { select: { firstName: true, lastName: true, email: true } } },
+        orderBy: { createdAt: 'desc' },
+      });
+      const pageResult = buildCursorResult(rows, limit);
+      res.json({
+        success: true,
+        data: pageResult.data,
+        pagination: {
+          limit: pageResult.limit,
+          nextCursor: pageResult.nextCursor,
+          prevCursor: pageResult.prevCursor,
+          hasMore: pageResult.hasMore,
+        },
+      });
+      return;
+    }
+
+    const skip = (page - 1) * limit;
 
     const [data, total] = await Promise.all([
       prisma.auditLog.findMany({
@@ -206,13 +235,16 @@ router.post(
   asyncHandler(async (req: AuthRequest, res: Response) => {
     const { password, ...data } = req.body;
 
-    const existing = await prisma.user.findUnique({ where: { email: data.email.toLowerCase() } });
+    const existing = await prisma.user.findFirst({
+      where: { companyId: req.user!.companyId, email: data.email.toLowerCase() },
+    });
     if (existing) throw new AppError('Email address is already in use', 409);
 
     const passwordHash = await AuthService.hashPassword(password);
     const user = await prisma.user.create({
       data: {
         ...data,
+        companyId: req.user!.companyId,
         email: data.email.toLowerCase(),
         passwordHash,
         passwordChangedAt: new Date(),
@@ -236,7 +268,9 @@ router.put(
     if (!existing) throw new AppError('User not found', 404);
 
     if (email && email.toLowerCase() !== existing.email) {
-      const duplicate = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
+      const duplicate = await prisma.user.findFirst({
+        where: { email: email.toLowerCase(), deletedAt: null },
+      });
       if (duplicate) throw new AppError('Email address is already in use', 409);
     }
 

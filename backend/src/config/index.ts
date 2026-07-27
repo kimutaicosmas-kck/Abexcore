@@ -43,4 +43,13 @@ export const config = {
     requireNumber: true,
     requireSpecial: false,
   },
+  /** Company slug for the platform owner who can register new tenants. */
+  platformCompanySlug: process.env.PLATFORM_COMPANY_SLUG || 'owner',
+  encryption: {
+    key: requireSecret(
+      'DATA_ENCRYPTION_KEY',
+      process.env.DATA_ENCRYPTION_KEY,
+      'dev-encryption-key-change-in-production-32b'
+    ),
+  },
 };

@@ -4,12 +4,10 @@ import {
   Plus,
   Pencil,
   Trash2,
-  Layers,
   Upload,
   Package,
   Box,
   FileText,
-  AlertTriangle,
   ChevronRight,
 } from 'lucide-react';
 import { productsApi } from '../services/api';
@@ -32,24 +30,11 @@ import {
 } from '../components/ui';
 import { Modal } from '../components/ui/Modal';
 import { ProductForm } from '../components/forms/ProductForm';
-import { BOMForm } from '../components/forms/BOMForm';
 import { useAuth } from '../contexts/AuthContext';
-import { Product, ProductStats } from '../types';
+import { Product, ProductCategoryOption, ProductStats } from '../types';
 import { PART_NUMBER_LABEL, formatPartNumberLine } from '../utils/productDisplay';
 
 const tabs = ['Overview', 'Catalog'];
-
-const CATEGORY_OPTIONS = [
-  { value: '', label: 'All categories' },
-  { value: 'OIL_FILTER', label: 'Oil Filter' },
-  { value: 'FUEL_FILTER', label: 'Fuel Filter' },
-  { value: 'AIR_FILTER', label: 'Air Filter' },
-  { value: 'CABIN_FILTER', label: 'Cabin Filter' },
-  { value: 'HYDRAULIC_FILTER', label: 'Hydraulic Filter' },
-  { value: 'WATER_FILTER', label: 'Water Filter' },
-  { value: 'INDUSTRIAL_FILTER', label: 'Industrial Filter' },
-  { value: 'CUSTOM_FILTER', label: 'Custom Filter' },
-];
 
 const STATUS_OPTIONS = [
   { value: '', label: 'All statuses' },
@@ -68,12 +53,10 @@ export function ProductsPage() {
   const [isActive, setIsActive] = useState('');
 
   const [formOpen, setFormOpen] = useState(false);
-  const [bomOpen, setBomOpen] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
   const [deactivateOpen, setDeactivateOpen] = useState(false);
   const [editing, setEditing] = useState<Product | null>(null);
   const [selected, setSelected] = useState<Product | null>(null);
-  const [bomProduct, setBomProduct] = useState<Product | null>(null);
 
   const canCreate = hasPermission('products:create');
   const canUpdate = hasPermission('products:update');
@@ -82,6 +65,16 @@ export function ProductsPage() {
     queryKey: ['product-stats'],
     queryFn: () => productsApi.stats().then((r) => r.data.data as ProductStats),
   });
+
+  const { data: categoriesData } = useQuery({
+    queryKey: ['product-categories'],
+    queryFn: () => productsApi.categories().then((r) => r.data.data as ProductCategoryOption[]),
+  });
+
+  const categoryOptions = [
+    { value: '', label: 'All categories' },
+    ...(categoriesData || []).map((c) => ({ value: c.id, label: c.name })),
+  ];
 
   const { data: productsRes, isLoading, isError, refetch } = useQuery({
     queryKey: ['products', page, search, category, isActive],
@@ -137,7 +130,6 @@ export function ProductsPage() {
 
   const products = (productsRes?.data as Product[]) || [];
   const recentProducts = activeTab === 0 ? products.slice(0, 6) : [];
-  const missingBomProducts = activeTab === 0 ? products.filter((p) => !p.bom).slice(0, 5) : [];
 
   const columns = [
     {
@@ -154,21 +146,15 @@ export function ProductsPage() {
     {
       key: 'category',
       label: 'Category',
-      render: (val: unknown) => <Badge variant="info">{(val as string).replace(/_/g, ' ')}</Badge>,
+      render: (_: unknown, row: Record<string, unknown>) => {
+        const product = row as unknown as Product;
+        return <Badge variant="info">{product.category?.name || 'Uncategorized'}</Badge>;
+      },
     },
     {
       key: 'sellingPrice',
       label: 'Selling Price',
       render: (val: unknown) => formatCurrency(val as number),
-    },
-    {
-      key: 'bom',
-      label: 'BOM',
-      render: (_: unknown, row: Record<string, unknown>) => (
-        <Badge variant={(row.bom as object) ? 'success' : 'warning'}>
-          {(row.bom as object) ? 'Defined' : 'Missing'}
-        </Badge>
-      ),
     },
     {
       key: 'isActive',
@@ -186,9 +172,6 @@ export function ProductsPage() {
           <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
             {canUpdate && (
               <>
-                <Button size="sm" variant="ghost" onClick={() => { setBomProduct(product); setBomOpen(true); }} title="BOM">
-                  <Layers className="h-4 w-4" />
-                </Button>
                 <label className="cursor-pointer p-2 rounded hover:bg-surface-muted" title="Upload image">
                   <Upload className="h-4 w-4 text-slate-600" />
                   <input
@@ -222,24 +205,14 @@ export function ProductsPage() {
     ) : undefined);
 
   return (
-    <div className="space-y-1">
-      <PageHeader action={
-          stats && stats.withoutBom > 0 ? (
-            <Button variant="secondary" size="sm" onClick={() => goToTab(1)}>
-              <AlertTriangle className="h-4 w-4 mr-1.5 text-amber-500" />
-              {stats.withoutBom} missing BOM
-            </Button>
-          ) : undefined
-        }
-      />
-
+    <div className="space-y-4">
       {stats && (
         <StatGrid>
           <StatCard
             title="Total Products"
             value={stats.total}
             icon={<Package className="h-5 w-5 text-white" />}
-            color="from-primary-500 to-indigo-600"
+            color="from-primary-500 to-primary-700"
           />
           <StatCard
             title="Active"
@@ -248,19 +221,27 @@ export function ProductsPage() {
             color="from-emerald-500 to-teal-600"
           />
           <StatCard
-            title="With BOM"
-            value={stats.withBom}
+            title="Inactive"
+            value={stats.inactive}
             icon={<FileText className="h-5 w-5 text-white" />}
-            color="from-violet-500 to-purple-600"
+            color="from-slate-600 to-slate-800"
           />
           <StatCard
             title="FG in Stock"
             value={stats.finishedGoodsQty.toLocaleString()}
-            icon={<Layers className="h-5 w-5 text-white" />}
+            icon={<Package className="h-5 w-5 text-white" />}
             color="from-orange-500 to-amber-600"
+          />
+          <StatCard
+            title="Categories"
+            value={stats.byCategory.length}
+            icon={<FileText className="h-5 w-5 text-white" />}
+            color="from-primary-600 to-primary-800"
           />
         </StatGrid>
       )}
+
+      <PageHeader />
 
       <PageToolbar tabs={tabs} activeTab={activeTab} onTabChange={setActiveTab} actions={toolbarActions} />
 
@@ -268,9 +249,9 @@ export function ProductsPage() {
         <div className="space-y-4">
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
             <Card
-              title="Missing BOM"
+              title="Recent products"
               action={
-                missingBomProducts.length > 0 ? (
+                recentProducts.length > 0 ? (
                   <Button variant="ghost" size="sm" onClick={() => goToTab(1)}>
                     View all
                   </Button>
@@ -278,26 +259,26 @@ export function ProductsPage() {
               }
               padding={false}
             >
-              {missingBomProducts.length === 0 ? (
+              {recentProducts.length === 0 ? (
                 <div className="p-6">
-                  <EmptyState title="All products have BOM" description="Every active product has a bill of materials defined." />
+                  <EmptyState title="No products yet" description="Add products to populate your catalog." />
                 </div>
               ) : (
                 <ul className="divide-y divide-slate-100">
-                  {missingBomProducts.map((product) => (
+                  {recentProducts.map((product) => (
                     <li
                       key={product.id}
-                      className="flex items-center gap-3 px-4 py-3 hover:bg-amber-50/30 cursor-pointer"
+                      className="flex items-center gap-3 px-4 py-3 hover:bg-primary-50/50 cursor-pointer"
                       onClick={() => openDetail(product)}
                     >
-                      <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-100 text-amber-600">
-                        <AlertTriangle className="h-4 w-4" />
+                      <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary-100 text-primary-600">
+                        <Package className="h-4 w-4" />
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="font-medium text-slate-900 truncate">{product.name}</p>
                         <p className="text-xs text-slate-500">{formatPartNumberLine(product.sku)}</p>
                       </div>
-                      <Badge variant="warning">Missing</Badge>
+                      <ChevronRight className="h-4 w-4 text-slate-400 shrink-0" />
                     </li>
                   ))}
                 </ul>
@@ -313,15 +294,15 @@ export function ProductsPage() {
                 <ul className="divide-y divide-slate-100">
                   {(stats?.byCategory || []).slice(0, 6).map((item) => (
                     <li
-                      key={item.category}
+                      key={item.categoryId}
                       className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 cursor-pointer"
-                      onClick={() => { setCategory(item.category); setPage(1); goToTab(1); }}
+                      onClick={() => { setCategory(item.categoryId); setPage(1); goToTab(1); }}
                     >
-                      <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-indigo-100 text-indigo-600">
+                      <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary-100 text-primary-600">
                         <Package className="h-4 w-4" />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="font-medium text-slate-900">{item.category.replace(/_/g, ' ')}</p>
+                        <p className="font-medium text-slate-900">{item.category}</p>
                       </div>
                       <span className="text-sm font-semibold tabular-nums text-slate-700">{item.count}</span>
                     </li>
@@ -347,7 +328,7 @@ export function ProductsPage() {
               />
             </form>
             <Select
-              options={CATEGORY_OPTIONS}
+              options={categoryOptions}
               value={category}
               onChange={(e) => { setCategory(e.target.value); setPage(1); }}
               className="sm:w-44"
@@ -398,6 +379,7 @@ export function ProductsPage() {
               columns={columns}
               data={products}
               loading={isLoading}
+              responsive
               onRowClick={(row) => openDetail(row as unknown as Product)}
               embedded
             />
@@ -417,12 +399,6 @@ export function ProductsPage() {
         <ProductForm product={editing} onSuccess={() => { setFormOpen(false); setEditing(null); }} onCancel={() => { setFormOpen(false); setEditing(null); }} />
       </Modal>
 
-      <Modal open={bomOpen} onClose={() => { setBomOpen(false); setBomProduct(null); }} title="Bill of Materials" size="lg">
-        {bomProduct && (
-          <BOMForm productId={bomProduct.id} onSuccess={() => { setBomOpen(false); setBomProduct(null); }} onCancel={() => { setBomOpen(false); setBomProduct(null); }} />
-        )}
-      </Modal>
-
       <Modal open={detailOpen} onClose={() => { setDetailOpen(false); setSelected(null); }} title="Product Details" size="xl">
         {detailLoading ? (
           <div className="py-8 text-center text-sm text-slate-500">Loading…</div>
@@ -436,28 +412,13 @@ export function ProductsPage() {
               )}
               <div className="grid grid-cols-2 gap-3 flex-1 text-sm">
                 <div><p className="text-slate-500">{PART_NUMBER_LABEL}</p><p className="font-semibold">{productDetail.sku}</p></div>
-                <div><p className="text-slate-500">Category</p><Badge variant="info">{productDetail.category.replace(/_/g, ' ')}</Badge></div>
+                <div><p className="text-slate-500">Category</p><Badge variant="info">{productDetail.category?.name || 'Uncategorized'}</Badge></div>
                 <div><p className="text-slate-500">Selling Price</p><p className="font-semibold">{formatCurrency(Number(productDetail.sellingPrice))}</p></div>
                 <div><p className="text-slate-500">Min Stock</p><p className="font-semibold">{productDetail.minStockLevel}</p></div>
                 <div><p className="text-slate-500">Status</p><Badge variant={productDetail.isActive ? 'success' : 'danger'}>{productDetail.isActive ? 'Active' : 'Inactive'}</Badge></div>
               </div>
             </div>
             {productDetail.description && <p className="text-sm text-slate-600">{productDetail.description}</p>}
-
-            <Card title="Bill of Materials">
-              {productDetail.bom?.items?.length ? (
-                <div className="space-y-2">
-                  {productDetail.bom.items.map((item) => (
-                    <div key={item.id} className="flex justify-between text-sm py-1 border-b border-border/60 last:border-0">
-                      <span>{item.rawMaterial.name} ({item.rawMaterial.code})</span>
-                      <span className="text-slate-600">{item.quantity} {item.unit}</span>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-sm text-slate-500">No BOM defined. Add components to enable production.</p>
-              )}
-            </Card>
 
             {productDetail.stockLevels && productDetail.stockLevels.length > 0 && (
               <Card title="Stock Levels">
@@ -472,14 +433,9 @@ export function ProductsPage() {
 
             <div className="flex justify-end gap-3 pt-4 border-t">
               {canUpdate && (
-                <>
-                  <Button variant="secondary" onClick={() => { setBomProduct(productDetail); setBomOpen(true); setDetailOpen(false); }}>
-                    <Layers className="h-4 w-4 mr-1.5" />Edit BOM
-                  </Button>
-                  <Button variant="secondary" onClick={() => { setEditing(productDetail); setFormOpen(true); setDetailOpen(false); }}>
-                    <Pencil className="h-4 w-4 mr-1.5" />Edit
-                  </Button>
-                </>
+                <Button variant="secondary" onClick={() => { setEditing(productDetail); setFormOpen(true); setDetailOpen(false); }}>
+                  <Pencil className="h-4 w-4 mr-1.5" />Edit
+                </Button>
               )}
               {canDelete && productDetail.isActive && (
                 <Button variant="danger" onClick={() => setDeactivateOpen(true)}>

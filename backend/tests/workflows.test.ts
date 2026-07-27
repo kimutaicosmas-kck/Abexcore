@@ -1,36 +1,34 @@
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import request from 'supertest';
-import { createApp } from '../src/app';
 import { generateNumber } from '../src/utils/date';
 import {
   createSalesOrderSchema,
   createRequisitionSchema,
   createOpportunitySchema,
 } from '../src/validators/schemas';
+import { authReq } from './helpers/testAuth';
+import { testCtx, itWithDb } from './setup';
 
-const app = createApp();
-let dbConnected = false;
-let authToken = '';
-
-async function login(): Promise<string> {
-  const res = await request(app)
-    .post('/api/v1/auth/login')
-    .send({ email: 'admin@filtererp.co.ke', password: 'Admin@123' });
-  if (res.status !== 200) throw new Error(`Login failed: ${res.status}`);
-  return res.body.data.accessToken as string;
+async function confirmSalesOrder(orderId: string) {
+  const res = await authReq(testCtx.app, testCtx.authToken)
+    .patch(`/api/v1/operations/orders/${orderId}/status`)
+    .send({ status: 'CONFIRMED' });
+  expect(res.status).toBe(200);
+  return res.body.data.status as string;
 }
 
-function authReq(token: string) {
-  return request(app).set('Authorization', `Bearer ${token}`);
-}
+/** Confirm may auto-advance to READY when finished goods are in stock. */
+async function ensureSalesOrderReady(orderId: string) {
+  const current = await authReq(testCtx.app, testCtx.authToken).get(`/api/v1/operations/orders/${orderId}`);
+  expect(current.status).toBe(200);
+  if (current.body.data.status === 'READY') return;
 
-beforeAll(async () => {
-  const health = await request(app).get('/api/health');
-  dbConnected = health.body.database === 'connected';
-  if (dbConnected) {
-    authToken = await login();
-  }
-});
+  const readyRes = await authReq(testCtx.app, testCtx.authToken)
+    .patch(`/api/v1/operations/orders/${orderId}/status`)
+    .send({ status: 'READY' });
+  expect(readyRes.status).toBe(200);
+  expect(readyRes.body.data.status).toBe('READY');
+}
 
 describe('Sales order schema validation', () => {
   it('accepts plain date strings for requiredDate', () => {
@@ -80,18 +78,18 @@ describe('CRM opportunity schema', () => {
 });
 
 describe('Sales order workflow (integration)', () => {
-  it.skipIf(() => !dbConnected)('creates a sales order with a plain date and advances status', async () => {
-    const customersRes = await authReq(authToken).get('/api/v1/customers?limit=1');
+  itWithDb('creates a sales order with a plain date and advances status', async () => {
+    const customersRes = await authReq(testCtx.app, testCtx.authToken).get('/api/v1/customers?limit=1');
     expect(customersRes.status).toBe(200);
     const customerId = customersRes.body.data[0]?.id;
     expect(customerId).toBeTruthy();
 
-    const productsRes = await authReq(authToken).get('/api/v1/products?limit=1');
+    const productsRes = await authReq(testCtx.app, testCtx.authToken).get('/api/v1/products?limit=1');
     expect(productsRes.status).toBe(200);
     const productId = productsRes.body.data[0]?.id;
     expect(productId).toBeTruthy();
 
-    const createRes = await authReq(authToken)
+    const createRes = await authReq(testCtx.app, testCtx.authToken)
       .post('/api/v1/operations/orders')
       .send({
         customerId,
@@ -105,28 +103,24 @@ describe('Sales order workflow (integration)', () => {
     expect(createRes.body.data.status).toBeTruthy();
 
     const orderId = createRes.body.data.id;
-    const statusRes = await authReq(authToken)
-      .patch(`/api/v1/operations/orders/${orderId}/status`)
-      .send({ status: 'CONFIRMED' });
-
-    expect(statusRes.status).toBe(200);
-    expect(statusRes.body.data.status).toBe('CONFIRMED');
+    const statusAfterConfirm = await confirmSalesOrder(orderId);
+    expect(['CONFIRMED', 'READY']).toContain(statusAfterConfirm);
   });
 });
 
 describe('RFQ workflow (integration)', () => {
-  it.skipIf(() => !dbConnected)('runs requisition → approve → RFQ → quote → award → PO', async () => {
-    const materialsRes = await authReq(authToken).get('/api/v1/inventory/materials?limit=1');
+  itWithDb('runs requisition → approve → RFQ → quote → award → PO', async () => {
+    const materialsRes = await authReq(testCtx.app, testCtx.authToken).get('/api/v1/inventory/materials?limit=1');
     expect(materialsRes.status).toBe(200);
     const rawMaterialId = materialsRes.body.data[0]?.id;
     expect(rawMaterialId).toBeTruthy();
 
-    const suppliersRes = await authReq(authToken).get('/api/v1/inventory/suppliers?limit=1');
+    const suppliersRes = await authReq(testCtx.app, testCtx.authToken).get('/api/v1/inventory/suppliers?limit=1');
     expect(suppliersRes.status).toBe(200);
     const supplierId = suppliersRes.body.data[0]?.id;
     expect(supplierId).toBeTruthy();
 
-    const reqRes = await authReq(authToken)
+    const reqRes = await authReq(testCtx.app, testCtx.authToken)
       .post('/api/v1/inventory/requisitions')
       .send({
         department: 'Test Procurement',
@@ -141,13 +135,13 @@ describe('RFQ workflow (integration)', () => {
     expect(reqRes.status).toBe(201);
     const requisitionId = reqRes.body.data.id;
 
-    const approveRes = await authReq(authToken)
+    const approveRes = await authReq(testCtx.app, testCtx.authToken)
       .patch(`/api/v1/inventory/requisitions/${requisitionId}/approve`)
       .send({ status: 'APPROVED' });
     expect(approveRes.status).toBe(200);
     expect(approveRes.body.data.status).toBe('APPROVED');
 
-    const rfqRes = await authReq(authToken)
+    const rfqRes = await authReq(testCtx.app, testCtx.authToken)
       .post(`/api/v1/inventory/requisitions/${requisitionId}/rfq`)
       .send({ supplierIds: [supplierId], notes: 'Workflow test RFQ' });
     expect(rfqRes.status).toBe(201);
@@ -157,12 +151,12 @@ describe('RFQ workflow (integration)', () => {
     const quotationId = rfqRes.body.data.quotations[0]?.id;
     expect(quotationId).toBeTruthy();
 
-    const quoteRes = await authReq(authToken)
+    const quoteRes = await authReq(testCtx.app, testCtx.authToken)
       .patch(`/api/v1/inventory/quotations/${quotationId}`)
       .send({ totalAmount: 2400, notes: 'Test quote' });
     expect(quoteRes.status).toBe(200);
 
-    const awardRes = await authReq(authToken)
+    const awardRes = await authReq(testCtx.app, testCtx.authToken)
       .patch(`/api/v1/inventory/rfqs/${rfqId}/award`)
       .send({ quotationId });
     expect(awardRes.status).toBe(200);
@@ -172,9 +166,9 @@ describe('RFQ workflow (integration)', () => {
 });
 
 describe('Order-to-cash workflow (integration)', () => {
-  it.skipIf(() => !dbConnected)('runs order → confirm → ready → delivery → auto invoice → credit sync', async () => {
-    const customersRes = await authReq(authToken).get('/api/v1/customers?limit=1');
-    const productsRes = await authReq(authToken).get('/api/v1/products?limit=1');
+  itWithDb('runs order → confirm → ready → delivery → auto invoice → credit sync', async () => {
+    const customersRes = await authReq(testCtx.app, testCtx.authToken).get('/api/v1/customers?limit=1');
+    const productsRes = await authReq(testCtx.app, testCtx.authToken).get('/api/v1/products?limit=1');
     expect(customersRes.status).toBe(200);
     expect(productsRes.status).toBe(200);
 
@@ -183,7 +177,7 @@ describe('Order-to-cash workflow (integration)', () => {
     expect(customerId).toBeTruthy();
     expect(productId).toBeTruthy();
 
-    const createRes = await authReq(authToken)
+    const createRes = await authReq(testCtx.app, testCtx.authToken)
       .post('/api/v1/operations/orders')
       .send({
         customerId,
@@ -193,17 +187,10 @@ describe('Order-to-cash workflow (integration)', () => {
     expect(createRes.status).toBe(201);
     const orderId = createRes.body.data.id;
 
-    const confirmRes = await authReq(authToken)
-      .patch(`/api/v1/operations/orders/${orderId}/status`)
-      .send({ status: 'CONFIRMED' });
-    expect(confirmRes.status).toBe(200);
+    await confirmSalesOrder(orderId);
+    await ensureSalesOrderReady(orderId);
 
-    const readyRes = await authReq(authToken)
-      .patch(`/api/v1/operations/orders/${orderId}/status`)
-      .send({ status: 'READY' });
-    expect(readyRes.status).toBe(200);
-
-    const deliveryRes = await authReq(authToken)
+    const deliveryRes = await authReq(testCtx.app, testCtx.authToken)
       .post('/api/v1/delivery')
       .send({
         salesOrderId: orderId,
@@ -214,17 +201,17 @@ describe('Order-to-cash workflow (integration)', () => {
     expect(deliveryRes.body.invoice?.invoiceNumber).toMatch(/^INV-/);
     expect(deliveryRes.body.data.status).toMatch(/PENDING|ASSIGNED/);
 
-    const orderRes = await authReq(authToken).get(`/api/v1/operations/orders/${orderId}`);
+    const orderRes = await authReq(testCtx.app, testCtx.authToken).get(`/api/v1/operations/orders/${orderId}`);
     expect(orderRes.status).toBe(200);
     expect(orderRes.body.data.status).toBe('DISPATCHED');
     expect(orderRes.body.data.invoices?.length).toBeGreaterThan(0);
 
-    const customerRes = await authReq(authToken).get(`/api/v1/customers/${customerId}`);
+    const customerRes = await authReq(testCtx.app, testCtx.authToken).get(`/api/v1/customers/${customerId}`);
     expect(customerRes.status).toBe(200);
     expect(Number(customerRes.body.data.creditUsed)).toBeGreaterThan(0);
 
     const deliveryNo = deliveryRes.body.data.deliveryNo as string;
-    const journalsRes = await authReq(authToken).get('/api/v1/finance/journal-entries?limit=50');
+    const journalsRes = await authReq(testCtx.app, testCtx.authToken).get('/api/v1/finance/journal-entries?limit=50');
     expect(journalsRes.status).toBe(200);
     const cogsEntry = (journalsRes.body.data as {
       reference?: string;
@@ -243,11 +230,11 @@ describe('Order-to-cash workflow (integration)', () => {
 });
 
 describe('Procure-to-pay workflow (integration)', () => {
-  it.skipIf(() => !dbConnected)('runs GRN → QC pass → post to stock → GL entry', async () => {
+  itWithDb('runs GRN → QC pass → post to stock → GL entry', async () => {
     const [suppliersRes, warehousesRes, materialsRes] = await Promise.all([
-      authReq(authToken).get('/api/v1/inventory/suppliers?limit=1'),
-      authReq(authToken).get('/api/v1/inventory/warehouses'),
-      authReq(authToken).get('/api/v1/inventory/materials?limit=1'),
+      authReq(testCtx.app, testCtx.authToken).get('/api/v1/inventory/suppliers?limit=1'),
+      authReq(testCtx.app, testCtx.authToken).get('/api/v1/inventory/warehouses'),
+      authReq(testCtx.app, testCtx.authToken).get('/api/v1/inventory/materials?limit=1'),
     ]);
 
     expect(suppliersRes.status).toBe(200);
@@ -261,7 +248,7 @@ describe('Procure-to-pay workflow (integration)', () => {
     expect(warehouseId).toBeTruthy();
     expect(rawMaterialId).toBeTruthy();
 
-    const grnRes = await authReq(authToken)
+    const grnRes = await authReq(testCtx.app, testCtx.authToken)
       .post('/api/v1/inventory/goods-receipts')
       .send({
         supplierId,
@@ -274,7 +261,7 @@ describe('Procure-to-pay workflow (integration)', () => {
     const grnId = grnRes.body.data.id;
     const grnNumber = grnRes.body.data.grnNumber;
 
-    const qcRes = await authReq(authToken)
+    const qcRes = await authReq(testCtx.app, testCtx.authToken)
       .post('/api/v1/quality')
       .send({
         type: 'incoming',
@@ -284,12 +271,12 @@ describe('Procure-to-pay workflow (integration)', () => {
       });
     expect(qcRes.status).toBe(201);
 
-    const postRes = await authReq(authToken)
+    const postRes = await authReq(testCtx.app, testCtx.authToken)
       .post(`/api/v1/inventory/goods-receipts/${grnId}/post-to-stock`);
     expect(postRes.status).toBe(200);
     expect(postRes.body.data.status).toBe('APPROVED');
 
-    const journalsRes = await authReq(authToken).get('/api/v1/finance/journal-entries?limit=20');
+    const journalsRes = await authReq(testCtx.app, testCtx.authToken).get('/api/v1/finance/journal-entries?limit=20');
     expect(journalsRes.status).toBe(200);
     const posted = (journalsRes.body.data as { reference?: string; description?: string }[]).some(
       (entry) => entry.reference === grnNumber || entry.description?.includes(grnNumber)
@@ -299,12 +286,12 @@ describe('Procure-to-pay workflow (integration)', () => {
 });
 
 describe('Decoupled production workflow (integration)', () => {
-  it.skipIf(() => !dbConnected)('admin marks sales order READY after independent production adds stock', async () => {
+  itWithDb('admin marks sales order READY after independent production adds stock', async () => {
     const [customersRes, productsRes, machinesRes, warehousesRes] = await Promise.all([
-      authReq(authToken).get('/api/v1/customers?limit=1'),
-      authReq(authToken).get('/api/v1/products?limit=1'),
-      authReq(authToken).get('/api/v1/operations/machines'),
-      authReq(authToken).get('/api/v1/inventory/warehouses'),
+      authReq(testCtx.app, testCtx.authToken).get('/api/v1/customers?limit=1'),
+      authReq(testCtx.app, testCtx.authToken).get('/api/v1/products?limit=1'),
+      authReq(testCtx.app, testCtx.authToken).get('/api/v1/operations/machines'),
+      authReq(testCtx.app, testCtx.authToken).get('/api/v1/inventory/warehouses'),
     ]);
 
     const customerId = customersRes.body.data[0]?.id;
@@ -313,7 +300,7 @@ describe('Decoupled production workflow (integration)', () => {
     const warehouseId = warehousesRes.body.data[0]?.id;
     expect(customerId && productId && machineId && warehouseId).toBeTruthy();
 
-    const orderRes = await authReq(authToken)
+    const orderRes = await authReq(testCtx.app, testCtx.authToken)
       .post('/api/v1/operations/orders')
       .send({
         customerId,
@@ -322,12 +309,9 @@ describe('Decoupled production workflow (integration)', () => {
     expect(orderRes.status).toBe(201);
     const salesOrderId = orderRes.body.data.id;
 
-    const confirmRes = await authReq(authToken)
-      .patch(`/api/v1/operations/orders/${salesOrderId}/status`)
-      .send({ status: 'CONFIRMED' });
-    expect(confirmRes.status).toBe(200);
+    await confirmSalesOrder(salesOrderId);
 
-    const productionRes = await authReq(authToken)
+    const productionRes = await authReq(testCtx.app, testCtx.authToken)
       .post('/api/v1/operations/production')
       .send({
         productId,
@@ -338,9 +322,9 @@ describe('Decoupled production workflow (integration)', () => {
     expect(productionRes.status).toBe(201);
     const productionId = productionRes.body.data.id;
 
-    await authReq(authToken).post(`/api/v1/operations/production/${productionId}/start`);
+    await authReq(testCtx.app, testCtx.authToken).post(`/api/v1/operations/production/${productionId}/start`);
 
-    const qcRes = await authReq(authToken)
+    const qcRes = await authReq(testCtx.app, testCtx.authToken)
       .post('/api/v1/quality')
       .send({
         type: 'production',
@@ -350,22 +334,19 @@ describe('Decoupled production workflow (integration)', () => {
       });
     expect(qcRes.status).toBe(201);
 
-    const completeRes = await authReq(authToken)
+    const completeRes = await authReq(testCtx.app, testCtx.authToken)
       .post(`/api/v1/operations/production/${productionId}/complete`)
-      .send({ completedQty: 1, rejectedQty: 0, warehouseId });
+      .send({ completedQty: 1, rejectedQty: 0 });
     expect(completeRes.status).toBe(200);
 
-    const readyRes = await authReq(authToken)
-      .patch(`/api/v1/operations/orders/${salesOrderId}/status`)
-      .send({ status: 'READY' });
-    expect(readyRes.status).toBe(200);
+    await ensureSalesOrderReady(salesOrderId);
 
-    const salesRes = await authReq(authToken).get(`/api/v1/operations/orders/${salesOrderId}`);
+    const salesRes = await authReq(testCtx.app, testCtx.authToken).get(`/api/v1/operations/orders/${salesOrderId}`);
     expect(salesRes.status).toBe(200);
     expect(salesRes.body.data.status).toBe('READY');
 
     const productionOrderNo = completeRes.body.data.orderNumber as string;
-    const journalsRes = await authReq(authToken).get('/api/v1/finance/journal-entries?limit=50');
+    const journalsRes = await authReq(testCtx.app, testCtx.authToken).get('/api/v1/finance/journal-entries?limit=50');
     expect(journalsRes.status).toBe(200);
     const costingEntry = (journalsRes.body.data as {
       reference?: string;
@@ -379,16 +360,58 @@ describe('Decoupled production workflow (integration)', () => {
       expect(costingEntry.reference).toBe(productionOrderNo);
     }
   });
+
+  itWithDb('completes surplus production using standalone product inspection', async () => {
+    const [productsRes, machinesRes, warehousesRes] = await Promise.all([
+      authReq(testCtx.app, testCtx.authToken).get('/api/v1/products?limit=1'),
+      authReq(testCtx.app, testCtx.authToken).get('/api/v1/operations/machines'),
+      authReq(testCtx.app, testCtx.authToken).get('/api/v1/inventory/warehouses'),
+    ]);
+
+    const productId = productsRes.body.data[0]?.id;
+    const machineId = machinesRes.body.data[0]?.id;
+    const warehouseId = warehousesRes.body.data[0]?.id;
+    expect(productId && machineId && warehouseId).toBeTruthy();
+
+    const productionRes = await authReq(testCtx.app, testCtx.authToken)
+      .post('/api/v1/operations/production')
+      .send({
+        productId,
+        machineId,
+        quantity: 2,
+        notes: 'Surplus stock run',
+      });
+    expect(productionRes.status).toBe(201);
+    const productionId = productionRes.body.data.id;
+
+    await authReq(testCtx.app, testCtx.authToken).post(`/api/v1/operations/production/${productionId}/start`);
+
+    const qcRes = await authReq(testCtx.app, testCtx.authToken)
+      .post('/api/v1/quality')
+      .send({
+        type: 'production',
+        productId,
+        status: 'PASSED',
+        result: 'Surplus batch approved',
+      });
+    expect(qcRes.status).toBe(201);
+
+    const completeRes = await authReq(testCtx.app, testCtx.authToken)
+      .post(`/api/v1/operations/production/${productionId}/complete`)
+      .send({ completedQty: 2, rejectedQty: 0 });
+    expect(completeRes.status).toBe(200);
+    expect(completeRes.body.data.status).toBe('COMPLETED');
+  });
 });
 
 describe('Partial delivery workflow (integration)', () => {
-  it.skipIf(() => !dbConnected)('allows multiple delivery notes and partial invoices', async () => {
-    const customersRes = await authReq(authToken).get('/api/v1/customers?limit=1');
-    const productsRes = await authReq(authToken).get('/api/v1/products?limit=1');
+  itWithDb('allows multiple delivery notes and partial invoices', async () => {
+    const customersRes = await authReq(testCtx.app, testCtx.authToken).get('/api/v1/customers?limit=1');
+    const productsRes = await authReq(testCtx.app, testCtx.authToken).get('/api/v1/products?limit=1');
     const customerId = customersRes.body.data[0]?.id;
     const productId = productsRes.body.data[0]?.id;
 
-    const createRes = await authReq(authToken)
+    const createRes = await authReq(testCtx.app, testCtx.authToken)
       .post('/api/v1/operations/orders')
       .send({
         customerId,
@@ -397,39 +420,39 @@ describe('Partial delivery workflow (integration)', () => {
     expect(createRes.status).toBe(201);
     const orderId = createRes.body.data.id;
 
-    await authReq(authToken).patch(`/api/v1/operations/orders/${orderId}/status`).send({ status: 'CONFIRMED' });
-    await authReq(authToken).patch(`/api/v1/operations/orders/${orderId}/status`).send({ status: 'READY' });
+    await confirmSalesOrder(orderId);
+    await ensureSalesOrderReady(orderId);
 
-    const firstDelivery = await authReq(authToken).post('/api/v1/delivery').send({
+    const firstDelivery = await authReq(testCtx.app, testCtx.authToken).post('/api/v1/delivery').send({
       salesOrderId: orderId,
       items: [{ productId, quantity: 2 }],
     });
     expect(firstDelivery.status).toBe(201);
     expect(firstDelivery.body.invoice?.totalAmount).toBeTruthy();
 
-    const partialOrder = await authReq(authToken).get(`/api/v1/operations/orders/${orderId}`);
+    const partialOrder = await authReq(testCtx.app, testCtx.authToken).get(`/api/v1/operations/orders/${orderId}`);
     expect(partialOrder.body.data.status).toBe('PARTIALLY_DELIVERED');
 
-    const secondDelivery = await authReq(authToken).post('/api/v1/delivery').send({
+    const secondDelivery = await authReq(testCtx.app, testCtx.authToken).post('/api/v1/delivery').send({
       salesOrderId: orderId,
       items: [{ productId, quantity: 2 }],
     });
     expect(secondDelivery.status).toBe(201);
 
-    const finalOrder = await authReq(authToken).get(`/api/v1/operations/orders/${orderId}`);
+    const finalOrder = await authReq(testCtx.app, testCtx.authToken).get(`/api/v1/operations/orders/${orderId}`);
     expect(finalOrder.body.data.status).toBe('DISPATCHED');
     expect(finalOrder.body.data.invoices.length).toBeGreaterThanOrEqual(2);
   });
 });
 
 describe('Overdue invoice automation (integration)', () => {
-  it.skipIf(() => !dbConnected)('marks past-due invoices as OVERDUE via maintenance endpoint', async () => {
-    const customersRes = await authReq(authToken).get('/api/v1/customers?limit=1');
+  itWithDb('marks past-due invoices as OVERDUE via maintenance endpoint', async () => {
+    const customersRes = await authReq(testCtx.app, testCtx.authToken).get('/api/v1/customers?limit=1');
     expect(customersRes.status).toBe(200);
     const customerId = customersRes.body.data[0]?.id;
     expect(customerId).toBeTruthy();
 
-    const createRes = await authReq(authToken)
+    const createRes = await authReq(testCtx.app, testCtx.authToken)
       .post('/api/v1/finance/invoices')
       .send({
         type: 'SALES',
@@ -442,15 +465,15 @@ describe('Overdue invoice automation (integration)', () => {
     expect(createRes.body.data.status).toBe('UNPAID');
     const invoiceId = createRes.body.data.id;
 
-    const markRes = await authReq(authToken).post('/api/v1/finance/maintenance/mark-overdue');
+    const markRes = await authReq(testCtx.app, testCtx.authToken).post('/api/v1/finance/maintenance/mark-overdue');
     expect(markRes.status).toBe(200);
     expect(markRes.body.data.marked).toBeGreaterThanOrEqual(1);
 
-    const invoiceRes = await authReq(authToken).get(`/api/v1/finance/invoices/${invoiceId}`);
+    const invoiceRes = await authReq(testCtx.app, testCtx.authToken).get(`/api/v1/finance/invoices/${invoiceId}`);
     expect(invoiceRes.status).toBe(200);
     expect(invoiceRes.body.data.status).toBe('OVERDUE');
 
-    const statsRes = await authReq(authToken).get('/api/v1/finance/stats');
+    const statsRes = await authReq(testCtx.app, testCtx.authToken).get('/api/v1/finance/stats');
     expect(statsRes.status).toBe(200);
     expect(statsRes.body.data.overdueInvoices).toBeGreaterThanOrEqual(1);
   });
@@ -458,14 +481,14 @@ describe('Overdue invoice automation (integration)', () => {
 
 describe('Protected workflow endpoints', () => {
   it('rejects unauthenticated sales order creation', async () => {
-    const res = await request(app)
+    const res = await request(testCtx.app)
       .post('/api/v1/operations/orders')
       .send({ customerId: 'x', items: [] });
     expect(res.status).toBe(401);
   });
 
   it('rejects unauthenticated RFQ listing', async () => {
-    const res = await request(app).get('/api/v1/inventory/rfqs');
+    const res = await request(testCtx.app).get('/api/v1/inventory/rfqs');
     expect(res.status).toBe(401);
   });
 });

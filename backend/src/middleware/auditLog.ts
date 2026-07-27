@@ -30,6 +30,7 @@ export const auditLog = (module: string, action: string, entityType: string) => 
         prisma.auditLog
           .create({
             data: {
+              companyId: req.user.companyId,
               userId: req.user.id,
               action,
               module,

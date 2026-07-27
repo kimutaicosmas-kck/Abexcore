@@ -7,8 +7,11 @@ import {
   PageToolbar,
   Alert,
   QueryErrorAlert,
+  StatCard,
+  StatGrid,
+  formatCurrency,
 } from '../components/ui';
-import { BarChart3, Users, Factory, Truck, FileSpreadsheet, ClipboardCheck } from 'lucide-react';
+import { BarChart3, Users, Factory, Truck, FileSpreadsheet, ClipboardCheck, TrendingUp, AlertCircle } from 'lucide-react';
 import { downloadFile } from '../utils/download';
 import { FinancialStatementsPanel } from '../components/reports/FinancialStatementsPanel';
 import { SalesByPersonPanel } from '../components/reports/SalesByPersonPanel';
@@ -42,11 +45,11 @@ export function ReportsPage() {
   const reportTypes = [
     { name: 'Sales Report', description: 'Export all sales invoices with salesperson', icon: BarChart3, color: 'bg-emerald-50 text-emerald-600 border-emerald-100', exportType: 'sales' as const, filename: 'sales-report.xlsx' },
     { name: 'Sales by Person', description: 'Filter, paginate, and export by salesperson', icon: Users, color: 'bg-sky-50 text-sky-600 border-sky-100', onClick: () => setActiveSection(1) },
-    { name: 'Inventory Report', description: 'Export stock levels and valuation', icon: Factory, color: 'bg-violet-50 text-violet-600 border-violet-100', exportType: 'inventory' as const, filename: 'inventory-report.xlsx' },
+    { name: 'Inventory Report', description: 'Export stock levels and valuation', icon: Factory, color: 'bg-primary-50 text-primary-600 border-primary-100', exportType: 'inventory' as const, filename: 'inventory-report.xlsx' },
     { name: 'Purchase Report', description: 'Purchases by supplier and material', icon: Truck, color: 'bg-red-50 text-red-600 border-red-100', detailKey: 'purchase' },
     { name: 'Production Report', description: 'Output and efficiency summary', icon: Factory, color: 'bg-orange-50 text-orange-600 border-orange-100', detailKey: 'production' },
     { name: 'Financial Statements', description: 'P&L, Balance Sheet, Cash Flow', icon: FileSpreadsheet, color: 'bg-primary-50 text-primary-600 border-primary-100', onClick: () => setActiveSection(2) },
-    { name: 'Customer Report', description: 'Customer activity and credit', icon: Users, color: 'bg-indigo-50 text-indigo-600 border-indigo-100', detailKey: 'customer' },
+    { name: 'Customer Report', description: 'Customer activity and credit', icon: Users, color: 'bg-primary-50 text-primary-600 border-primary-100', detailKey: 'customer' },
     { name: 'Quality Report', description: 'Inspection results and defects', icon: ClipboardCheck, color: 'bg-teal-50 text-teal-600 border-teal-100', detailKey: 'quality' },
   ];
 
@@ -62,33 +65,74 @@ export function ReportsPage() {
 
   return (
     <div className="space-y-4">
-      <QueryErrorAlert error={isError ? error : null} onRetry={() => refetch()} />
-      {exportError && <Alert variant="error">{exportError}</Alert>}
-
-      <PageToolbar tabs={sections} activeTab={activeSection} onTabChange={setActiveSection} />
+      {activeSection === 0 && summary && (
+        <StatGrid>
+          <StatCard
+            title="Total sales"
+            value={formatCurrency(summary.totalSales)}
+            icon={<TrendingUp className="h-5 w-5 text-white" />}
+            color="from-emerald-500 to-teal-600"
+          />
+          <StatCard
+            title="Total purchases"
+            value={formatCurrency(summary.totalPurchases)}
+            icon={<Truck className="h-5 w-5 text-white" />}
+            color="from-red-500 to-rose-600"
+          />
+          <StatCard
+            title="Customers"
+            value={summary.totalCustomers}
+            icon={<Users className="h-5 w-5 text-white" />}
+            color="from-primary-500 to-primary-700"
+          />
+          <StatCard
+            title="Production completed"
+            value={summary.completedProduction}
+            icon={<Factory className="h-5 w-5 text-white" />}
+            color="from-orange-500 to-amber-600"
+          />
+          <StatCard
+            title="Unpaid invoices"
+            value={summary.unpaidInvoices}
+            icon={<AlertCircle className="h-5 w-5 text-white" />}
+            color="from-slate-600 to-slate-800"
+          />
+        </StatGrid>
+      )}
 
       {activeSection === 1 ? (
-        <SalesByPersonPanel />
-      ) : activeSection === 2 ? (
-        <FinancialStatementsPanel />
-      ) : !summary && !isLoading ? (
-        <EmptyState title="No report data available" description="Summary metrics will appear once your business has activity." />
+        <SalesByPersonPanel
+          toolbar={<PageToolbar tabs={sections} activeTab={activeSection} onTabChange={setActiveSection} />}
+        />
       ) : (
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {reportTypes.map((report) => (
-              <QuickActionCard
-                key={report.name}
-                label={report.name}
-                desc={report.description}
-                icon={report.icon}
-                color={report.color}
-                disabled={'exportType' in report && !!report.exportType && !canExport}
-                onClick={() => handleReportClick(report)}
-              />
-            ))}
-          </div>
-        </div>
+        <>
+          <PageToolbar tabs={sections} activeTab={activeSection} onTabChange={setActiveSection} />
+
+          <QueryErrorAlert error={isError ? error : null} onRetry={() => refetch()} />
+          {exportError && <Alert variant="error">{exportError}</Alert>}
+
+          {activeSection === 2 ? (
+            <FinancialStatementsPanel />
+          ) : !summary && !isLoading ? (
+            <EmptyState title="No report data available" description="Summary metrics will appear once your business has activity." />
+          ) : (
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {reportTypes.map((report) => (
+                  <QuickActionCard
+                    key={report.name}
+                    label={report.name}
+                    desc={report.description}
+                    icon={report.icon}
+                    color={report.color}
+                    disabled={'exportType' in report && !!report.exportType && !canExport}
+                    onClick={() => handleReportClick(report)}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+        </>
       )}
 
       <Modal open={detailModal !== null} onClose={() => setDetailModal(null)} title={

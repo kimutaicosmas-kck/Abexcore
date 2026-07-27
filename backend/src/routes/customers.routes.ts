@@ -12,6 +12,7 @@ import {
 import { createCrudService } from '../utils/crud';
 import { getParam, getQuery } from '../utils/request';
 import prisma from '../config/database';
+import { requireTenantId } from '../utils/tenant';
 
 const router = Router();
 router.use(authenticate);
@@ -60,7 +61,9 @@ router.post(
   validate(createCustomerSchema),
   auditLog('customers', 'create', 'customer'),
   asyncHandler(async (req: AuthRequest, res: Response) => {
-    const existing = await prisma.customer.findUnique({ where: { code: req.body.code } });
+    const existing = await prisma.customer.findUnique({
+      where: { companyId_code: { companyId: requireTenantId(), code: req.body.code } },
+    });
     if (existing) throw new AppError('Customer code already exists', 409);
 
     const data = await customerService.create(req.body);

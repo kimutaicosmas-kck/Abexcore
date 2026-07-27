@@ -16,7 +16,7 @@ export default defineConfig({
         short_name: 'ApexCore',
         description:
           'Enterprise resource planning by ApexCore Technologies.',
-        theme_color: '#4f46e5',
+        theme_color: '#2563eb',
         background_color: '#f1f5f9',
         display: 'standalone',
         orientation: 'portrait-primary',
@@ -106,6 +106,10 @@ export default defineConfig({
         target: 'http://localhost:3001',
         changeOrigin: true,
       },
+      '/uploads': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+      },
     },
   },
   preview: {
@@ -114,6 +118,10 @@ export default defineConfig({
     allowedHosts: true,
     proxy: {
       '/api': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+      },
+      '/uploads': {
         target: 'http://localhost:3001',
         changeOrigin: true,
       },

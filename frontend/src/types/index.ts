@@ -86,7 +86,7 @@ export interface DashboardKPIs {
   monthlyRevenue: number;
   monthlyProfit: number;
   monthlyExpenses: number;
-  topSellingFilters: { id: string; name: string; sku: string; quantitySold: number }[];
+  topSellingProducts: { id: string; name: string; sku: string; quantitySold: number }[];
   recentOrders: { id: string; orderNumber: string; customer: string; total: number; status: string; date: string }[];
   productionStatus: { status: string; count: number }[];
   pendingActions: { type: string; label: string; count: number; path: string }[];
@@ -180,12 +180,29 @@ export interface CrmStats {
   warranties: { total: number; expiringSoon: number };
 }
 
+export interface ProductCategoryOption {
+  id: string;
+  name: string;
+  sortOrder?: number;
+  isActive?: boolean;
+  usageCount?: number;
+}
+
+export interface CatalogManageItem {
+  id: string;
+  name: string;
+  sortOrder: number;
+  isActive: boolean;
+  usageCount?: number;
+}
+
 export interface Product {
   id: string;
   sku: string;
   barcode?: string;
   name: string;
-  category: string;
+  categoryId: string;
+  category?: { id: string; name: string };
   description?: string;
   imageUrl?: string;
   manufacturingCost: number;
@@ -194,7 +211,6 @@ export interface Product {
   retailPrice: number;
   minStockLevel: number;
   isActive: boolean;
-  bom?: BillOfMaterial;
   stockLevels?: StockLevel[];
 }
 
@@ -202,10 +218,8 @@ export interface ProductStats {
   total: number;
   active: number;
   inactive: number;
-  withBom: number;
-  withoutBom: number;
   finishedGoodsQty: number;
-  byCategory: { category: string; count: number }[];
+  byCategory: { categoryId: string; category: string; count: number }[];
 }
 
 export interface InventoryStats {
@@ -256,25 +270,20 @@ export interface InventoryTransaction {
   warehouse?: { name: string; code: string };
 }
 
-export interface BillOfMaterial {
+export interface MaterialTypeOption {
   id: string;
-  version: string;
-  items: BOMItem[];
-}
-
-export interface BOMItem {
-  id: string;
-  rawMaterialId: string;
-  quantity: number;
-  unit: string;
-  rawMaterial: RawMaterial;
+  name: string;
+  sortOrder?: number;
+  isActive?: boolean;
+  usageCount?: number;
 }
 
 export interface RawMaterial {
   id: string;
   code: string;
   name: string;
-  type: string;
+  typeId: string;
+  materialType?: { id: string; name: string };
   unit: string;
   unitCost: number;
   minStockLevel: number;
@@ -323,6 +332,7 @@ export interface SalesOrderItem {
   quantity: number;
   deliveredQty?: number;
   unitPrice: number;
+  discount?: number;
   totalPrice: number;
   product: Product;
 }
@@ -439,6 +449,7 @@ export interface QualityInspection {
   createdAt: string;
   goodsReceipt?: { grnNumber: string; supplier?: { name: string } };
   productionOrder?: { orderNumber: string; product?: { name: string; sku: string } };
+  product?: { name: string; sku: string };
 }
 
 export interface SalesStats {
@@ -506,6 +517,7 @@ export interface Vehicle {
   make?: string;
   model?: string;
   capacity?: string;
+  isHired?: boolean;
   isActive: boolean;
 }
 
@@ -514,14 +526,30 @@ export interface DeliveryNote {
   deliveryNo: string;
   status: string;
   driverId?: string | null;
+  deliveryTripId?: string | null;
+  stopSequence?: number | null;
   scheduledDate?: string;
   deliveredAt?: string;
+  createdAt?: string;
   proofOfDelivery?: string;
   notes?: string;
   salesOrder: SalesOrder & { customer: Customer };
   vehicle?: Vehicle;
   driver?: { id: string; firstName: string; lastName: string; email: string };
+  deliveryTrip?: Pick<DeliveryTrip, 'id' | 'tripNo' | 'status'>;
   items: { id: string; productId: string; quantity: number }[];
+}
+
+export interface DeliveryTrip {
+  id: string;
+  tripNo: string;
+  status: string;
+  scheduledDate?: string;
+  createdAt?: string;
+  notes?: string;
+  vehicle?: Vehicle;
+  driver?: { id: string; firstName: string; lastName: string; email: string };
+  stops: DeliveryNote[];
 }
 
 export interface Notification {
@@ -693,6 +721,7 @@ export interface MaintenanceRequest {
 
 export interface CompanySettings {
   id: string;
+  slug?: string;
   name: string;
   legalName?: string;
   registrationNo?: string;
@@ -702,8 +731,44 @@ export interface CompanySettings {
   address?: string;
   currency?: string;
   vatRate: number;
+  logo?: string | null;
+  qualityModuleEnabled?: boolean;
   branches?: { id: string; name: string; code: string; city: string }[];
   taxRates?: { id: string; name: string; rate: number; isDefault: boolean }[];
+}
+
+export interface WorkspaceSettings {
+  id: string;
+  slug: string;
+  name: string;
+  isActive: boolean;
+  qualityModuleEnabled: boolean;
+  logo?: string | null;
+  currency: string;
+  vatRate: number;
+  userCount: number;
+  activeUsers: number;
+}
+
+export interface RegisteredCompany {
+  id: string;
+  slug: string;
+  name: string;
+  logo?: string | null;
+  email?: string | null;
+  isActive: boolean;
+  userCount: number;
+  createdAt: string;
+}
+
+export interface TenantTeamMember {
+  id: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  status: string;
+  lastLoginAt?: string | null;
+  role: { name: string };
 }
 
 export interface LeaveRequest {

@@ -1,11 +1,14 @@
+import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { AxiosError } from 'axios';
 import { usersApi } from '../../services/api';
-import { Button, Input, Select } from '../ui';
+import { Input, Select, FormActions, ModalFormBody } from '../ui';
+import { getApiErrorMessage } from '../../utils/apiError';
 import { User } from '../../types';
+import { ModuleAccessPicker } from './ModuleAccessPicker';
+import { modulesForRoleName } from '../../utils/roleModules';
 
 const userSchema = z.object({
   email: z.string().email('Invalid email address'),
@@ -27,43 +30,41 @@ interface UserFormProps {
   onCancel: () => void;
 }
 
-function getApiError(error: unknown): string {
-  const axiosError = error as AxiosError<{ message?: string }>;
-  return axiosError.response?.data?.message || 'Failed to save user. Please try again.';
-}
-
 export function UserForm({ user, onSuccess, onCancel }: UserFormProps) {
   const queryClient = useQueryClient();
   const isEdit = !!user;
+  const [selectedModules, setSelectedModules] = useState<string[]>(['dashboard']);
 
   const { data: rolesData } = useQuery({
     queryKey: ['user-roles'],
-    queryFn: () => usersApi.roles().then((r) => r.data.data),
+    queryFn: () => usersApi.roles().then((r) => r.data.data as { id: string; name: string }[]),
   });
 
   const { data: departmentsData } = useQuery({
     queryKey: ['user-departments'],
-    queryFn: () => usersApi.departments().then((r) => r.data.data),
+    queryFn: () => usersApi.departments().then((r) => r.data.data as { id: string; name: string }[]),
   });
 
   const { data: branchesData } = useQuery({
     queryKey: ['user-branches'],
-    queryFn: () => usersApi.branches().then((r) => r.data.data),
+    queryFn: () => usersApi.branches().then((r) => r.data.data as { id: string; name: string; code: string }[]),
   });
 
+  const assignableRoles = (rolesData || []).filter((r) => r.name !== 'Super Admin');
+
   const roleOptions = [
-    { value: '', label: 'Select role...' },
-    ...(rolesData || []).map((r: { id: string; name: string }) => ({ value: r.id, label: r.name })),
+    { value: '', label: 'Select role…' },
+    ...assignableRoles.map((r) => ({ value: r.id, label: r.name })),
   ];
 
   const departmentOptions = [
     { value: '', label: 'None' },
-    ...(departmentsData || []).map((d: { id: string; name: string }) => ({ value: d.id, label: d.name })),
+    ...(departmentsData || []).map((d) => ({ value: d.id, label: d.name })),
   ];
 
   const branchOptions = [
     { value: '', label: 'None' },
-    ...(branchesData || []).map((b: { id: string; name: string; code: string }) => ({
+    ...(branchesData || []).map((b) => ({
       value: b.id,
       label: `${b.name} (${b.code})`,
     })),
@@ -75,22 +76,60 @@ export function UserForm({ user, onSuccess, onCancel }: UserFormProps) {
     { value: 'SUSPENDED', label: 'Suspended' },
   ];
 
-  const { register, handleSubmit, setError, formState: { errors } } = useForm<UserFormData>({
+  const { register, handleSubmit, reset, setError, watch, formState: { errors } } = useForm<UserFormData>({
     resolver: zodResolver(userSchema),
-    defaultValues: user
-      ? {
-          email: user.email,
-          password: '',
-          firstName: user.firstName,
-          lastName: user.lastName,
-          phone: user.phone || '',
-          roleId: user.roleId,
-          departmentId: user.department?.id || '',
-          branchId: user.branch?.id || '',
-          status: (user.status as 'ACTIVE' | 'INACTIVE' | 'SUSPENDED') || 'ACTIVE',
-        }
-      : { password: '', roleId: '', departmentId: '', branchId: '', status: 'ACTIVE' },
+    defaultValues: {
+      email: '',
+      password: '',
+      firstName: '',
+      lastName: '',
+      phone: '',
+      roleId: '',
+      departmentId: '',
+      branchId: '',
+      status: 'ACTIVE',
+    },
   });
+
+  const selectedRoleId = watch('roleId');
+
+  useEffect(() => {
+    if (!selectedRoleId || !rolesData?.length) return;
+    const role = rolesData.find((r) => r.id === selectedRoleId);
+    if (role) {
+      setSelectedModules(modulesForRoleName(role.name));
+    }
+  }, [selectedRoleId, rolesData]);
+
+  useEffect(() => {
+    if (user) {
+      reset({
+        email: user.email,
+        password: '',
+        firstName: user.firstName,
+        lastName: user.lastName,
+        phone: user.phone || '',
+        roleId: user.roleId || user.role?.id || '',
+        departmentId: user.department?.id || '',
+        branchId: user.branch?.id || '',
+        status: (user.status as 'ACTIVE' | 'INACTIVE' | 'SUSPENDED') || 'ACTIVE',
+      });
+      setSelectedModules(modulesForRoleName(user.role?.name || 'Sales Officer'));
+    } else {
+      reset({
+        email: '',
+        password: '',
+        firstName: '',
+        lastName: '',
+        phone: '',
+        roleId: '',
+        departmentId: '',
+        branchId: '',
+        status: 'ACTIVE',
+      });
+      setSelectedModules(['dashboard']);
+    }
+  }, [user, reset]);
 
   const mutation = useMutation({
     mutationFn: (payload: Record<string, unknown>) =>
@@ -109,6 +148,7 @@ export function UserForm({ user, onSuccess, onCancel }: UserFormProps) {
       setError('password', { message: 'Password is required' });
       return;
     }
+
     const payload = {
       email: data.email,
       firstName: data.firstName,
@@ -124,24 +164,40 @@ export function UserForm({ user, onSuccess, onCancel }: UserFormProps) {
   };
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+    <form onSubmit={handleSubmit(onSubmit)} autoComplete="off">
+      <ModalFormBody
+        footer={
+          <FormActions
+            onCancel={onCancel}
+            submitLabel={isEdit ? 'Update User' : 'Create User'}
+            loading={mutation.isPending}
+          />
+        }
+      >
       {mutation.isError && (
         <div className="p-3 rounded-lg bg-red-50 text-red-700 text-sm">
-          {getApiError(mutation.error)}
+          {getApiErrorMessage(mutation.error)}
         </div>
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <Input label="Email *" type="email" {...register('email')} error={errors.email?.message} />
+        <Input
+          label="Email *"
+          type="email"
+          autoComplete="off"
+          {...register('email')}
+          error={errors.email?.message}
+        />
         <Input
           label={isEdit ? 'Password (leave blank to keep)' : 'Password *'}
           type="password"
+          autoComplete="new-password"
           {...register('password')}
           error={errors.password?.message}
         />
-        <Input label="First Name *" {...register('firstName')} error={errors.firstName?.message} />
-        <Input label="Last Name *" {...register('lastName')} error={errors.lastName?.message} />
-        <Input label="Phone" {...register('phone')} />
+        <Input label="First Name *" autoComplete="off" {...register('firstName')} error={errors.firstName?.message} />
+        <Input label="Last Name *" autoComplete="off" {...register('lastName')} error={errors.lastName?.message} />
+        <Input label="Phone" autoComplete="off" {...register('phone')} />
         <Select label="Role *" options={roleOptions} {...register('roleId')} error={errors.roleId?.message} />
         <Select label="Department" options={departmentOptions} {...register('departmentId')} />
         <Select label="Branch" options={branchOptions} {...register('branchId')} />
@@ -150,12 +206,12 @@ export function UserForm({ user, onSuccess, onCancel }: UserFormProps) {
         )}
       </div>
 
-      <div className="flex justify-end gap-3 pt-4 border-t">
-        <Button type="button" variant="secondary" onClick={onCancel}>Cancel</Button>
-        <Button type="submit" loading={mutation.isPending}>
-          {isEdit ? 'Update User' : 'Create User'}
-        </Button>
-      </div>
+      <ModuleAccessPicker
+        value={selectedModules}
+        onChange={setSelectedModules}
+        disabled
+      />
+      </ModalFormBody>
     </form>
   );
 }

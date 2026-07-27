@@ -5,15 +5,18 @@ import { asyncHandler, AppError } from '../middleware/errorHandler';
 import { auditLog } from '../middleware/auditLog';
 import {
   createSalesOrderSchema,
+  updateSalesOrderItemsSchema,
   createProductionOrderSchema,
+  completeProductionSchema,
   createQuotationSchema,
   salesListQuerySchema,
   paginationSchema,
+  productionListQuerySchema,
 } from '../validators/schemas';
 import prisma from '../config/database';
-import { generateNumber } from '../utils/date';
+import { generateNumber, nextQualityInspectionNumber } from '../utils/date';
 import { getParam, getQuery } from '../utils/request';
-import { SalesService, ProductionStatsService } from '../services/operations.service';
+import { SalesService, ProductionStatsService, QualityService } from '../services/operations.service';
 import { getVatRate, calcTax } from '../utils/company';
 import { assertCreditLimit, assertOrderStatusTransition, syncCustomerCreditUsed } from '../utils/credit';
 import { StockMovementService } from '../services/inventory.service';
@@ -21,6 +24,7 @@ import { SalesOrderService, StockShortage } from '../services/sales-order.servic
 import { AccountingService } from '../services/accounting.service';
 import { salesPersonOrderFilter } from '../services/my-sales.service';
 import { NotificationService } from '../services/notification.service';
+import { injectTenantData, requireTenantId } from '../utils/tenant';
 import { Prisma } from '@prisma/client';
 
 const router = Router();
@@ -169,7 +173,7 @@ router.post(
 
     const order = await prisma.$transaction(async (tx) => {
       const created = await tx.salesOrder.create({
-        data: {
+        data: injectTenantData({
           orderNumber,
           customerId,
           quotationId,
@@ -186,7 +190,7 @@ router.post(
               totalPrice: item.quantity * item.unitPrice * (1 - (item.discount || 0) / 100),
             })),
           },
-        },
+        }),
         include: { customer: true, items: { include: { product: true } } },
       });
 
@@ -195,6 +199,73 @@ router.post(
     });
 
     res.status(201).json({ success: true, data: order });
+  })
+);
+
+router.patch(
+  '/orders/:id/items',
+  authorize('sales:update'),
+  validate(updateSalesOrderItemsSchema),
+  auditLog('sales', 'update', 'sales_order'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const orderId = getParam(req.params.id);
+    const { items, adjustmentReason, notes } = req.body;
+
+    const existing = await prisma.salesOrder.findUnique({
+      where: { id: orderId },
+      select: { id: true, status: true, orderNumber: true, salesPersonId: true, createdById: true },
+    });
+    if (!existing) throw new AppError('Sales order not found', 404);
+
+    const isSalesOfficer = req.user!.roleName === 'Sales Officer';
+    if (isSalesOfficer && existing.status !== 'PENDING') {
+      throw new AppError(
+        'Only administrators can adjust confirmed orders. Contact your manager to revise quantities.',
+        403
+      );
+    }
+
+    const order = await prisma.$transaction(async (tx) => {
+      const updated = await SalesOrderService.updateOrderItems(tx, orderId, items, adjustmentReason);
+      if (notes?.trim()) {
+        return tx.salesOrder.update({
+          where: { id: orderId },
+          data: { notes: updated.notes ? `${updated.notes}\n${notes.trim()}` : notes.trim() },
+          include: {
+            customer: true,
+            items: { include: { product: true } },
+            salesPerson: { select: { id: true, firstName: true, lastName: true } },
+            createdBy: { select: { firstName: true, lastName: true } },
+            deliveries: { select: { id: true, deliveryNo: true, status: true } },
+            invoices: { select: { id: true, invoiceNumber: true, status: true, totalAmount: true } },
+          },
+        });
+      }
+      return tx.salesOrder.findUniqueOrThrow({
+        where: { id: orderId },
+        include: {
+          customer: true,
+          items: { include: { product: true } },
+          salesPerson: { select: { id: true, firstName: true, lastName: true } },
+          createdBy: { select: { firstName: true, lastName: true } },
+          deliveries: { select: { id: true, deliveryNo: true, status: true } },
+          invoices: { select: { id: true, invoiceNumber: true, status: true, totalAmount: true } },
+        },
+      });
+    });
+
+    const notifyUserId = order?.salesPersonId || existing.createdById;
+    if (notifyUserId && notifyUserId !== req.user!.id) {
+      await NotificationService.notifyUser(
+        notifyUserId,
+        'SYSTEM',
+        `Sales order ${order!.orderNumber} adjusted`,
+        `${adjustmentReason}. Open the order to see updated quantities and totals.`,
+        `/sales?orderId=${orderId}`
+      );
+    }
+
+    res.json({ success: true, data: order });
   })
 );
 
@@ -230,7 +301,26 @@ router.patch(
       );
     }
 
+    if (status === 'CANCELLED') {
+      if (req.user!.roleName === 'Sales Officer' && !['PENDING', 'CONFIRMED'].includes(existing.status)) {
+        throw new AppError(
+          'Only administrators can cancel orders after they are marked ready for delivery.',
+          403
+        );
+      }
+    }
+
     const order = await prisma.$transaction(async (tx) => {
+      if (status === 'CANCELLED') {
+        const deliveryCount = await tx.deliveryNote.count({ where: { salesOrderId: orderId } });
+        if (deliveryCount > 0) {
+          throw new AppError('Cannot cancel — a delivery has already been created for this order.', 400);
+        }
+        if (existing.items.some((item) => item.deliveredQty > 0)) {
+          throw new AppError('Cannot cancel — goods have already been dispatched.', 400);
+        }
+      }
+
       let finalStatus = status;
       let confirmShortages: StockShortage[] = [];
 
@@ -279,7 +369,7 @@ router.patch(
         assertOrderStatusTransition(existing.status, 'READY', { system: true });
       }
 
-      if (status === 'CANCELLED' && ['CONFIRMED', 'IN_PRODUCTION', 'READY', 'PARTIALLY_DELIVERED'].includes(existing.status)) {
+      if (status === 'CANCELLED' && ['CONFIRMED', 'IN_PRODUCTION', 'READY'].includes(existing.status)) {
         await StockMovementService.releaseSalesOrderReservations(tx, existing.id, existing.items);
       }
 
@@ -305,14 +395,14 @@ router.patch(
       await NotificationService.notifyAdmins(
         'APPROVAL',
         `Sales order ${order.order.orderNumber} ready — ${salesperson}`,
-        `${order.order.customer.name} · Sales: ${salesperson} — KES ${total}. Open the order to create an invoice, then assign delivery.`,
+        `${order.order.customer.name} · Sales: ${salesperson} — KES ${total}. Assign delivery — invoice is created automatically when goods are dispatched.`,
         salesOrderLink
       );
       await NotificationService.notifyRole(
         'Finance Officer',
         'APPROVAL',
         `Sales order ${order.order.orderNumber} ready — ${salesperson}`,
-        `${order.order.customer.name} · Sales: ${salesperson} — KES ${total}. Open the order to create an invoice, then assign delivery.`,
+        `${order.order.customer.name} · Sales: ${salesperson} — KES ${total}. Assign delivery — invoice is created automatically when goods are dispatched.`,
         salesOrderLink
       );
     } else if (isConfirm && order.order.status === 'CONFIRMED') {
@@ -335,6 +425,17 @@ router.patch(
         `${order.order.customer.name} · Sales: ${salesperson} — KES ${total}. Out of stock: ${shortageSummary}. Mark ready in Sales when finished goods are available.`,
         `/sales?orderId=${order.order.id}`
       );
+    } else if (status === 'CANCELLED') {
+      const notifyUserId = order.order.salesPersonId || existing.createdById;
+      if (notifyUserId && notifyUserId !== req.user!.id) {
+        await NotificationService.notifyUser(
+          notifyUserId,
+          'SYSTEM',
+          `Sales order ${order.order.orderNumber} cancelled`,
+          'This order was cancelled. Open Sales for details.',
+          `/sales?orderId=${orderId}`
+        );
+      }
     }
 
     res.json({
@@ -440,7 +541,7 @@ router.post(
     const totalAmount = subtotal + taxAmount;
 
     const quotation = await prisma.salesQuotation.create({
-      data: {
+      data: injectTenantData({
         quotationNo,
         customerId,
         validUntil: validUntil ? new Date(validUntil) : undefined,
@@ -454,7 +555,7 @@ router.post(
             totalPrice: item.quantity * item.unitPrice * (1 - (item.discount || 0) / 100),
           })),
         },
-      },
+      }),
       include: { customer: true, items: { include: { product: true } } },
     });
 
@@ -486,7 +587,7 @@ router.post(
 
     const order = await prisma.$transaction(async (tx) => {
       const so = await tx.salesOrder.create({
-        data: {
+        data: injectTenantData({
           orderNumber,
           customerId: quotation.customerId,
           quotationId: quotation.id,
@@ -503,7 +604,7 @@ router.post(
               totalPrice: item.totalPrice,
             })),
           },
-        },
+        }),
         include: { customer: true, items: { include: { product: true } } },
       });
 
@@ -533,21 +634,26 @@ router.get(
 router.get(
   '/production',
   authorize('production:read'),
-  validate(paginationSchema, 'query'),
+  validate(productionListQuerySchema, 'query'),
   asyncHandler(async (req: AuthRequest, res: Response) => {
-    const { page, limit, search } = getQuery<{ page: number; limit: number; search?: string }>(
-      req.query
-    );
+    const { page, limit, search, status } = getQuery<{
+      page: number;
+      limit: number;
+      search?: string;
+      status?: string;
+    }>(req.query);
     const skip = (page - 1) * limit;
 
-    const where: Prisma.ProductionOrderWhereInput = search
-      ? {
-          OR: [
-            { orderNumber: { contains: search } },
-            { product: { name: { contains: search } } },
-          ],
-        }
-      : {};
+    const where: Prisma.ProductionOrderWhereInput = {};
+    if (search) {
+      where.OR = [
+        { orderNumber: { contains: search } },
+        { product: { name: { contains: search } } },
+      ];
+    }
+    if (status) {
+      where.status = status as Prisma.EnumProductionStatusFilter['equals'];
+    }
 
     const [data, total] = await Promise.all([
       prisma.productionOrder.findMany({
@@ -583,14 +689,9 @@ router.post(
     const count = await prisma.productionOrder.count();
     const orderNumber = generateNumber('PRO', count + 1);
 
-    const bom = await prisma.billOfMaterial.findUnique({
-      where: { productId },
-      include: { items: true },
-    });
-
     const productionOrder = await prisma.$transaction(async (tx) => {
       const created = await tx.productionOrder.create({
-        data: {
+        data: injectTenantData({
           orderNumber,
           productId,
           salesOrderId,
@@ -601,16 +702,7 @@ router.post(
           scheduledStart: scheduledStart ? new Date(scheduledStart) : undefined,
           scheduledEnd: scheduledEnd ? new Date(scheduledEnd) : undefined,
           notes,
-          consumption: bom
-            ? {
-                create: bom.items.map((item) => ({
-                  rawMaterialId: item.rawMaterialId,
-                  plannedQty: Number(item.quantity) * quantity,
-                  unit: item.unit,
-                })),
-              }
-            : undefined,
-        },
+        }),
         include: {
           product: true,
           consumption: { include: { rawMaterial: true } },
@@ -650,7 +742,8 @@ router.post(
       if (!existingQc) {
         await tx.qualityInspection.create({
           data: {
-            inspectionNo: generateNumber('QC', (await tx.qualityInspection.count()) + 1),
+            companyId: order.companyId,
+            inspectionNo: await nextQualityInspectionNumber(tx),
             type: 'production',
             productionOrderId: order.id,
             inspectorId: req.user!.id,
@@ -673,6 +766,7 @@ router.post(
 router.post(
   '/production/:id/complete',
   authorize('production:update'),
+  validate(completeProductionSchema),
   auditLog('production', 'update', 'production_order'),
   asyncHandler(async (req: AuthRequest, res: Response) => {
     const { completedQty, rejectedQty, warehouseId } = req.body;
@@ -687,19 +781,37 @@ router.post(
       throw new AppError('Start production before completing it', 400);
     }
 
-    const passedInspection = await prisma.qualityInspection.findFirst({
-      where: { productionOrderId: order.id, status: 'PASSED' },
+    const passedInspection = await QualityService.findPassedProductionInspection(prisma, {
+      id: order.id,
+      productId: order.productId,
+      actualStart: order.actualStart,
     });
     if (!passedInspection) {
-      throw new AppError('A passed quality inspection is required before completing production', 400);
+      throw new AppError(
+        'A passed quality inspection is required before completing production. Link an inspection to this order, or pass a product inspection for surplus stock.',
+        400
+      );
     }
 
     const result = await prisma.$transaction(async (tx) => {
+      const fgWarehouseId = await StockMovementService.getFinishedGoodsWarehouseId(tx);
+      if (warehouseId && warehouseId !== fgWarehouseId) {
+        throw new AppError('Production output must be posted to the finished goods warehouse', 400);
+      }
+
+      let rawMaterialsWarehouseId: string | null = null;
+      try {
+        rawMaterialsWarehouseId = await StockMovementService.getRawMaterialsWarehouseId(tx);
+      } catch {
+        rawMaterialsWarehouseId = null;
+      }
+
       let totalMaterialCost = 0;
 
       for (const consumption of order.consumption) {
+        const consumeWarehouseId = rawMaterialsWarehouseId ?? fgWarehouseId;
         const stockLevel = await tx.stockLevel.findFirst({
-          where: { rawMaterialId: consumption.rawMaterialId, warehouseId },
+          where: { rawMaterialId: consumption.rawMaterialId, warehouseId: consumeWarehouseId },
         });
 
         if (stockLevel) {
@@ -717,7 +829,7 @@ router.post(
 
           await tx.inventoryTransaction.create({
             data: {
-              warehouseId,
+              warehouseId: consumeWarehouseId,
               type: 'PRODUCTION_CONSUMPTION',
               rawMaterialId: consumption.rawMaterialId,
               quantity: consumeQty,
@@ -746,7 +858,7 @@ router.post(
           : Number(order.product.manufacturingCost);
 
       const fgStock = await tx.stockLevel.findFirst({
-        where: { productId: order.productId, warehouseId },
+        where: { productId: order.productId, warehouseId: fgWarehouseId },
       });
 
       if (fgStock) {
@@ -760,7 +872,7 @@ router.post(
       } else {
         await tx.stockLevel.create({
           data: {
-            warehouseId,
+            warehouseId: fgWarehouseId,
             productId: order.productId,
             batchNumber,
             quantity: completedQty,
@@ -771,7 +883,7 @@ router.post(
 
       await tx.inventoryTransaction.create({
         data: {
-          warehouseId,
+          warehouseId: fgWarehouseId,
           type: 'PRODUCTION_OUTPUT',
           productId: order.productId,
           batchNumber,

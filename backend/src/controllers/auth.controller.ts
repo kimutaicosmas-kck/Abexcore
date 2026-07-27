@@ -2,17 +2,42 @@ import { Response } from 'express';
 import { AuthService } from '../services/auth.service';
 import { asyncHandler } from '../middleware/errorHandler';
 import { AuthRequest } from '../middleware/auth';
+import { sanitizeCompanyBrand } from '../utils/platform';
 
 export const login = asyncHandler(async (req: AuthRequest, res: Response) => {
-  const { email, password, totpCode } = req.body;
+  const { email, password, totpCode, companySlug } = req.body;
   const result = await AuthService.login(
     email,
     password,
+    companySlug,
     totpCode,
     req.ip,
     req.headers['user-agent']
   );
   res.json({ success: true, data: result });
+});
+
+export const registerCompany = asyncHandler(async (req: AuthRequest, res: Response) => {
+  const { TenantService } = await import('../services/tenant.service');
+  const { AuthService } = await import('../services/auth.service');
+  const input = req.body;
+  AuthService.validatePassword(input.adminPassword);
+  const { company, admin } = await TenantService.registerCompany(input);
+  res.status(201).json({
+    success: true,
+    data: {
+      company: { id: company.id, slug: company.slug, name: company.name },
+      admin: { id: admin.id, email: admin.email, firstName: admin.firstName, lastName: admin.lastName },
+    },
+    message: 'Company registered. Sign in with your company code and admin email.',
+  });
+});
+
+export const resolveTenant = asyncHandler(async (req: AuthRequest, res: Response) => {
+  const { TenantService } = await import('../services/tenant.service');
+  const slug = String(req.params.slug || '');
+  const company = await TenantService.resolveTenant(slug);
+  res.json({ success: true, data: company });
 });
 
 export const refresh = asyncHandler(async (req: AuthRequest, res: Response) => {
@@ -34,14 +59,25 @@ export const me = asyncHandler(async (req: AuthRequest, res: Response) => {
       role: true,
       department: true,
       branch: true,
+      company: { select: { id: true, slug: true, name: true, logo: true, vatRate: true, currency: true } },
     },
   });
-  const { passwordHash, twoFactorSecret, ...safeUser } = user!;
+  const { passwordHash, twoFactorSecret, company, ...safeUser } = user!;
   res.json({
     success: true,
     data: {
       ...safeUser,
       permissions: req.user!.permissions,
+      company: company
+        ? sanitizeCompanyBrand({
+            id: company.id,
+            slug: company.slug,
+            name: company.name,
+            logo: company.logo,
+            vatRate: Number(company.vatRate),
+            currency: company.currency,
+          })
+        : null,
     },
   });
 });

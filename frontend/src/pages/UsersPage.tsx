@@ -29,6 +29,7 @@ import {
   DataPanel,
   TablePagination,
   formatDate,
+  formatDateTime,
   PageToolbar,
 } from '../components/ui';
 import { Modal } from '../components/ui/Modal';
@@ -234,8 +235,8 @@ export function UsersPage() {
   const auditColumns = [
     {
       key: 'createdAt',
-      label: 'Date',
-      render: (val: unknown) => formatDate(val as string),
+      label: 'Timestamp',
+      render: (val: unknown) => formatDateTime(val as string),
     },
     {
       key: 'user',
@@ -267,7 +268,17 @@ export function UsersPage() {
     ) : undefined);
 
   return (
-    <div className="space-y-1">
+    <div className="space-y-4">
+      {stats && (
+        <StatGrid>
+          <StatCard title="Total Users" value={stats.total} icon={<Users className="h-5 w-5 text-white" />} color="from-primary-500 to-primary-700" />
+          <StatCard title="Active" value={stats.active} icon={<UserCheck className="h-5 w-5 text-white" />} color="from-emerald-500 to-teal-600" />
+          <StatCard title="Inactive / Suspended" value={stats.inactive + stats.suspended} icon={<UserX className="h-5 w-5 text-white" />} color="from-red-500 to-rose-600" />
+          <StatCard title="Logged In (7d)" value={stats.recentLogins} icon={<Shield className="h-5 w-5 text-white" />} color="from-primary-600 to-primary-800" />
+          <StatCard title="Roles" value={stats.byRole.length} icon={<ScrollText className="h-5 w-5 text-white" />} color="from-slate-600 to-slate-800" />
+        </StatGrid>
+      )}
+
       <PageHeader
         action={
           stats && stats.inactive + stats.suspended > 0 ? (
@@ -278,15 +289,6 @@ export function UsersPage() {
           ) : undefined
         }
       />
-
-      {stats && (
-        <StatGrid>
-          <StatCard title="Total Users" value={stats.total} icon={<Users className="h-5 w-5 text-white" />} color="from-primary-500 to-indigo-600" />
-          <StatCard title="Active" value={stats.active} icon={<UserCheck className="h-5 w-5 text-white" />} color="from-emerald-500 to-teal-600" />
-          <StatCard title="Inactive / Suspended" value={stats.inactive + stats.suspended} icon={<UserX className="h-5 w-5 text-white" />} color="from-red-500 to-rose-600" />
-          <StatCard title="Logged In (7d)" value={stats.recentLogins} icon={<Shield className="h-5 w-5 text-white" />} color="from-violet-500 to-purple-600" />
-        </StatGrid>
-      )}
 
       <PageToolbar
         tabs={tabs}
@@ -321,7 +323,7 @@ export function UsersPage() {
                 <ul className="divide-y divide-slate-100">
                   {topRoles.map((r) => (
                     <li key={r.roleId} className="flex items-center gap-3 px-4 py-3">
-                      <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-violet-100 text-violet-600">
+                      <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary-100 text-primary-600">
                         <Shield className="h-4 w-4" />
                       </div>
                       <div className="flex-1 min-w-0">
@@ -355,7 +357,7 @@ export function UsersPage() {
                       <Badge variant="info">{entry.module}</Badge>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm text-slate-800 truncate">{entry.action} · {entry.entityType}</p>
-                        <p className="text-xs text-slate-400">{formatDate(entry.createdAt)}</p>
+                        <p className="text-xs text-slate-400">{formatDateTime(entry.createdAt)}</p>
                       </div>
                     </li>
                   ))}
@@ -425,6 +427,7 @@ export function UsersPage() {
               columns={userColumns}
               data={(usersRes?.data as User[]) || []}
               loading={isLoading}
+              responsive
               onRowClick={(row) => openDetail(row as unknown as User)}
               embedded
             />
@@ -482,6 +485,7 @@ export function UsersPage() {
               columns={auditColumns}
               data={(auditRes?.data as AuditLogEntry[]) || []}
               loading={auditLoading}
+              responsive
               embedded
             />
           )}
@@ -491,8 +495,8 @@ export function UsersPage() {
         </DataPanel>
       )}
 
-      <Modal open={formModalOpen} onClose={closeFormModal} title={editing ? 'Edit User' : 'Add User'} size="lg">
-        <UserForm user={editing} onSuccess={closeFormModal} onCancel={closeFormModal} />
+      <Modal open={formModalOpen} onClose={closeFormModal} title={editing ? 'Edit User' : 'Add User'} size="xl">
+        <UserForm key={editing?.id ?? 'new'} user={editing} onSuccess={closeFormModal} onCancel={closeFormModal} />
       </Modal>
 
       <Modal open={detailModalOpen} onClose={() => { setDetailModalOpen(false); setSelectedUser(null); }} title="User Details" size="lg">
@@ -552,7 +556,7 @@ export function UsersPage() {
                     <tbody className="divide-y divide-border/70">
                       {userDetail.loginHistory.map((entry) => (
                         <tr key={entry.id}>
-                          <td className="px-3 py-2">{formatDate(entry.createdAt)}</td>
+                          <td className="px-3 py-2">{formatDateTime(entry.createdAt)}</td>
                           <td className="px-3 py-2 text-slate-500">{entry.ipAddress || '—'}</td>
                           <td className="px-3 py-2">
                             <Badge variant={entry.success ? 'success' : 'danger'}>

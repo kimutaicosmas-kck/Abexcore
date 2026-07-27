@@ -1,31 +1,39 @@
 import prisma from '../config/database';
+import { mergeTenantWarehouseWhere } from '../utils/tenant';
 
 export class ProductService {
   static async getStats() {
-    const [total, active, withBom, categoryCounts, totalStock] = await Promise.all([
+    const [total, active, categoryCounts, totalStock] = await Promise.all([
       prisma.product.count({ where: { deletedAt: null } }),
       prisma.product.count({ where: { deletedAt: null, isActive: true } }),
-      prisma.billOfMaterial.count(),
       prisma.product.groupBy({
-        by: ['category'],
+        by: ['categoryId'],
         where: { deletedAt: null },
         _count: { id: true },
       }),
       prisma.stockLevel.aggregate({
-        where: { productId: { not: null } },
+        where: mergeTenantWarehouseWhere({ productId: { not: null } }),
         _sum: { quantity: true },
       }),
     ]);
+
+    const categoryIds = categoryCounts.map((c) => c.categoryId);
+    const categories = categoryIds.length
+      ? await prisma.productCategory.findMany({
+          where: { id: { in: categoryIds } },
+          select: { id: true, name: true },
+        })
+      : [];
+    const categoryNameById = new Map(categories.map((c) => [c.id, c.name]));
 
     return {
       total,
       active,
       inactive: total - active,
-      withBom,
-      withoutBom: total - withBom,
       finishedGoodsQty: Number(totalStock._sum.quantity || 0),
       byCategory: categoryCounts.map((c) => ({
-        category: c.category,
+        categoryId: c.categoryId,
+        category: categoryNameById.get(c.categoryId) || 'Uncategorized',
         count: c._count.id,
       })),
     };
@@ -45,6 +53,7 @@ export class InventoryService {
     });
 
     const stockLevels = await prisma.stockLevel.findMany({
+      where: mergeTenantWarehouseWhere(),
       include: { product: true, rawMaterial: true },
     });
 
@@ -57,9 +66,9 @@ export class InventoryService {
       prisma.warehouse.count({ where: { isActive: true, deletedAt: null } }),
       prisma.rawMaterial.count({ where: { deletedAt: null, isActive: true } }),
       prisma.inventoryTransaction.count({
-        where: {
+        where: mergeTenantWarehouseWhere({
           createdAt: { gte: new Date(new Date().setHours(0, 0, 0, 0)) },
-        },
+        }),
       }),
     ]);
 

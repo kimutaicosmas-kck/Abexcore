@@ -1,16 +1,20 @@
 import prisma from '../config/database';
+import { DeliveryStatus } from '@prisma/client';
+import { mergeTenantWhere, requireTenantId } from '../utils/tenant';
 import { getMonthlySalesRevenue } from '../utils/finance-metrics';
 import { salesPersonOrderFilter } from './my-sales.service';
 import { Prisma } from '@prisma/client';
 
 export class QualityService {
   static async getStats() {
+    const companyId = requireTenantId();
+
     const [total, pending, passed, failed, conditional] = await Promise.all([
-      prisma.qualityInspection.count(),
-      prisma.qualityInspection.count({ where: { status: 'PENDING' } }),
-      prisma.qualityInspection.count({ where: { status: 'PASSED' } }),
-      prisma.qualityInspection.count({ where: { status: 'FAILED' } }),
-      prisma.qualityInspection.count({ where: { status: 'CONDITIONAL' } }),
+      prisma.qualityInspection.count({ where: { companyId } }),
+      prisma.qualityInspection.count({ where: { companyId, status: 'PENDING' } }),
+      prisma.qualityInspection.count({ where: { companyId, status: 'PASSED' } }),
+      prisma.qualityInspection.count({ where: { companyId, status: 'FAILED' } }),
+      prisma.qualityInspection.count({ where: { companyId, status: 'CONDITIONAL' } }),
     ]);
 
     const inspected = passed + failed + conditional;
@@ -22,6 +26,35 @@ export class QualityService {
       conditional,
       passRate: inspected > 0 ? Math.round((passed / inspected) * 100) : 0,
     };
+  }
+
+  /** Passed QC linked to the order, or standalone surplus-stock QC for the same product. */
+  static findPassedProductionInspection(
+    client: Prisma.TransactionClient | typeof prisma,
+    order: { id: string; productId: string; actualStart: Date | null }
+  ) {
+    return client.qualityInspection.findFirst({
+      where: {
+        status: 'PASSED',
+        OR: [
+          { productionOrderId: order.id },
+          {
+            productionOrderId: null,
+            productId: order.productId,
+            type: { in: ['production', 'finished'] },
+            ...(order.actualStart
+              ? {
+                  OR: [
+                    { inspectedAt: { gte: order.actualStart } },
+                    { inspectedAt: null, createdAt: { gte: order.actualStart } },
+                  ],
+                }
+              : {}),
+          },
+        ],
+      },
+      orderBy: [{ inspectedAt: 'desc' }, { createdAt: 'desc' }],
+    });
   }
 }
 
@@ -80,13 +113,23 @@ export class DeliveryService {
 
     const [pending, inTransit, deliveredToday, deliveredMonth, activeVehicles, motorcycles, trucks, lorries] =
       await Promise.all([
-        prisma.deliveryNote.count({ where: { status: { in: ['PENDING', 'ASSIGNED'] } } }),
-        prisma.deliveryNote.count({ where: { status: 'IN_TRANSIT' } }),
         prisma.deliveryNote.count({
-          where: { status: 'DELIVERED', deliveredAt: { gte: todayStart } },
+          where: mergeTenantWhere({ status: { in: ['PENDING', 'ASSIGNED'] as DeliveryStatus[] } }),
         }),
         prisma.deliveryNote.count({
-          where: { status: 'DELIVERED', deliveredAt: { gte: monthStart } },
+          where: mergeTenantWhere({ status: 'IN_TRANSIT' as DeliveryStatus }),
+        }),
+        prisma.deliveryNote.count({
+          where: mergeTenantWhere({
+            status: 'DELIVERED' as DeliveryStatus,
+            deliveredAt: { gte: todayStart },
+          }),
+        }),
+        prisma.deliveryNote.count({
+          where: mergeTenantWhere({
+            status: 'DELIVERED' as DeliveryStatus,
+            deliveredAt: { gte: monthStart },
+          }),
         }),
         prisma.vehicle.count({ where: { isActive: true } }),
         prisma.vehicle.count({ where: { isActive: true, type: 'MOTORCYCLE' } }),

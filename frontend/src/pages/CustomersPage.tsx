@@ -452,7 +452,17 @@ export function CustomersPage() {
     : undefined;
 
   return (
-    <div className="space-y-1">
+    <div className="space-y-4">
+      {stats && (
+        <StatGrid>
+          <StatCard title="Customers" value={stats.customers.active} icon={<Users className="h-5 w-5 text-white" />} color="from-primary-500 to-primary-700" />
+          <StatCard title="Open Complaints" value={stats.complaints.open} icon={<AlertCircle className="h-5 w-5 text-white" />} color="from-red-500 to-rose-600" />
+          <StatCard title="Pipeline Value" value={formatCurrency(stats.opportunities.pipelineValue)} icon={<TrendingUp className="h-5 w-5 text-white" />} color="from-emerald-500 to-teal-600" />
+          <StatCard title="Warranties Expiring" value={stats.warranties.expiringSoon} icon={<Shield className="h-5 w-5 text-white" />} color="from-primary-600 to-primary-800" />
+          <StatCard title="Open Opportunities" value={stats.opportunities.open} icon={<Target className="h-5 w-5 text-white" />} color="from-slate-600 to-slate-800" />
+        </StatGrid>
+      )}
+
       <PageHeader
         action={
           stats && stats.complaints.open > 0 ? (
@@ -463,15 +473,6 @@ export function CustomersPage() {
           ) : undefined
         }
       />
-
-      {stats && (
-        <StatGrid>
-          <StatCard title="Customers" value={stats.customers.active} icon={<Users className="h-5 w-5 text-white" />} color="from-primary-500 to-indigo-600" />
-          <StatCard title="Open Complaints" value={stats.complaints.open} icon={<AlertCircle className="h-5 w-5 text-white" />} color="from-red-500 to-rose-600" />
-          <StatCard title="Pipeline Value" value={formatCurrency(stats.opportunities.pipelineValue)} icon={<TrendingUp className="h-5 w-5 text-white" />} color="from-emerald-500 to-teal-600" />
-          <StatCard title="Warranties Expiring" value={stats.warranties.expiringSoon} icon={<Shield className="h-5 w-5 text-white" />} color="from-violet-500 to-purple-600" />
-        </StatGrid>
-      )}
 
       <PageToolbar
         tabs={tabs}
@@ -601,6 +602,7 @@ export function CustomersPage() {
               data={(customersRes?.data as Customer[]) || []}
               loading={custLoading}
               onRowClick={(row) => openDetail(row as unknown as Customer)}
+              responsive
               embedded
             />
           )}
@@ -636,6 +638,7 @@ export function CustomersPage() {
               columns={complaintColumns}
               data={(complaintsRes?.data as Complaint[]) || []}
               loading={compLoading}
+              responsive
               onRowClick={(row) => { setSelectedComplaint(row as unknown as Complaint); setComplaintDetailOpen(true); }}
               embedded
             />
@@ -668,7 +671,7 @@ export function CustomersPage() {
               />
             </div>
           ) : (
-            <Table columns={opportunityColumns} data={(opportunitiesRes?.data as Opportunity[]) || []} loading={oppLoading} embedded />
+            <Table columns={opportunityColumns} data={(opportunitiesRes?.data as Opportunity[]) || []} loading={oppLoading} responsive embedded />
           )}
           <div className="px-4 pb-4">
             <TablePagination pagination={opportunitiesRes?.pagination} page={oppPage} onPageChange={setOppPage} label="opportunities" />
@@ -697,7 +700,7 @@ export function CustomersPage() {
               />
             </div>
           ) : (
-            <Table columns={warrantyColumns} data={(warrantiesRes?.data as Warranty[]) || []} loading={warrLoading} embedded />
+            <Table columns={warrantyColumns} data={(warrantiesRes?.data as Warranty[]) || []} loading={warrLoading} responsive embedded />
           )}
           <div className="px-4 pb-4">
             <TablePagination pagination={warrantiesRes?.pagination} page={warrPage} onPageChange={setWarrPage} label="warranties" />

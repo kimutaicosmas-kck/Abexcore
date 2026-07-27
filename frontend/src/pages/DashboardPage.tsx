@@ -62,15 +62,15 @@ const CHART_DAYS_OPTIONS = [
 const chartDefaults = {
   responsive: true,
   plugins: {
-    legend: { labels: { usePointStyle: true, boxWidth: 8, font: { family: 'Inter' } } },
+    legend: { labels: { usePointStyle: true, boxWidth: 8, font: { family: 'Plus Jakarta Sans', size: 11 } } },
   },
 };
 
 const QUICK_ACTIONS = [
-  { label: 'New sales order', desc: 'Create a customer order', icon: Plus, color: 'bg-emerald-50 text-emerald-600 border-emerald-100', href: '/sales' },
-  { label: 'Invoices & payments', desc: 'Bill customers and record paybill', icon: FileText, color: 'bg-primary-50 text-primary-600 border-primary-100', href: '/finance' },
-  { label: 'Delivery', desc: 'Dispatch confirmed orders', icon: Truck, color: 'bg-orange-50 text-orange-600 border-orange-100', href: '/delivery' },
-  { label: 'Inventory', desc: 'Check stock levels', icon: Package, color: 'bg-violet-50 text-violet-600 border-violet-100', href: '/inventory' },
+  { label: 'New sales order', desc: 'Create a customer order', icon: Plus, color: 'border-primary-100 hover:border-primary-300', href: '/sales' },
+  { label: 'Invoices & payments', desc: 'Bill customers and record paybill', icon: FileText, color: 'border-primary-100 hover:border-primary-300', href: '/finance' },
+  { label: 'Delivery', desc: 'Dispatch confirmed orders', icon: Truck, color: 'border-primary-100 hover:border-primary-300', href: '/delivery' },
+  { label: 'Inventory', desc: 'Check stock levels', icon: Package, color: 'border-primary-100 hover:border-primary-300', href: '/inventory' },
 ] as const;
 
 export function DashboardPage() {
@@ -124,7 +124,7 @@ export function DashboardPage() {
   const salesTotal = charts?.salesTrend?.reduce((s, d) => s + d.amount, 0) || 0;
   const hasSalesTrend = salesTotal > 0;
   const hasCategories = (charts?.productCategories?.length || 0) > 0;
-  const hasTopSellers = (kpis.topSellingFilters?.length || 0) > 0;
+  const hasTopSellers = (kpis.topSellingProducts?.length || 0) > 0;
 
   const salesChartData = {
     labels: charts?.salesTrend?.map((d) => d.date.slice(5)) || [],
@@ -132,8 +132,8 @@ export function DashboardPage() {
       {
         label: 'Sales (KES)',
         data: charts?.salesTrend?.map((d) => d.amount) || [],
-        borderColor: '#6366f1',
-        backgroundColor: 'rgba(99, 102, 241, 0.12)',
+        borderColor: '#2563eb',
+        backgroundColor: 'rgba(37, 99, 235, 0.12)',
         fill: true,
         tension: 0.35,
         pointRadius: 0,
@@ -144,11 +144,11 @@ export function DashboardPage() {
   };
 
   const categoryData = {
-    labels: charts?.productCategories?.map((c) => c.category.replace(/_/g, ' ')) || [],
+    labels: charts?.productCategories?.map((c) => c.category) || [],
     datasets: [
       {
         data: charts?.productCategories?.map((c) => c.count) || [],
-        backgroundColor: ['#6366f1', '#8b5cf6', '#ec4899', '#f97316', '#22c55e', '#06b6d4', '#4f46e5', '#db2777'],
+        backgroundColor: ['#2563eb', '#3b82f6', '#0ea5e9', '#0284c7', '#1d4ed8', '#0369a1', '#1e40af', '#0891b2'],
         borderWidth: 0,
         hoverOffset: 6,
       },
@@ -178,22 +178,22 @@ export function DashboardPage() {
   );
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       <StatGrid>
         <StatCard title="Sales today" value={formatCurrency(kpis.salesToday)} icon={<DollarSign className="h-5 w-5 text-white" />} color="from-emerald-500 to-teal-600" />
-        <StatCard title="Monthly revenue" value={formatCurrency(kpis.monthlyRevenue)} icon={<TrendingUp className="h-5 w-5 text-white" />} color="from-primary-500 to-indigo-600" />
-        <StatCard title="Production orders" value={kpis.productionOrders} icon={<Factory className="h-5 w-5 text-white" />} color="from-violet-500 to-purple-600" />
+        <StatCard title="Monthly revenue" value={formatCurrency(kpis.monthlyRevenue)} icon={<TrendingUp className="h-5 w-5 text-white" />} color="from-primary-500 to-primary-700" />
+        <StatCard title="Production orders" value={kpis.productionOrders} icon={<Factory className="h-5 w-5 text-white" />} color="from-primary-600 to-primary-800" />
         <StatCard title="Inventory value" value={formatCurrency(kpis.inventoryValue)} icon={<Package className="h-5 w-5 text-white" />} color="from-orange-500 to-amber-600" />
         <StatCard title="Low stock" value={kpis.rawMaterialsLow} icon={<AlertTriangle className="h-5 w-5 text-white" />} color="from-red-500 to-rose-600" />
       </StatGrid>
+
+      <PageToolbar tabs={TABS} activeTab={activeTab} onTabChange={setActiveTab} actions={toolbarActions} />
 
       {accessDenied && (
         <Alert variant="warning">
           That module is not assigned to your role. Use the sidebar or enabled shortcuts below.
         </Alert>
       )}
-
-      <PageToolbar tabs={TABS} activeTab={activeTab} onTabChange={setActiveTab} actions={toolbarActions} />
 
       {activeTab === 0 && (
         <>
@@ -302,8 +302,8 @@ export function DashboardPage() {
                     ...chartDefaults,
                     plugins: { ...chartDefaults.plugins, legend: { display: false } },
                     scales: {
-                      x: { grid: { display: false }, ticks: { color: '#64748b', maxTicksLimit: 10 } },
-                      y: { beginAtZero: true, grid: { color: '#f1f5f9' }, ticks: { color: '#64748b' } },
+                      x: { grid: { display: false }, ticks: { color: '#64748b', maxTicksLimit: 10, font: { size: 11, family: 'Plus Jakarta Sans' } } },
+                      y: { beginAtZero: true, grid: { color: '#f1f5f9' }, ticks: { color: '#64748b', font: { size: 11, family: 'Plus Jakarta Sans' } } },
                     },
                   }}
                 />
@@ -337,7 +337,7 @@ export function DashboardPage() {
           <Card title="Top selling products" padding={false}>
             {hasTopSellers ? (
               <ul className="divide-y divide-slate-100">
-                {kpis.topSellingFilters.slice(0, 8).map((product, index) => (
+                {kpis.topSellingProducts.filter((product) => product.id).slice(0, 8).map((product, index) => (
                   <li key={product.id} className="flex items-center justify-between px-4 py-3 text-sm">
                     <div className="flex items-center gap-3 min-w-0">
                       <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary-50 text-xs font-semibold text-primary-600">

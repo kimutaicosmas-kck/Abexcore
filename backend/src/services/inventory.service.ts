@@ -23,6 +23,15 @@ export class StockMovementService {
     return warehouse.id;
   }
 
+  static async getRawMaterialsWarehouseId(tx: TxClient = prisma): Promise<string> {
+    const warehouse = await tx.warehouse.findFirst({
+      where: { isActive: true, deletedAt: null, type: 'raw_materials' },
+      orderBy: { createdAt: 'asc' },
+    });
+    if (!warehouse) throw new AppError('No raw materials warehouse configured', 400);
+    return warehouse.id;
+  }
+
   static async reserveProductStock(
     tx: TxClient,
     opts: {
@@ -85,13 +94,15 @@ export class StockMovementService {
 
   static async releaseSalesOrderReservations(
     tx: TxClient,
-    salesOrderId: string,
-    items: { productId: string; quantity: number }[]
+    _salesOrderId: string,
+    items: { productId: string; quantity: number; deliveredQty?: number }[]
   ) {
     for (const item of items) {
+      const remaining = item.quantity - (item.deliveredQty || 0);
+      if (remaining <= 0) continue;
       await this.releaseProductReservation(tx, {
         productId: item.productId,
-        quantity: item.quantity,
+        quantity: remaining,
       });
     }
   }

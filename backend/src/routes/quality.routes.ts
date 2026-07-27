@@ -9,10 +9,11 @@ import {
   qualityListQuerySchema,
 } from '../validators/schemas';
 import prisma from '../config/database';
-import { generateNumber } from '../utils/date';
+import { nextQualityInspectionNumber } from '../utils/date';
 import { getParam, getQuery } from '../utils/request';
 import { QualityService } from '../services/operations.service';
 import { Prisma } from '@prisma/client';
+import { requireTenantId } from '../utils/tenant';
 
 const router = Router();
 router.use(authenticate);
@@ -31,20 +32,23 @@ router.get(
   authorize('quality:read'),
   validate(qualityListQuerySchema, 'query'),
   asyncHandler(async (req: AuthRequest, res: Response) => {
-    const { page, limit, search, status, type, productionOrderId } = getQuery<{
+    const { page, limit, search, status, type, productionOrderId, productId } = getQuery<{
       page: number;
       limit: number;
       search?: string;
       status?: string;
       type?: string;
       productionOrderId?: string;
+      productId?: string;
     }>(req.query);
+    const companyId = requireTenantId();
     const skip = (page - 1) * limit;
 
-    const where: Prisma.QualityInspectionWhereInput = {};
+    const where: Prisma.QualityInspectionWhereInput = { companyId };
     if (status) where.status = status as Prisma.EnumQualityStatusFilter['equals'];
     if (type) where.type = type;
     if (productionOrderId) where.productionOrderId = productionOrderId;
+    if (productId) where.productId = productId;
     if (search) {
       where.OR = [
         { inspectionNo: { contains: search } },
@@ -63,6 +67,7 @@ router.get(
           productionOrder: {
             select: { orderNumber: true, product: { select: { name: true, sku: true } } },
           },
+          product: { select: { name: true, sku: true } },
         },
         orderBy: { createdAt: 'desc' },
       }),
@@ -81,13 +86,15 @@ router.get(
   '/:id',
   authorize('quality:read'),
   asyncHandler(async (req: AuthRequest, res: Response) => {
-    const data = await prisma.qualityInspection.findUnique({
-      where: { id: getParam(req.params.id) },
+    const companyId = requireTenantId();
+    const data = await prisma.qualityInspection.findFirst({
+      where: { id: getParam(req.params.id), companyId },
       include: {
         goodsReceipt: { include: { supplier: { select: { name: true } } } },
         productionOrder: {
           include: { product: { select: { name: true, sku: true } }, machine: true },
         },
+        product: { select: { name: true, sku: true } },
       },
     });
     if (!data) throw new AppError('Inspection not found', 404);
@@ -105,7 +112,7 @@ router.post(
     const data = await prisma.$transaction(async (tx) => {
       const inspection = await tx.qualityInspection.create({
         data: {
-          inspectionNo: generateNumber('QC', (await tx.qualityInspection.count()) + 1),
+          inspectionNo: await nextQualityInspectionNumber(tx),
           ...body,
           inspectorId: req.user!.id,
           inspectedAt: body.status && body.status !== 'PENDING' ? new Date() : undefined,
@@ -113,6 +120,7 @@ router.post(
         include: {
           goodsReceipt: { select: { grnNumber: true, id: true } },
           productionOrder: { select: { orderNumber: true } },
+          product: { select: { name: true, sku: true } },
         },
       });
 

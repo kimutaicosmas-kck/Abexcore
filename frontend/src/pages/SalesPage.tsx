@@ -12,6 +12,8 @@ import {
   ChevronRight,
   Download,
   Target,
+  Pencil,
+  XCircle,
 } from 'lucide-react';
 import { financeApi, operationsApi } from '../services/api';
 import { downloadFile } from '../utils/download';
@@ -38,6 +40,7 @@ import {
 } from '../components/ui';
 import { Modal } from '../components/ui/Modal';
 import { SalesOrderForm } from '../components/forms/SalesOrderForm';
+import { SalesOrderEditForm } from '../components/forms/SalesOrderEditForm';
 import { QuotationForm } from '../components/forms/QuotationForm';
 import { useAuth } from '../contexts/AuthContext';
 import { SalesOrder, SalesQuotation, SalesStats } from '../types';
@@ -66,10 +69,27 @@ const QUOTE_STATUS_OPTIONS = [
   { value: 'CANCELLED', label: 'Cancelled' },
 ];
 
+const EDITABLE_ORDER_STATUSES = [
+  'PENDING',
+  'CONFIRMED',
+  'IN_PRODUCTION',
+  'READY',
+  'PARTIALLY_DELIVERED',
+  'DISPATCHED',
+];
+
+const CANCELLABLE_ORDER_STATUSES = ['PENDING', 'CONFIRMED', 'IN_PRODUCTION', 'READY'];
+
 const NEXT_STATUS: Record<string, { status: string; label: string }> = {
   PENDING: { status: 'CONFIRMED', label: 'Confirm' },
   DELIVERED: { status: 'COMPLETED', label: 'Complete' },
 };
+
+function canCancelOrder(status: string, isSalesOfficer: boolean): boolean {
+  if (!CANCELLABLE_ORDER_STATUSES.includes(status)) return false;
+  if (isSalesOfficer) return ['PENDING', 'CONFIRMED'].includes(status);
+  return true;
+}
 
 function getNextOrderAction(
   status: string,
@@ -105,7 +125,9 @@ export function SalesPage() {
   const [orderDetailOpen, setOrderDetailOpen] = useState(false);
   const [quoteDetailOpen, setQuoteDetailOpen] = useState(false);
   const [statusFeedback, setStatusFeedback] = useState<{ text: string; variant: 'error' | 'info' } | null>(null);
+  const [quoteFeedback, setQuoteFeedback] = useState<{ text: string; variant: 'error' | 'info' } | null>(null);
   const [pendingStatusChange, setPendingStatusChange] = useState<{ id: string; status: string; label: string } | null>(null);
+  const [orderEditMode, setOrderEditMode] = useState(false);
 
   const canCreate = hasPermission('sales:create');
   const canUpdate = hasPermission('sales:update');
@@ -171,10 +193,15 @@ export function SalesPage() {
   const convertMutation = useMutation({
     mutationFn: (id: string) => operationsApi.convertQuotation(id),
     onSuccess: () => {
+      setQuoteFeedback(null);
       queryClient.invalidateQueries({ queryKey: ['quotations'] });
       queryClient.invalidateQueries({ queryKey: ['sales-orders'] });
       queryClient.invalidateQueries({ queryKey: ['sales-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['customers'] });
+      setQuoteDetailOpen(false);
+      setSelectedQuote(null);
     },
+    onError: (err) => setQuoteFeedback({ text: getApiErrorMessage(err), variant: 'error' }),
   });
 
   const statusMutation = useMutation({
@@ -199,12 +226,17 @@ export function SalesPage() {
         }
       } else if (variables.status === 'READY') {
         setStatusFeedback({ text: 'Order marked ready.', variant: 'info' });
+      } else if (variables.status === 'CANCELLED') {
+        setStatusFeedback({ text: 'Order cancelled.', variant: 'info' });
       } else {
         setStatusFeedback(null);
       }
       queryClient.invalidateQueries({ queryKey: ['sales-orders'] });
       queryClient.invalidateQueries({ queryKey: ['sales-stats'] });
       queryClient.invalidateQueries({ queryKey: ['sales-order'] });
+      if (variables.status === 'CANCELLED') {
+        queryClient.invalidateQueries({ queryKey: ['sales-orders-deliverable'] });
+      }
     },
     onError: (err) => setStatusFeedback({ text: getApiErrorMessage(err), variant: 'error' }),
   });
@@ -213,13 +245,15 @@ export function SalesPage() {
     mutationFn: (orderId: string) => financeApi.createInvoiceFromOrder(orderId),
     onSuccess: () => {
       setStatusFeedback({
-        text: 'Invoice created. Download it from Finance or below. Assign delivery when ready.',
+        text: 'Invoice created with all order lines. Download it below or from Finance.',
         variant: 'info',
       });
       queryClient.invalidateQueries({ queryKey: ['sales-order'] });
+      queryClient.invalidateQueries({ queryKey: ['sales-orders'] });
       queryClient.invalidateQueries({ queryKey: ['finance-invoices'] });
       queryClient.invalidateQueries({ queryKey: ['finance-stats'] });
     },
+    onError: (err) => setStatusFeedback({ text: getApiErrorMessage(err), variant: 'error' }),
   });
 
   const downloadInvoice = async (invoiceId: string, invoiceNumber: string) => {
@@ -235,12 +269,14 @@ export function SalesPage() {
 
   const openOrderDetail = (order: SalesOrder) => {
     setStatusFeedback(null);
+    setOrderEditMode(false);
     setSelectedOrder(order);
     setOrderDetailOpen(true);
   };
 
   const closeOrderDetail = () => {
     setOrderDetailOpen(false);
+    setOrderEditMode(false);
     setSelectedOrder(null);
     setStatusFeedback(null);
     if (orderIdFromUrl) {
@@ -293,19 +329,36 @@ export function SalesPage() {
         if (!canUpdate) return null;
         const status = row.status as string;
         const next = getNextOrderAction(status, isSalesOfficer);
-        if (!next || status === 'COMPLETED' || status === 'CANCELLED') return null;
+        const showCancel = canCancelOrder(status, isSalesOfficer);
+        if (!next && !showCancel) return null;
         return (
-          <Button
-            size="sm"
-            loading={statusMutation.isPending}
-            disabled={statusMutation.isPending}
-            onClick={(e) => {
-              e.stopPropagation();
-              setPendingStatusChange({ id: row.id as string, status: next.status, label: next.label });
-            }}
-          >
-            {next.label}
-          </Button>
+          <div className="flex flex-wrap gap-1 justify-end" onClick={(e) => e.stopPropagation()}>
+            {next && (
+              <Button
+                size="sm"
+                loading={statusMutation.isPending}
+                disabled={statusMutation.isPending}
+                onClick={() =>
+                  setPendingStatusChange({ id: row.id as string, status: next.status, label: next.label })
+                }
+              >
+                {next.label}
+              </Button>
+            )}
+            {showCancel && (
+              <Button
+                size="sm"
+                variant="secondary"
+                loading={statusMutation.isPending}
+                disabled={statusMutation.isPending}
+                onClick={() =>
+                  setPendingStatusChange({ id: row.id as string, status: 'CANCELLED', label: 'Cancel order' })
+                }
+              >
+                Cancel
+              </Button>
+            )}
+          </div>
         );
       },
     },
@@ -374,7 +427,17 @@ export function SalesPage() {
     ) : undefined);
 
   return (
-    <div className="space-y-1">
+    <div className="space-y-4">
+      {stats && (
+        <StatGrid>
+          <StatCard title="Open Orders" value={stats.openOrders} icon={<ShoppingCart className="h-5 w-5 text-white" />} color="from-primary-500 to-primary-700" />
+          <StatCard title="Pipeline Value" value={formatCurrency(stats.pipelineValue)} icon={<TrendingUp className="h-5 w-5 text-white" />} color="from-emerald-500 to-teal-600" />
+          <StatCard title="Pending Quotes" value={stats.pendingQuotations} icon={<FileText className="h-5 w-5 text-white" />} color="from-amber-500 to-orange-600" />
+          <StatCard title="Orders This Month" value={stats.ordersThisMonth} icon={<CalendarDays className="h-5 w-5 text-white" />} color="from-primary-600 to-primary-800" />
+          <StatCard title="Monthly Revenue" value={formatCurrency(stats.monthlyRevenue)} icon={<Receipt className="h-5 w-5 text-white" />} color="from-slate-600 to-slate-800" />
+        </StatGrid>
+      )}
+
       <PageHeader
         action={
           <div className="flex flex-wrap items-center gap-2">
@@ -400,15 +463,6 @@ export function SalesPage() {
           </div>
         }
       />
-
-      {stats && (
-        <StatGrid>
-          <StatCard title="Open Orders" value={stats.openOrders} icon={<ShoppingCart className="h-5 w-5 text-white" />} color="from-primary-500 to-indigo-600" />
-          <StatCard title="Pipeline Value" value={formatCurrency(stats.pipelineValue)} icon={<TrendingUp className="h-5 w-5 text-white" />} color="from-emerald-500 to-teal-600" />
-          <StatCard title="Pending Quotes" value={stats.pendingQuotations} icon={<FileText className="h-5 w-5 text-white" />} color="from-amber-500 to-orange-600" />
-          <StatCard title="Orders This Month" value={stats.ordersThisMonth} icon={<CalendarDays className="h-5 w-5 text-white" />} color="from-violet-500 to-purple-600" />
-        </StatGrid>
-      )}
 
       <PageToolbar
         tabs={tabs}
@@ -609,8 +663,27 @@ export function SalesPage() {
         <QuotationForm onSuccess={() => setQuotationModalOpen(false)} onCancel={() => setQuotationModalOpen(false)} />
       </Modal>
 
-      <Modal open={orderDetailOpen} onClose={closeOrderDetail} title="Sales Order Details" size="lg">
-        {activeOrder && (
+      <Modal
+        open={orderDetailOpen}
+        onClose={closeOrderDetail}
+        title={orderEditMode ? 'Adjust Sales Order' : 'Sales Order Details'}
+        size="lg"
+      >
+        {activeOrder && orderEditMode ? (
+          <SalesOrderEditForm
+            order={activeOrder}
+            onSuccess={(updated) => {
+              setSelectedOrder(updated);
+              setOrderEditMode(false);
+              setStatusFeedback({
+                text: 'Order updated. The salesperson has been notified of the changes.',
+                variant: 'info',
+              });
+              queryClient.setQueryData(['sales-order', updated.id], updated);
+            }}
+            onCancel={() => setOrderEditMode(false)}
+          />
+        ) : activeOrder && (
           <div className="space-y-4 text-sm">
             {statusFeedback && <Alert variant={statusFeedback.variant}>{statusFeedback.text}</Alert>}
             <div className="grid grid-cols-2 gap-4">
@@ -620,18 +693,42 @@ export function SalesPage() {
               <div><p className="text-slate-500">Status</p><Badge variant={getStatusBadge(activeOrder.status)}>{activeOrder.status.replace(/_/g, ' ')}</Badge></div>
               <div><p className="text-slate-500">Total</p><p className="font-semibold text-lg">{formatCurrency(Number(activeOrder.totalAmount))}</p></div>
             </div>
+            {activeOrder.status === 'READY'
+              && !activeOrder.invoices?.length
+              && !activeOrder.deliveries?.length && (
+              <Alert variant="info">
+                {canInvoice
+                  ? 'This order is ready. Use Create Invoice for a full invoice with all products, or go to Delivery to dispatch goods — an invoice is also created automatically on dispatch.'
+                  : 'This order is ready for invoicing. A user with Finance access can create the invoice here, or assign delivery from the Delivery module (invoice is created on dispatch).'}
+              </Alert>
+            )}
             {activeOrder.items?.length > 0 && (
               <Card title="Line Items">
-                {activeOrder.items.map((item) => (
-                  <div key={item.id} className="flex justify-between py-2 border-b border-border/60 last:border-0">
-                    <span>{item.product?.name || item.productId}</span>
-                    <span>{item.quantity} × {formatCurrency(Number(item.unitPrice))}</span>
+                {activeOrder.items.map((item) => {
+                  const delivered = item.deliveredQty || 0;
+                  const remaining = Math.max(0, item.quantity - delivered);
+                  return (
+                  <div key={item.id} className="py-2 border-b border-border/60 last:border-0">
+                    <div className="flex justify-between gap-2">
+                      <span>{item.product?.name || item.productId}</span>
+                      <span>{item.quantity} × {formatCurrency(Number(item.unitPrice))}</span>
+                    </div>
+                    {(delivered > 0 || activeOrder.status.includes('PARTIAL') || activeOrder.status === 'DISPATCHED') && (
+                      <p className="text-xs text-slate-500 mt-1">
+                        Delivered {delivered} of {item.quantity}
+                        {remaining > 0 ? ` · ${remaining} remaining` : ' · complete'}
+                      </p>
+                    )}
                   </div>
-                ))}
+                  );
+                })}
               </Card>
             )}
             {activeOrder.invoices && activeOrder.invoices.length > 0 && (
               <Card title="Invoices">
+                <p className="text-xs text-slate-500 mb-2">
+                  Invoices are created per delivery dispatch and include all products on that delivery.
+                </p>
                 {activeOrder.invoices.map((inv) => (
                   <div key={inv.id} className="flex justify-between items-center py-2 border-b border-border/60 last:border-0 gap-2">
                     <span>{inv.invoiceNumber}</span>
@@ -675,14 +772,42 @@ export function SalesPage() {
               </Card>
             )}
             <div className="flex flex-wrap justify-end gap-2 pt-2">
-              {canInvoice && !activeOrder.invoices?.length && activeOrder.status === 'READY' && (
+              {canUpdate
+                && EDITABLE_ORDER_STATUSES.includes(activeOrder.status)
+                && (!isSalesOfficer || activeOrder.status === 'PENDING') && (
+                <Button variant="secondary" onClick={() => setOrderEditMode(true)}>
+                  <Pencil className="h-4 w-4 mr-2" />
+                  Adjust order
+                </Button>
+              )}
+              {canInvoice
+                && !activeOrder.invoices?.length
+                && !activeOrder.deliveries?.length
+                && activeOrder.status === 'READY' && (
                 <Button
-                  variant="secondary"
                   loading={invoiceMutation.isPending}
+                  disabled={invoiceMutation.isPending}
                   onClick={() => invoiceMutation.mutate(activeOrder.id)}
                 >
                   <Receipt className="h-4 w-4 mr-2" />
                   Create Invoice
+                </Button>
+              )}
+              {canUpdate && canCancelOrder(activeOrder.status, isSalesOfficer) && (
+                <Button
+                  variant="secondary"
+                  loading={statusMutation.isPending}
+                  disabled={statusMutation.isPending}
+                  onClick={() =>
+                    setPendingStatusChange({
+                      id: activeOrder.id,
+                      status: 'CANCELLED',
+                      label: 'Cancel order',
+                    })
+                  }
+                >
+                  <XCircle className="h-4 w-4 mr-2" />
+                  Cancel order
                 </Button>
               )}
               {(() => {
@@ -709,9 +834,10 @@ export function SalesPage() {
         )}
       </Modal>
 
-      <Modal open={quoteDetailOpen} onClose={() => { setQuoteDetailOpen(false); setSelectedQuote(null); }} title="Quotation Details" size="lg">
+      <Modal open={quoteDetailOpen} onClose={() => { setQuoteDetailOpen(false); setSelectedQuote(null); setQuoteFeedback(null); }} title="Quotation Details" size="lg">
         {selectedQuote && (
           <div className="space-y-4 text-sm">
+            {quoteFeedback && <Alert variant={quoteFeedback.variant}>{quoteFeedback.text}</Alert>}
             <div className="grid grid-cols-2 gap-4">
               <div><p className="text-slate-500">Quote #</p><p className="font-semibold">{selectedQuote.quotationNo}</p></div>
               <div><p className="text-slate-500">Customer</p><p className="font-semibold">{selectedQuote.customer?.name}</p></div>
@@ -742,13 +868,16 @@ export function SalesPage() {
 
       <ConfirmDialog
         open={!!pendingStatusChange}
-        title="Change order status?"
+        title={pendingStatusChange?.status === 'CANCELLED' ? 'Cancel this order?' : 'Change order status?'}
         message={
           pendingStatusChange
-            ? `This will move the order to "${pendingStatusChange.status.replace(/_/g, ' ')}". Continue?`
+            ? pendingStatusChange.status === 'CANCELLED'
+              ? 'This will cancel the order and release any reserved stock. This cannot be undone. Continue?'
+              : `This will move the order to "${pendingStatusChange.status.replace(/_/g, ' ')}". Continue?`
             : ''
         }
         confirmLabel={pendingStatusChange?.label || 'Confirm'}
+        variant={pendingStatusChange?.status === 'CANCELLED' ? 'danger' : 'primary'}
         loading={statusMutation.isPending}
         onCancel={() => setPendingStatusChange(null)}
         onConfirm={() => {

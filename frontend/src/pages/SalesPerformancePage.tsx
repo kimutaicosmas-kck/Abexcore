@@ -1,7 +1,7 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useSearchParams } from 'react-router-dom';
-import { Target, TrendingUp, Wallet, ShoppingCart } from 'lucide-react';
+import { Target, TrendingUp, Wallet, ShoppingCart, AlertCircle } from 'lucide-react';
 import { financeApi } from '../services/api';
 import {
   Alert,
@@ -30,7 +30,7 @@ function startOfMonth(date = new Date()) {
   return localDateInput(new Date(date.getFullYear(), date.getMonth(), 1));
 }
 
-export function SalesPerformancePanel() {
+export function SalesPerformancePanel({ toolbar }: { toolbar?: ReactNode }) {
   const today = localDateInput();
   const from = startOfMonth();
   const to = today;
@@ -140,13 +140,13 @@ export function SalesPerformancePanel() {
             title="Collected"
             value={formatCurrency(data.summary.collected)}
             icon={<Wallet className="h-5 w-5 text-white" />}
-            color="from-violet-500 to-purple-600"
+            color="from-primary-600 to-primary-800"
           />
           <StatCard
             title="Orders"
             value={data.summary.orderCount}
             icon={<ShoppingCart className="h-5 w-5 text-white" />}
-            color="from-primary-500 to-indigo-600"
+            color="from-primary-500 to-primary-700"
           />
           <StatCard
             title="Avg target hit"
@@ -154,8 +154,16 @@ export function SalesPerformancePanel() {
             icon={<Target className="h-5 w-5 text-white" />}
             color="from-amber-500 to-orange-600"
           />
+          <StatCard
+            title="Outstanding"
+            value={formatCurrency(data.summary.outstanding)}
+            icon={<AlertCircle className="h-5 w-5 text-white" />}
+            color="from-slate-600 to-slate-800"
+          />
         </StatGrid>
       )}
+
+      {toolbar}
 
       <DataPanel>
         {isError ? (
@@ -182,6 +190,7 @@ export function SalesPerformancePanel() {
               columns={columns}
               data={(data?.performers || []) as unknown as Record<string, unknown>[]}
               loading={isLoading}
+              responsive
               embedded
             />
           </>
@@ -242,18 +251,32 @@ export function SalesPerformancePage() {
     return <Alert variant="warning">You do not have access to sales performance or targets.</Alert>;
   }
 
+  const performanceToolbar =
+    tabs.length > 1 ? (
+      <PageToolbar
+        tabs={tabs}
+        activeTab={activeTab}
+        onTabChange={(index) => setActiveTabName(tabs[index])}
+      />
+    ) : undefined;
+
   return (
     <div className="space-y-4">
-      {tabs.length > 1 && (
-        <PageToolbar
-          tabs={tabs}
-          activeTab={activeTab}
-          onTabChange={(index) => setActiveTabName(tabs[index])}
-        />
+      {activeTabName === 'Performance' && canViewPerformance && (
+        <SalesPerformancePanel toolbar={performanceToolbar} />
       )}
-
-      {activeTabName === 'Performance' && canViewPerformance && <SalesPerformancePanel />}
-      {activeTabName === 'Targets' && canManageTargets && <SalesTargetsPanel />}
+      {activeTabName === 'Targets' && canManageTargets && (
+        <>
+          {tabs.length > 1 && (
+            <PageToolbar
+              tabs={tabs}
+              activeTab={activeTab}
+              onTabChange={(index) => setActiveTabName(tabs[index])}
+            />
+          )}
+          <SalesTargetsPanel />
+        </>
+      )}
     </div>
   );
 }

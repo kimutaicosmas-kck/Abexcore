@@ -9,6 +9,7 @@ import { getParam } from '../utils/request';
 import { MpesaService } from '../services/mpesa.service';
 import { FinancePaymentService } from '../services/finance.service';
 import { config } from '../config';
+import { requireIntegrationAvailable } from '../middleware/integrationGuard';
 
 const router = Router();
 
@@ -125,6 +126,7 @@ router.get(
 router.post(
   '/stk-push',
   authorize('finance:create'),
+  requireIntegrationAvailable('mpesa'),
   validate(stkPushSchema),
   auditLog('finance', 'create', 'mpesa_transaction'),
   asyncHandler(async (req: AuthRequest, res: Response) => {
@@ -151,6 +153,7 @@ router.post(
 
     const txn = await prisma.mpesaTransaction.create({
       data: {
+        companyId: invoice.companyId,
         invoiceId,
         phone: normalizedPhone,
         amount,

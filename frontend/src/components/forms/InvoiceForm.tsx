@@ -4,7 +4,8 @@ import { z } from 'zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, Trash2 } from 'lucide-react';
 import { financeApi, customersApi, inventoryApi } from '../../services/api';
-import { Button, Input, Select, Alert } from '../ui';
+import { Button, Input, Select, Alert, FormActions, ModalFormBody } from '../ui';
+import { getApiErrorMessage } from '../../utils/apiError';
 import { Customer, Supplier } from '../../types';
 import { useVatRate } from '../../contexts/AuthContext';
 
@@ -98,9 +99,18 @@ export function InvoiceForm({ onSuccess, onCancel }: InvoiceFormProps) {
   });
 
   return (
-    <form onSubmit={handleSubmit((data) => mutation.mutate(data))} className="space-y-4">
+    <form onSubmit={handleSubmit((data) => mutation.mutate(data))}>
+      <ModalFormBody
+        footer={
+          <FormActions
+            onCancel={onCancel}
+            submitLabel="Create Invoice"
+            loading={mutation.isPending}
+          />
+        }
+      >
       {mutation.isError && (
-        <Alert variant="error">Failed to create invoice. Please check all fields.</Alert>
+        <Alert variant="error">{getApiErrorMessage(mutation.error)}</Alert>
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -173,11 +183,7 @@ export function InvoiceForm({ onSuccess, onCancel }: InvoiceFormProps) {
           <span>KES {grandTotal.toLocaleString('en-KE', { minimumFractionDigits: 2 })}</span>
         </div>
       </div>
-
-      <div className="flex justify-end gap-3 pt-4 border-t">
-        <Button type="button" variant="secondary" onClick={onCancel}>Cancel</Button>
-        <Button type="submit" loading={mutation.isPending}>Create Invoice</Button>
-      </div>
+      </ModalFormBody>
     </form>
   );
 }

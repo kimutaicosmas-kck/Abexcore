@@ -31,6 +31,7 @@ import {
   getStatusBadge,
   PageToolbar,
   ConfirmDialog,
+  PageQueryStatus,
 } from '../components/ui';
 import { Modal } from '../components/ui/Modal';
 import { PurchaseOrderForm } from '../components/forms/PurchaseOrderForm';
@@ -96,32 +97,32 @@ export function ProcurementPage() {
     queryFn: () => inventoryApi.procurementStats().then((r) => r.data.data as ProcurementStats),
   });
 
-  const { data: purchaseOrders, isLoading: poLoading } = useQuery({
+  const { data: purchaseOrders, isLoading: poLoading, isError: poError, error: poErr, refetch: refetchPo } = useQuery({
     queryKey: ['purchase-orders', poPage, poSearch],
     queryFn: () => inventoryApi.purchaseOrders({ page: poPage, limit: 15, search: poSearch || undefined }).then((r) => r.data),
     enabled: activeTab === 0 || activeTab === 1,
   });
 
-  const { data: requisitions, isLoading: reqLoading } = useQuery({
+  const { data: requisitions, isLoading: reqLoading, isError: reqError, error: reqErr, refetch: refetchReq } = useQuery({
     queryKey: ['requisitions', reqPage, reqSearch, reqStatus],
     queryFn: () =>
       inventoryApi.requisitions({ page: reqPage, limit: 15, search: reqSearch || undefined, status: reqStatus || undefined }).then((r) => r.data),
     enabled: activeTab === 0 || activeTab === 2,
   });
 
-  const { data: rfqs, isLoading: rfqLoading } = useQuery({
+  const { data: rfqs, isLoading: rfqLoading, isError: rfqError, error: rfqErr, refetch: refetchRfq } = useQuery({
     queryKey: ['rfqs', rfqPage, rfqSearch],
     queryFn: () => inventoryApi.rfqs({ page: rfqPage, limit: 15, search: rfqSearch || undefined }).then((r) => r.data),
     enabled: activeTab === 0 || activeTab === 3,
   });
 
-  const { data: goodsReceipts, isLoading: grLoading } = useQuery({
+  const { data: goodsReceipts, isLoading: grLoading, isError: grError, error: grErr, refetch: refetchGr } = useQuery({
     queryKey: ['goods-receipts', grPage, grSearch],
     queryFn: () => inventoryApi.goodsReceipts({ page: grPage, limit: 15, search: grSearch || undefined }).then((r) => r.data),
     enabled: activeTab === 0 || activeTab === 4,
   });
 
-  const { data: suppliers, isLoading: supLoading } = useQuery({
+  const { data: suppliers, isLoading: supLoading, isError: supError, error: supErr, refetch: refetchSup } = useQuery({
     queryKey: ['suppliers', supPage, supSearch],
     queryFn: () => inventoryApi.suppliers({ page: supPage, limit: 15, search: supSearch || undefined }).then((r) => r.data),
     enabled: activeTab === 0 || activeTab === 5,
@@ -428,7 +429,28 @@ export function ProcurementPage() {
         : undefined);
 
   return (
-    <div className="space-y-1">
+    <div className="space-y-4">
+      <PageQueryStatus
+        isError={poError || reqError || rfqError || grError || supError}
+        error={poErr || reqErr || rfqErr || grErr || supErr}
+        onRetry={() => {
+          void refetchPo();
+          void refetchReq();
+          void refetchRfq();
+          void refetchGr();
+          void refetchSup();
+        }}
+      />
+      {stats && (
+        <StatGrid>
+          <StatCard title="Pending Requisitions" value={stats.pendingRequisitions} icon={<ClipboardList className="h-5 w-5 text-white" />} color="from-amber-500 to-orange-600" />
+          <StatCard title="Open RFQs" value={stats.openRfqs} icon={<FileText className="h-5 w-5 text-white" />} color="from-primary-500 to-primary-700" />
+          <StatCard title="Active PO Value" value={formatCurrency(stats.activePoValue)} icon={<ShoppingCart className="h-5 w-5 text-white" />} color="from-emerald-500 to-teal-600" />
+          <StatCard title="Suppliers" value={stats.suppliers} icon={<Users className="h-5 w-5 text-white" />} color="from-primary-600 to-primary-800" />
+          <StatCard title="Active POs" value={stats.activePurchaseOrders} icon={<PackageCheck className="h-5 w-5 text-white" />} color="from-slate-600 to-slate-800" />
+        </StatGrid>
+      )}
+
       <PageHeader
         action={
           stats && stats.pendingRequisitions > 0 ? (
@@ -439,15 +461,6 @@ export function ProcurementPage() {
           ) : undefined
         }
       />
-
-      {stats && (
-        <StatGrid>
-          <StatCard title="Pending Requisitions" value={stats.pendingRequisitions} icon={<ClipboardList className="h-5 w-5 text-white" />} color="from-amber-500 to-orange-600" />
-          <StatCard title="Open RFQs" value={stats.openRfqs} icon={<FileText className="h-5 w-5 text-white" />} color="from-primary-500 to-indigo-600" />
-          <StatCard title="Active PO Value" value={formatCurrency(stats.activePoValue)} icon={<ShoppingCart className="h-5 w-5 text-white" />} color="from-emerald-500 to-teal-600" />
-          <StatCard title="Suppliers" value={stats.suppliers} icon={<Users className="h-5 w-5 text-white" />} color="from-violet-500 to-purple-600" />
-        </StatGrid>
-      )}
 
       <PageToolbar
         tabs={tabs}

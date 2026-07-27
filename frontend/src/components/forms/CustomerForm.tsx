@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { AxiosError } from 'axios';
 import { customersApi } from '../../services/api';
-import { Button, Input, Select } from '../ui';
+import { Input, Select, FormActions, ModalFormBody } from '../ui';
 import { Customer } from '../../types';
 
 const customerSchema = z.object({
@@ -93,7 +93,16 @@ export function CustomerForm({ customer, onSuccess, onCancel }: CustomerFormProp
   });
 
   return (
-    <form onSubmit={handleSubmit((data) => mutation.mutate(data))} className="space-y-4">
+    <form onSubmit={handleSubmit((data) => mutation.mutate(data))}>
+      <ModalFormBody
+        footer={
+          <FormActions
+            onCancel={onCancel}
+            submitLabel={isEdit ? 'Update Customer' : 'Create Customer'}
+            loading={mutation.isPending}
+          />
+        }
+      >
       {mutation.isError && (
         <div className="p-3 rounded-lg bg-red-50 text-red-700 text-sm">{getApiError(mutation.error)}</div>
       )}
@@ -106,7 +115,12 @@ export function CustomerForm({ customer, onSuccess, onCancel }: CustomerFormProp
         <Input label="Phone" {...register('phone')} />
         <Input label="City" {...register('city')} />
         <Input label="Tax PIN" {...register('taxPin')} />
-        <Input label="Credit Limit (KES)" type="number" {...register('creditLimit')} />
+        <div>
+          <Input label="Credit Limit (KES)" type="number" min={0} step="0.01" {...register('creditLimit')} />
+          <p className="text-xs text-slate-500 mt-1">
+            Maximum unpaid balance allowed for this customer. Set to 0 for no credit limit check.
+          </p>
+        </div>
         <Input label="Payment Terms (days)" type="number" {...register('paymentTerms')} />
         {isEdit && (
           <Select
@@ -123,13 +137,7 @@ export function CustomerForm({ customer, onSuccess, onCancel }: CustomerFormProp
       </div>
       <Input label="Address" {...register('address')} />
       <Input label="Notes" {...register('notes')} />
-
-      <div className="flex justify-end gap-3 pt-4 border-t">
-        <Button type="button" variant="secondary" onClick={onCancel}>Cancel</Button>
-        <Button type="submit" loading={mutation.isPending}>
-          {isEdit ? 'Update Customer' : 'Create Customer'}
-        </Button>
-      </div>
+      </ModalFormBody>
     </form>
   );
 }

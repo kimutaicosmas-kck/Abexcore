@@ -11,6 +11,7 @@ import * as authController from '../controllers/auth.controller';
 
 const router = Router();
 
+router.get('/resolve-tenant/:slug', authController.resolveTenant);
 router.post('/login', loginRateLimiter, validate(loginSchema), authController.login);
 router.post('/refresh', authRateLimiter, validate(refreshTokenSchema), authController.refresh);
 router.post('/logout', authenticate, authController.logout);

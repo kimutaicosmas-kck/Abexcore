@@ -40,19 +40,10 @@ import { RawMaterialForm } from '../components/forms/RawMaterialForm';
 import { StockAdjustForm } from '../components/forms/StockAdjustForm';
 import { StockTransferForm } from '../components/forms/StockTransferForm';
 import { useAuth } from '../contexts/AuthContext';
-import { InventoryStats, InventoryTransaction, RawMaterial } from '../types';
+import { InventoryStats, InventoryTransaction, MaterialTypeOption, RawMaterial } from '../types';
 import { formatPartNumberLine } from '../utils/productDisplay';
 
 const tabs = ['Overview', 'Stock Levels', 'Materials', 'Warehouses', 'Low Stock', 'Movements'];
-
-const MATERIAL_TYPE_OPTIONS = [
-  { value: '', label: 'All types' },
-  { value: 'STEEL', label: 'Steel' },
-  { value: 'FILTER_PAPER', label: 'Filter Paper' },
-  { value: 'RUBBER', label: 'Rubber' },
-  { value: 'ADHESIVE', label: 'Adhesive' },
-  { value: 'OTHER', label: 'Other' },
-];
 
 const TX_TYPE_FILTER = [
   { value: '', label: 'All movement types' },
@@ -67,7 +58,7 @@ const TX_TYPE_FILTER = [
 const WAREHOUSE_TYPE_COLORS: Record<string, string> = {
   RAW_MATERIAL: 'from-amber-500 to-orange-600',
   FINISHED_GOODS: 'from-emerald-500 to-teal-600',
-  WIP: 'from-violet-500 to-purple-600',
+  WIP: 'from-primary-600 to-primary-800',
   GENERAL: 'from-slate-500 to-slate-700',
 };
 
@@ -102,6 +93,17 @@ export function InventoryPage() {
     queryKey: ['inventory-stats'],
     queryFn: () => inventoryApi.stats().then((r) => r.data.data as InventoryStats),
   });
+
+  const { data: materialTypesData } = useQuery({
+    queryKey: ['material-types'],
+    queryFn: () => inventoryApi.materialTypes().then((r) => r.data.data as MaterialTypeOption[]),
+    enabled: activeTab === 2,
+  });
+
+  const materialTypeOptions = [
+    { value: '', label: 'All types' },
+    ...(materialTypesData || []).map((t) => ({ value: t.id, label: t.name })),
+  ];
 
   const { data: stockLevels, isLoading: stockLoading, isError: stockError, refetch: refetchStock } = useQuery({
     queryKey: ['stock-levels', stockPage, stockSearch],
@@ -204,12 +206,15 @@ export function InventoryPage() {
   ];
 
   const materialColumns = [
-    { key: 'code', label: 'Code', render: (v: unknown) => <span className="font-mono text-xs">{v as string}</span> },
+    { key: 'code', label: 'Ref', render: (v: unknown) => <span className="font-mono text-xs">{v as string}</span> },
     { key: 'name', label: 'Name', render: (v: unknown) => <span className="font-medium">{v as string}</span> },
     {
       key: 'type',
       label: 'Type',
-      render: (val: unknown) => <Badge variant="info">{(val as string).replace(/_/g, ' ')}</Badge>,
+      render: (_: unknown, row: Record<string, unknown>) => {
+        const material = row as unknown as RawMaterial;
+        return <Badge variant="info">{material.materialType?.name || 'Uncategorized'}</Badge>;
+      },
     },
     { key: 'unit', label: 'Unit' },
     {
@@ -325,18 +330,7 @@ export function InventoryPage() {
     ) : undefined);
 
   return (
-    <div className="space-y-1">
-      <PageHeader
-        action={
-          stats && stats.lowStockCount > 0 ? (
-            <Button variant="secondary" size="sm" onClick={() => goToTab(4)}>
-              <AlertTriangle className="h-4 w-4 mr-1.5 text-amber-500" />
-              {stats.lowStockCount} low stock
-            </Button>
-          ) : undefined
-        }
-      />
-
+    <div className="space-y-4">
       {stats && (
         <StatGrid>
           <StatCard
@@ -349,7 +343,7 @@ export function InventoryPage() {
             title="Raw materials"
             value={stats.materialsCount}
             icon={<Package className="h-5 w-5 text-white" />}
-            color="from-primary-500 to-indigo-600"
+            color="from-primary-500 to-primary-700"
           />
           <StatCard
             title="Warehouses"
@@ -367,10 +361,21 @@ export function InventoryPage() {
             title="Movements today"
             value={stats.transfersToday}
             icon={<Activity className="h-5 w-5 text-white" />}
-            color="from-violet-500 to-purple-600"
+            color="from-primary-600 to-primary-800"
           />
         </StatGrid>
       )}
+
+      <PageHeader
+        action={
+          stats && stats.lowStockCount > 0 ? (
+            <Button variant="secondary" size="sm" onClick={() => goToTab(4)}>
+              <AlertTriangle className="h-4 w-4 mr-1.5 text-amber-500" />
+              {stats.lowStockCount} low stock
+            </Button>
+          ) : undefined
+        }
+      />
 
       <PageToolbar tabs={tabs} activeTab={activeTab} onTabChange={setActiveTab} actions={toolbarActions} />
 
@@ -496,7 +501,7 @@ export function InventoryPage() {
               onChange={(e) => { setMatSearch(e.target.value); setMatPage(1); }}
             />
             <Select
-              options={MATERIAL_TYPE_OPTIONS}
+              options={materialTypeOptions}
               value={matType}
               onChange={(e) => { setMatType(e.target.value); setMatPage(1); }}
               className="sm:w-44"
@@ -505,7 +510,7 @@ export function InventoryPage() {
           {(materials?.data?.length || 0) === 0 && !matLoading ? (
             <EmptyState
               title="No materials found"
-              description="Add raw materials to track paper, steel, rubber, and other inputs."
+              description="Add raw materials and define types that match how your company works."
               action={
                 canCreate ? (
                   <Button onClick={() => { setEditingMaterial(null); setMaterialModalOpen(true); }}>
@@ -614,7 +619,7 @@ export function InventoryPage() {
                         <div>
                           <p className="font-semibold text-slate-900">{item.name}</p>
                           <p className="text-xs text-slate-500 mt-0.5">
-                            {item.code} · {item.type.replace(/_/g, ' ')}
+                            {item.code} · {item.materialType?.name || 'Uncategorized'}
                           </p>
                         </div>
                         <Badge variant="danger">Low</Badge>
@@ -622,15 +627,15 @@ export function InventoryPage() {
                       <div className="mt-4 grid grid-cols-3 gap-2 text-center">
                         <div className="rounded-lg bg-white/80 px-2 py-2 border border-red-100">
                           <p className="text-lg font-bold text-red-600 tabular-nums">{onHand.toLocaleString()}</p>
-                          <p className="text-[10px] uppercase tracking-wide text-slate-500">On hand</p>
+                          <p className="text-xs uppercase tracking-wide text-slate-500">On hand</p>
                         </div>
                         <div className="rounded-lg bg-white/80 px-2 py-2 border border-slate-100">
                           <p className="text-lg font-bold text-slate-700 tabular-nums">{min.toLocaleString()}</p>
-                          <p className="text-[10px] uppercase tracking-wide text-slate-500">Minimum</p>
+                          <p className="text-xs uppercase tracking-wide text-slate-500">Minimum</p>
                         </div>
                         <div className="rounded-lg bg-white/80 px-2 py-2 border border-slate-100">
                           <p className="text-lg font-bold text-slate-700">{item.unit}</p>
-                          <p className="text-[10px] uppercase tracking-wide text-slate-500">Unit</p>
+                          <p className="text-xs uppercase tracking-wide text-slate-500">Unit</p>
                         </div>
                       </div>
                       <div className="mt-3">
