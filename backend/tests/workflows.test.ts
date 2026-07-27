@@ -224,7 +224,7 @@ describe('Order-to-cash workflow (integration)', () => {
     );
     if (cogsEntry) {
       const cogsLine = cogsEntry.lines?.find((line) => line.account?.code === '5100');
-      expect(cogsLine?.debit).toBeGreaterThan(0);
+      expect(Number(cogsLine?.debit)).toBeGreaterThan(0);
     }
   });
 });

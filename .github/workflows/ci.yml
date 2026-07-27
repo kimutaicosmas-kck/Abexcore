@@ -232,6 +232,7 @@ jobs:
         env:
           DATABASE_URL: mysql://erp_user:erp_password@127.0.0.1:3306/filter_erp_test
           MPESA_ENV: stub
+          DATA_ENCRYPTION_KEY: ci-test-encryption-key-32-characters-min
         run: |
           npm ci
           npx prisma generate

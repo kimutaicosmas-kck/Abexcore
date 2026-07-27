@@ -30,6 +30,13 @@ HOST="${HOST_PORT%%:*}"
 PORT="${HOST_PORT#*:}"
 PORT="${PORT:-3306}"
 
-mysqldump -h "$HOST" -P "$PORT" -u "$USER" -p"$PASS" "$DB" > "$FILE"
+DUMP_OPTS="-h $HOST -P $PORT -u $USER -p$PASS --single-transaction"
+# MySQL 8 clients may require this when talking to servers without COLUMN_STATISTICS.
+if mysqldump --help 2>/dev/null | grep -q -- '--column-statistics'; then
+  DUMP_OPTS="$DUMP_OPTS --column-statistics=0"
+fi
+
+# shellcheck disable=SC2086
+mysqldump $DUMP_OPTS "$DB" > "$FILE"
 gzip -f "$FILE"
 echo "Backup complete: ${FILE}.gz"
