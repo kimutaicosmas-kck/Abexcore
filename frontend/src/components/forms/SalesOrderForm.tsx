@@ -1,13 +1,13 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useFieldArray, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, Trash2 } from 'lucide-react';
 import { operationsApi, customersApi } from '../../services/api';
-import { Alert, Button, Input, Select, formatCurrency, FormActions, ModalFormBody } from '../ui';
+import { Alert, Button, Input, Select, formatCurrency, ModalFormBody } from '../ui';
 import { Customer } from '../../types';
-import { useVatRate } from '../../contexts/AuthContext';
+import { useAuth, useVatRate } from '../../contexts/AuthContext';
 import { formatProductOptionLabel } from '../../utils/productDisplay';
 import { useProductPicker } from '../../hooks/useProductPicker';
 import { getApiErrorCode, getApiErrorMessage } from '../../utils/apiError';
@@ -21,6 +21,7 @@ const orderItemSchema = z.object({
 
 const salesOrderSchema = z.object({
   customerId: z.string().min(1, 'Customer is required'),
+  salesPersonId: z.string().optional(),
   requiredDate: z.string().optional(),
   notes: z.string().optional(),
   items: z.array(orderItemSchema).min(1, 'Add at least one item'),
@@ -35,18 +36,77 @@ interface SalesOrderFormProps {
 
 export function SalesOrderForm({ onSuccess, onCancel }: SalesOrderFormProps) {
   const queryClient = useQueryClient();
+  const { isSalesOfficer } = useAuth();
+  const canAssignSalesPerson = !isSalesOfficer;
+  const [customerSearch, setCustomerSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
 
-  const { data: customersData } = useQuery({
-    queryKey: ['customers'],
-    queryFn: () => customersApi.list({ limit: 100 }).then((r) => r.data.data as Customer[]),
+  useEffect(() => {
+    const t = window.setTimeout(() => setDebouncedSearch(customerSearch.trim()), 250);
+    return () => window.clearTimeout(t);
+  }, [customerSearch]);
+
+  const { register, control, handleSubmit, watch, setValue, formState: { errors } } = useForm<SalesOrderFormData>({
+    resolver: zodResolver(salesOrderSchema),
+    defaultValues: {
+      salesPersonId: '',
+      customerId: '',
+      items: [{ productId: '', quantity: 1, unitPrice: 0, discount: 0 }],
+    },
+  });
+
+  const salesPersonId = watch('salesPersonId') || '';
+  const customerId = watch('customerId');
+  const items = watch('items');
+
+  const { data: salesOfficers } = useQuery({
+    queryKey: ['sales-officers'],
+    queryFn: () =>
+      operationsApi.salesOfficers().then(
+        (r) => r.data.data as { id: string; name: string; email: string }[]
+      ),
+    enabled: canAssignSalesPerson,
+  });
+
+  // Filter customers by selected sales person (or unassigned). Sales officers are scoped by API.
+  const customerFilterKey = canAssignSalesPerson
+    ? salesPersonId
+      ? salesPersonId
+      : 'none'
+    : 'self';
+
+  const { data: customersData, isFetching: customersLoading } = useQuery({
+    queryKey: ['customers-for-order', customerFilterKey, debouncedSearch],
+    queryFn: () =>
+      customersApi
+        .list({
+          limit: 100,
+          isActive: true,
+          search: debouncedSearch || undefined,
+          ...(canAssignSalesPerson
+            ? { salesPersonId: salesPersonId || 'none' }
+            : {}),
+        })
+        .then((r) => r.data.data as Customer[]),
   });
 
   const { data: productsData, isError: productsError, refetch: refetchProducts } = useProductPicker();
 
-  const customerOptions = (customersData || []).map((c) => ({
-    value: c.id,
-    label: `${c.code} - ${c.name}`,
-  }));
+  const customerOptions = [
+    { value: '', label: customersLoading ? 'Loading customers…' : 'Select customer…' },
+    ...(customersData || []).map((c) => ({
+      value: c.id,
+      label: `${c.code} - ${c.name}`,
+    })),
+  ];
+
+  const salesPersonOptions = [
+    { value: '', label: 'No sales person (unassigned customers)' },
+    ...(salesOfficers || []).map((o) => ({
+      value: o.id,
+      label: o.name,
+    })),
+  ];
 
   const productOptions = [
     { value: '', label: 'Select product...' },
@@ -56,17 +116,15 @@ export function SalesOrderForm({ onSuccess, onCancel }: SalesOrderFormProps) {
     })),
   ];
 
-  const { register, control, handleSubmit, watch, setValue, formState: { errors } } = useForm<SalesOrderFormData>({
-    resolver: zodResolver(salesOrderSchema),
-    defaultValues: {
-      items: [{ productId: '', quantity: 1, unitPrice: 0, discount: 0 }],
-    },
-  });
-
   const { fields, append, remove } = useFieldArray({ control, name: 'items' });
-  const customerId = watch('customerId');
-  const items = watch('items');
   const errorRef = useRef<HTMLDivElement>(null);
+
+  // When sales person changes, clear customer (list is a different set).
+  useEffect(() => {
+    if (!canAssignSalesPerson) return;
+    setValue('customerId', '');
+    setCustomerSearch('');
+  }, [salesPersonId, canAssignSalesPerson, setValue]);
 
   useEffect(() => {
     items.forEach((item, index) => {
@@ -98,7 +156,11 @@ export function SalesOrderForm({ onSuccess, onCancel }: SalesOrderFormProps) {
   const exceedsCreditLimit = hasCreditLimit && projectedExposure > creditLimit;
 
   const { mutate, reset, isPending, isError, error } = useMutation({
-    mutationFn: (data: SalesOrderFormData) => operationsApi.createSalesOrder(data),
+    mutationFn: (data: SalesOrderFormData) =>
+      operationsApi.createSalesOrder({
+        ...data,
+        salesPersonId: data.salesPersonId || undefined,
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['sales-orders'] });
       queryClient.invalidateQueries({ queryKey: ['sales-stats'] });
@@ -147,13 +209,46 @@ export function SalesOrderForm({ onSuccess, onCancel }: SalesOrderFormProps) {
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {canAssignSalesPerson && (
+          <Select
+            label="Sales Person"
+            options={salesPersonOptions}
+            {...register('salesPersonId')}
+          />
+        )}
+        <Input label="Required Date" type="date" {...register('requiredDate')} />
+      </div>
+
+      {canAssignSalesPerson && (
+        <p className="-mt-2 text-xs text-slate-500">
+          Choose a sales person to load their customers, or leave unassigned for house-account customers.
+        </p>
+      )}
+
+      <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-3 space-y-3">
+        <p className="text-sm font-medium text-slate-800">Customer</p>
+        <Input
+          label="Search customer"
+          placeholder="Search by name or code…"
+          value={customerSearch}
+          onChange={(e) => setCustomerSearch(e.target.value)}
+        />
         <Select
           label="Customer *"
-          options={[{ value: '', label: 'Select customer...' }, ...customerOptions]}
+          options={customerOptions}
           {...register('customerId')}
           error={errors.customerId?.message}
         />
-        <Input label="Required Date" type="date" {...register('requiredDate')} />
+        <p className="text-xs text-slate-500">
+          {canAssignSalesPerson
+            ? salesPersonId
+              ? 'Showing customers assigned to the selected sales person.'
+              : 'Showing unassigned customers (no sales person).'
+            : 'Showing customers assigned to you. Use search to narrow the list.'}
+          {(customersData?.length ?? 0) === 0 && !customersLoading
+            ? ' No matching customers found.'
+            : ''}
+        </p>
       </div>
 
       {selectedCustomer && hasCreditLimit && (

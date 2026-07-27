@@ -14,8 +14,9 @@ import {
   Target,
   Pencil,
   XCircle,
+  Truck,
 } from 'lucide-react';
-import { financeApi, operationsApi } from '../services/api';
+import { operationsApi } from '../services/api';
 import { downloadFile } from '../utils/download';
 import {
   PageHeader,
@@ -132,8 +133,8 @@ export function SalesPage() {
   const canCreate = hasPermission('sales:create');
   const canUpdate = hasPermission('sales:update');
   const canReadSales = hasPermission('sales:read');
+  const canCreateDelivery = hasPermission('delivery:create');
   const canViewPerformance = hasPermission('reports:read') || hasPermission('finance:read');
-  const canInvoice = hasPermission('finance:create');
   const canDownloadInvoice = hasPermission('finance:read');
   const [downloadingInvoiceId, setDownloadingInvoiceId] = useState<string | null>(null);
 
@@ -241,21 +242,6 @@ export function SalesPage() {
     onError: (err) => setStatusFeedback({ text: getApiErrorMessage(err), variant: 'error' }),
   });
 
-  const invoiceMutation = useMutation({
-    mutationFn: (orderId: string) => financeApi.createInvoiceFromOrder(orderId),
-    onSuccess: () => {
-      setStatusFeedback({
-        text: 'Invoice created with all order lines. Download it below or from Finance.',
-        variant: 'info',
-      });
-      queryClient.invalidateQueries({ queryKey: ['sales-order'] });
-      queryClient.invalidateQueries({ queryKey: ['sales-orders'] });
-      queryClient.invalidateQueries({ queryKey: ['finance-invoices'] });
-      queryClient.invalidateQueries({ queryKey: ['finance-stats'] });
-    },
-    onError: (err) => setStatusFeedback({ text: getApiErrorMessage(err), variant: 'error' }),
-  });
-
   const downloadInvoice = async (invoiceId: string, invoiceNumber: string) => {
     setDownloadingInvoiceId(invoiceId);
     try {
@@ -304,6 +290,15 @@ export function SalesPage() {
       label: 'Customer',
       render: (_: unknown, row: Record<string, unknown>) =>
         (row.customer as { name: string })?.name || '-',
+    },
+    {
+      key: 'salesPerson',
+      label: 'Sales Person',
+      render: (_: unknown, row: Record<string, unknown>) => {
+        const person = row.salesPerson as { firstName?: string; lastName?: string } | null | undefined;
+        if (!person) return <span className="text-slate-400">—</span>;
+        return `${person.firstName || ''} ${person.lastName || ''}`.trim() || '—';
+      },
     },
     {
       key: 'orderDate',
@@ -689,19 +684,18 @@ export function SalesPage() {
             <div className="grid grid-cols-2 gap-4">
               <div><p className="text-slate-500">Order #</p><p className="font-semibold">{activeOrder.orderNumber}</p></div>
               <div><p className="text-slate-500">Customer</p><p className="font-semibold">{activeOrder.customer?.name}</p></div>
+              <div>
+                <p className="text-slate-500">Sales Person</p>
+                <p className="font-semibold">
+                  {activeOrder.salesPerson
+                    ? `${activeOrder.salesPerson.firstName} ${activeOrder.salesPerson.lastName}`.trim()
+                    : '—'}
+                </p>
+              </div>
               <div><p className="text-slate-500">Date</p><p className="font-semibold">{formatDate(activeOrder.orderDate)}</p></div>
               <div><p className="text-slate-500">Status</p><Badge variant={getStatusBadge(activeOrder.status)}>{activeOrder.status.replace(/_/g, ' ')}</Badge></div>
               <div><p className="text-slate-500">Total</p><p className="font-semibold text-lg">{formatCurrency(Number(activeOrder.totalAmount))}</p></div>
             </div>
-            {activeOrder.status === 'READY'
-              && !activeOrder.invoices?.length
-              && !activeOrder.deliveries?.length && (
-              <Alert variant="info">
-                {canInvoice
-                  ? 'This order is ready. Use Create Invoice for a full invoice with all products, or go to Delivery to dispatch goods — an invoice is also created automatically on dispatch.'
-                  : 'This order is ready for invoicing. A user with Finance access can create the invoice here, or assign delivery from the Delivery module (invoice is created on dispatch).'}
-              </Alert>
-            )}
             {activeOrder.items?.length > 0 && (
               <Card title="Line Items">
                 {activeOrder.items.map((item) => {
@@ -727,7 +721,7 @@ export function SalesPage() {
             {activeOrder.invoices && activeOrder.invoices.length > 0 && (
               <Card title="Invoices">
                 <p className="text-xs text-slate-500 mb-2">
-                  Invoices are created per delivery dispatch and include all products on that delivery.
+                  Invoices are created with each delivery note and cover the products on that dispatch.
                 </p>
                 {activeOrder.invoices.map((inv) => (
                   <div key={inv.id} className="flex justify-between items-center py-2 border-b border-border/60 last:border-0 gap-2">
@@ -780,17 +774,12 @@ export function SalesPage() {
                   Adjust order
                 </Button>
               )}
-              {canInvoice
-                && !activeOrder.invoices?.length
+              {canCreateDelivery
                 && !activeOrder.deliveries?.length
-                && activeOrder.status === 'READY' && (
-                <Button
-                  loading={invoiceMutation.isPending}
-                  disabled={invoiceMutation.isPending}
-                  onClick={() => invoiceMutation.mutate(activeOrder.id)}
-                >
-                  <Receipt className="h-4 w-4 mr-2" />
-                  Create Invoice
+                && (activeOrder.status === 'READY' || activeOrder.status === 'PARTIALLY_DELIVERED') && (
+                <Button variant="secondary" onClick={() => navigate('/delivery')}>
+                  <Truck className="h-4 w-4 mr-2" />
+                  Create delivery note
                 </Button>
               )}
               {canUpdate && canCancelOrder(activeOrder.status, isSalesOfficer) && (

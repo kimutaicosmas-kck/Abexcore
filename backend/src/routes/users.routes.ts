@@ -8,6 +8,7 @@ import { AuthService } from '../services/auth.service';
 import prisma from '../config/database';
 import { getParam, getQuery } from '../utils/request';
 import { Prisma } from '@prisma/client';
+import { normalizeAllowedModules } from '../utils/userPermissions';
 
 const router = Router();
 router.use(authenticate);
@@ -233,7 +234,8 @@ router.post(
   validate(createUserSchema),
   auditLog('users', 'create', 'user'),
   asyncHandler(async (req: AuthRequest, res: Response) => {
-    const { password, ...data } = req.body;
+    const { password, modules, ...data } = req.body;
+    const allowedModules = normalizeAllowedModules(modules);
 
     const existing = await prisma.user.findFirst({
       where: { companyId: req.user!.companyId, email: data.email.toLowerCase() },
@@ -248,6 +250,7 @@ router.post(
         email: data.email.toLowerCase(),
         passwordHash,
         passwordChangedAt: new Date(),
+        ...(allowedModules ? { allowedModules } : {}),
       },
       include: { role: true, department: true, branch: true },
     });
@@ -262,7 +265,7 @@ router.put(
   auditLog('users', 'update', 'user'),
   asyncHandler(async (req: AuthRequest, res: Response) => {
     const id = getParam(req.params.id);
-    const { password, email, ...data } = req.body;
+    const { password, email, modules, ...data } = req.body;
 
     const existing = await prisma.user.findFirst({ where: { id, deletedAt: null } });
     if (!existing) throw new AppError('User not found', 404);
@@ -278,6 +281,11 @@ router.put(
       ...data,
       ...(email ? { email: email.toLowerCase() } : {}),
     };
+
+    if (modules !== undefined) {
+      const allowedModules = normalizeAllowedModules(modules);
+      updateData.allowedModules = allowedModules === null ? Prisma.DbNull : allowedModules;
+    }
 
     if (password) {
       updateData.passwordHash = await AuthService.hashPassword(password);

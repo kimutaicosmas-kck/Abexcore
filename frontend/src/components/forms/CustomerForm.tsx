@@ -1,11 +1,12 @@
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AxiosError } from 'axios';
-import { customersApi } from '../../services/api';
+import { customersApi, operationsApi } from '../../services/api';
 import { Input, Select, FormActions, ModalFormBody } from '../ui';
 import { Customer } from '../../types';
+import { useAuth } from '../../contexts/AuthContext';
 
 const customerSchema = z.object({
   code: z.string().min(1, 'Code is required'),
@@ -18,6 +19,7 @@ const customerSchema = z.object({
   taxPin: z.string().optional(),
   creditLimit: z.coerce.number().min(0).optional(),
   paymentTerms: z.coerce.number().int().min(0).optional(),
+  salesPersonId: z.string().optional(),
   notes: z.string().optional(),
   isActive: z.boolean().optional(),
 });
@@ -45,7 +47,18 @@ function getApiError(error: unknown): string {
 
 export function CustomerForm({ customer, onSuccess, onCancel }: CustomerFormProps) {
   const queryClient = useQueryClient();
+  const { isSalesOfficer } = useAuth();
   const isEdit = !!customer;
+  const canAssignSalesPerson = !isSalesOfficer;
+
+  const { data: salesOfficers } = useQuery({
+    queryKey: ['sales-officers'],
+    queryFn: () =>
+      operationsApi.salesOfficers().then(
+        (r) => r.data.data as { id: string; name: string; email: string }[]
+      ),
+    enabled: canAssignSalesPerson,
+  });
 
   const { register, handleSubmit, formState: { errors } } = useForm<CustomerFormData>({
     resolver: zodResolver(customerSchema),
@@ -61,6 +74,7 @@ export function CustomerForm({ customer, onSuccess, onCancel }: CustomerFormProp
           taxPin: customer.taxPin || '',
           creditLimit: Number(customer.creditLimit),
           paymentTerms: customer.paymentTerms ?? 30,
+          salesPersonId: customer.salesPersonId || '',
           notes: customer.notes || '',
           isActive: customer.isActive,
         }
@@ -68,6 +82,7 @@ export function CustomerForm({ customer, onSuccess, onCancel }: CustomerFormProp
           type: 'DEALER',
           creditLimit: 0,
           paymentTerms: 30,
+          salesPersonId: '',
           isActive: true,
         },
   });
@@ -79,6 +94,7 @@ export function CustomerForm({ customer, onSuccess, onCancel }: CustomerFormProp
         email: data.email || undefined,
         address: data.address || undefined,
         notes: data.notes || undefined,
+        salesPersonId: data.salesPersonId || null,
       };
       return isEdit
         ? customersApi.update(customer!.id, payload)
@@ -91,6 +107,11 @@ export function CustomerForm({ customer, onSuccess, onCancel }: CustomerFormProp
       onSuccess();
     },
   });
+
+  const salesPersonOptions = [
+    { value: '', label: 'No sales person (unassigned)' },
+    ...(salesOfficers || []).map((o) => ({ value: o.id, label: o.name })),
+  ];
 
   return (
     <form onSubmit={handleSubmit((data) => mutation.mutate(data))}>
@@ -111,6 +132,13 @@ export function CustomerForm({ customer, onSuccess, onCancel }: CustomerFormProp
         <Input label="Customer Code *" {...register('code')} error={errors.code?.message} disabled={isEdit} />
         <Input label="Name *" {...register('name')} error={errors.name?.message} />
         <Select label="Type" options={customerTypes} {...register('type')} error={errors.type?.message} />
+        {canAssignSalesPerson && (
+          <Select
+            label="Sales Person"
+            options={salesPersonOptions}
+            {...register('salesPersonId')}
+          />
+        )}
         <Input label="Email" type="email" {...register('email')} error={errors.email?.message} />
         <Input label="Phone" {...register('phone')} />
         <Input label="City" {...register('city')} />
@@ -135,6 +163,11 @@ export function CustomerForm({ customer, onSuccess, onCancel }: CustomerFormProp
           />
         )}
       </div>
+      {canAssignSalesPerson && (
+        <p className="-mt-2 text-xs text-slate-500">
+          Assign this customer to a sales officer, or leave unassigned for house/admin accounts.
+        </p>
+      )}
       <Input label="Address" {...register('address')} />
       <Input label="Notes" {...register('notes')} />
       </ModalFormBody>

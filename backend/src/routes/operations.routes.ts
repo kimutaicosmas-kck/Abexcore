@@ -123,6 +123,36 @@ router.get(
 );
 
 router.get(
+  '/sales-officers',
+  authorizeAny('sales:read', 'sales:create'),
+  asyncHandler(async (_req: AuthRequest, res: Response) => {
+    const officers = await prisma.user.findMany({
+      where: {
+        companyId: requireTenantId(),
+        deletedAt: null,
+        status: 'ACTIVE',
+        role: { name: 'Sales Officer' },
+      },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+      },
+      orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
+    });
+    res.json({
+      success: true,
+      data: officers.map((o) => ({
+        id: o.id,
+        name: `${o.firstName} ${o.lastName}`.trim(),
+        email: o.email,
+      })),
+    });
+  })
+);
+
+router.get(
   '/orders/:id',
   authorizeAny('sales:read', 'finance:read', 'finance:create'),
   asyncHandler(async (req: AuthRequest, res: Response) => {
@@ -132,7 +162,8 @@ router.get(
         customer: true,
         quotation: { select: { quotationNo: true, status: true } },
         items: { include: { product: true } },
-        createdBy: { select: { firstName: true, lastName: true } },
+        createdBy: { select: { id: true, firstName: true, lastName: true } },
+        salesPerson: { select: { id: true, firstName: true, lastName: true } },
         deliveries: { include: { vehicle: true } },
         productionOrders: { select: { id: true, orderNumber: true, status: true } },
         invoices: { select: { id: true, invoiceNumber: true, status: true, totalAmount: true, deliveryNoteId: true } },
@@ -154,10 +185,41 @@ router.post(
     const orderNumber = generateNumber('SO', count + 1);
     const vatRate = await getVatRate();
 
-    const assignedSalesPersonId =
-      req.user!.roleName === 'Sales Officer'
-        ? req.user!.id
-        : salesPersonId || req.user!.id;
+    // Sales Officers always own their orders. Admins may assign a salesperson or leave unassigned.
+    let assignedSalesPersonId: string | null =
+      req.user!.roleName === 'Sales Officer' ? req.user!.id : salesPersonId || null;
+
+    if (assignedSalesPersonId && req.user!.roleName !== 'Sales Officer') {
+      const officer = await prisma.user.findFirst({
+        where: {
+          id: assignedSalesPersonId,
+          companyId: requireTenantId(),
+          deletedAt: null,
+          status: 'ACTIVE',
+          role: { name: 'Sales Officer' },
+        },
+        select: { id: true },
+      });
+      if (!officer) {
+        throw new AppError('Selected sales person is not a valid Sales Officer', 400);
+      }
+    }
+
+    const customer = await prisma.customer.findFirst({
+      where: { id: customerId, isActive: true, deletedAt: null },
+      select: { id: true, salesPersonId: true, name: true },
+    });
+    if (!customer) throw new AppError('Customer not found', 404);
+
+    // Orders must use customers owned by the same sales person (or both unassigned).
+    if ((customer.salesPersonId || null) !== (assignedSalesPersonId || null)) {
+      throw new AppError(
+        assignedSalesPersonId
+          ? 'Select a customer assigned to this sales person.'
+          : 'Select an unassigned customer, or choose the sales person who owns this customer.',
+        400
+      );
+    }
 
     const subtotal = items.reduce(
       (sum: number, item: { quantity: number; unitPrice: number; discount?: number }) => {
@@ -191,7 +253,11 @@ router.post(
             })),
           },
         }),
-        include: { customer: true, items: { include: { product: true } } },
+        include: {
+          customer: true,
+          items: { include: { product: true } },
+          salesPerson: { select: { id: true, firstName: true, lastName: true } },
+        },
       });
 
       await syncCustomerCreditUsed(customerId, tx);
@@ -584,6 +650,8 @@ router.post(
 
     const count = await prisma.salesOrder.count();
     const orderNumber = generateNumber('SO', count + 1);
+    const assignedSalesPersonId =
+      req.user!.roleName === 'Sales Officer' ? req.user!.id : null;
 
     const order = await prisma.$transaction(async (tx) => {
       const so = await tx.salesOrder.create({
@@ -592,6 +660,7 @@ router.post(
           customerId: quotation.customerId,
           quotationId: quotation.id,
           createdById: req.user!.id,
+          salesPersonId: assignedSalesPersonId,
           subtotal: quotation.subtotal,
           taxAmount: quotation.taxAmount,
           totalAmount: quotation.totalAmount,
@@ -605,7 +674,11 @@ router.post(
             })),
           },
         }),
-        include: { customer: true, items: { include: { product: true } } },
+        include: {
+          customer: true,
+          items: { include: { product: true } },
+          salesPerson: { select: { id: true, firstName: true, lastName: true } },
+        },
       });
 
       await tx.salesQuotation.update({

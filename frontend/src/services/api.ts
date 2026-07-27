@@ -209,6 +209,7 @@ export const searchApi = {
 export const operationsApi = {
   stats: () => api.get('/operations/stats'),
   productionStats: () => api.get('/operations/production-stats'),
+  salesOfficers: () => api.get('/operations/sales-officers'),
   salesOrders: (params?: object) => api.get('/operations/orders', { params }),
   getSalesOrder: (id: string) => api.get(`/operations/orders/${id}`),
   createSalesOrder: (data: object) => api.post('/operations/orders', data),
@@ -241,6 +242,7 @@ export const deliveryApi = {
   drivers: () => api.get('/delivery/drivers/list'),
   vehicles: (params?: object) => api.get('/delivery/vehicles', { params }),
   createVehicle: (data: object) => api.post('/delivery/vehicles', data),
+  pdfPath: (id: string) => `/delivery/${id}/pdf`,
 };
 
 export const hrApi = {

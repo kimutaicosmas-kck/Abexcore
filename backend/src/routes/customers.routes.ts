@@ -19,15 +19,33 @@ router.use(authenticate);
 
 const customerService = createCrudService('customer', ['name', 'code', 'email'], {
   contacts: true,
+  salesPerson: { select: { id: true, firstName: true, lastName: true } },
   _count: { select: { salesOrders: true, invoices: true, complaints: true, opportunities: true } },
 });
+
+async function assertValidSalesPerson(salesPersonId: string | null | undefined) {
+  if (!salesPersonId) return;
+  const officer = await prisma.user.findFirst({
+    where: {
+      id: salesPersonId,
+      companyId: requireTenantId(),
+      deletedAt: null,
+      status: 'ACTIVE',
+      role: { name: 'Sales Officer' },
+    },
+    select: { id: true },
+  });
+  if (!officer) {
+    throw new AppError('Selected sales person is not a valid Sales Officer', 400);
+  }
+}
 
 router.get(
   '/',
   authorize('customers:read'),
   validate(customerListQuerySchema, 'query'),
   asyncHandler(async (req: AuthRequest, res: Response) => {
-    const { page, limit, search, sortBy, sortOrder, type, isActive } = getQuery<{
+    const { page, limit, search, sortBy, sortOrder, type, isActive, salesPersonId } = getQuery<{
       page: number;
       limit: number;
       search?: string;
@@ -35,11 +53,21 @@ router.get(
       sortOrder?: 'asc' | 'desc';
       type?: string;
       isActive?: boolean;
+      salesPersonId?: string;
     }>(req.query);
 
     const where: Record<string, unknown> = {};
     if (type) where.type = type;
     if (isActive !== undefined) where.isActive = isActive;
+
+    // Sales officers only see customers assigned to them.
+    if (req.user!.roleName === 'Sales Officer') {
+      where.salesPersonId = req.user!.id;
+    } else if (salesPersonId === 'none') {
+      where.salesPersonId = null;
+    } else if (salesPersonId) {
+      where.salesPersonId = salesPersonId;
+    }
 
     const result = await customerService.list({ page, limit, search, sortBy, sortOrder, where });
     res.json({ success: true, ...result });
@@ -66,7 +94,14 @@ router.post(
     });
     if (existing) throw new AppError('Customer code already exists', 409);
 
-    const data = await customerService.create(req.body);
+    const payload = { ...req.body };
+    if (req.user!.roleName === 'Sales Officer') {
+      payload.salesPersonId = req.user!.id;
+    } else {
+      await assertValidSalesPerson(payload.salesPersonId);
+    }
+
+    const data = await customerService.create(payload);
     res.status(201).json({ success: true, data });
   })
 );
@@ -77,7 +112,20 @@ router.put(
   validate(updateCustomerSchema),
   auditLog('customers', 'update', 'customer'),
   asyncHandler(async (req: AuthRequest, res: Response) => {
-    const data = await customerService.update(getParam(req.params.id), req.body);
+    const payload = { ...req.body };
+    if (req.user!.roleName === 'Sales Officer') {
+      // Officers may only edit their own customers and cannot reassign ownership.
+      const existing = await prisma.customer.findFirst({
+        where: { id: getParam(req.params.id), salesPersonId: req.user!.id },
+        select: { id: true },
+      });
+      if (!existing) throw new AppError('Customer not found', 404);
+      delete payload.salesPersonId;
+    } else if ('salesPersonId' in payload) {
+      await assertValidSalesPerson(payload.salesPersonId);
+    }
+
+    const data = await customerService.update(getParam(req.params.id), payload);
     res.json({ success: true, data });
   })
 );

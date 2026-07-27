@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plus, Truck, Package, MapPin, Bike, Container, AlertTriangle, ChevronRight } from 'lucide-react';
+import { Plus, Truck, Package, MapPin, Bike, Container, AlertTriangle, ChevronRight, Download } from 'lucide-react';
 import { deliveryApi } from '../services/api';
+import { downloadFile } from '../utils/download';
 import {
   PageHeader,
   Table,
@@ -130,6 +131,16 @@ export function DeliveryPage() {
     }[];
   } | null>(null);
   const [actualQtys, setActualQtys] = useState<Record<string, number>>({});
+  const [printingId, setPrintingId] = useState<string | null>(null);
+
+  const printDeliveryNote = async (id: string, deliveryNo: string) => {
+    setPrintingId(id);
+    try {
+      await downloadFile(deliveryApi.pdfPath(id), `${deliveryNo}.pdf`);
+    } finally {
+      setPrintingId(null);
+    }
+  };
 
   const canCreate = hasPermission('delivery:create') && !isDriver;
   const canUpdate = hasPermission('delivery:update');
@@ -375,6 +386,16 @@ export function DeliveryPage() {
         const listRow = row as unknown as DeliveryListRow;
         const vehicle = listRow.kind === 'trip' ? listRow.trip.vehicle : listRow.note.vehicle;
         return formatVehicleLabel(vehicle);
+      },
+    },
+    {
+      key: 'driver',
+      label: 'Delivery Person',
+      render: (_: unknown, row: Record<string, unknown>) => {
+        const listRow = row as unknown as DeliveryListRow;
+        const driver = listRow.kind === 'trip' ? listRow.trip.driver : listRow.note.driver;
+        if (!driver) return <span className="text-slate-400">—</span>;
+        return `${driver.firstName} ${driver.lastName}`.trim() || '—';
       },
     },
     {
@@ -754,9 +775,14 @@ export function DeliveryPage() {
               <div><p className="text-slate-500">Trip #</p><p className="font-semibold">{selectedTrip.tripNo}</p></div>
               <div><p className="text-slate-500">Orders</p><p className="font-semibold">{selectedTrip.stops.length}</p></div>
               <div><p className="text-slate-500">Vehicle</p><p className="font-semibold">{formatVehicleLabel(selectedTrip.vehicle)}</p></div>
-              {selectedTrip.driver && (
-                <div><p className="text-slate-500">Driver</p><p className="font-semibold">{selectedTrip.driver.firstName} {selectedTrip.driver.lastName}</p></div>
-              )}
+              <div>
+                <p className="text-slate-500">Delivery Person</p>
+                <p className="font-semibold">
+                  {selectedTrip.driver
+                    ? `${selectedTrip.driver.firstName} ${selectedTrip.driver.lastName}`.trim()
+                    : '—'}
+                </p>
+              </div>
               <div><p className="text-slate-500">Scheduled</p><p className="font-semibold">{selectedTrip.scheduledDate ? formatDate(selectedTrip.scheduledDate) : '-'}</p></div>
               <div><p className="text-slate-500">Status</p><Badge variant={getStatusBadge(selectedTrip.status)}>{selectedTrip.status.replace(/_/g, ' ')}</Badge></div>
             </div>
@@ -769,7 +795,18 @@ export function DeliveryPage() {
                       <p className="font-medium">{stop.salesOrder.orderNumber}</p>
                       <p className="text-xs text-slate-500">{stop.salesOrder.customer.name} · {stop.deliveryNo}</p>
                     </div>
-                    <Badge variant={getStatusBadge(stop.status)}>{stop.status.replace(/_/g, ' ')}</Badge>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        loading={printingId === stop.id}
+                        onClick={() => printDeliveryNote(stop.id, stop.deliveryNo)}
+                      >
+                        <Download className="h-3.5 w-3.5 mr-1" />
+                        Print DN
+                      </Button>
+                      <Badge variant={getStatusBadge(stop.status)}>{stop.status.replace(/_/g, ' ')}</Badge>
+                    </div>
                   </div>
                   {stop.items?.length > 0 && (
                     <div className="mt-2 space-y-1 text-xs text-slate-600">
@@ -848,9 +885,14 @@ export function DeliveryPage() {
               <div><p className="text-slate-500">Customer</p><p className="font-semibold">{selected.salesOrder?.customer?.name}</p></div>
               <div><p className="text-slate-500">Sales Order</p><p className="font-semibold">{selected.salesOrder?.orderNumber}</p></div>
               <div><p className="text-slate-500">Vehicle</p><p className="font-semibold">{formatVehicleLabel(selected.vehicle)}</p></div>
-              {selected.driver && (
-                <div><p className="text-slate-500">Driver</p><p className="font-semibold">{selected.driver.firstName} {selected.driver.lastName}</p></div>
-              )}
+              <div>
+                <p className="text-slate-500">Delivery Person</p>
+                <p className="font-semibold">
+                  {selected.driver
+                    ? `${selected.driver.firstName} ${selected.driver.lastName}`.trim()
+                    : '—'}
+                </p>
+              </div>
               <div><p className="text-slate-500">Scheduled</p><p className="font-semibold">{selected.scheduledDate ? formatDate(selected.scheduledDate) : '-'}</p></div>
               <div><p className="text-slate-500">Status</p><Badge variant={getStatusBadge(selected.status)}>{selected.status.replace(/_/g, ' ')}</Badge></div>
               {selected.deliveredAt && (
@@ -867,9 +909,17 @@ export function DeliveryPage() {
                 ))}
               </Card>
             )}
-            {canUpdate && getDeliveryActions(selected.status, isDriver).length > 0 && (
-              <div className="flex flex-wrap justify-end gap-2">
-                {getDeliveryActions(selected.status, isDriver).map((action) => (
+            <div className="flex flex-wrap justify-end gap-2">
+              <Button
+                variant="secondary"
+                loading={printingId === selected.id}
+                onClick={() => printDeliveryNote(selected.id, selected.deliveryNo)}
+              >
+                <Download className="h-4 w-4 mr-2" />
+                Print delivery note
+              </Button>
+              {canUpdate &&
+                getDeliveryActions(selected.status, isDriver).map((action) => (
                   <Button
                     key={action.status}
                     variant={action.status === 'DELIVERED' ? 'primary' : 'secondary'}
@@ -891,8 +941,7 @@ export function DeliveryPage() {
                     {action.label}
                   </Button>
                 ))}
-              </div>
-            )}
+            </div>
           </div>
         )}
       </Modal>

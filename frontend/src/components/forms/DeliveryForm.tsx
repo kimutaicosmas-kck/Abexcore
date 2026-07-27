@@ -6,9 +6,10 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Container, Trash2 } from 'lucide-react';
 import { deliveryApi, operationsApi } from '../../services/api';
 import { Alert, Button, Input, Select, formatCurrency } from '../ui';
-import { SalesOrder, Vehicle, vehicleTypeLabel } from '../../types';
+import { DeliveryNote, DeliveryTrip, SalesOrder, Vehicle, vehicleTypeLabel } from '../../types';
 import { formatProductOptionLabel } from '../../utils/productDisplay';
 import { getApiErrorMessage } from '../../utils/apiError';
+import { downloadFile } from '../../utils/download';
 
 const tripSchema = z.object({
   vehicleId: z.string().optional(),
@@ -210,13 +211,30 @@ export function DeliveryForm({ onSuccess, onCancel }: DeliveryFormProps) {
       };
       return deliveryApi.create(payload);
     },
-    onSuccess: () => {
+    onSuccess: async (res) => {
       queryClient.invalidateQueries({ queryKey: ['deliveries'] });
       queryClient.invalidateQueries({ queryKey: ['delivery-trips'] });
       queryClient.invalidateQueries({ queryKey: ['delivery-stats'] });
       queryClient.invalidateQueries({ queryKey: ['sales-orders'] });
       queryClient.invalidateQueries({ queryKey: ['sales-orders-deliverable'] });
       queryClient.invalidateQueries({ queryKey: ['finance-invoices'] });
+
+      const payload = res.data.data as DeliveryNote | DeliveryTrip;
+      const notes: { id: string; deliveryNo: string }[] =
+        'stops' in payload && Array.isArray(payload.stops) && payload.stops.length > 0
+          ? payload.stops.map((stop) => ({ id: stop.id, deliveryNo: stop.deliveryNo }))
+          : 'deliveryNo' in payload && payload.id
+            ? [{ id: payload.id, deliveryNo: payload.deliveryNo }]
+            : [];
+
+      for (const note of notes) {
+        try {
+          await downloadFile(deliveryApi.pdfPath(note.id), `${note.deliveryNo}.pdf`);
+        } catch {
+          // Creation succeeded even if print download fails — user can reprint from Delivery details.
+        }
+      }
+
       onSuccess();
     },
   });
@@ -404,8 +422,8 @@ export function DeliveryForm({ onSuccess, onCancel }: DeliveryFormProps) {
 
       <p className="text-xs text-slate-500">
         {tripOrders.length > 1
-          ? 'A delivery trip is created with one stop per checked order. A sales invoice is auto-created for each stop.'
-          : 'A sales invoice is auto-created for the quantities on this delivery note.'}
+          ? 'A printable delivery note PDF downloads for each stop to accompany the goods. A sales invoice is auto-created per note.'
+          : 'A printable delivery note PDF downloads after create — print it to go with the goods. The sales invoice is auto-created on dispatch.'}
       </p>
 
       <div className="flex justify-end gap-3 pt-4 border-t">

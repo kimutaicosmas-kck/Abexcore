@@ -156,8 +156,10 @@ router.post(
   validate(createUserSchema),
   asyncHandler(async (req: AuthRequest, res: Response) => {
     const companyId = requireTenantId();
-    const { password, ...data } = req.body;
+    const { password, modules, ...data } = req.body;
     const email = data.email.toLowerCase();
+    const { normalizeAllowedModules } = await import('../utils/userPermissions');
+    const allowedModules = normalizeAllowedModules(modules);
 
     const existing = await prisma.user.findFirst({
       where: { companyId, email },
@@ -178,6 +180,7 @@ router.post(
         passwordHash,
         passwordChangedAt: new Date(),
         mustChangePassword: true,
+        ...(allowedModules ? { allowedModules } : {}),
       },
       include: { role: true, department: true, branch: true },
     });

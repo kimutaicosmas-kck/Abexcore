@@ -283,6 +283,16 @@ export function FinancePage() {
       render: (_: unknown, row: Record<string, unknown>) =>
         (row.customer as { name: string })?.name || (row.supplier as { name: string })?.name || '—',
     },
+    {
+      key: 'salesPerson',
+      label: 'Sales Person',
+      render: (_: unknown, row: Record<string, unknown>) => {
+        const order = row.salesOrder as Invoice['salesOrder'];
+        const person = order?.salesPerson;
+        if (!person) return <span className="text-slate-400">—</span>;
+        return `${person.firstName} ${person.lastName}`.trim() || '—';
+      },
+    },
     { key: 'invoiceDate', label: 'Date', render: (val: unknown) => formatDate(val as string) },
     {
       key: 'dueDate',
@@ -967,6 +977,12 @@ export function FinancePage() {
                 </div>
                 <p className="text-lg font-bold text-slate-900">
                   {invoiceDetail.customer?.name || invoiceDetail.supplier?.name || '—'}
+                </p>
+                <p className="text-sm text-slate-500">
+                  Sales Person:{' '}
+                  {invoiceDetail.salesOrder?.salesPerson
+                    ? `${invoiceDetail.salesOrder.salesPerson.firstName} ${invoiceDetail.salesOrder.salesPerson.lastName}`.trim()
+                    : '—'}
                 </p>
                 <p className="text-sm text-slate-500">
                   Issued {formatDate(invoiceDetail.invoiceDate)}

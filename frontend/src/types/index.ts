@@ -9,6 +9,8 @@ export interface User {
   role: { id: string; name: string; permissions?: { permission: { module: string; action: string } }[] };
   department?: { id: string; name: string };
   branch?: { id: string; name: string; code: string };
+  /** When set, overrides role default modules for access control. */
+  allowedModules?: string[] | null;
   permissions: string[];
   status: string;
   lastLoginAt?: string;
@@ -106,6 +108,12 @@ export interface DashboardCharts {
   productCategories: { category: string; count: number }[];
 }
 
+export interface SalesPersonRef {
+  id: string;
+  firstName: string;
+  lastName: string;
+}
+
 export interface Customer {
   id: string;
   code: string;
@@ -121,6 +129,8 @@ export interface Customer {
   paymentTerms?: number;
   notes?: string;
   isActive: boolean;
+  salesPersonId?: string | null;
+  salesPerson?: SalesPersonRef | null;
   contacts?: CustomerContact[];
   _count?: { salesOrders: number; invoices: number; complaints: number; opportunities: number };
 }
@@ -320,6 +330,9 @@ export interface SalesOrder {
   status: string;
   orderDate: string;
   totalAmount: number;
+  salesPersonId?: string | null;
+  salesPerson?: SalesPersonRef | null;
+  createdBy?: SalesPersonRef | null;
   items: SalesOrderItem[];
   invoices?: { id: string; invoiceNumber: string; status: string; totalAmount: number }[];
   deliveries?: { id: string; deliveryNo: string; status: string }[];
@@ -404,6 +417,12 @@ export interface Invoice {
   notes?: string;
   items?: InvoiceItem[];
   payments?: Payment[];
+  salesOrder?: {
+    id: string;
+    orderNumber: string;
+    salesPersonId?: string | null;
+    salesPerson?: SalesPersonRef | null;
+  } | null;
 }
 
 export interface Employee {

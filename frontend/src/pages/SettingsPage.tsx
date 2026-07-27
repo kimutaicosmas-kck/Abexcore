@@ -300,7 +300,14 @@ export function SettingsPage() {
     }
     setInviteModuleError('');
     const departmentId = resolveDepartmentIdFromModules(inviteModules, departmentsData || []);
-    inviteMutation.mutate({ ...data, roleId, departmentId });
+    inviteMutation.mutate({
+      ...data,
+      roleId,
+      departmentId,
+      modules: inviteModules.includes('dashboard')
+        ? inviteModules
+        : ['dashboard', ...inviteModules],
+    });
   };
 
   const subdomainLoginUrl = workspace ? buildTenantLoginUrl(workspace.slug) : '';

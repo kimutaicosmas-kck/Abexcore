@@ -37,6 +37,8 @@ export const createUserSchema = z.object({
   roleId: z.string().uuid(),
   departmentId: z.string().uuid().optional(),
   branchId: z.string().uuid().optional(),
+  /** Module keys; when provided, stored as per-user access (can differ from role defaults). */
+  modules: z.array(z.string().min(1)).optional(),
 });
 
 export const updateUserSchema = createUserSchema.partial().omit({ password: true }).extend({
@@ -56,6 +58,11 @@ export const createCustomerSchema = z.object({
   creditLimit: z.number().min(0).optional(),
   paymentTerms: z.number().int().min(0).optional(),
   notes: z.string().optional(),
+  /** Empty / null = unassigned customer (not owned by a sales officer). */
+  salesPersonId: z.preprocess(
+    (v) => (v === '' || v === undefined ? null : v),
+    z.string().uuid().nullable().optional()
+  ),
 });
 
 export const updateCustomerSchema = createCustomerSchema.partial().extend({
@@ -161,6 +168,11 @@ export const customerListQuerySchema = paginationSchema.extend({
     (v) => (v === '' || v === undefined ? undefined : v === 'true' ? true : v === 'false' ? false : undefined),
     z.boolean().optional()
   ),
+  /** UUID of sales officer, or "none" for unassigned customers. */
+  salesPersonId: z.preprocess(
+    (v) => (v === '' || v === undefined ? undefined : v),
+    z.union([z.string().uuid(), z.literal('none')]).optional()
+  ),
 });
 
 export const createProductCategorySchema = z.object({
@@ -238,7 +250,11 @@ export const updateSalesOrderItemsSchema = z.object({
 export const createSalesOrderSchema = z.object({
   customerId: z.string().uuid(),
   quotationId: z.string().uuid().optional(),
-  salesPersonId: z.string().uuid().optional(),
+  /** Omit / empty = unassigned (admins). Sales Officers are always assigned to themselves. */
+  salesPersonId: z.preprocess(
+    (v) => (v === '' || v === null || v === undefined ? undefined : v),
+    z.string().uuid().optional()
+  ),
   requiredDate: optionalDateString,
   notes: z.string().optional(),
   items: z.array(z.object({

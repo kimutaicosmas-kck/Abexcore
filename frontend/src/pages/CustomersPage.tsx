@@ -14,7 +14,7 @@ import {
   MessageSquarePlus,
   Target,
 } from 'lucide-react';
-import { customersApi, crmApi } from '../services/api';
+import { customersApi, crmApi, operationsApi } from '../services/api';
 import {
   PageHeader,
   Table,
@@ -92,7 +92,7 @@ function warrantyStatus(endDate: string) {
 
 export function CustomersPage() {
   const queryClient = useQueryClient();
-  const { hasPermission } = useAuth();
+  const { hasPermission, isSalesOfficer } = useAuth();
   const [activeTab, setActiveTab] = useState(0);
 
   const [custPage, setCustPage] = useState(1);
@@ -100,6 +100,7 @@ export function CustomersPage() {
   const [custSearchInput, setCustSearchInput] = useState('');
   const [custType, setCustType] = useState('');
   const [custActive, setCustActive] = useState('');
+  const [custSalesPerson, setCustSalesPerson] = useState('');
 
   const [compPage, setCompPage] = useState(1);
   const [compSearch, setCompSearch] = useState('');
@@ -138,8 +139,17 @@ export function CustomersPage() {
     queryFn: () => crmApi.stats().then((r) => r.data.data as CrmStats),
   });
 
+  const { data: salesOfficers } = useQuery({
+    queryKey: ['sales-officers'],
+    queryFn: () =>
+      operationsApi.salesOfficers().then(
+        (r) => r.data.data as { id: string; name: string; email: string }[]
+      ),
+    enabled: !isSalesOfficer,
+  });
+
   const { data: customersRes, isLoading: custLoading, isError: custError, refetch: refetchCustomers } = useQuery({
-    queryKey: ['customers', custPage, custSearch, custType, custActive],
+    queryKey: ['customers', custPage, custSearch, custType, custActive, custSalesPerson],
     queryFn: () =>
       customersApi
         .list({
@@ -148,6 +158,7 @@ export function CustomersPage() {
           search: custSearch || undefined,
           type: custType || undefined,
           isActive: custActive === '' ? undefined : custActive === 'true',
+          salesPersonId: custSalesPerson || undefined,
         })
         .then((r) => r.data),
     enabled: activeTab === 0 || activeTab === 1,
@@ -244,6 +255,12 @@ export function CustomersPage() {
     ? ((opportunitiesRes?.data as Opportunity[]) || []).filter((o) => !isClosedStage(o.stage)).slice(0, 5)
     : [];
 
+  const salesPersonFilterOptions = [
+    { value: '', label: 'All sales people' },
+    { value: 'none', label: 'Unassigned' },
+    ...(salesOfficers || []).map((o) => ({ value: o.id, label: o.name })),
+  ];
+
   const customerColumns = [
     { key: 'code', label: 'Code' },
     { key: 'name', label: 'Name' },
@@ -251,6 +268,15 @@ export function CustomersPage() {
       key: 'type',
       label: 'Type',
       render: (val: unknown) => <Badge variant="info">{(val as string).replace(/_/g, ' ')}</Badge>,
+    },
+    {
+      key: 'salesPerson',
+      label: 'Sales Person',
+      render: (_: unknown, row: Record<string, unknown>) => {
+        const person = row.salesPerson as Customer['salesPerson'];
+        if (!person) return <span className="text-slate-400">—</span>;
+        return `${person.firstName} ${person.lastName}`.trim();
+      },
     },
     { key: 'city', label: 'City' },
     { key: 'phone', label: 'Phone' },
@@ -571,7 +597,28 @@ export function CustomersPage() {
             </form>
             <Select options={CUSTOMER_TYPE_OPTIONS} value={custType} onChange={(e) => { setCustType(e.target.value); setCustPage(1); }} className="w-40" />
             <Select options={CUSTOMER_STATUS_OPTIONS} value={custActive} onChange={(e) => { setCustActive(e.target.value); setCustPage(1); }} className="w-36" />
-            <Button variant="secondary" size="sm" onClick={() => { setCustSearchInput(''); setCustSearch(''); setCustType(''); setCustActive(''); setCustPage(1); }}>Clear</Button>
+            {!isSalesOfficer && (
+              <Select
+                options={salesPersonFilterOptions}
+                value={custSalesPerson}
+                onChange={(e) => { setCustSalesPerson(e.target.value); setCustPage(1); }}
+                className="w-48"
+              />
+            )}
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => {
+                setCustSearchInput('');
+                setCustSearch('');
+                setCustType('');
+                setCustActive('');
+                setCustSalesPerson('');
+                setCustPage(1);
+              }}
+            >
+              Clear
+            </Button>
           </div>
           {custError && (
             <div className="px-4">
@@ -745,6 +792,14 @@ export function CustomersPage() {
               <div><p className="text-slate-500">Code</p><p className="font-semibold">{customerDetail.code}</p></div>
               <div><p className="text-slate-500">Name</p><p className="font-semibold">{customerDetail.name}</p></div>
               <div><p className="text-slate-500">Type</p><Badge variant="info">{customerDetail.type.replace(/_/g, ' ')}</Badge></div>
+              <div>
+                <p className="text-slate-500">Sales Person</p>
+                <p className="font-semibold">
+                  {customerDetail.salesPerson
+                    ? `${customerDetail.salesPerson.firstName} ${customerDetail.salesPerson.lastName}`.trim()
+                    : '—'}
+                </p>
+              </div>
               <div><p className="text-slate-500">Email</p><p className="font-semibold">{customerDetail.email || '—'}</p></div>
               <div><p className="text-slate-500">Phone</p><p className="font-semibold">{customerDetail.phone || '—'}</p></div>
               <div><p className="text-slate-500">City</p><p className="font-semibold">{customerDetail.city || '—'}</p></div>

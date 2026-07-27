@@ -70,6 +70,18 @@
   scrollbar-color: #cbd5e1 transparent;
 }
 
+/* Hide number input steppers (spinner arrows) across the app */
+input[type='number'] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+input[type='number']::-webkit-inner-spin-button,
+input[type='number']::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
 *::-webkit-scrollbar {
   width: 8px;
   height: 8px;

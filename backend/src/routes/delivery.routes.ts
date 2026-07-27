@@ -458,6 +458,50 @@ router.get(
 
 router.get(
 
+  '/:id/pdf',
+
+  authorize('delivery:read'),
+
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+
+    const id = getParam(req.params.id);
+
+    const note = await prisma.deliveryNote.findFirst({
+
+      where: { id, companyId: requireTenantId() },
+
+      select: { id: true, deliveryNo: true, driverId: true },
+
+    });
+
+    if (!note) throw new AppError('Delivery not found', 404);
+
+    if (isDriverUser(req) && note.driverId !== req.user!.id) {
+
+      throw new AppError('You can only print deliveries assigned to you', 403);
+
+    }
+
+    const { ExportService } = await import('../services/export.service');
+
+    const delivery = await ExportService.getDeliveryNote(note.id);
+
+    const pdf = await ExportService.generateDeliveryNotePDF(delivery);
+
+    res.setHeader('Content-Type', 'application/pdf');
+
+    res.setHeader('Content-Disposition', `attachment; filename="${delivery.deliveryNo}.pdf"`);
+
+    res.send(pdf);
+
+  })
+
+);
+
+
+
+router.get(
+
   '/:id',
 
   authorize('delivery:read'),

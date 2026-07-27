@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -30,10 +30,21 @@ interface UserFormProps {
   onCancel: () => void;
 }
 
+function modulesFromUser(user: User): string[] {
+  if (Array.isArray(user.allowedModules) && user.allowedModules.length > 0) {
+    return user.allowedModules.includes('dashboard')
+      ? [...user.allowedModules]
+      : ['dashboard', ...user.allowedModules];
+  }
+  return modulesForRoleName(user.role?.name || 'Sales Officer');
+}
+
 export function UserForm({ user, onSuccess, onCancel }: UserFormProps) {
   const queryClient = useQueryClient();
   const isEdit = !!user;
   const [selectedModules, setSelectedModules] = useState<string[]>(['dashboard']);
+  const [moduleError, setModuleError] = useState('');
+  const skipNextRoleModuleSync = useRef(false);
 
   const { data: rolesData } = useQuery({
     queryKey: ['user-roles'],
@@ -95,14 +106,20 @@ export function UserForm({ user, onSuccess, onCancel }: UserFormProps) {
 
   useEffect(() => {
     if (!selectedRoleId || !rolesData?.length) return;
+    if (skipNextRoleModuleSync.current) {
+      skipNextRoleModuleSync.current = false;
+      return;
+    }
     const role = rolesData.find((r) => r.id === selectedRoleId);
     if (role) {
       setSelectedModules(modulesForRoleName(role.name));
+      setModuleError('');
     }
   }, [selectedRoleId, rolesData]);
 
   useEffect(() => {
     if (user) {
+      skipNextRoleModuleSync.current = true;
       reset({
         email: user.email,
         password: '',
@@ -114,7 +131,8 @@ export function UserForm({ user, onSuccess, onCancel }: UserFormProps) {
         branchId: user.branch?.id || '',
         status: (user.status as 'ACTIVE' | 'INACTIVE' | 'SUSPENDED') || 'ACTIVE',
       });
-      setSelectedModules(modulesForRoleName(user.role?.name || 'Sales Officer'));
+      setSelectedModules(modulesFromUser(user));
+      setModuleError('');
     } else {
       reset({
         email: '',
@@ -128,6 +146,7 @@ export function UserForm({ user, onSuccess, onCancel }: UserFormProps) {
         status: 'ACTIVE',
       });
       setSelectedModules(['dashboard']);
+      setModuleError('');
     }
   }, [user, reset]);
 
@@ -149,6 +168,15 @@ export function UserForm({ user, onSuccess, onCancel }: UserFormProps) {
       return;
     }
 
+    const modules = selectedModules.includes('dashboard')
+      ? selectedModules
+      : ['dashboard', ...selectedModules];
+    if (modules.length < 2) {
+      setModuleError('Select at least one module in addition to Dashboard.');
+      return;
+    }
+    setModuleError('');
+
     const payload = {
       email: data.email,
       firstName: data.firstName,
@@ -157,6 +185,7 @@ export function UserForm({ user, onSuccess, onCancel }: UserFormProps) {
       roleId: data.roleId,
       departmentId: data.departmentId || undefined,
       branchId: data.branchId || undefined,
+      modules,
       ...(isEdit ? { status: data.status } : {}),
       ...(data.password ? { password: data.password } : {}),
     };
@@ -208,8 +237,11 @@ export function UserForm({ user, onSuccess, onCancel }: UserFormProps) {
 
       <ModuleAccessPicker
         value={selectedModules}
-        onChange={setSelectedModules}
-        disabled
+        onChange={(next) => {
+          setSelectedModules(next);
+          setModuleError('');
+        }}
+        error={moduleError}
       />
       </ModalFormBody>
     </form>

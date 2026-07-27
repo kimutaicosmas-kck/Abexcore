@@ -9,6 +9,7 @@ import prisma from '../config/database';
 import { AppError } from '../middleware/errorHandler';
 import { encryptSecret, decryptSecret, hashToken } from '../utils/crypto';
 import { auditAuthFailure, auditAuthSuccess } from '../utils/audit';
+import { resolveUserPermissionStrings } from '../utils/userPermissions';
 
 const SALT_ROUNDS = 12;
 
@@ -158,13 +159,12 @@ export class AuthService {
 
     const { passwordHash, twoFactorSecret, ...safeUser } = user!;
     const company = user!.company;
+    const permissions = await resolveUserPermissionStrings(user!);
 
     return {
       user: {
         ...safeUser,
-        permissions: user!.role.permissions.map(
-          (rp) => `${rp.permission.module}:${rp.permission.action}`
-        ),
+        permissions,
       },
       mustChangePassword: user!.mustChangePassword,
       company: company

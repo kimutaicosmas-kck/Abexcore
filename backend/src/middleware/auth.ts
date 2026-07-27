@@ -4,6 +4,7 @@ import { config } from '../config';
 import prisma from '../config/database';
 import { AppError } from './errorHandler';
 import { runWithTenant } from '../utils/tenant';
+import { resolveUserPermissionStrings } from '../utils/userPermissions';
 
 export interface AuthRequest extends Request {
   user?: {
@@ -54,6 +55,8 @@ export const authenticate = async (
       throw new AppError('Session is not valid for this company', 401);
     }
 
+    const permissions = await resolveUserPermissionStrings(user);
+
     req.user = {
       id: user.id,
       email: user.email,
@@ -61,9 +64,7 @@ export const authenticate = async (
       roleName: user.role.name,
       companyId: user.companyId,
       companySlug: user.company.slug,
-      permissions: user.role.permissions.map(
-        (rp) => `${rp.permission.module}:${rp.permission.action}`
-      ),
+      permissions,
     };
 
     runWithTenant({ companyId: user.companyId }, () => next());

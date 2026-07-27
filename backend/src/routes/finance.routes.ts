@@ -169,6 +169,21 @@ router.get(
       ];
     }
 
+    const invoiceInclude = {
+      customer: true,
+      supplier: true,
+      items: true,
+      payments: true,
+      salesOrder: {
+        select: {
+          id: true,
+          orderNumber: true,
+          salesPersonId: true,
+          salesPerson: { select: { id: true, firstName: true, lastName: true } },
+        },
+      },
+    } as const;
+
     if (cursor) {
       const { buildCursorResult } = await import('../utils/cursorPagination');
       const rows = await prisma.invoice.findMany({
@@ -176,7 +191,7 @@ router.get(
         take: limit + 1,
         cursor: { id: cursor },
         skip: 1,
-        include: { customer: true, supplier: true, items: true, payments: true },
+        include: invoiceInclude,
         orderBy: { createdAt: 'desc' },
       });
       const pageResult = buildCursorResult(rows, limit);
@@ -200,7 +215,7 @@ router.get(
         where,
         skip,
         take: limit,
-        include: { customer: true, supplier: true, items: true, payments: true },
+        include: invoiceInclude,
         orderBy: { createdAt: 'desc' },
       }),
       prisma.invoice.count({ where }),
@@ -220,7 +235,20 @@ router.get(
   asyncHandler(async (req: AuthRequest, res: Response) => {
     const data = await prisma.invoice.findUnique({
       where: { id: getParam(req.params.id) },
-      include: { customer: true, supplier: true, items: true, payments: true },
+      include: {
+        customer: true,
+        supplier: true,
+        items: true,
+        payments: true,
+        salesOrder: {
+          select: {
+            id: true,
+            orderNumber: true,
+            salesPersonId: true,
+            salesPerson: { select: { id: true, firstName: true, lastName: true } },
+          },
+        },
+      },
     });
     if (!data) throw new AppError('Invoice not found', 404);
     res.json({ success: true, data });

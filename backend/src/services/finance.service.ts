@@ -228,78 +228,21 @@ export class FinanceInvoiceService {
     return tx.invoice.findUnique({ where: { id: invoice.id }, include: { items: true } });
   }
 
-  static async createSalesInvoiceFromOrder(tx: TxClient, orderId: string) {
+  /**
+   * Goods are always delivered with a delivery note. Sales invoices are created
+   * from delivery dispatch (`createSalesInvoiceFromDelivery`), not from the order alone.
+   */
+  static async createSalesInvoiceFromOrder(tx: TxClient, orderId: string): Promise<never> {
     const order = await tx.salesOrder.findUnique({
       where: { id: orderId },
-      include: {
-        items: { include: { product: true } },
-        customer: true,
-        deliveries: true,
-        invoices: { where: { type: 'SALES' }, select: { id: true } },
-      },
+      select: { id: true },
     });
     if (!order) throw new AppError('Sales order not found', 404);
 
-    if (order.invoices.length > 0) {
-      throw new AppError('This order already has a sales invoice', 409);
-    }
-
-    if (order.deliveries.length > 0) {
-      throw new AppError('Order has deliveries — invoice is created automatically when you dispatch goods', 400);
-    }
-
-    if (order.items.length === 0) {
-      throw new AppError('Cannot create invoice: order has no products', 400);
-    }
-
-    await SalesOrderService.validateOrderLinesForInvoicing(
-      tx,
-      order.items.map((item) => ({
-        productId: item.productId,
-        quantity: item.quantity,
-        product: item.product,
-      }))
+    throw new AppError(
+      'Goods must be delivered with a delivery note. Create a delivery from the Delivery module — the sales invoice is created automatically on dispatch.',
+      400
     );
-
-    const vatRate = await getVatRate();
-    const invoiceNumber = await nextInvoiceNumber(tx, 'INV');
-    const paymentTerms = Number(order.customer?.paymentTerms || 30);
-
-    const inv = await tx.invoice.create({
-      data: {
-        companyId: order.companyId,
-        invoiceNumber,
-        type: 'SALES',
-        customerId: order.customerId,
-        salesOrderId: order.id,
-        subtotal: order.subtotal,
-        taxAmount: order.taxAmount,
-        totalAmount: order.totalAmount,
-        dueDate: new Date(Date.now() + paymentTerms * 24 * 60 * 60 * 1000),
-        fiscalStatus: 'PENDING',
-        items: {
-          create: order.items.map((item) => ({
-            description: item.product.name,
-            quantity: item.quantity,
-            unitPrice: item.unitPrice,
-            taxRate: vatRate,
-            totalPrice: item.totalPrice,
-          })),
-        },
-      },
-      include: { customer: true, items: true },
-    });
-
-    await AccountingService.postSalesInvoice(tx, {
-      id: inv.id,
-      invoiceNumber: inv.invoiceNumber,
-      subtotal: Number(inv.subtotal),
-      taxAmount: Number(inv.taxAmount),
-      totalAmount: Number(inv.totalAmount),
-    });
-
-    await syncCustomerCreditUsed(order.customerId, tx);
-    return inv;
   }
 
   static async createPurchaseInvoiceFromGrn(tx: TxClient, grnId: string) {

@@ -25,7 +25,7 @@ export function ModuleAccessPicker({ value, onChange, disabled, error }: ModuleA
       <p className="text-xs text-slate-500">
         {disabled
           ? 'Preview of modules included for the selected role. Change the role above to update access.'
-          : 'Check the modules this user can access. Dashboard is always included.'}
+          : 'Choose modules for this user. Role sets the default; you can add or remove modules anytime after creation. Dashboard is always included.'}
       </p>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 rounded-xl border border-slate-200 p-3 bg-slate-50/50">
         {ASSIGNABLE_MODULES.map((module) => {

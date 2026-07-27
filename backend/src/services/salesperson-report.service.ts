@@ -2,6 +2,7 @@ import prisma from '../config/database';
 import { endOfDay, startOfDay } from '../utils/date';
 import { salesPersonOrderFilter } from './my-sales.service';
 import { Prisma } from '@prisma/client';
+import { requireTenantId } from '../utils/tenant';
 
 export interface SalesByPersonQuery {
   page: number;
@@ -13,6 +14,7 @@ export interface SalesByPersonQuery {
 
 function buildInvoiceWhere(query: Pick<SalesByPersonQuery, 'salesPersonId' | 'startDate' | 'endDate'>) {
   const where: Prisma.InvoiceWhereInput = {
+    companyId: requireTenantId(),
     type: 'SALES',
     status: { not: 'REFUNDED' },
     salesOrderId: { not: null },
@@ -51,6 +53,7 @@ export class SalespersonReportService {
   static async listSalesOfficers() {
     const users = await prisma.user.findMany({
       where: {
+        companyId: requireTenantId(),
         deletedAt: null,
         status: 'ACTIVE',
         OR: [
