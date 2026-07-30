@@ -4,11 +4,12 @@ services:
     container_name: erp-mysql
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: rootpassword
-      MYSQL_DATABASE: filter_erp
-      MYSQL_USER: erp_user
-      MYSQL_PASSWORD: erp_password
-      TZ: Africa/Nairobi
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-rootpassword}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-filter_erp}
+      MYSQL_USER: ${MYSQL_USER:-erp_user}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-erp_password}
+      TZ: ${TZ:-Africa/Nairobi}
+    # Bound to localhost only — never expose MySQL publicly
     ports:
       - '127.0.0.1:3307:3306'
     volumes:
@@ -19,6 +20,10 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    command:
+      - --default-authentication-plugin=mysql_native_password
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
 
   backend:
     build:
@@ -26,28 +31,45 @@ services:
       dockerfile: ../docker/Dockerfile.backend
     container_name: erp-backend
     restart: unless-stopped
-    ports:
-      - '3001:3001'
+    # Not published publicly — Nginx proxies /api and /uploads
+    expose:
+      - '3001'
     environment:
-      DATABASE_URL: mysql://erp_user:erp_password@mysql:3306/filter_erp
+      DATABASE_URL: mysql://${MYSQL_USER:-erp_user}:${MYSQL_PASSWORD:-erp_password}@mysql:3306/${MYSQL_DATABASE:-filter_erp}
       JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-change-me-refresh-in-production}
-      NODE_ENV: production
+      DATA_ENCRYPTION_KEY: ${DATA_ENCRYPTION_KEY:-dev-encryption-key-change-in-production-32b}
+      NODE_ENV: ${NODE_ENV:-production}
       PORT: 3001
-      TZ: Africa/Nairobi
-      USE_DB_PUSH: "false"
-      FRONTEND_URL: http://localhost
+      TZ: ${TZ:-Africa/Nairobi}
+      USE_DB_PUSH: 'false'
+      FRONTEND_URL: ${FRONTEND_URL:-${PUBLIC_URL:-http://localhost}}
+      CORS_EXTRA_ORIGINS: ${CORS_EXTRA_ORIGINS:-}
       SMTP_HOST: ${SMTP_HOST:-}
       SMTP_PORT: ${SMTP_PORT:-587}
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASS: ${SMTP_PASS:-}
       SMTP_FROM: ${SMTP_FROM:-ApexCore ERP <noreply@apexcore.co.ke>}
+      MPESA_ENV: ${MPESA_ENV:-stub}
+      SWAGGER_ENABLED: ${SWAGGER_ENABLED:-false}
+      SEED_ON_START: ${SEED_ON_START:-false}
+      SEED_PRODUCTION: ${SEED_PRODUCTION:-true}
+      SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:-}
+      PLATFORM_COMPANY_SLUG: ${PLATFORM_COMPANY_SLUG:-owner}
+      PLATFORM_OWNER_EMAIL: ${PLATFORM_OWNER_EMAIL:-}
+      PLATFORM_OWNER_PASSWORD: ${PLATFORM_OWNER_PASSWORD:-}
     depends_on:
       mysql:
         condition: service_healthy
     volumes:
       - uploads:/app/uploads
       - reports:/app/reports
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:3001/api/health']
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
 
   frontend:
     build:
@@ -58,7 +80,8 @@ services:
     ports:
       - '80:80'
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
 
 volumes:
   mysql_data:
