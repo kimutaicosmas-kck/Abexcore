@@ -1,0 +1,10 @@
+{
+  "startedAt": "2026-07-28T09:01:50.134Z",
+  "apiBase": "http://localhost:3001",
+  "feBase": "http://localhost:5173",
+  "company": "owner",
+  "email": "kimutaicosmas547@gmail.com",
+  "node": "v24.16.0",
+  "platform": "win32",
+  "arch": "x64"
+}

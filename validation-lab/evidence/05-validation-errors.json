@@ -1,0 +1,75 @@
+[
+  {
+    "name": "create_customer_empty",
+    "url": "http://localhost:3001/api/v1/customers",
+    "method": "POST",
+    "status": 400,
+    "ms": 14.254,
+    "bytes": 1271,
+    "ok": false,
+    "error": null,
+    "json": {
+      "success": false,
+      "message": "code: Required, name: Required",
+      "stack": "Error: code: Required, name: Required\n    at <anonymous> (C:\\Users\\Public\\APEXCORE ERP\\backend\\src\\middleware\\validate.ts:10:19)\n    at Layer.handle [as handle_request] (C:\\Users\\Public\\APEXCORE ERP\\backend\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at next (C:\\Users\\Public\\APEXCORE ERP\\backend\\node_modules\\express\\lib\\router\\route.js:149:13)\n    at <anonymous> (C:\\Users\\Public\\APEXCORE ERP\\backend\\src\\middleware\\auth.ts:84:53)\n    at Layer.handle [as handle_request] (C:\\Users\\Public\\APEXCORE ERP\\backend\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at next (C:\\Users\\Public\\APEXCORE ERP\\backend\\node_modules\\express\\lib\\router\\route.js:149:13)\n    at Route.dispatch (C:\\Users\\Public\\APEXCORE ERP\\backend\\node_modules\\express\\lib\\router\\route.js:119:3)\n    at Layer.handle [as handle_request] (C:\\Users\\Public\\APEXCORE ERP\\backend\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at C:\\Users\\Public\\APEXCORE ERP\\backend\\node_modules\\express\\lib\\router\\index.js:284:15\n    at router.process_params (C:\\Users\\Public\\APEXCORE ERP\\backend\\node_modules\\express\\lib\\router\\index.js:346:12)"
+    },
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "x-ratelimit-remaining": null,
+      "content-security-policy": "default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests",
+      "x-content-type-options": "nosniff",
+      "strict-transport-security": "max-age=31536000; includeSubDomains",
+      "x-frame-options": "SAMEORIGIN"
+    }
+  },
+  {
+    "name": "create_order_empty",
+    "url": "http://localhost:3001/api/v1/operations/orders",
+    "method": "POST",
+    "status": 400,
+    "ms": 15.541,
+    "bytes": 1285,
+    "ok": false,
+    "error": null,
+    "json": {
+      "success": false,
+      "message": "customerId: Required, items: Required",
+      "stack": "Error: customerId: Required, items: Required\n    at <anonymous> (C:\\Users\\Public\\APEXCORE ERP\\backend\\src\\middleware\\validate.ts:10:19)\n    at Layer.handle [as handle_request] (C:\\Users\\Public\\APEXCORE ERP\\backend\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at next (C:\\Users\\Public\\APEXCORE ERP\\backend\\node_modules\\express\\lib\\router\\route.js:149:13)\n    at <anonymous> (C:\\Users\\Public\\APEXCORE ERP\\backend\\src\\middleware\\auth.ts:84:53)\n    at Layer.handle [as handle_request] (C:\\Users\\Public\\APEXCORE ERP\\backend\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at next (C:\\Users\\Public\\APEXCORE ERP\\backend\\node_modules\\express\\lib\\router\\route.js:149:13)\n    at Route.dispatch (C:\\Users\\Public\\APEXCORE ERP\\backend\\node_modules\\express\\lib\\router\\route.js:119:3)\n    at Layer.handle [as handle_request] (C:\\Users\\Public\\APEXCORE ERP\\backend\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at C:\\Users\\Public\\APEXCORE ERP\\backend\\node_modules\\express\\lib\\router\\index.js:284:15\n    at router.process_params (C:\\Users\\Public\\APEXCORE ERP\\backend\\node_modules\\express\\lib\\router\\index.js:346:12)"
+    },
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "x-ratelimit-remaining": null,
+      "content-security-policy": "default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests",
+      "x-content-type-options": "nosniff",
+      "strict-transport-security": "max-age=31536000; includeSubDomains",
+      "x-frame-options": "SAMEORIGIN"
+    }
+  },
+  {
+    "name": "search_empty_q",
+    "url": "http://localhost:3001/api/v1/search",
+    "method": "GET",
+    "status": 200,
+    "ms": 14.084,
+    "bytes": 81,
+    "ok": true,
+    "error": null,
+    "json": {
+      "success": true,
+      "data": {
+        "customers": [],
+        "products": [],
+        "orders": [],
+        "suppliers": []
+      }
+    },
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "x-ratelimit-remaining": null,
+      "content-security-policy": "default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests",
+      "x-content-type-options": "nosniff",
+      "strict-transport-security": "max-age=31536000; includeSubDomains",
+      "x-frame-options": "SAMEORIGIN"
+    }
+  }
+]

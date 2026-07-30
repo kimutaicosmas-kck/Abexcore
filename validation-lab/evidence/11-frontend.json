@@ -1,0 +1,61 @@
+{
+  "pages": [
+    {
+      "path": "/",
+      "url": "http://localhost:5173/",
+      "method": "GET",
+      "status": 200,
+      "ms": 6.286,
+      "bytes": 1338,
+      "ok": true,
+      "error": null,
+      "json": null,
+      "headers": {
+        "content-type": "text/html",
+        "x-ratelimit-remaining": null,
+        "content-security-policy": null,
+        "x-content-type-options": null,
+        "strict-transport-security": null,
+        "x-frame-options": null
+      }
+    },
+    {
+      "path": "/login",
+      "url": "http://localhost:5173/login",
+      "method": "GET",
+      "status": 200,
+      "ms": 4.677,
+      "bytes": 1338,
+      "ok": true,
+      "error": null,
+      "json": null,
+      "headers": {
+        "content-type": "text/html",
+        "x-ratelimit-remaining": null,
+        "content-security-policy": null,
+        "x-content-type-options": null,
+        "strict-transport-security": null,
+        "x-frame-options": null
+      }
+    },
+    {
+      "path": "/manifest.webmanifest",
+      "url": "http://localhost:5173/manifest.webmanifest",
+      "method": "GET",
+      "status": 200,
+      "ms": 2.82,
+      "bytes": 1338,
+      "ok": true,
+      "error": null,
+      "json": null,
+      "headers": {
+        "content-type": "text/html",
+        "x-ratelimit-remaining": null,
+        "content-security-policy": null,
+        "x-content-type-options": null,
+        "strict-transport-security": null,
+        "x-frame-options": null
+      }
+    }
+  ]
+}

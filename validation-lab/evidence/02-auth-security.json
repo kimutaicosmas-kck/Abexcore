@@ -1,0 +1,117 @@
+[
+  {
+    "name": "login_wrong_password",
+    "url": "http://localhost:3001/api/v1/auth/login",
+    "method": "POST",
+    "status": 401,
+    "ms": 487.39,
+    "bytes": 424,
+    "ok": false,
+    "error": null,
+    "json": {
+      "success": false,
+      "message": "Invalid email or password",
+      "stack": "Error: Invalid email or password\n    at loginFail (C:\\Users\\Public\\APEXCORE ERP\\backend\\src\\services\\auth.service.ts:102:13)\n    at async AuthService.login (C:\\Users\\Public\\APEXCORE ERP\\backend\\src\\services\\auth.service.ts:109:17)\n    at async <anonymous> (C:\\Users\\Public\\APEXCORE ERP\\backend\\src\\controllers\\auth.controller.ts:9:18)"
+    },
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "x-ratelimit-remaining": null,
+      "content-security-policy": "default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests",
+      "x-content-type-options": "nosniff",
+      "strict-transport-security": "max-age=31536000; includeSubDomains",
+      "x-frame-options": "SAMEORIGIN"
+    }
+  },
+  {
+    "name": "login_missing_fields",
+    "url": "http://localhost:3001/api/v1/auth/login",
+    "method": "POST",
+    "status": 400,
+    "ms": 6.153,
+    "bytes": 763,
+    "ok": false,
+    "error": null,
+    "json": {
+      "success": false,
+      "message": "email: Required, password: Required",
+      "stack": "Error: email: Required, password: Required\n    at <anonymous> (C:\\Users\\Public\\APEXCORE ERP\\backend\\src\\middleware\\validate.ts:10:19)\n    at Layer.handle [as handle_request] (C:\\Users\\Public\\APEXCORE ERP\\backend\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at next (C:\\Users\\Public\\APEXCORE ERP\\backend\\node_modules\\express\\lib\\router\\route.js:149:13)\n    at C:\\Users\\Public\\APEXCORE ERP\\backend\\node_modules\\express-rate-limit\\dist\\index.cjs:807:7\n    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async C:\\Users\\Public\\APEXCORE ERP\\backend\\node_modules\\express-rate-limit\\dist\\index.cjs:691:5"
+    },
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "x-ratelimit-remaining": null,
+      "content-security-policy": "default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests",
+      "x-content-type-options": "nosniff",
+      "strict-transport-security": "max-age=31536000; includeSubDomains",
+      "x-frame-options": "SAMEORIGIN"
+    }
+  },
+  {
+    "name": "protected_without_token",
+    "url": "http://localhost:3001/api/v1/dashboard/stats",
+    "method": "GET",
+    "status": 401,
+    "ms": 13.899,
+    "bytes": 1255,
+    "ok": false,
+    "error": null,
+    "json": {
+      "success": false,
+      "message": "Authentication required",
+      "stack": "Error: Authentication required\n    at authenticate (C:\\Users\\Public\\APEXCORE ERP\\backend\\src\\middleware\\auth.ts:29:13)\n    at Layer.handle [as handle_request] (C:\\Users\\Public\\APEXCORE ERP\\backend\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at trim_prefix (C:\\Users\\Public\\APEXCORE ERP\\backend\\node_modules\\express\\lib\\router\\index.js:328:13)\n    at C:\\Users\\Public\\APEXCORE ERP\\backend\\node_modules\\express\\lib\\router\\index.js:286:9\n    at router.process_params (C:\\Users\\Public\\APEXCORE ERP\\backend\\node_modules\\express\\lib\\router\\index.js:346:12)\n    at next (C:\\Users\\Public\\APEXCORE ERP\\backend\\node_modules\\express\\lib\\router\\index.js:280:10)\n    at router.handle (C:\\Users\\Public\\APEXCORE ERP\\backend\\node_modules\\express\\lib\\router\\index.js:175:3)\n    at router (C:\\Users\\Public\\APEXCORE ERP\\backend\\node_modules\\express\\lib\\router\\index.js:47:12)\n    at Layer.handle [as handle_request] (C:\\Users\\Public\\APEXCORE ERP\\backend\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at trim_prefix (C:\\Users\\Public\\APEXCORE ERP\\backend\\node_modules\\express\\lib\\router\\index.js:328:13)"
+    },
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "x-ratelimit-remaining": null,
+      "content-security-policy": "default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests",
+      "x-content-type-options": "nosniff",
+      "strict-transport-security": "max-age=31536000; includeSubDomains",
+      "x-frame-options": "SAMEORIGIN"
+    }
+  },
+  {
+    "name": "protected_with_garbage_token",
+    "url": "http://localhost:3001/api/v1/dashboard/stats",
+    "method": "GET",
+    "status": 401,
+    "ms": 4.443,
+    "bytes": 1257,
+    "ok": false,
+    "error": null,
+    "json": {
+      "success": false,
+      "message": "Invalid or expired token",
+      "stack": "Error: Invalid or expired token\n    at authenticate (C:\\Users\\Public\\APEXCORE ERP\\backend\\src\\middleware\\auth.ts:73:12)\n    at Layer.handle [as handle_request] (C:\\Users\\Public\\APEXCORE ERP\\backend\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at trim_prefix (C:\\Users\\Public\\APEXCORE ERP\\backend\\node_modules\\express\\lib\\router\\index.js:328:13)\n    at C:\\Users\\Public\\APEXCORE ERP\\backend\\node_modules\\express\\lib\\router\\index.js:286:9\n    at router.process_params (C:\\Users\\Public\\APEXCORE ERP\\backend\\node_modules\\express\\lib\\router\\index.js:346:12)\n    at next (C:\\Users\\Public\\APEXCORE ERP\\backend\\node_modules\\express\\lib\\router\\index.js:280:10)\n    at router.handle (C:\\Users\\Public\\APEXCORE ERP\\backend\\node_modules\\express\\lib\\router\\index.js:175:3)\n    at router (C:\\Users\\Public\\APEXCORE ERP\\backend\\node_modules\\express\\lib\\router\\index.js:47:12)\n    at Layer.handle [as handle_request] (C:\\Users\\Public\\APEXCORE ERP\\backend\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at trim_prefix (C:\\Users\\Public\\APEXCORE ERP\\backend\\node_modules\\express\\lib\\router\\index.js:328:13)"
+    },
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "x-ratelimit-remaining": null,
+      "content-security-policy": "default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests",
+      "x-content-type-options": "nosniff",
+      "strict-transport-security": "max-age=31536000; includeSubDomains",
+      "x-frame-options": "SAMEORIGIN"
+    }
+  },
+  {
+    "name": "sql_injection_login_email",
+    "url": "http://localhost:3001/api/v1/auth/login",
+    "method": "POST",
+    "status": 400,
+    "ms": 7.452,
+    "bytes": 749,
+    "ok": false,
+    "error": null,
+    "json": {
+      "success": false,
+      "message": "email: Invalid email address",
+      "stack": "Error: email: Invalid email address\n    at <anonymous> (C:\\Users\\Public\\APEXCORE ERP\\backend\\src\\middleware\\validate.ts:10:19)\n    at Layer.handle [as handle_request] (C:\\Users\\Public\\APEXCORE ERP\\backend\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at next (C:\\Users\\Public\\APEXCORE ERP\\backend\\node_modules\\express\\lib\\router\\route.js:149:13)\n    at C:\\Users\\Public\\APEXCORE ERP\\backend\\node_modules\\express-rate-limit\\dist\\index.cjs:807:7\n    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async C:\\Users\\Public\\APEXCORE ERP\\backend\\node_modules\\express-rate-limit\\dist\\index.cjs:691:5"
+    },
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "x-ratelimit-remaining": null,
+      "content-security-policy": "default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests",
+      "x-content-type-options": "nosniff",
+      "strict-transport-security": "max-age=31536000; includeSubDomains",
+      "x-frame-options": "SAMEORIGIN"
+    }
+  }
+]

@@ -1,0 +1,433 @@
+{
+  "durationMs": 60000,
+  "samples": 59,
+  "failures": 0,
+  "non200": 0,
+  "latency": {
+    "count": 59,
+    "min": 12.361,
+    "max": 108.532,
+    "mean": 20.316,
+    "median": 18.071,
+    "p95": 24.134,
+    "p99": 108.532,
+    "stddev": 13.188
+  },
+  "firstHalfMean": 21.172,
+  "secondHalfMean": 19.488,
+  "series": [
+    {
+      "t": 20,
+      "status": 200,
+      "ms": 19.38,
+      "bytes": 1244,
+      "error": null
+    },
+    {
+      "t": 1048,
+      "status": 200,
+      "ms": 19.941,
+      "bytes": 1244,
+      "error": null
+    },
+    {
+      "t": 2078,
+      "status": 200,
+      "ms": 17.309,
+      "bytes": 1244,
+      "error": null
+    },
+    {
+      "t": 3112,
+      "status": 200,
+      "ms": 19.114,
+      "bytes": 1244,
+      "error": null
+    },
+    {
+      "t": 4143,
+      "status": 200,
+      "ms": 17.877,
+      "bytes": 1244,
+      "error": null
+    },
+    {
+      "t": 5183,
+      "status": 200,
+      "ms": 24.134,
+      "bytes": 1244,
+      "error": null
+    },
+    {
+      "t": 6299,
+      "status": 200,
+      "ms": 108.532,
+      "bytes": 1244,
+      "error": null
+    },
+    {
+      "t": 7323,
+      "status": 200,
+      "ms": 17.499,
+      "bytes": 1244,
+      "error": null
+    },
+    {
+      "t": 8357,
+      "status": 200,
+      "ms": 19.291,
+      "bytes": 1244,
+      "error": null
+    },
+    {
+      "t": 9392,
+      "status": 200,
+      "ms": 21.223,
+      "bytes": 1244,
+      "error": null
+    },
+    {
+      "t": 10417,
+      "status": 200,
+      "ms": 13.647,
+      "bytes": 1244,
+      "error": null
+    },
+    {
+      "t": 11436,
+      "status": 200,
+      "ms": 17.867,
+      "bytes": 1244,
+      "error": null
+    },
+    {
+      "t": 12467,
+      "status": 200,
+      "ms": 15.117,
+      "bytes": 1244,
+      "error": null
+    },
+    {
+      "t": 13499,
+      "status": 200,
+      "ms": 16.021,
+      "bytes": 1244,
+      "error": null
+    },
+    {
+      "t": 14532,
+      "status": 200,
+      "ms": 16.04,
+      "bytes": 1244,
+      "error": null
+    },
+    {
+      "t": 15551,
+      "status": 200,
+      "ms": 16.196,
+      "bytes": 1244,
+      "error": null
+    },
+    {
+      "t": 16570,
+      "status": 200,
+      "ms": 18.38,
+      "bytes": 1244,
+      "error": null
+    },
+    {
+      "t": 17599,
+      "status": 200,
+      "ms": 18.167,
+      "bytes": 1244,
+      "error": null
+    },
+    {
+      "t": 18619,
+      "status": 200,
+      "ms": 19.295,
+      "bytes": 1244,
+      "error": null
+    },
+    {
+      "t": 19647,
+      "status": 200,
+      "ms": 16.996,
+      "bytes": 1244,
+      "error": null
+    },
+    {
+      "t": 20678,
+      "status": 200,
+      "ms": 16.302,
+      "bytes": 1244,
+      "error": null
+    },
+    {
+      "t": 21716,
+      "status": 200,
+      "ms": 21.306,
+      "bytes": 1244,
+      "error": null
+    },
+    {
+      "t": 22749,
+      "status": 200,
+      "ms": 23.115,
+      "bytes": 1244,
+      "error": null
+    },
+    {
+      "t": 23777,
+      "status": 200,
+      "ms": 17.237,
+      "bytes": 1244,
+      "error": null
+    },
+    {
+      "t": 24808,
+      "status": 200,
+      "ms": 17.095,
+      "bytes": 1244,
+      "error": null
+    },
+    {
+      "t": 25841,
+      "status": 200,
+      "ms": 17.413,
+      "bytes": 1244,
+      "error": null
+    },
+    {
+      "t": 26862,
+      "status": 200,
+      "ms": 20.289,
+      "bytes": 1244,
+      "error": null
+    },
+    {
+      "t": 27888,
+      "status": 200,
+      "ms": 12.361,
+      "bytes": 1244,
+      "error": null
+    },
+    {
+      "t": 28921,
+      "status": 200,
+      "ms": 16.856,
+      "bytes": 1244,
+      "error": null
+    },
+    {
+      "t": 29955,
+      "status": 200,
+      "ms": 18.071,
+      "bytes": 1244,
+      "error": null
+    },
+    {
+      "t": 31032,
+      "status": 200,
+      "ms": 63.485,
+      "bytes": 1244,
+      "error": null
+    },
+    {
+      "t": 32054,
+      "status": 200,
+      "ms": 19.242,
+      "bytes": 1244,
+      "error": null
+    },
+    {
+      "t": 33084,
+      "status": 200,
+      "ms": 17.587,
+      "bytes": 1244,
+      "error": null
+    },
+    {
+      "t": 34120,
+      "status": 200,
+      "ms": 21.3,
+      "bytes": 1244,
+      "error": null
+    },
+    {
+      "t": 35154,
+      "status": 200,
+      "ms": 20.237,
+      "bytes": 1244,
+      "error": null
+    },
+    {
+      "t": 36186,
+      "status": 200,
+      "ms": 19.375,
+      "bytes": 1244,
+      "error": null
+    },
+    {
+      "t": 37217,
+      "status": 200,
+      "ms": 19.33,
+      "bytes": 1244,
+      "error": null
+    },
+    {
+      "t": 38250,
+      "status": 200,
+      "ms": 20.602,
+      "bytes": 1244,
+      "error": null
+    },
+    {
+      "t": 39281,
+      "status": 200,
+      "ms": 18.622,
+      "bytes": 1244,
+      "error": null
+    },
+    {
+      "t": 40312,
+      "status": 200,
+      "ms": 16.481,
+      "bytes": 1244,
+      "error": null
+    },
+    {
+      "t": 41343,
+      "status": 200,
+      "ms": 17.337,
+      "bytes": 1244,
+      "error": null
+    },
+    {
+      "t": 42359,
+      "status": 200,
+      "ms": 13.798,
+      "bytes": 1244,
+      "error": null
+    },
+    {
+      "t": 43378,
+      "status": 200,
+      "ms": 18.113,
+      "bytes": 1244,
+      "error": null
+    },
+    {
+      "t": 44404,
+      "status": 200,
+      "ms": 13.071,
+      "bytes": 1244,
+      "error": null
+    },
+    {
+      "t": 45428,
+      "status": 200,
+      "ms": 19.941,
+      "bytes": 1244,
+      "error": null
+    },
+    {
+      "t": 46452,
+      "status": 200,
+      "ms": 15.556,
+      "bytes": 1244,
+      "error": null
+    },
+    {
+      "t": 47472,
+      "status": 200,
+      "ms": 16.608,
+      "bytes": 1244,
+      "error": null
+    },
+    {
+      "t": 48506,
+      "status": 200,
+      "ms": 18.622,
+      "bytes": 1244,
+      "error": null
+    },
+    {
+      "t": 49524,
+      "status": 200,
+      "ms": 16.887,
+      "bytes": 1244,
+      "error": null
+    },
+    {
+      "t": 50557,
+      "status": 200,
+      "ms": 21.169,
+      "bytes": 1244,
+      "error": null
+    },
+    {
+      "t": 51586,
+      "status": 200,
+      "ms": 18.534,
+      "bytes": 1244,
+      "error": null
+    },
+    {
+      "t": 52622,
+      "status": 200,
+      "ms": 19.686,
+      "bytes": 1244,
+      "error": null
+    },
+    {
+      "t": 53654,
+      "status": 200,
+      "ms": 20.113,
+      "bytes": 1244,
+      "error": null
+    },
+    {
+      "t": 54683,
+      "status": 200,
+      "ms": 17.545,
+      "bytes": 1244,
+      "error": null
+    },
+    {
+      "t": 55702,
+      "status": 200,
+      "ms": 17.756,
+      "bytes": 1244,
+      "error": null
+    },
+    {
+      "t": 56730,
+      "status": 200,
+      "ms": 15.761,
+      "bytes": 1244,
+      "error": null
+    },
+    {
+      "t": 57759,
+      "status": 200,
+      "ms": 19.031,
+      "bytes": 1244,
+      "error": null
+    },
+    {
+      "t": 58781,
+      "status": 200,
+      "ms": 17.658,
+      "bytes": 1244,
+      "error": null
+    },
+    {
+      "t": 59808,
+      "status": 200,
+      "ms": 13.127,
+      "bytes": 1244,
+      "error": null
+    }
+  ]
+}

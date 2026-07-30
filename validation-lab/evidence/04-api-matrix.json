@@ -1,0 +1,2878 @@
+[
+  {
+    "endpoint": "/api/v1/dashboard/stats",
+    "url": "http://localhost:3001/api/v1/dashboard/stats",
+    "method": "GET",
+    "status": 404,
+    "ms": 22.133,
+    "bytes": 45,
+    "ok": false,
+    "error": null,
+    "json": {
+      "success": false,
+      "message": "Route not found"
+    },
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "x-ratelimit-remaining": null,
+      "content-security-policy": "default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests",
+      "x-content-type-options": "nosniff",
+      "strict-transport-security": "max-age=31536000; includeSubDomains",
+      "x-frame-options": "SAMEORIGIN"
+    }
+  },
+  {
+    "endpoint": "/api/v1/customers?limit=10",
+    "url": "http://localhost:3001/api/v1/customers?limit=10",
+    "method": "GET",
+    "status": 200,
+    "ms": 51.816,
+    "bytes": 1243,
+    "ok": true,
+    "error": null,
+    "json": {
+      "success": true,
+      "data": [
+        {
+          "id": "9d2656e9-ddec-497f-8400-a98980edf238",
+          "companyId": "00000000-0000-0000-0000-000000000001",
+          "code": "SSW",
+          "name": "Witima",
+          "type": "DEALER",
+          "email": "josphatoleteipa@gmail.com",
+          "phone": "0789366924",
+          "address": null,
+          "city": "Nairobi",
+          "country": "Kenya",
+          "taxPin": "",
+          "creditLimit": "150000",
+          "creditUsed": "78527.65",
+          "paymentTerms": 30,
+          "salesPersonId": null,
+          "isActive": true,
+          "notes": null,
+          "createdAt": "2026-07-27T09:44:24.079Z",
+          "updatedAt": "2026-07-28T05:24:50.358Z",
+          "deletedAt": null,
+          "contacts": [],
+          "salesPerson": null,
+          "_count": {
+            "salesOrders": 5,
+            "invoices": 5,
+            "complaints": 0,
+            "opportunities": 0
+          }
+        },
+        {
+          "id": "c73e26e6-a683-4486-9a9a-31ff4328c994",
+          "companyId": "00000000-0000-0000-0000-000000000001",
+          "code": "sfewwr",
+          "name": "Bliss",
+          "type": "RETAIL_SHOP",
+          "email": "josphatoleteipa@gmail.com",
+          "phone": "0780366924",
+          "address": null,
+          "city": "Nairobi",
+          "country": "Kenya",
+          "taxPin": "",
+          "creditLimit": "100000",
+          "creditUsed": "44660",
+          "paymentTerms": 30,
+          "salesPersonId": null,
+          "isActive": true,
+          "notes": null,
+          "createdAt": "2026-07-27T09:43:33.971Z",
+          "updatedAt": "2026-07-27T12:32:22.825Z",
+          "deletedAt": null,
+          "contacts": [],
+          "salesPerson": null,
+          "_count": {
+            "salesOrders": 2,
+            "invoices": 2,
+            "complaints": 0,
+            "opportunities": 0
+          }
+        }
+      ],
+      "pagination": {
+        "page": 1,
+        "limit": 10,
+        "total": 2,
+        "totalPages": 1
+      }
+    },
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "x-ratelimit-remaining": null,
+      "content-security-policy": "default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests",
+      "x-content-type-options": "nosniff",
+      "strict-transport-security": "max-age=31536000; includeSubDomains",
+      "x-frame-options": "SAMEORIGIN"
+    }
+  },
+  {
+    "endpoint": "/api/v1/products?limit=10",
+    "url": "http://localhost:3001/api/v1/products?limit=10",
+    "method": "GET",
+    "status": 200,
+    "ms": 37.726,
+    "bytes": 2192,
+    "ok": true,
+    "error": null,
+    "json": {
+      "success": true,
+      "data": [
+        {
+          "id": "8de4000a-d8b3-47bc-9ad2-fa2c7f333e6d",
+          "companyId": "00000000-0000-0000-0000-000000000001",
+          "sku": "EU2442/55/79",
+          "barcode": null,
+          "name": "22060",
+          "categoryId": "1cb0796b-6771-47f1-acd1-f6605a514d35",
+          "description": "",
+          "weight": null,
+          "length": null,
+          "width": null,
+          "height": null,
+          "imageUrl": null,
+          "manufacturingCost": "0",
+          "sellingPrice": "700",
+          "distributorPrice": "550",
+          "retailPrice": "600",
+          "minStockLevel": 50,
+          "isImported": false,
+          "requiresProduction": false,
+          "isActive": true,
+          "createdAt": "2026-07-27T09:52:27.744Z",
+          "updatedAt": "2026-07-27T09:52:27.744Z",
+          "deletedAt": null,
+          "category": {
+            "id": "1cb0796b-6771-47f1-acd1-f6605a514d35",
+            "name": "Fuel Filter"
+          },
+          "stockLevels": [
+            {
+              "id": "21fd656f-b399-433b-b02d-2d18fc855e60",
+              "warehouseId": "55827a58-edc9-418a-b89c-95a6aaaf4a06",
+              "productId": "8de4000a-d8b3-47bc-9ad2-fa2c7f333e6d",
+              "rawMaterialId": null,
+              "batchNumber": null,
+              "quantity": "2840",
+              "reservedQty": "0",
+              "unitCost": "700",
+              "expiryDate": null,
+              "updatedAt": "2026-07-27T13:53:26.577Z",
+              "warehouse": {
+                "id": "55827a58-edc9-418a-b89c-95a6aaaf4a06",
+                "name": "Finished Goods Warehouse",
+                "code": "WH-FG"
+              }
+            }
+          ]
+        },
+        {
+          "id": "f2cb358e-6100-4635-9f6b-453db46e15eb",
+          "companyId": "00000000-0000-0000-0000-000000000001",
+          "sku": "EU2442/55/3",
+          "barcode": null,
+          "name": "2250",
+          "categoryId": "f4360550-0689-4867-845a-1041e621c58c",
+          "description": "",
+          "weight": null,
+          "length": null,
+          "width": null,
+          "height": null,
+          "imageUrl": null,
+          "manufacturingCost": "0",
+          "sellingPrice": "300",
+          "distributorPrice": "250",
+          "retailPrice": "280",
+          "minStockLevel": 50,
+          "isImported": false,
+          "requiresProduction": false,
+          "isActive": true,
+          "createdAt": "2026-07-27T09:50:52.910Z",
+          "updatedAt": "2026-07-27T09:50:52.910Z",
+          "deletedAt": null,
+          "category": {
+            "id": "f4360550-0689-4867-845a-1041e621c58c",
+            "name": "Air Filter"
+          },
+          "stockLevels": [
+            {
+              "id": "e50bf9c4-cb8a-4e97-8dce-ede3425c392a",
+              "warehouseId": "55827a58-edc9-418a-b89c-95a6aaaf4a06",
+              "productId": "f2cb358e-6100-4635-9f6b-453db46e15eb",
+              "rawMaterialId": null,
+              "batchNumber": null,
+              "quantity": "4742",
+              "reservedQty": "0",
+              "unitCost": "300",
+              "expiryDate": null,
+              "updatedAt": "2026-07-27T13:53:26.544Z",
+              "warehouse": {
+                "id": "55827a58-edc9-418a-b89c-95a6aaaf4a06",
+                "name": "Finished Goods Warehouse",
+                "code": "WH-FG"
+              }
+            }
+          ]
+        }
+      ],
+      "pagination": {
+        "page": 1,
+        "limit": 10,
+        "total": 2,
+        "totalPages": 1
+      }
+    },
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "x-ratelimit-remaining": null,
+      "content-security-policy": "default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests",
+      "x-content-type-options": "nosniff",
+      "strict-transport-security": "max-age=31536000; includeSubDomains",
+      "x-frame-options": "SAMEORIGIN"
+    }
+  },
+  {
+    "endpoint": "/api/v1/users?limit=10",
+    "url": "http://localhost:3001/api/v1/users?limit=10",
+    "method": "GET",
+    "status": 200,
+    "ms": 29.473,
+    "bytes": 5575,
+    "ok": true,
+    "error": null,
+    "json": {
+      "success": true,
+      "data": [
+        {
+          "id": "173e0ee1-47b7-4a8e-9211-34dd5ba071e7",
+          "companyId": "00000000-0000-0000-0000-000000000001",
+          "email": "dennis@gmail.com",
+          "firstName": "Dennis",
+          "lastName": "Wantam",
+          "phone": null,
+          "avatar": null,
+          "roleId": "87c61117-d494-41ff-b5bb-2bc2212e500e",
+          "departmentId": null,
+          "branchId": "eaf19a23-f774-42fd-b4ee-87cd6c99ba0b",
+          "status": "ACTIVE",
+          "twoFactorEnabled": false,
+          "mustChangePassword": false,
+          "allowedModules": [
+            "dashboard",
+            "delivery"
+          ],
+          "lastLoginAt": "2026-07-28T05:24:29.486Z",
+          "passwordChangedAt": "2026-07-27T13:48:48.303Z",
+          "createdAt": "2026-07-27T13:48:48.305Z",
+          "updatedAt": "2026-07-28T05:24:29.487Z",
+          "deletedAt": null,
+          "role": {
+            "id": "87c61117-d494-41ff-b5bb-2bc2212e500e",
+            "name": "Driver",
+            "description": "Driver role",
+            "isSystem": false,
+            "createdAt": "2026-07-13T13:13:32.837Z",
+            "updatedAt": "2026-07-13T13:13:32.837Z"
+          },
+          "department": null,
+          "branch": {
+            "id": "eaf19a23-f774-42fd-b4ee-87cd6c99ba0b",
+            "companyId": "00000000-0000-0000-0000-000000000001",
+            "name": "Head Office - Nairobi",
+            "code": "HQ",
+            "address": "Industrial Area, Nairobi",
+            "phone": "+254 700 123 456",
+            "email": "hq@kenyafilters.co.ke",
+            "isActive": true,
+            "createdAt": "2026-07-13T13:13:33.301Z",
+            "updatedAt": "2026-07-13T13:13:33.301Z",
+            "deletedAt": null
+          }
+        },
+        {
+          "id": "e86baa14-0197-479c-a606-07452865f5d5",
+          "companyId": "00000000-0000-0000-0000-000000000001",
+          "email": "jacinta@gmail.com",
+          "firstName": "Jacinta",
+          "lastName": "Njeri",
+          "phone": null,
+          "avatar": null,
+          "roleId": "a249d610-b6a9-4021-b4dc-62e10c56216e",
+          "departmentId": "a452bb42-1b84-4fef-bddf-eba448363b16",
+          "branchId": "eaf19a23-f774-42fd-b4ee-87cd6c99ba0b",
+          "status": "ACTIVE",
+          "twoFactorEnabled": false,
+          "mustChangePassword": false,
+          "allowedModules": null,
+          "lastLoginAt": "2026-07-27T13:35:41.605Z",
+          "passwordChangedAt": "2026-07-27T09:41:43.329Z",
+          "createdAt": "2026-07-27T09:41:43.335Z",
+          "updatedAt": "2026-07-27T13:35:41.608Z",
+          "deletedAt": null,
+          "role": {
+            "id": "a249d610-b6a9-4021-b4dc-62e10c56216e",
+            "name": "Sales Officer",
+            "description": "Sales Officer role",
+            "isSystem": false,
+            "createdAt": "2026-07-13T13:13:31.839Z",
+            "updatedAt": "2026-07-13T13:13:31.839Z"
+          },
+          "department": {
+            "id": "a452bb42-1b84-4fef-bddf-eba448363b16",
+            "companyId": "00000000-0000-0000-0000-000000000001",
+            "name": "Sales",
+            "description": "Sales department",
+            "isActive": true,
+            "createdAt": "2026-07-13T13:13:33.223Z",
+            "updatedAt": "2026-07-13T13:13:33.223Z"
+          },
+          "branch": {
+            "id": "eaf19a23-f774-42fd-b4ee-87cd6c99ba0b",
+            "companyId": "00000000-0000-0000-0000-000000000001",
+            "name": "Head Office - Nairobi",
+            "code": "HQ",
+            "address": "Industrial Area, Nairobi",
+            "phone": "+254 700 123 456",
+            "email": "hq@kenyafilters.co.ke",
+            "isActive": true,
+            "createdAt": "2026-07-13T13:13:33.301Z",
+            "updatedAt": "2026-07-13T13:13:33.301Z",
+            "deletedAt": null
+          }
+        },
+        {
+          "id": "8756a414-2227-4964-b7e8-6a1faab9faaa",
+          "companyId": "00000000-0000-0000-0000-000000000001",
+          "email": "harrison@gmail.com",
+          "firstName": "Harrison",
+          "lastName": "Maina",
+          "phone": "0780366922",
+          "avatar": null,
+          "roleId": "a249d610-b6a9-4021-b4dc-62e10c56216e",
+          "departmentId": "a452bb42-1b84-4fef-bddf-eba448363b16",
+          "branchId": "eaf19a23-f774-42fd-b4ee-87cd6c99ba0b",
+          "status": "ACTIVE",
+          "twoFactorEnabled": false,
+          "mustChangePassword": false,
+          "allowedModules": null,
+          "lastLoginAt": "2026-07-27T11:13:03.504Z",
+          "passwordChangedAt": "2026-07-27T09:40:00.744Z",
+          "createdAt": "2026-07-27T09:40:00.745Z",
+          "updatedAt": "2026-07-27T11:13:03.506Z",
+          "deletedAt": null,
+          "role": {
+            "id": "a249d610-b6a9-4021-b4dc-62e10c56216e",
+            "name": "Sales Officer",
+            "description": "Sales Officer role",
+            "isSystem": false,
+            "createdAt": "2026-07-13T13:13:31.839Z",
+            "updatedAt": "2026-07-13T13:13:31.839Z"
+          },
+          "department": {
+            "id": "a452bb42-1b84-4fef-bddf-eba448363b16",
+            "companyId": "00000000-0000-0000-0000-000000000001",
+            "name": "Sales",
+            "description": "Sales department",
+            "isActive": true,
+            "createdAt": "2026-07-13T13:13:33.223Z",
+            "updatedAt": "2026-07-13T13:13:33.223Z"
+          },
+          "branch": {
+            "id": "eaf19a23-f774-42fd-b4ee-87cd6c99ba0b",
+            "companyId": "00000000-0000-0000-0000-000000000001",
+            "name": "Head Office - Nairobi",
+            "code": "HQ",
+            "address": "Industrial Area, Nairobi",
+            "phone": "+254 700 123 456",
+            "email": "hq@kenyafilters.co.ke",
+            "isActive": true,
+            "createdAt": "2026-07-13T13:13:33.301Z",
+            "updatedAt": "2026-07-13T13:13:33.301Z",
+            "deletedAt": null
+          }
+        },
+        {
+          "id": "7ee89b37-5a70-4422-98dd-d80f6fe32fa8",
+          "companyId": "00000000-0000-0000-0000-000000000001",
+          "email": "kimutaicosmas547@gmail.com",
+          "firstName": "Cosmas",
+          "lastName": "Kimutai",
+          "phone": "+254 700 000 001",
+          "avatar": null,
+          "roleId": "2e7a5319-9abf-466f-a359-5948429e6e0a",
+          "departmentId": "bebad173-484b-4452-9d8c-e6319df2b74e",
+          "branchId": "eaf19a23-f774-42fd-b4ee-87cd6c99ba0b",
+          "status": "ACTIVE",
+          "twoFactorEnabled": false,
+          "mustChangePassword": false,
+          "allowedModules": null,
+          "lastLoginAt": "2026-07-28T09:01:51.152Z",
+          "passwordChangedAt": null,
+          "createdAt": "2026-07-13T13:13:34.191Z",
+          "updatedAt": "2026-07-28T09:01:51.163Z",
+          "deletedAt": null,
+          "role": {
+            "id": "2e7a5319-9abf-466f-a359-5948429e6e0a",
+            "name": "Super Admin",
+            "description": "Super Admin role",
+            "isSystem": true,
+            "createdAt": "2026-07-13T13:13:28.567Z",
+            "updatedAt": "2026-07-13T13:13:28.567Z"
+          },
+          "department": {
+            "id": "bebad173-484b-4452-9d8c-e6319df2b74e",
+            "companyId": "00000000-0000-0000-0000-000000000001",
+            "name": "Management",
+            "description": "Management department",
+            "isActive": true,
+            "createdAt": "2026-07-13T13:13:33.156Z",
+            "updatedAt": "2026-07-13T13:13:33.156Z"
+          },
+          "branch": {
+            "id": "eaf19a23-f774-42fd-b4ee-87cd6c99ba0b",
+            "companyId": "00000000-0000-0000-0000-000000000001",
+            "name": "Head Office - Nairobi",
+            "code": "HQ",
+            "address": "Industrial Area, Nairobi",
+            "phone": "+254 700 123 456",
+            "email": "hq@kenyafilters.co.ke",
+            "isActive": true,
+            "createdAt": "2026-07-13T13:13:33.301Z",
+            "updatedAt": "2026-07-13T13:13:33.301Z",
+            "deletedAt": null
+          }
+        }
+      ],
+      "pagination": {
+        "page": 1,
+        "limit": 10,
+        "total": 4,
+        "totalPages": 1
+      }
+    },
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "x-ratelimit-remaining": null,
+      "content-security-policy": "default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests",
+      "x-content-type-options": "nosniff",
+      "strict-transport-security": "max-age=31536000; includeSubDomains",
+      "x-frame-options": "SAMEORIGIN"
+    }
+  },
+  {
+    "endpoint": "/api/v1/inventory/stock?limit=10",
+    "url": "http://localhost:3001/api/v1/inventory/stock?limit=10",
+    "method": "GET",
+    "status": 404,
+    "ms": 15.404,
+    "bytes": 45,
+    "ok": false,
+    "error": null,
+    "json": {
+      "success": false,
+      "message": "Route not found"
+    },
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "x-ratelimit-remaining": null,
+      "content-security-policy": "default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests",
+      "x-content-type-options": "nosniff",
+      "strict-transport-security": "max-age=31536000; includeSubDomains",
+      "x-frame-options": "SAMEORIGIN"
+    }
+  },
+  {
+    "endpoint": "/api/v1/inventory/warehouses",
+    "url": "http://localhost:3001/api/v1/inventory/warehouses",
+    "method": "GET",
+    "status": 200,
+    "ms": 32.752,
+    "bytes": 2134,
+    "ok": true,
+    "error": null,
+    "json": {
+      "success": true,
+      "data": [
+        {
+          "id": "55827a58-edc9-418a-b89c-95a6aaaf4a06",
+          "companyId": "00000000-0000-0000-0000-000000000001",
+          "branchId": "eaf19a23-f774-42fd-b4ee-87cd6c99ba0b",
+          "code": "WH-FG",
+          "name": "Finished Goods Warehouse",
+          "type": "finished_goods",
+          "address": "Industrial Area, Block B",
+          "isActive": true,
+          "createdAt": "2026-07-13T13:13:33.337Z",
+          "updatedAt": "2026-07-13T13:13:33.337Z",
+          "deletedAt": null,
+          "branch": {
+            "id": "eaf19a23-f774-42fd-b4ee-87cd6c99ba0b",
+            "companyId": "00000000-0000-0000-0000-000000000001",
+            "name": "Head Office - Nairobi",
+            "code": "HQ",
+            "address": "Industrial Area, Nairobi",
+            "phone": "+254 700 123 456",
+            "email": "hq@kenyafilters.co.ke",
+            "isActive": true,
+            "createdAt": "2026-07-13T13:13:33.301Z",
+            "updatedAt": "2026-07-13T13:13:33.301Z",
+            "deletedAt": null
+          },
+          "locations": [],
+          "stockLevels": [
+            {
+              "id": "21fd656f-b399-433b-b02d-2d18fc855e60",
+              "warehouseId": "55827a58-edc9-418a-b89c-95a6aaaf4a06",
+              "productId": "8de4000a-d8b3-47bc-9ad2-fa2c7f333e6d",
+              "rawMaterialId": null,
+              "batchNumber": null,
+              "quantity": "2840",
+              "reservedQty": "0",
+              "unitCost": "700",
+              "expiryDate": null,
+              "updatedAt": "2026-07-27T13:53:26.577Z"
+            },
+            {
+              "id": "e50bf9c4-cb8a-4e97-8dce-ede3425c392a",
+              "warehouseId": "55827a58-edc9-418a-b89c-95a6aaaf4a06",
+              "productId": "f2cb358e-6100-4635-9f6b-453db46e15eb",
+              "rawMaterialId": null,
+              "batchNumber": null,
+              "quantity": "4742",
+              "reservedQty": "0",
+              "unitCost": "300",
+              "expiryDate": null,
+              "updatedAt": "2026-07-27T13:53:26.544Z"
+            }
+          ]
+        },
+        {
+          "id": "efb74e7d-ace5-4b51-a7a4-0805bb7fee32",
+          "companyId": "00000000-0000-0000-0000-000000000001",
+          "branchId": "eaf19a23-f774-42fd-b4ee-87cd6c99ba0b",
+          "code": "WH-RM",
+          "name": "Raw Materials Warehouse",
+          "type": "raw_materials",
+          "address": "Industrial Area, Block A",
+          "isActive": true,
+          "createdAt": "2026-07-13T13:13:33.320Z",
+          "updatedAt": "2026-07-13T13:13:33.320Z",
+          "deletedAt": null,
+          "branch": {
+            "id": "eaf19a23-f774-42fd-b4ee-87cd6c99ba0b",
+            "companyId": "00000000-0000-0000-0000-000000000001",
+            "name": "Head Office - Nairobi",
+            "code": "HQ",
+            "address": "Industrial Area, Nairobi",
+            "phone": "+254 700 123 456",
+            "email": "hq@kenyafilters.co.ke",
+            "isActive": true,
+            "createdAt": "2026-07-13T13:13:33.301Z",
+            "updatedAt": "2026-07-13T13:13:33.301Z",
+            "deletedAt": null
+          },
+          "locations": [],
+          "stockLevels": []
+        }
+      ]
+    },
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "x-ratelimit-remaining": null,
+      "content-security-policy": "default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests",
+      "x-content-type-options": "nosniff",
+      "strict-transport-security": "max-age=31536000; includeSubDomains",
+      "x-frame-options": "SAMEORIGIN"
+    }
+  },
+  {
+    "endpoint": "/api/v1/inventory/materials?limit=10",
+    "url": "http://localhost:3001/api/v1/inventory/materials?limit=10",
+    "method": "GET",
+    "status": 200,
+    "ms": 21.565,
+    "bytes": 86,
+    "ok": true,
+    "error": null,
+    "json": {
+      "success": true,
+      "data": [],
+      "pagination": {
+        "page": 1,
+        "limit": 10,
+        "total": 0,
+        "totalPages": 0
+      }
+    },
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "x-ratelimit-remaining": null,
+      "content-security-policy": "default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests",
+      "x-content-type-options": "nosniff",
+      "strict-transport-security": "max-age=31536000; includeSubDomains",
+      "x-frame-options": "SAMEORIGIN"
+    }
+  },
+  {
+    "endpoint": "/api/v1/operations/orders?limit=10",
+    "url": "http://localhost:3001/api/v1/operations/orders?limit=10",
+    "method": "GET",
+    "status": 200,
+    "ms": 44.867,
+    "bytes": 20395,
+    "ok": true,
+    "error": null,
+    "json": {
+      "success": true,
+      "data": [
+        {
+          "id": "7b20e194-737b-4655-98c6-0ba0555afdfe",
+          "companyId": "00000000-0000-0000-0000-000000000001",
+          "orderNumber": "SO-2026-00007",
+          "customerId": "9d2656e9-ddec-497f-8400-a98980edf238",
+          "quotationId": null,
+          "createdById": "7ee89b37-5a70-4422-98dd-d80f6fe32fa8",
+          "salesPersonId": null,
+          "orderDate": "2026-07-27T13:52:59.218Z",
+          "requiredDate": "2026-07-27T00:00:00.000Z",
+          "status": "COMPLETED",
+          "subtotal": "7500",
+          "taxAmount": "1200",
+          "totalAmount": "8700",
+          "notes": "",
+          "createdAt": "2026-07-27T13:52:59.218Z",
+          "updatedAt": "2026-07-28T05:24:50.338Z",
+          "customer": {
+            "id": "9d2656e9-ddec-497f-8400-a98980edf238",
+            "companyId": "00000000-0000-0000-0000-000000000001",
+            "code": "SSW",
+            "name": "Witima",
+            "type": "DEALER",
+            "email": "josphatoleteipa@gmail.com",
+            "phone": "0789366924",
+            "address": null,
+            "city": "Nairobi",
+            "country": "Kenya",
+            "taxPin": "",
+            "creditLimit": "150000",
+            "creditUsed": "78527.65",
+            "paymentTerms": 30,
+            "salesPersonId": null,
+            "isActive": true,
+            "notes": null,
+            "createdAt": "2026-07-27T09:44:24.079Z",
+            "updatedAt": "2026-07-28T05:24:50.358Z",
+            "deletedAt": null
+          },
+          "items": [
+            {
+              "id": "0fa4fcbf-f087-4e79-b5bc-3eb4bf1f178b",
+              "salesOrderId": "7b20e194-737b-4655-98c6-0ba0555afdfe",
+              "productId": "f2cb358e-6100-4635-9f6b-453db46e15eb",
+              "quantity": 10,
+              "deliveredQty": 10,
+              "unitPrice": "250",
+              "discount": "0",
+              "totalPrice": "2500",
+              "product": {
+                "id": "f2cb358e-6100-4635-9f6b-453db46e15eb",
+                "companyId": "00000000-0000-0000-0000-000000000001",
+                "sku": "EU2442/55/3",
+                "barcode": null,
+                "name": "2250",
+                "categoryId": "f4360550-0689-4867-845a-1041e621c58c",
+                "description": "",
+                "weight": null,
+                "length": null,
+                "width": null,
+                "height": null,
+                "imageUrl": null,
+                "manufacturingCost": "0",
+                "sellingPrice": "300",
+                "distributorPrice": "250",
+                "retailPrice": "280",
+                "minStockLevel": 50,
+                "isImported": false,
+                "requiresProduction": false,
+                "isActive": true,
+                "createdAt": "2026-07-27T09:50:52.910Z",
+                "updatedAt": "2026-07-27T09:50:52.910Z",
+                "deletedAt": null
+              }
+            },
+            {
+              "id": "d961bc13-8595-4327-848b-79479bfb5869",
+              "salesOrderId": "7b20e194-737b-4655-98c6-0ba0555afdfe",
+              "productId": "8de4000a-d8b3-47bc-9ad2-fa2c7f333e6d",
+              "quantity": 10,
+              "deliveredQty": 10,
+              "unitPrice": "500",
+              "discount": "0",
+              "totalPrice": "5000",
+              "product": {
+                "id": "8de4000a-d8b3-47bc-9ad2-fa2c7f333e6d",
+                "companyId": "00000000-0000-0000-0000-000000000001",
+                "sku": "EU2442/55/79",
+                "barcode": null,
+                "name": "22060",
+                "categoryId": "1cb0796b-6771-47f1-acd1-f6605a514d35",
+                "description": "",
+                "weight": null,
+                "length": null,
+                "width": null,
+                "height": null,
+                "imageUrl": null,
+                "manufacturingCost": "0",
+                "sellingPrice": "700",
+                "distributorPrice": "550",
+                "retailPrice": "600",
+                "minStockLevel": 50,
+                "isImported": false,
+                "requiresProduction": false,
+                "isActive": true,
+                "createdAt": "2026-07-27T09:52:27.744Z",
+                "updatedAt": "2026-07-27T09:52:27.744Z",
+                "deletedAt": null
+              }
+            }
+          ],
+          "createdBy": {
+            "firstName": "Cosmas",
+            "lastName": "Kimutai"
+          },
+          "salesPerson": null,
+          "deliveries": [
+            {
+              "id": "d3ba6136-5e9a-4753-8566-036e8773c5ca",
+              "deliveryNo": "DN-2026-00007",
+              "status": "DELIVERED"
+            }
+          ]
+        },
+        {
+          "id": "bbaaf378-adc3-455f-a9d9-13e002d5e9b2",
+          "companyId": "00000000-0000-0000-0000-000000000001",
+          "orderNumber": "SO-2026-00006",
+          "customerId": "9d2656e9-ddec-497f-8400-a98980edf238",
+          "quotationId": null,
+          "createdById": "e86baa14-0197-479c-a606-07452865f5d5",
+          "salesPersonId": "e86baa14-0197-479c-a606-07452865f5d5",
+          "orderDate": "2026-07-27T12:54:20.386Z",
+          "requiredDate": "2026-07-27T00:00:00.000Z",
+          "status": "COMPLETED",
+          "subtotal": "7999.7",
+          "taxAmount": "1279.95",
+          "totalAmount": "9279.65",
+          "notes": "",
+          "createdAt": "2026-07-27T12:54:20.386Z",
+          "updatedAt": "2026-07-27T12:58:45.458Z",
+          "customer": {
+            "id": "9d2656e9-ddec-497f-8400-a98980edf238",
+            "companyId": "00000000-0000-0000-0000-000000000001",
+            "code": "SSW",
+            "name": "Witima",
+            "type": "DEALER",
+            "email": "josphatoleteipa@gmail.com",
+            "phone": "0789366924",
+            "address": null,
+            "city": "Nairobi",
+            "country": "Kenya",
+            "taxPin": "",
+            "creditLimit": "150000",
+            "creditUsed": "78527.65",
+            "paymentTerms": 30,
+            "salesPersonId": null,
+            "isActive": true,
+            "notes": null,
+            "createdAt": "2026-07-27T09:44:24.079Z",
+            "updatedAt": "2026-07-28T05:24:50.358Z",
+            "deletedAt": null
+          },
+          "items": [
+            {
+              "id": "9c88743b-5da1-4dea-8a0b-59816a48fd5c",
+              "salesOrderId": "bbaaf378-adc3-455f-a9d9-13e002d5e9b2",
+              "productId": "f2cb358e-6100-4635-9f6b-453db46e15eb",
+              "quantity": 15,
+              "deliveredQty": 15,
+              "unitPrice": "199.98",
+              "discount": "0",
+              "totalPrice": "2999.7",
+              "product": {
+                "id": "f2cb358e-6100-4635-9f6b-453db46e15eb",
+                "companyId": "00000000-0000-0000-0000-000000000001",
+                "sku": "EU2442/55/3",
+                "barcode": null,
+                "name": "2250",
+                "categoryId": "f4360550-0689-4867-845a-1041e621c58c",
+                "description": "",
+                "weight": null,
+                "length": null,
+                "width": null,
+                "height": null,
+                "imageUrl": null,
+                "manufacturingCost": "0",
+                "sellingPrice": "300",
+                "distributorPrice": "250",
+                "retailPrice": "280",
+                "minStockLevel": 50,
+                "isImported": false,
+                "requiresProduction": false,
+                "isActive": true,
+                "createdAt": "2026-07-27T09:50:52.910Z",
+                "updatedAt": "2026-07-27T09:50:52.910Z",
+                "deletedAt": null
+              }
+            },
+            {
+              "id": "b9f7be41-78fb-4835-97bd-334b4741c986",
+              "salesOrderId": "bbaaf378-adc3-455f-a9d9-13e002d5e9b2",
+              "productId": "8de4000a-d8b3-47bc-9ad2-fa2c7f333e6d",
+              "quantity": 10,
+              "deliveredQty": 10,
+              "unitPrice": "500",
+              "discount": "0",
+              "totalPrice": "5000",
+              "product": {
+                "id": "8de4000a-d8b3-47bc-9ad2-fa2c7f333e6d",
+                "companyId": "00000000-0000-0000-0000-000000000001",
+                "sku": "EU2442/55/79",
+                "barcode": null,
+                "name": "22060",
+                "categoryId": "1cb0796b-6771-47f1-acd1-f6605a514d35",
+                "description": "",
+                "weight": null,
+                "length": null,
+                "width": null,
+                "height": null,
+                "imageUrl": null,
+                "manufacturingCost": "0",
+                "sellingPrice": "700",
+                "distributorPrice": "550",
+                "retailPrice": "600",
+                "minStockLevel": 50,
+                "isImported": false,
+                "requiresProduction": false,
+                "isActive": true,
+                "createdAt": "2026-07-27T09:52:27.744Z",
+                "updatedAt": "2026-07-27T09:52:27.744Z",
+                "deletedAt": null
+              }
+            }
+          ],
+          "createdBy": {
+            "firstName": "Jacinta",
+            "lastName": "Njeri"
+          },
+          "salesPerson": {
+            "id": "e86baa14-0197-479c-a606-07452865f5d5",
+            "firstName": "Jacinta",
+            "lastName": "Njeri"
+          },
+          "deliveries": [
+            {
+              "id": "fc070fee-5803-4814-b98a-8b673e6c7a5b",
+              "deliveryNo": "DN-2026-00006",
+              "status": "DELIVERED"
+            }
+          ]
+        },
+        {
+          "id": "756841a5-1517-4734-b785-7fc0d3cfca19",
+          "companyId": "00000000-0000-0000-0000-000000000001",
+          "orderNumber": "SO-2026-00005",
+          "customerId": "9d2656e9-ddec-497f-8400-a98980edf238",
+          "quotationId": null,
+          "createdById": "e86baa14-0197-479c-a606-07452865f5d5",
+          "salesPersonId": "e86baa14-0197-479c-a606-07452865f5d5",
+          "orderDate": "2026-07-27T12:34:52.392Z",
+          "requiredDate": "2026-07-27T00:00:00.000Z",
+          "status": "COMPLETED",
+          "subtotal": "8300",
+          "taxAmount": "1328",
+          "totalAmount": "9628",
+          "notes": "",
+          "createdAt": "2026-07-27T12:34:52.392Z",
+          "updatedAt": "2026-07-27T12:55:02.895Z",
+          "customer": {
+            "id": "9d2656e9-ddec-497f-8400-a98980edf238",
+            "companyId": "00000000-0000-0000-0000-000000000001",
+            "code": "SSW",
+            "name": "Witima",
+            "type": "DEALER",
+            "email": "josphatoleteipa@gmail.com",
+            "phone": "0789366924",
+            "address": null,
+            "city": "Nairobi",
+            "country": "Kenya",
+            "taxPin": "",
+            "creditLimit": "150000",
+            "creditUsed": "78527.65",
+            "paymentTerms": 30,
+            "salesPersonId": null,
+            "isActive": true,
+            "notes": null,
+            "createdAt": "2026-07-27T09:44:24.079Z",
+            "updatedAt": "2026-07-28T05:24:50.358Z",
+            "deletedAt": null
+          },
+          "items": [
+            {
+              "id": "5a9e649b-c47e-457a-9eca-a290e27327b7",
+              "salesOrderId": "756841a5-1517-4734-b785-7fc0d3cfca19",
+              "productId": "8de4000a-d8b3-47bc-9ad2-fa2c7f333e6d",
+              "quantity": 10,
+              "deliveredQty": 10,
+              "unitPrice": "550",
+              "discount": "0",
+              "totalPrice": "5500",
+              "product": {
+                "id": "8de4000a-d8b3-47bc-9ad2-fa2c7f333e6d",
+                "companyId": "00000000-0000-0000-0000-000000000001",
+                "sku": "EU2442/55/79",
+                "barcode": null,
+                "name": "22060",
+                "categoryId": "1cb0796b-6771-47f1-acd1-f6605a514d35",
+                "description": "",
+                "weight": null,
+                "length": null,
+                "width": null,
+                "height": null,
+                "imageUrl": null,
+                "manufacturingCost": "0",
+                "sellingPrice": "700",
+                "distributorPrice": "550",
+                "retailPrice": "600",
+                "minStockLevel": 50,
+                "isImported": false,
+                "requiresProduction": false,
+                "isActive": true,
+                "createdAt": "2026-07-27T09:52:27.744Z",
+                "updatedAt": "2026-07-27T09:52:27.744Z",
+                "deletedAt": null
+              }
+            },
+            {
+              "id": "ff16c2a2-8840-4cab-b789-c1f96688008a",
+              "salesOrderId": "756841a5-1517-4734-b785-7fc0d3cfca19",
+              "productId": "f2cb358e-6100-4635-9f6b-453db46e15eb",
+              "quantity": 10,
+              "deliveredQty": 10,
+              "unitPrice": "280",
+              "discount": "0",
+              "totalPrice": "2800",
+              "product": {
+                "id": "f2cb358e-6100-4635-9f6b-453db46e15eb",
+                "companyId": "00000000-0000-0000-0000-000000000001",
+                "sku": "EU2442/55/3",
+                "barcode": null,
+                "name": "2250",
+                "categoryId": "f4360550-0689-4867-845a-1041e621c58c",
+                "description": "",
+                "weight": null,
+                "length": null,
+                "width": null,
+                "height": null,
+                "imageUrl": null,
+                "manufacturingCost": "0",
+                "sellingPrice": "300",
+                "distributorPrice": "250",
+                "retailPrice": "280",
+                "minStockLevel": 50,
+                "isImported": false,
+                "requiresProduction": false,
+                "isActive": true,
+                "createdAt": "2026-07-27T09:50:52.910Z",
+                "updatedAt": "2026-07-27T09:50:52.910Z",
+                "deletedAt": null
+              }
+            }
+          ],
+          "createdBy": {
+            "firstName": "Jacinta",
+            "lastName": "Njeri"
+          },
+          "salesPerson": {
+            "id": "e86baa14-0197-479c-a606-07452865f5d5",
+            "firstName": "Jacinta",
+            "lastName": "Njeri"
+          },
+          "deliveries": [
+            {
+              "id": "e5b9816e-13cb-436d-ba39-cf30cdabd54e",
+              "deliveryNo": "DN-2026-00005",
+              "status": "DELIVERED"
+            }
+          ]
+        },
+        {
+          "id": "25a937b3-2834-41fe-8cf8-d28c9947b4ec",
+          "companyId": "00000000-0000-0000-0000-000000000001",
+          "orderNumber": "SO-2026-00004",
+          "customerId": "c73e26e6-a683-4486-9a9a-31ff4328c994",
+          "quotationId": null,
+          "createdById": "e86baa14-0197-479c-a606-07452865f5d5",
+          "salesPersonId": "e86baa14-0197-479c-a606-07452865f5d5",
+          "orderDate": "2026-07-27T12:15:26.572Z",
+          "requiredDate": "2026-07-27T00:00:00.000Z",
+          "status": "COMPLETED",
+          "subtotal": "30500",
+          "taxAmount": "4880",
+          "totalAmount": "35380",
+          "notes": "",
+          "createdAt": "2026-07-27T12:15:26.572Z",
+          "updatedAt": "2026-07-27T12:32:22.792Z",
+          "customer": {
+            "id": "c73e26e6-a683-4486-9a9a-31ff4328c994",
+            "companyId": "00000000-0000-0000-0000-000000000001",
+            "code": "sfewwr",
+            "name": "Bliss",
+            "type": "RETAIL_SHOP",
+            "email": "josphatoleteipa@gmail.com",
+            "phone": "0780366924",
+            "address": null,
+            "city": "Nairobi",
+            "country": "Kenya",
+            "taxPin": "",
+            "creditLimit": "100000",
+            "creditUsed": "44660",
+            "paymentTerms": 30,
+            "salesPersonId": null,
+            "isActive": true,
+            "notes": null,
+            "createdAt": "2026-07-27T09:43:33.971Z",
+            "updatedAt": "2026-07-27T12:32:22.825Z",
+            "deletedAt": null
+          },
+          "items": [
+            {
+              "id": "8356a24e-e61e-4976-a20c-ff8a9f833019",
+              "salesOrderId": "25a937b3-2834-41fe-8cf8-d28c9947b4ec",
+              "productId": "8de4000a-d8b3-47bc-9ad2-fa2c7f333e6d",
+              "quantity": 10,
+              "deliveredQty": 10,
+              "unitPrice": "550",
+              "discount": "0",
+              "totalPrice": "5500",
+              "product": {
+                "id": "8de4000a-d8b3-47bc-9ad2-fa2c7f333e6d",
+                "companyId": "00000000-0000-0000-0000-000000000001",
+                "sku": "EU2442/55/79",
+                "barcode": null,
+                "name": "22060",
+                "categoryId": "1cb0796b-6771-47f1-acd1-f6605a514d35",
+                "description": "",
+                "weight": null,
+                "length": null,
+                "width": null,
+                "height": null,
+                "imageUrl": null,
+                "manufacturingCost": "0",
+                "sellingPrice": "700",
+                "distributorPrice": "550",
+                "retailPrice": "600",
+                "minStockLevel": 50,
+                "isImported": false,
+                "requiresProduction": false,
+                "isActive": true,
+                "createdAt": "2026-07-27T09:52:27.744Z",
+                "updatedAt": "2026-07-27T09:52:27.744Z",
+                "deletedAt": null
+              }
+            },
+            {
+              "id": "fb5bc331-befa-47be-aed7-5ee723614569",
+              "salesOrderId": "25a937b3-2834-41fe-8cf8-d28c9947b4ec",
+              "productId": "f2cb358e-6100-4635-9f6b-453db46e15eb",
+              "quantity": 100,
+              "deliveredQty": 100,
+              "unitPrice": "250",
+              "discount": "0",
+              "totalPrice": "25000",
+              "product": {
+                "id": "f2cb358e-6100-4635-9f6b-453db46e15eb",
+                "companyId": "00000000-0000-0000-0000-000000000001",
+                "sku": "EU2442/55/3",
+                "barcode": null,
+                "name": "2250",
+                "categoryId": "f4360550-0689-4867-845a-1041e621c58c",
+                "description": "",
+                "weight": null,
+                "length": null,
+                "width": null,
+                "height": null,
+                "imageUrl": null,
+                "manufacturingCost": "0",
+                "sellingPrice": "300",
+                "distributorPrice": "250",
+                "retailPrice": "280",
+                "minStockLevel": 50,
+                "isImported": false,
+                "requiresProduction": false,
+                "isActive": true,
+                "createdAt": "2026-07-27T09:50:52.910Z",
+                "updatedAt": "2026-07-27T09:50:52.910Z",
+                "deletedAt": null
+              }
+            }
+          ],
+          "createdBy": {
+            "firstName": "Jacinta",
+            "lastName": "Njeri"
+          },
+          "salesPerson": {
+            "id": "e86baa14-0197-479c-a606-07452865f5d5",
+            "firstName": "Jacinta",
+            "lastName": "Njeri"
+          },
+          "deliveries": [
+            {
+              "id": "422a39a7-89fc-4d25-9413-4cb33c5d9523",
+              "deliveryNo": "DN-2026-00004",
+              "status": "DELIVERED"
+            }
+          ]
+        },
+        {
+          "id": "6f05ce9f-759a-4ab2-a1e8-8002923a1bcf",
+          "companyId": "00000000-0000-0000-0000-000000000001",
+          "orderNumber": "SO-2026-00003",
+          "customerId": "9d2656e9-ddec-497f-8400-a98980edf238",
+          "quotationId": null,
+          "createdById": "8756a414-2227-4964-b7e8-6a1faab9faaa",
+          "salesPersonId": "8756a414-2227-4964-b7e8-6a1faab9faaa",
+          "orderDate": "2026-07-27T11:13:57.655Z",
+          "requiredDate": "2026-07-27T00:00:00.000Z",
+          "status": "COMPLETED",
+          "subtotal": "7000",
+          "taxAmount": "1120",
+          "totalAmount": "8120",
+          "notes": "",
+          "createdAt": "2026-07-27T11:13:57.655Z",
+          "updatedAt": "2026-07-27T12:13:53.615Z",
+          "customer": {
+            "id": "9d2656e9-ddec-497f-8400-a98980edf238",
+            "companyId": "00000000-0000-0000-0000-000000000001",
+            "code": "SSW",
+            "name": "Witima",
+            "type": "DEALER",
+            "email": "josphatoleteipa@gmail.com",
+            "phone": "0789366924",
+            "address": null,
+            "city": "Nairobi",
+            "country": "Kenya",
+            "taxPin": "",
+            "creditLimit": "150000",
+            "creditUsed": "78527.65",
+            "paymentTerms": 30,
+            "salesPersonId": null,
+            "isActive": true,
+            "notes": null,
+            "createdAt": "2026-07-27T09:44:24.079Z",
+            "updatedAt": "2026-07-28T05:24:50.358Z",
+            "deletedAt": null
+          },
+          "items": [
+            {
+              "id": "3c11fdf8-690d-4a9d-a675-c98778570437",
+              "salesOrderId": "6f05ce9f-759a-4ab2-a1e8-8002923a1bcf",
+              "productId": "f2cb358e-6100-4635-9f6b-453db46e15eb",
+              "quantity": 10,
+              "deliveredQty": 10,
+              "unitPrice": "200",
+              "discount": "0",
+              "totalPrice": "2000",
+              "product": {
+                "id": "f2cb358e-6100-4635-9f6b-453db46e15eb",
+                "companyId": "00000000-0000-0000-0000-000000000001",
+                "sku": "EU2442/55/3",
+                "barcode": null,
+                "name": "2250",
+                "categoryId": "f4360550-0689-4867-845a-1041e621c58c",
+                "description": "",
+                "weight": null,
+                "length": null,
+                "width": null,
+                "height": null,
+                "imageUrl": null,
+                "manufacturingCost": "0",
+                "sellingPrice": "300",
+                "distributorPrice": "250",
+                "retailPrice": "280",
+                "minStockLevel": 50,
+                "isImported": false,
+                "requiresProduction": false,
+                "isActive": true,
+                "createdAt": "2026-07-27T09:50:52.910Z",
+                "updatedAt": "2026-07-27T09:50:52.910Z",
+                "deletedAt": null
+              }
+            },
+            {
+              "id": "5c047912-3009-4c89-8c12-d53440eef964",
+              "salesOrderId": "6f05ce9f-759a-4ab2-a1e8-8002923a1bcf",
+              "productId": "8de4000a-d8b3-47bc-9ad2-fa2c7f333e6d",
+              "quantity": 10,
+              "deliveredQty": 10,
+              "unitPrice": "500",
+              "discount": "0",
+              "totalPrice": "5000",
+              "product": {
+                "id": "8de4000a-d8b3-47bc-9ad2-fa2c7f333e6d",
+                "companyId": "00000000-0000-0000-0000-000000000001",
+                "sku": "EU2442/55/79",
+                "barcode": null,
+                "name": "22060",
+                "categoryId": "1cb0796b-6771-47f1-acd1-f6605a514d35",
+                "description": "",
+                "weight": null,
+                "length": null,
+                "width": null,
+                "height": null,
+                "imageUrl": null,
+                "manufacturingCost": "0",
+                "sellingPrice": "700",
+                "distributorPrice": "550",
+                "retailPrice": "600",
+                "minStockLevel": 50,
+                "isImported": false,
+                "requiresProduction": false,
+                "isActive": true,
+                "createdAt": "2026-07-27T09:52:27.744Z",
+                "updatedAt": "2026-07-27T09:52:27.744Z",
+                "deletedAt": null
+              }
+            }
+          ],
+          "createdBy": {
+            "firstName": "Harrison",
+            "lastName": "Maina"
+          },
+          "salesPerson": {
+            "id": "8756a414-2227-4964-b7e8-6a1faab9faaa",
+            "firstName": "Harrison",
+            "lastName": "Maina"
+          },
+          "deliveries": [
+            {
+              "id": "810314cd-8605-4c19-98c4-abc642ba2c40",
+              "deliveryNo": "DN-2026-00003",
+              "status": "DELIVERED"
+            }
+          ]
+        },
+        {
+          "id": "87006c14-a1df-45e3-aee6-2caa81a9e93a",
+          "companyId": "00000000-0000-0000-0000-000000000001",
+          "orderNumber": "SO-2026-00002",
+          "customerId": "9d2656e9-ddec-497f-8400-a98980edf238",
+          "quotationId": null,
+          "createdById": "8756a414-2227-4964-b7e8-6a1faab9faaa",
+          "salesPersonId": "8756a414-2227-4964-b7e8-6a1faab9faaa",
+          "orderDate": "2026-07-27T10:03:33.863Z",
+          "requiredDate": "2026-07-27T00:00:00.000Z",
+          "status": "COMPLETED",
+          "subtotal": "80000",
+          "taxAmount": "12800",
+          "totalAmount": "92800",
+          "notes": "",
+          "createdAt": "2026-07-27T10:03:33.863Z",
+          "updatedAt": "2026-07-27T11:14:05.423Z",
+          "customer": {
+            "id": "9d2656e9-ddec-497f-8400-a98980edf238",
+            "companyId": "00000000-0000-0000-0000-000000000001",
+            "code": "SSW",
+            "name": "Witima",
+            "type": "DEALER",
+            "email": "josphatoleteipa@gmail.com",
+            "phone": "0789366924",
+            "address": null,
+            "city": "Nairobi",
+            "country": "Kenya",
+            "taxPin": "",
+            "creditLimit": "150000",
+            "creditUsed": "78527.65",
+            "paymentTerms": 30,
+            "salesPersonId": null,
+            "isActive": true,
+            "notes": null,
+            "createdAt": "2026-07-27T09:44:24.079Z",
+            "updatedAt": "2026-07-28T05:24:50.358Z",
+            "deletedAt": null
+          },
+          "items": [
+            {
+              "id": "3cf2f5d8-903e-460f-9f5e-7df63c92f588",
+              "salesOrderId": "87006c14-a1df-45e3-aee6-2caa81a9e93a",
+              "productId": "8de4000a-d8b3-47bc-9ad2-fa2c7f333e6d",
+              "quantity": 100,
+              "deliveredQty": 100,
+              "unitPrice": "550",
+              "discount": "0",
+              "totalPrice": "55000",
+              "product": {
+                "id": "8de4000a-d8b3-47bc-9ad2-fa2c7f333e6d",
+                "companyId": "00000000-0000-0000-0000-000000000001",
+                "sku": "EU2442/55/79",
+                "barcode": null,
+                "name": "22060",
+                "categoryId": "1cb0796b-6771-47f1-acd1-f6605a514d35",
+                "description": "",
+                "weight": null,
+                "length": null,
+                "width": null,
+                "height": null,
+                "imageUrl": null,
+                "manufacturingCost": "0",
+                "sellingPrice": "700",
+                "distributorPrice": "550",
+                "retailPrice": "600",
+                "minStockLevel": 50,
+                "isImported": false,
+                "requiresProduction": false,
+                "isActive": true,
+                "createdAt": "2026-07-27T09:52:27.744Z",
+                "updatedAt": "2026-07-27T09:52:27.744Z",
+                "deletedAt": null
+              }
+            },
+            {
+              "id": "bfba19e2-271b-4978-a158-6bf8bc5adb72",
+              "salesOrderId": "87006c14-a1df-45e3-aee6-2caa81a9e93a",
+              "productId": "f2cb358e-6100-4635-9f6b-453db46e15eb",
+              "quantity": 100,
+              "deliveredQty": 100,
+              "unitPrice": "250",
+              "discount": "0",
+              "totalPrice": "25000",
+              "product": {
+                "id": "f2cb358e-6100-4635-9f6b-453db46e15eb",
+                "companyId": "00000000-0000-0000-0000-000000000001",
+                "sku": "EU2442/55/3",
+                "barcode": null,
+                "name": "2250",
+                "categoryId": "f4360550-0689-4867-845a-1041e621c58c",
+                "description": "",
+                "weight": null,
+                "length": null,
+                "width": null,
+                "height": null,
+                "imageUrl": null,
+                "manufacturingCost": "0",
+                "sellingPrice": "300",
+                "distributorPrice": "250",
+                "retailPrice": "280",
+                "minStockLevel": 50,
+                "isImported": false,
+                "requiresProduction": false,
+                "isActive": true,
+                "createdAt": "2026-07-27T09:50:52.910Z",
+                "updatedAt": "2026-07-27T09:50:52.910Z",
+                "deletedAt": null
+              }
+            }
+          ],
+          "createdBy": {
+            "firstName": "Harrison",
+            "lastName": "Maina"
+          },
+          "salesPerson": {
+            "id": "8756a414-2227-4964-b7e8-6a1faab9faaa",
+            "firstName": "Harrison",
+            "lastName": "Maina"
+          },
+          "deliveries": [
+            {
+              "id": "6da5c50f-e38a-4093-be30-c25d0caf2c3a",
+              "deliveryNo": "DN-2026-00002",
+              "status": "DELIVERED"
+            }
+          ]
+        },
+        {
+          "id": "6d78153a-558d-416c-836e-5d35b5018195",
+          "companyId": "00000000-0000-0000-0000-000000000001",
+          "orderNumber": "SO-2026-00001",
+          "customerId": "c73e26e6-a683-4486-9a9a-31ff4328c994",
+          "quotationId": null,
+          "createdById": "7ee89b37-5a70-4422-98dd-d80f6fe32fa8",
+          "salesPersonId": "7ee89b37-5a70-4422-98dd-d80f6fe32fa8",
+          "orderDate": "2026-07-27T09:58:22.210Z",
+          "requiredDate": "2026-07-27T00:00:00.000Z",
+          "status": "COMPLETED",
+          "subtotal": "8000",
+          "taxAmount": "1280",
+          "totalAmount": "9280",
+          "notes": "",
+          "createdAt": "2026-07-27T09:58:22.210Z",
+          "updatedAt": "2026-07-27T09:59:57.542Z",
+          "customer": {
+            "id": "c73e26e6-a683-4486-9a9a-31ff4328c994",
+            "companyId": "00000000-0000-0000-0000-000000000001",
+            "code": "sfewwr",
+            "name": "Bliss",
+            "type": "RETAIL_SHOP",
+            "email": "josphatoleteipa@gmail.com",
+            "phone": "0780366924",
+            "address": null,
+            "city": "Nairobi",
+            "country": "Kenya",
+            "taxPin": "",
+            "creditLimit": "100000",
+            "creditUsed": "44660",
+            "paymentTerms": 30,
+            "salesPersonId": null,
+            "isActive": true,
+            "notes": null,
+            "createdAt": "2026-07-27T09:43:33.971Z",
+            "updatedAt": "2026-07-27T12:32:22.825Z",
+            "deletedAt": null
+          },
+          "items": [
+            {
+              "id": "1c5d9a44-ab32-428e-bf3c-0e1baf0ae0b0",
+              "salesOrderId": "6d78153a-558d-416c-836e-5d35b5018195",
+              "productId": "f2cb358e-6100-4635-9f6b-453db46e15eb",
+              "quantity": 10,
+              "deliveredQty": 10,
+              "unitPrice": "250",
+              "discount": "0",
+              "totalPrice": "2500",
+              "product": {
+                "id": "f2cb358e-6100-4635-9f6b-453db46e15eb",
+                "companyId": "00000000-0000-0000-0000-000000000001",
+                "sku": "EU2442/55/3",
+                "barcode": null,
+                "name": "2250",
+                "categoryId": "f4360550-0689-4867-845a-1041e621c58c",
+                "description": "",
+                "weight": null,
+                "length": null,
+                "width": null,
+                "height": null,
+                "imageUrl": null,
+                "manufacturingCost": "0",
+                "sellingPrice": "300",
+                "distributorPrice": "250",
+                "retailPrice": "280",
+                "minStockLevel": 50,
+                "isImported": false,
+                "requiresProduction": false,
+                "isActive": true,
+                "createdAt": "2026-07-27T09:50:52.910Z",
+                "updatedAt": "2026-07-27T09:50:52.910Z",
+                "deletedAt": null
+              }
+            },
+            {
+              "id": "b3c1491c-9bb5-4a0f-8482-d11523021c3c",
+              "salesOrderId": "6d78153a-558d-416c-836e-5d35b5018195",
+              "productId": "8de4000a-d8b3-47bc-9ad2-fa2c7f333e6d",
+              "quantity": 10,
+              "deliveredQty": 10,
+              "unitPrice": "550",
+              "discount": "0",
+              "totalPrice": "5500",
+              "product": {
+                "id": "8de4000a-d8b3-47bc-9ad2-fa2c7f333e6d",
+                "companyId": "00000000-0000-0000-0000-000000000001",
+                "sku": "EU2442/55/79",
+                "barcode": null,
+                "name": "22060",
+                "categoryId": "1cb0796b-6771-47f1-acd1-f6605a514d35",
+                "description": "",
+                "weight": null,
+                "length": null,
+                "width": null,
+                "height": null,
+                "imageUrl": null,
+                "manufacturingCost": "0",
+                "sellingPrice": "700",
+                "distributorPrice": "550",
+                "retailPrice": "600",
+                "minStockLevel": 50,
+                "isImported": false,
+                "requiresProduction": false,
+                "isActive": true,
+                "createdAt": "2026-07-27T09:52:27.744Z",
+                "updatedAt": "2026-07-27T09:52:27.744Z",
+                "deletedAt": null
+              }
+            }
+          ],
+          "createdBy": {
+            "firstName": "Cosmas",
+            "lastName": "Kimutai"
+          },
+          "salesPerson": {
+            "id": "7ee89b37-5a70-4422-98dd-d80f6fe32fa8",
+            "firstName": "Cosmas",
+            "lastName": "Kimutai"
+          },
+          "deliveries": [
+            {
+              "id": "e5656c90-7db1-4b2b-b4f8-11aad57bb0c1",
+              "deliveryNo": "DN-2026-00001",
+              "status": "DELIVERED"
+            }
+          ]
+        }
+      ],
+      "pagination": {
+        "page": 1,
+        "limit": 10,
+        "total": 7,
+        "totalPages": 1
+      }
+    },
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "x-ratelimit-remaining": null,
+      "content-security-policy": "default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests",
+      "x-content-type-options": "nosniff",
+      "strict-transport-security": "max-age=31536000; includeSubDomains",
+      "x-frame-options": "SAMEORIGIN"
+    }
+  },
+  {
+    "endpoint": "/api/v1/operations/quotations?limit=10",
+    "url": "http://localhost:3001/api/v1/operations/quotations?limit=10",
+    "method": "GET",
+    "status": 200,
+    "ms": 20.067,
+    "bytes": 86,
+    "ok": true,
+    "error": null,
+    "json": {
+      "success": true,
+      "data": [],
+      "pagination": {
+        "page": 1,
+        "limit": 10,
+        "total": 0,
+        "totalPages": 0
+      }
+    },
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "x-ratelimit-remaining": null,
+      "content-security-policy": "default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests",
+      "x-content-type-options": "nosniff",
+      "strict-transport-security": "max-age=31536000; includeSubDomains",
+      "x-frame-options": "SAMEORIGIN"
+    }
+  },
+  {
+    "endpoint": "/api/v1/operations/sales-officers",
+    "url": "http://localhost:3001/api/v1/operations/sales-officers",
+    "method": "GET",
+    "status": 200,
+    "ms": 23.433,
+    "bytes": 221,
+    "ok": true,
+    "error": null,
+    "json": {
+      "success": true,
+      "data": [
+        {
+          "id": "8756a414-2227-4964-b7e8-6a1faab9faaa",
+          "name": "Harrison Maina",
+          "email": "harrison@gmail.com"
+        },
+        {
+          "id": "e86baa14-0197-479c-a606-07452865f5d5",
+          "name": "Jacinta Njeri",
+          "email": "jacinta@gmail.com"
+        }
+      ]
+    },
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "x-ratelimit-remaining": null,
+      "content-security-policy": "default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests",
+      "x-content-type-options": "nosniff",
+      "strict-transport-security": "max-age=31536000; includeSubDomains",
+      "x-frame-options": "SAMEORIGIN"
+    }
+  },
+  {
+    "endpoint": "/api/v1/operations/work-orders?limit=10",
+    "url": "http://localhost:3001/api/v1/operations/work-orders?limit=10",
+    "method": "GET",
+    "status": 404,
+    "ms": 13.622,
+    "bytes": 45,
+    "ok": false,
+    "error": null,
+    "json": {
+      "success": false,
+      "message": "Route not found"
+    },
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "x-ratelimit-remaining": null,
+      "content-security-policy": "default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests",
+      "x-content-type-options": "nosniff",
+      "strict-transport-security": "max-age=31536000; includeSubDomains",
+      "x-frame-options": "SAMEORIGIN"
+    }
+  },
+  {
+    "endpoint": "/api/v1/finance/invoices?limit=10",
+    "url": "http://localhost:3001/api/v1/finance/invoices?limit=10",
+    "method": "GET",
+    "status": 200,
+    "ms": 47.219,
+    "bytes": 14695,
+    "ok": true,
+    "error": null,
+    "json": {
+      "success": true,
+      "data": [
+        {
+          "id": "7bf8c4c2-4cbb-44f0-bc7c-331078fb82b6",
+          "companyId": "00000000-0000-0000-0000-000000000001",
+          "invoiceNumber": "INV-2026-00007",
+          "type": "SALES",
+          "customerId": "9d2656e9-ddec-497f-8400-a98980edf238",
+          "supplierId": null,
+          "salesOrderId": "7b20e194-737b-4655-98c6-0ba0555afdfe",
+          "purchaseOrderId": null,
+          "deliveryNoteId": "d3ba6136-5e9a-4753-8566-036e8773c5ca",
+          "goodsReceiptId": null,
+          "invoiceDate": "2026-07-27T13:53:27.344Z",
+          "dueDate": "2026-08-26T13:53:27.342Z",
+          "subtotal": "7500",
+          "taxAmount": "1200",
+          "customerVatAmount": "0",
+          "companyVatAmount": "0",
+          "totalAmount": "8700",
+          "paidAmount": "0",
+          "status": "UNPAID",
+          "notes": null,
+          "fiscalStatus": "PENDING",
+          "etimsQrCode": null,
+          "etimsControlCode": null,
+          "etimsSubmittedAt": null,
+          "etimsInvoiceNumber": null,
+          "createdAt": "2026-07-27T13:53:27.344Z",
+          "updatedAt": "2026-07-27T13:53:49.721Z",
+          "customer": {
+            "id": "9d2656e9-ddec-497f-8400-a98980edf238",
+            "companyId": "00000000-0000-0000-0000-000000000001",
+            "code": "SSW",
+            "name": "Witima",
+            "type": "DEALER",
+            "email": "josphatoleteipa@gmail.com",
+            "phone": "0789366924",
+            "address": null,
+            "city": "Nairobi",
+            "country": "Kenya",
+            "taxPin": "",
+            "creditLimit": "150000",
+            "creditUsed": "78527.65",
+            "paymentTerms": 30,
+            "salesPersonId": null,
+            "isActive": true,
+            "notes": null,
+            "createdAt": "2026-07-27T09:44:24.079Z",
+            "updatedAt": "2026-07-28T05:24:50.358Z",
+            "deletedAt": null
+          },
+          "supplier": null,
+          "items": [
+            {
+              "id": "23af80ba-2827-4042-a0c2-55c31ffa30e6",
+              "invoiceId": "7bf8c4c2-4cbb-44f0-bc7c-331078fb82b6",
+              "description": "22060",
+              "quantity": "10",
+              "unitPrice": "500",
+              "taxRate": "16",
+              "totalPrice": "5000"
+            },
+            {
+              "id": "ba39ae56-d1f6-490c-9036-911a0c2f26c6",
+              "invoiceId": "7bf8c4c2-4cbb-44f0-bc7c-331078fb82b6",
+              "description": "2250",
+              "quantity": "10",
+              "unitPrice": "250",
+              "taxRate": "16",
+              "totalPrice": "2500"
+            }
+          ],
+          "payments": [],
+          "salesOrder": {
+            "id": "7b20e194-737b-4655-98c6-0ba0555afdfe",
+            "orderNumber": "SO-2026-00007",
+            "salesPersonId": null,
+            "salesPerson": null,
+            "createdBy": {
+              "id": "7ee89b37-5a70-4422-98dd-d80f6fe32fa8",
+              "firstName": "Cosmas",
+              "lastName": "Kimutai"
+            }
+          }
+        },
+        {
+          "id": "144d6ec6-1016-47d1-9007-7db556803769",
+          "companyId": "00000000-0000-0000-0000-000000000001",
+          "invoiceNumber": "INV-2026-00006",
+          "type": "SALES",
+          "customerId": "9d2656e9-ddec-497f-8400-a98980edf238",
+          "supplierId": null,
+          "salesOrderId": "bbaaf378-adc3-455f-a9d9-13e002d5e9b2",
+          "purchaseOrderId": null,
+          "deliveryNoteId": "fc070fee-5803-4814-b98a-8b673e6c7a5b",
+          "goodsReceiptId": null,
+          "invoiceDate": "2026-07-27T12:55:24.605Z",
+          "dueDate": "2026-08-26T12:55:24.603Z",
+          "subtotal": "7999.7",
+          "taxAmount": "1279.95",
+          "customerVatAmount": "0",
+          "companyVatAmount": "0",
+          "totalAmount": "9279.65",
+          "paidAmount": "0",
+          "status": "UNPAID",
+          "notes": null,
+          "fiscalStatus": "PENDING",
+          "etimsQrCode": null,
+          "etimsControlCode": null,
+          "etimsSubmittedAt": null,
+          "etimsInvoiceNumber": null,
+          "createdAt": "2026-07-27T12:55:24.605Z",
+          "updatedAt": "2026-07-27T12:56:31.647Z",
+          "customer": {
+            "id": "9d2656e9-ddec-497f-8400-a98980edf238",
+            "companyId": "00000000-0000-0000-0000-000000000001",
+            "code": "SSW",
+            "name": "Witima",
+            "type": "DEALER",
+            "email": "josphatoleteipa@gmail.com",
+            "phone": "0789366924",
+            "address": null,
+            "city": "Nairobi",
+            "country": "Kenya",
+            "taxPin": "",
+            "creditLimit": "150000",
+            "creditUsed": "78527.65",
+            "paymentTerms": 30,
+            "salesPersonId": null,
+            "isActive": true,
+            "notes": null,
+            "createdAt": "2026-07-27T09:44:24.079Z",
+            "updatedAt": "2026-07-28T05:24:50.358Z",
+            "deletedAt": null
+          },
+          "supplier": null,
+          "items": [
+            {
+              "id": "0d1f5449-5a80-433c-bc4a-c22709c0562e",
+              "invoiceId": "144d6ec6-1016-47d1-9007-7db556803769",
+              "description": "2250",
+              "quantity": "15",
+              "unitPrice": "199.98",
+              "taxRate": "16",
+              "totalPrice": "2999.7"
+            },
+            {
+              "id": "52fbe0b9-4cd5-47f4-9f62-fcb6a0c20daf",
+              "invoiceId": "144d6ec6-1016-47d1-9007-7db556803769",
+              "description": "22060",
+              "quantity": "10",
+              "unitPrice": "500",
+              "taxRate": "16",
+              "totalPrice": "5000"
+            }
+          ],
+          "payments": [],
+          "salesOrder": {
+            "id": "bbaaf378-adc3-455f-a9d9-13e002d5e9b2",
+            "orderNumber": "SO-2026-00006",
+            "salesPersonId": "e86baa14-0197-479c-a606-07452865f5d5",
+            "salesPerson": {
+              "id": "e86baa14-0197-479c-a606-07452865f5d5",
+              "firstName": "Jacinta",
+              "lastName": "Njeri"
+            },
+            "createdBy": {
+              "id": "e86baa14-0197-479c-a606-07452865f5d5",
+              "firstName": "Jacinta",
+              "lastName": "Njeri"
+            }
+          }
+        },
+        {
+          "id": "8e0d44f0-031e-453f-9731-f13176e2a9c8",
+          "companyId": "00000000-0000-0000-0000-000000000001",
+          "invoiceNumber": "INV-2026-00005",
+          "type": "SALES",
+          "customerId": "9d2656e9-ddec-497f-8400-a98980edf238",
+          "supplierId": null,
+          "salesOrderId": "756841a5-1517-4734-b785-7fc0d3cfca19",
+          "purchaseOrderId": null,
+          "deliveryNoteId": "e5b9816e-13cb-436d-ba39-cf30cdabd54e",
+          "goodsReceiptId": null,
+          "invoiceDate": "2026-07-27T12:35:51.441Z",
+          "dueDate": "2026-08-26T12:35:51.440Z",
+          "subtotal": "8300",
+          "taxAmount": "1328",
+          "customerVatAmount": "0",
+          "companyVatAmount": "0",
+          "totalAmount": "9628",
+          "paidAmount": "0",
+          "status": "UNPAID",
+          "notes": null,
+          "fiscalStatus": "PENDING",
+          "etimsQrCode": null,
+          "etimsControlCode": null,
+          "etimsSubmittedAt": null,
+          "etimsInvoiceNumber": null,
+          "createdAt": "2026-07-27T12:35:51.441Z",
+          "updatedAt": "2026-07-27T12:54:53.960Z",
+          "customer": {
+            "id": "9d2656e9-ddec-497f-8400-a98980edf238",
+            "companyId": "00000000-0000-0000-0000-000000000001",
+            "code": "SSW",
+            "name": "Witima",
+            "type": "DEALER",
+            "email": "josphatoleteipa@gmail.com",
+            "phone": "0789366924",
+            "address": null,
+            "city": "Nairobi",
+            "country": "Kenya",
+            "taxPin": "",
+            "creditLimit": "150000",
+            "creditUsed": "78527.65",
+            "paymentTerms": 30,
+            "salesPersonId": null,
+            "isActive": true,
+            "notes": null,
+            "createdAt": "2026-07-27T09:44:24.079Z",
+            "updatedAt": "2026-07-28T05:24:50.358Z",
+            "deletedAt": null
+          },
+          "supplier": null,
+          "items": [
+            {
+              "id": "7c5a1f34-fee2-44ce-8087-7d2b9b917e3a",
+              "invoiceId": "8e0d44f0-031e-453f-9731-f13176e2a9c8",
+              "description": "22060",
+              "quantity": "10",
+              "unitPrice": "550",
+              "taxRate": "16",
+              "totalPrice": "5500"
+            },
+            {
+              "id": "c4f8b25d-0f12-419f-91d2-cbcc56390332",
+              "invoiceId": "8e0d44f0-031e-453f-9731-f13176e2a9c8",
+              "description": "2250",
+              "quantity": "10",
+              "unitPrice": "280",
+              "taxRate": "16",
+              "totalPrice": "2800"
+            }
+          ],
+          "payments": [],
+          "salesOrder": {
+            "id": "756841a5-1517-4734-b785-7fc0d3cfca19",
+            "orderNumber": "SO-2026-00005",
+            "salesPersonId": "e86baa14-0197-479c-a606-07452865f5d5",
+            "salesPerson": {
+              "id": "e86baa14-0197-479c-a606-07452865f5d5",
+              "firstName": "Jacinta",
+              "lastName": "Njeri"
+            },
+            "createdBy": {
+              "id": "e86baa14-0197-479c-a606-07452865f5d5",
+              "firstName": "Jacinta",
+              "lastName": "Njeri"
+            }
+          }
+        },
+        {
+          "id": "50f88342-1a4b-49dd-8ab7-25dc58437010",
+          "companyId": "00000000-0000-0000-0000-000000000001",
+          "invoiceNumber": "INV-2026-00004",
+          "type": "SALES",
+          "customerId": "c73e26e6-a683-4486-9a9a-31ff4328c994",
+          "supplierId": null,
+          "salesOrderId": "25a937b3-2834-41fe-8cf8-d28c9947b4ec",
+          "purchaseOrderId": null,
+          "deliveryNoteId": "422a39a7-89fc-4d25-9413-4cb33c5d9523",
+          "goodsReceiptId": null,
+          "invoiceDate": "2026-07-27T12:16:19.750Z",
+          "dueDate": "2026-08-26T12:16:19.747Z",
+          "subtotal": "30500",
+          "taxAmount": "4880",
+          "customerVatAmount": "0",
+          "companyVatAmount": "0",
+          "totalAmount": "35380",
+          "paidAmount": "0",
+          "status": "UNPAID",
+          "notes": null,
+          "fiscalStatus": "PENDING",
+          "etimsQrCode": null,
+          "etimsControlCode": null,
+          "etimsSubmittedAt": null,
+          "etimsInvoiceNumber": null,
+          "createdAt": "2026-07-27T12:16:19.750Z",
+          "updatedAt": "2026-07-27T12:17:15.842Z",
+          "customer": {
+            "id": "c73e26e6-a683-4486-9a9a-31ff4328c994",
+            "companyId": "00000000-0000-0000-0000-000000000001",
+            "code": "sfewwr",
+            "name": "Bliss",
+            "type": "RETAIL_SHOP",
+            "email": "josphatoleteipa@gmail.com",
+            "phone": "0780366924",
+            "address": null,
+            "city": "Nairobi",
+            "country": "Kenya",
+            "taxPin": "",
+            "creditLimit": "100000",
+            "creditUsed": "44660",
+            "paymentTerms": 30,
+            "salesPersonId": null,
+            "isActive": true,
+            "notes": null,
+            "createdAt": "2026-07-27T09:43:33.971Z",
+            "updatedAt": "2026-07-27T12:32:22.825Z",
+            "deletedAt": null
+          },
+          "supplier": null,
+          "items": [
+            {
+              "id": "5c604974-11b9-4034-915a-18b80e69313e",
+              "invoiceId": "50f88342-1a4b-49dd-8ab7-25dc58437010",
+              "description": "22060",
+              "quantity": "10",
+              "unitPrice": "550",
+              "taxRate": "16",
+              "totalPrice": "5500"
+            },
+            {
+              "id": "be0d7ed8-6e2d-426a-a135-1edfe2f61a02",
+              "invoiceId": "50f88342-1a4b-49dd-8ab7-25dc58437010",
+              "description": "2250",
+              "quantity": "100",
+              "unitPrice": "250",
+              "taxRate": "16",
+              "totalPrice": "25000"
+            }
+          ],
+          "payments": [],
+          "salesOrder": {
+            "id": "25a937b3-2834-41fe-8cf8-d28c9947b4ec",
+            "orderNumber": "SO-2026-00004",
+            "salesPersonId": "e86baa14-0197-479c-a606-07452865f5d5",
+            "salesPerson": {
+              "id": "e86baa14-0197-479c-a606-07452865f5d5",
+              "firstName": "Jacinta",
+              "lastName": "Njeri"
+            },
+            "createdBy": {
+              "id": "e86baa14-0197-479c-a606-07452865f5d5",
+              "firstName": "Jacinta",
+              "lastName": "Njeri"
+            }
+          }
+        },
+        {
+          "id": "8c715eb4-a1a0-4e9a-9681-43f445a16448",
+          "companyId": "00000000-0000-0000-0000-000000000001",
+          "invoiceNumber": "INV-2026-00003",
+          "type": "SALES",
+          "customerId": "9d2656e9-ddec-497f-8400-a98980edf238",
+          "supplierId": null,
+          "salesOrderId": "6f05ce9f-759a-4ab2-a1e8-8002923a1bcf",
+          "purchaseOrderId": null,
+          "deliveryNoteId": "810314cd-8605-4c19-98c4-abc642ba2c40",
+          "goodsReceiptId": null,
+          "invoiceDate": "2026-07-27T11:18:40.927Z",
+          "dueDate": "2026-08-26T11:18:40.920Z",
+          "subtotal": "7000",
+          "taxAmount": "1120",
+          "customerVatAmount": "0",
+          "companyVatAmount": "0",
+          "totalAmount": "8120",
+          "paidAmount": "0",
+          "status": "UNPAID",
+          "notes": null,
+          "fiscalStatus": "PENDING",
+          "etimsQrCode": null,
+          "etimsControlCode": null,
+          "etimsSubmittedAt": null,
+          "etimsInvoiceNumber": null,
+          "createdAt": "2026-07-27T11:18:40.927Z",
+          "updatedAt": "2026-07-27T11:18:52.618Z",
+          "customer": {
+            "id": "9d2656e9-ddec-497f-8400-a98980edf238",
+            "companyId": "00000000-0000-0000-0000-000000000001",
+            "code": "SSW",
+            "name": "Witima",
+            "type": "DEALER",
+            "email": "josphatoleteipa@gmail.com",
+            "phone": "0789366924",
+            "address": null,
+            "city": "Nairobi",
+            "country": "Kenya",
+            "taxPin": "",
+            "creditLimit": "150000",
+            "creditUsed": "78527.65",
+            "paymentTerms": 30,
+            "salesPersonId": null,
+            "isActive": true,
+            "notes": null,
+            "createdAt": "2026-07-27T09:44:24.079Z",
+            "updatedAt": "2026-07-28T05:24:50.358Z",
+            "deletedAt": null
+          },
+          "supplier": null,
+          "items": [
+            {
+              "id": "da348f9c-de35-4a8e-800e-dc8bbf4f3d55",
+              "invoiceId": "8c715eb4-a1a0-4e9a-9681-43f445a16448",
+              "description": "2250",
+              "quantity": "10",
+              "unitPrice": "200",
+              "taxRate": "16",
+              "totalPrice": "2000"
+            },
+            {
+              "id": "da8de4a1-61b2-4754-9e4c-9a970aae622c",
+              "invoiceId": "8c715eb4-a1a0-4e9a-9681-43f445a16448",
+              "description": "22060",
+              "quantity": "10",
+              "unitPrice": "500",
+              "taxRate": "16",
+              "totalPrice": "5000"
+            }
+          ],
+          "payments": [],
+          "salesOrder": {
+            "id": "6f05ce9f-759a-4ab2-a1e8-8002923a1bcf",
+            "orderNumber": "SO-2026-00003",
+            "salesPersonId": "8756a414-2227-4964-b7e8-6a1faab9faaa",
+            "salesPerson": {
+              "id": "8756a414-2227-4964-b7e8-6a1faab9faaa",
+              "firstName": "Harrison",
+              "lastName": "Maina"
+            },
+            "createdBy": {
+              "id": "8756a414-2227-4964-b7e8-6a1faab9faaa",
+              "firstName": "Harrison",
+              "lastName": "Maina"
+            }
+          }
+        },
+        {
+          "id": "2eca6f25-5b7d-46ea-8151-a819fde201fc",
+          "companyId": "00000000-0000-0000-0000-000000000001",
+          "invoiceNumber": "INV-2026-00002",
+          "type": "SALES",
+          "customerId": "9d2656e9-ddec-497f-8400-a98980edf238",
+          "supplierId": null,
+          "salesOrderId": "87006c14-a1df-45e3-aee6-2caa81a9e93a",
+          "purchaseOrderId": null,
+          "deliveryNoteId": "6da5c50f-e38a-4093-be30-c25d0caf2c3a",
+          "goodsReceiptId": null,
+          "invoiceDate": "2026-07-27T10:07:03.473Z",
+          "dueDate": "2026-08-26T10:07:03.471Z",
+          "subtotal": "80000",
+          "taxAmount": "12800",
+          "customerVatAmount": "0",
+          "companyVatAmount": "0",
+          "totalAmount": "92800",
+          "paidAmount": "50000",
+          "status": "PARTIAL",
+          "notes": null,
+          "fiscalStatus": "PENDING",
+          "etimsQrCode": null,
+          "etimsControlCode": null,
+          "etimsSubmittedAt": null,
+          "etimsInvoiceNumber": null,
+          "createdAt": "2026-07-27T10:07:03.473Z",
+          "updatedAt": "2026-07-27T11:04:45.799Z",
+          "customer": {
+            "id": "9d2656e9-ddec-497f-8400-a98980edf238",
+            "companyId": "00000000-0000-0000-0000-000000000001",
+            "code": "SSW",
+            "name": "Witima",
+            "type": "DEALER",
+            "email": "josphatoleteipa@gmail.com",
+            "phone": "0789366924",
+            "address": null,
+            "city": "Nairobi",
+            "country": "Kenya",
+            "taxPin": "",
+            "creditLimit": "150000",
+            "creditUsed": "78527.65",
+            "paymentTerms": 30,
+            "salesPersonId": null,
+            "isActive": true,
+            "notes": null,
+            "createdAt": "2026-07-27T09:44:24.079Z",
+            "updatedAt": "2026-07-28T05:24:50.358Z",
+            "deletedAt": null
+          },
+          "supplier": null,
+          "items": [
+            {
+              "id": "baa0a150-e6d2-44ec-8da9-73ddbb2252eb",
+              "invoiceId": "2eca6f25-5b7d-46ea-8151-a819fde201fc",
+              "description": "2250",
+              "quantity": "100",
+              "unitPrice": "250",
+              "taxRate": "16",
+              "totalPrice": "25000"
+            },
+            {
+              "id": "e00256bb-b879-47ae-adcb-bb197ee05096",
+              "invoiceId": "2eca6f25-5b7d-46ea-8151-a819fde201fc",
+              "description": "22060",
+              "quantity": "100",
+              "unitPrice": "550",
+              "taxRate": "16",
+              "totalPrice": "55000"
+            }
+          ],
+          "payments": [
+            {
+              "id": "855e2b6b-85a3-4c3c-ba65-69419b1ff912",
+              "companyId": "00000000-0000-0000-0000-000000000001",
+              "paymentNumber": "PAY-2026-00001",
+              "invoiceId": "2eca6f25-5b7d-46ea-8151-a819fde201fc",
+              "amount": "50000",
+              "method": "MPESA",
+              "reference": "UTRDEFGUIH",
+              "paymentDate": "2026-07-27T11:04:45.792Z",
+              "notes": null,
+              "isReconciled": false,
+              "reconciledAt": null,
+              "bankReference": null,
+              "reconciledById": null,
+              "createdAt": "2026-07-27T11:04:45.792Z"
+            }
+          ],
+          "salesOrder": {
+            "id": "87006c14-a1df-45e3-aee6-2caa81a9e93a",
+            "orderNumber": "SO-2026-00002",
+            "salesPersonId": "8756a414-2227-4964-b7e8-6a1faab9faaa",
+            "salesPerson": {
+              "id": "8756a414-2227-4964-b7e8-6a1faab9faaa",
+              "firstName": "Harrison",
+              "lastName": "Maina"
+            },
+            "createdBy": {
+              "id": "8756a414-2227-4964-b7e8-6a1faab9faaa",
+              "firstName": "Harrison",
+              "lastName": "Maina"
+            }
+          }
+        },
+        {
+          "id": "2778e056-0fe2-4cf7-b759-6f6411d57212",
+          "companyId": "00000000-0000-0000-0000-000000000001",
+          "invoiceNumber": "INV-2026-00001",
+          "type": "SALES",
+          "customerId": "c73e26e6-a683-4486-9a9a-31ff4328c994",
+          "supplierId": null,
+          "salesOrderId": "6d78153a-558d-416c-836e-5d35b5018195",
+          "purchaseOrderId": null,
+          "deliveryNoteId": "e5656c90-7db1-4b2b-b4f8-11aad57bb0c1",
+          "goodsReceiptId": null,
+          "invoiceDate": "2026-07-27T09:59:12.805Z",
+          "dueDate": "2026-08-26T09:59:12.804Z",
+          "subtotal": "8000",
+          "taxAmount": "1280",
+          "customerVatAmount": "0",
+          "companyVatAmount": "0",
+          "totalAmount": "9280",
+          "paidAmount": "0",
+          "status": "UNPAID",
+          "notes": null,
+          "fiscalStatus": "PENDING",
+          "etimsQrCode": null,
+          "etimsControlCode": null,
+          "etimsSubmittedAt": null,
+          "etimsInvoiceNumber": null,
+          "createdAt": "2026-07-27T09:59:12.805Z",
+          "updatedAt": "2026-07-27T09:59:30.049Z",
+          "customer": {
+            "id": "c73e26e6-a683-4486-9a9a-31ff4328c994",
+            "companyId": "00000000-0000-0000-0000-000000000001",
+            "code": "sfewwr",
+            "name": "Bliss",
+            "type": "RETAIL_SHOP",
+            "email": "josphatoleteipa@gmail.com",
+            "phone": "0780366924",
+            "address": null,
+            "city": "Nairobi",
+            "country": "Kenya",
+            "taxPin": "",
+            "creditLimit": "100000",
+            "creditUsed": "44660",
+            "paymentTerms": 30,
+            "salesPersonId": null,
+            "isActive": true,
+            "notes": null,
+            "createdAt": "2026-07-27T09:43:33.971Z",
+            "updatedAt": "2026-07-27T12:32:22.825Z",
+            "deletedAt": null
+          },
+          "supplier": null,
+          "items": [
+            {
+              "id": "797baeb1-f1bb-452b-9331-ec032b252671",
+              "invoiceId": "2778e056-0fe2-4cf7-b759-6f6411d57212",
+              "description": "22060",
+              "quantity": "10",
+              "unitPrice": "550",
+              "taxRate": "16",
+              "totalPrice": "5500"
+            },
+            {
+              "id": "b4a6e0ce-7046-4625-8580-b2ac48a8df85",
+              "invoiceId": "2778e056-0fe2-4cf7-b759-6f6411d57212",
+              "description": "2250",
+              "quantity": "10",
+              "unitPrice": "250",
+              "taxRate": "16",
+              "totalPrice": "2500"
+            }
+          ],
+          "payments": [],
+          "salesOrder": {
+            "id": "6d78153a-558d-416c-836e-5d35b5018195",
+            "orderNumber": "SO-2026-00001",
+            "salesPersonId": "7ee89b37-5a70-4422-98dd-d80f6fe32fa8",
+            "salesPerson": {
+              "id": "7ee89b37-5a70-4422-98dd-d80f6fe32fa8",
+              "firstName": "Cosmas",
+              "lastName": "Kimutai"
+            },
+            "createdBy": {
+              "id": "7ee89b37-5a70-4422-98dd-d80f6fe32fa8",
+              "firstName": "Cosmas",
+              "lastName": "Kimutai"
+            }
+          }
+        }
+      ],
+      "pagination": {
+        "page": 1,
+        "limit": 10,
+        "total": 7,
+        "totalPages": 1
+      }
+    },
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "x-ratelimit-remaining": null,
+      "content-security-policy": "default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests",
+      "x-content-type-options": "nosniff",
+      "strict-transport-security": "max-age=31536000; includeSubDomains",
+      "x-frame-options": "SAMEORIGIN"
+    }
+  },
+  {
+    "endpoint": "/api/v1/finance/accounts",
+    "url": "http://localhost:3001/api/v1/finance/accounts",
+    "method": "GET",
+    "status": 200,
+    "ms": 18.35,
+    "bytes": 4640,
+    "ok": true,
+    "error": null,
+    "json": {
+      "success": true,
+      "data": [
+        {
+          "id": "895ac3a4-6e5a-42fb-95dc-a4cdcecff3e6",
+          "companyId": "00000000-0000-0000-0000-000000000001",
+          "code": "1000",
+          "name": "Assets",
+          "type": "ASSET",
+          "parentId": null,
+          "balance": "0",
+          "isActive": true,
+          "description": null,
+          "createdAt": "2026-07-27T09:20:08.536Z",
+          "children": []
+        },
+        {
+          "id": "5e188a4b-b209-4301-94e5-12d421ced14c",
+          "companyId": "00000000-0000-0000-0000-000000000001",
+          "code": "1100",
+          "name": "Cash & Bank",
+          "type": "ASSET",
+          "parentId": null,
+          "balance": "0",
+          "isActive": true,
+          "description": null,
+          "createdAt": "2026-07-27T09:20:08.671Z",
+          "children": []
+        },
+        {
+          "id": "3dcc1acc-697a-4c34-b6e2-f5b3d2723b9b",
+          "companyId": "00000000-0000-0000-0000-000000000001",
+          "code": "1110",
+          "name": "M-Pesa Float",
+          "type": "ASSET",
+          "parentId": null,
+          "balance": "50000",
+          "isActive": true,
+          "description": null,
+          "createdAt": "2026-07-27T09:20:08.676Z",
+          "children": []
+        },
+        {
+          "id": "c58e597f-364d-473b-a65c-bd1f8c3d88ea",
+          "companyId": "00000000-0000-0000-0000-000000000001",
+          "code": "1120",
+          "name": "Bank Accounts",
+          "type": "ASSET",
+          "parentId": null,
+          "balance": "0",
+          "isActive": true,
+          "description": null,
+          "createdAt": "2026-07-27T09:20:08.679Z",
+          "children": []
+        },
+        {
+          "id": "a99e5fe1-2314-463d-b055-e509f294d100",
+          "companyId": "00000000-0000-0000-0000-000000000001",
+          "code": "1200",
+          "name": "Accounts Receivable",
+          "type": "ASSET",
+          "parentId": null,
+          "balance": "123187.65",
+          "isActive": true,
+          "description": null,
+          "createdAt": "2026-07-27T09:20:08.683Z",
+          "children": []
+        },
+        {
+          "id": "58859778-8e28-4851-81e1-76e3dc30408b",
+          "companyId": "00000000-0000-0000-0000-000000000001",
+          "code": "1250",
+          "name": "VAT Input Recoverable",
+          "type": "ASSET",
+          "parentId": null,
+          "balance": "0",
+          "isActive": true,
+          "description": null,
+          "createdAt": "2026-07-27T09:20:08.686Z",
+          "children": []
+        },
+        {
+          "id": "14767bcf-cfd1-4bc9-b35e-8ac8d7eaacea",
+          "companyId": "00000000-0000-0000-0000-000000000001",
+          "code": "1300",
+          "name": "Inventory",
+          "type": "ASSET",
+          "parentId": null,
+          "balance": "3410600",
+          "isActive": true,
+          "description": null,
+          "createdAt": "2026-07-27T09:20:08.689Z",
+          "children": []
+        },
+        {
+          "id": "aa8d30d8-9c6d-46ca-8a6d-7dcc73acd205",
+          "companyId": "00000000-0000-0000-0000-000000000001",
+          "code": "2000",
+          "name": "Liabilities",
+          "type": "LIABILITY",
+          "parentId": null,
+          "balance": "0",
+          "isActive": true,
+          "description": null,
+          "createdAt": "2026-07-27T09:20:08.694Z",
+          "children": []
+        },
+        {
+          "id": "158f1af2-7516-443f-9da3-6cc2fef61844",
+          "companyId": "00000000-0000-0000-0000-000000000001",
+          "code": "2100",
+          "name": "Accounts Payable",
+          "type": "LIABILITY",
+          "parentId": null,
+          "balance": "0",
+          "isActive": true,
+          "description": null,
+          "createdAt": "2026-07-27T09:20:08.697Z",
+          "children": []
+        },
+        {
+          "id": "0c4e3596-e3a4-4cc0-a960-54ad9f364738",
+          "companyId": "00000000-0000-0000-0000-000000000001",
+          "code": "2150",
+          "name": "Goods Received Not Invoiced",
+          "type": "LIABILITY",
+          "parentId": null,
+          "balance": "0",
+          "isActive": true,
+          "description": null,
+          "createdAt": "2026-07-27T09:20:08.700Z",
+          "children": []
+        },
+        {
+          "id": "6e2cdd94-1343-449a-8756-ba0380571b05",
+          "companyId": "00000000-0000-0000-0000-000000000001",
+          "code": "2200",
+          "name": "VAT Payable",
+          "type": "LIABILITY",
+          "parentId": null,
+          "balance": "-23887.95",
+          "isActive": true,
+          "description": null,
+          "createdAt": "2026-07-27T09:20:08.703Z",
+          "children": []
+        },
+        {
+          "id": "9dc0a70a-5586-4f8c-be5c-c0a37779f7a4",
+          "companyId": "00000000-0000-0000-0000-000000000001",
+          "code": "3000",
+          "name": "Equity",
+          "type": "EQUITY",
+          "parentId": null,
+          "balance": "0",
+          "isActive": true,
+          "description": null,
+          "createdAt": "2026-07-27T09:20:08.706Z",
+          "children": []
+        },
+        {
+          "id": "2eedfe0b-e59b-4648-b020-0809d4fec308",
+          "companyId": "00000000-0000-0000-0000-000000000001",
+          "code": "4000",
+          "name": "Revenue",
+          "type": "INCOME",
+          "parentId": null,
+          "balance": "0",
+          "isActive": true,
+          "description": null,
+          "createdAt": "2026-07-27T09:20:08.710Z",
+          "children": []
+        },
+        {
+          "id": "ed6f3a03-fdfc-4e94-8eab-60b9ef6d104d",
+          "companyId": "00000000-0000-0000-0000-000000000001",
+          "code": "4100",
+          "name": "Sales Revenue",
+          "type": "INCOME",
+          "parentId": null,
+          "balance": "-149299.7",
+          "isActive": true,
+          "description": null,
+          "createdAt": "2026-07-27T09:20:08.713Z",
+          "children": []
+        },
+        {
+          "id": "628a8761-c260-4420-bb40-2a02c31fe62b",
+          "companyId": "00000000-0000-0000-0000-000000000001",
+          "code": "5000",
+          "name": "Expenses",
+          "type": "EXPENSE",
+          "parentId": null,
+          "balance": "0",
+          "isActive": true,
+          "description": null,
+          "createdAt": "2026-07-27T09:20:08.716Z",
+          "children": []
+        },
+        {
+          "id": "1e3b9584-896b-4db6-9daa-bd7e655358e3",
+          "companyId": "00000000-0000-0000-0000-000000000001",
+          "code": "5100",
+          "name": "Cost of Goods Sold",
+          "type": "EXPENSE",
+          "parentId": null,
+          "balance": "188500",
+          "isActive": true,
+          "description": null,
+          "createdAt": "2026-07-27T09:20:08.719Z",
+          "children": []
+        },
+        {
+          "id": "352ab5b8-40f3-4b1c-8774-f3ce663b6e24",
+          "companyId": "00000000-0000-0000-0000-000000000001",
+          "code": "5200",
+          "name": "Operating Expenses",
+          "type": "EXPENSE",
+          "parentId": null,
+          "balance": "-3599100",
+          "isActive": true,
+          "description": null,
+          "createdAt": "2026-07-27T09:20:08.722Z",
+          "children": []
+        }
+      ]
+    },
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "x-ratelimit-remaining": null,
+      "content-security-policy": "default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests",
+      "x-content-type-options": "nosniff",
+      "strict-transport-security": "max-age=31536000; includeSubDomains",
+      "x-frame-options": "SAMEORIGIN"
+    }
+  },
+  {
+    "endpoint": "/api/v1/finance/my-sales?limit=10",
+    "url": "http://localhost:3001/api/v1/finance/my-sales?limit=10",
+    "method": "GET",
+    "status": 400,
+    "ms": 29.417,
+    "bytes": 500,
+    "ok": false,
+    "error": null,
+    "json": {
+      "success": false,
+      "message": "My Sales is only available for Sales Officers",
+      "stack": "Error: My Sales is only available for Sales Officers\n    at MySalesService.assertSalesOfficer (C:\\Users\\Public\\APEXCORE ERP\\backend\\src\\services\\my-sales.service.ts:34:13)\n    at async MySalesService.getDashboard (C:\\Users\\Public\\APEXCORE ERP\\backend\\src\\services\\my-sales.service.ts:53:18)\n    at async <anonymous> (C:\\Users\\Public\\APEXCORE ERP\\backend\\src\\routes\\finance.routes.ts:590:18)"
+    },
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "x-ratelimit-remaining": null,
+      "content-security-policy": "default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests",
+      "x-content-type-options": "nosniff",
+      "strict-transport-security": "max-age=31536000; includeSubDomains",
+      "x-frame-options": "SAMEORIGIN"
+    }
+  },
+  {
+    "endpoint": "/api/v1/delivery/notes?limit=10",
+    "url": "http://localhost:3001/api/v1/delivery/notes?limit=10",
+    "method": "GET",
+    "status": 404,
+    "ms": 26.602,
+    "bytes": 187,
+    "ok": false,
+    "error": null,
+    "json": {
+      "success": false,
+      "message": "Delivery not found",
+      "stack": "Error: Delivery not found\n    at <anonymous> (C:\\Users\\Public\\APEXCORE ERP\\backend\\src\\routes\\delivery.routes.ts:566:22)"
+    },
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "x-ratelimit-remaining": null,
+      "content-security-policy": "default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests",
+      "x-content-type-options": "nosniff",
+      "strict-transport-security": "max-age=31536000; includeSubDomains",
+      "x-frame-options": "SAMEORIGIN"
+    }
+  },
+  {
+    "endpoint": "/api/v1/delivery/trips?limit=10",
+    "url": "http://localhost:3001/api/v1/delivery/trips?limit=10",
+    "method": "GET",
+    "status": 200,
+    "ms": 18.81,
+    "bytes": 86,
+    "ok": true,
+    "error": null,
+    "json": {
+      "success": true,
+      "data": [],
+      "pagination": {
+        "page": 1,
+        "limit": 10,
+        "total": 0,
+        "totalPages": 0
+      }
+    },
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "x-ratelimit-remaining": null,
+      "content-security-policy": "default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests",
+      "x-content-type-options": "nosniff",
+      "strict-transport-security": "max-age=31536000; includeSubDomains",
+      "x-frame-options": "SAMEORIGIN"
+    }
+  },
+  {
+    "endpoint": "/api/v1/delivery/vehicles",
+    "url": "http://localhost:3001/api/v1/delivery/vehicles",
+    "method": "GET",
+    "status": 200,
+    "ms": 17.799,
+    "bytes": 598,
+    "ok": true,
+    "error": null,
+    "json": {
+      "success": true,
+      "data": [
+        {
+          "id": "43d7643a-a2ee-4d00-af5e-e9728de2cbb2",
+          "companyId": "00000000-0000-0000-0000-000000000001",
+          "registration": "kDA7/456",
+          "type": "MOTORCYCLE",
+          "make": null,
+          "model": "honda",
+          "capacity": null,
+          "isHired": false,
+          "isActive": true,
+          "createdAt": "2026-07-27T10:01:54.360Z"
+        },
+        {
+          "id": "67e209b2-fc07-4037-a1df-2bdb8095530e",
+          "companyId": "00000000-0000-0000-0000-000000000001",
+          "registration": "kDA7/4565",
+          "type": "TRUCK",
+          "make": null,
+          "model": "Toyota",
+          "capacity": null,
+          "isHired": false,
+          "isActive": true,
+          "createdAt": "2026-07-27T10:02:16.342Z"
+        }
+      ],
+      "pagination": {
+        "page": 1,
+        "limit": 20,
+        "total": 2,
+        "totalPages": 1
+      }
+    },
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "x-ratelimit-remaining": null,
+      "content-security-policy": "default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests",
+      "x-content-type-options": "nosniff",
+      "strict-transport-security": "max-age=31536000; includeSubDomains",
+      "x-frame-options": "SAMEORIGIN"
+    }
+  },
+  {
+    "endpoint": "/api/v1/quality/inspections?limit=10",
+    "url": "http://localhost:3001/api/v1/quality/inspections?limit=10",
+    "method": "GET",
+    "status": 404,
+    "ms": 18.936,
+    "bytes": 190,
+    "ok": false,
+    "error": null,
+    "json": {
+      "success": false,
+      "message": "Inspection not found",
+      "stack": "Error: Inspection not found\n    at <anonymous> (C:\\Users\\Public\\APEXCORE ERP\\backend\\src\\routes\\quality.routes.ts:100:22)"
+    },
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "x-ratelimit-remaining": null,
+      "content-security-policy": "default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests",
+      "x-content-type-options": "nosniff",
+      "strict-transport-security": "max-age=31536000; includeSubDomains",
+      "x-frame-options": "SAMEORIGIN"
+    }
+  },
+  {
+    "endpoint": "/api/v1/hr/employees?limit=10",
+    "url": "http://localhost:3001/api/v1/hr/employees?limit=10",
+    "method": "GET",
+    "status": 200,
+    "ms": 16.646,
+    "bytes": 86,
+    "ok": true,
+    "error": null,
+    "json": {
+      "success": true,
+      "data": [],
+      "pagination": {
+        "page": 1,
+        "limit": 10,
+        "total": 0,
+        "totalPages": 0
+      }
+    },
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "x-ratelimit-remaining": null,
+      "content-security-policy": "default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests",
+      "x-content-type-options": "nosniff",
+      "strict-transport-security": "max-age=31536000; includeSubDomains",
+      "x-frame-options": "SAMEORIGIN"
+    }
+  },
+  {
+    "endpoint": "/api/v1/maintenance/machines",
+    "url": "http://localhost:3001/api/v1/maintenance/machines",
+    "method": "GET",
+    "status": 200,
+    "ms": 17.445,
+    "bytes": 86,
+    "ok": true,
+    "error": null,
+    "json": {
+      "success": true,
+      "data": [],
+      "pagination": {
+        "page": 1,
+        "limit": 20,
+        "total": 0,
+        "totalPages": 0
+      }
+    },
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "x-ratelimit-remaining": null,
+      "content-security-policy": "default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests",
+      "x-content-type-options": "nosniff",
+      "strict-transport-security": "max-age=31536000; includeSubDomains",
+      "x-frame-options": "SAMEORIGIN"
+    }
+  },
+  {
+    "endpoint": "/api/v1/maintenance/schedules?limit=10",
+    "url": "http://localhost:3001/api/v1/maintenance/schedules?limit=10",
+    "method": "GET",
+    "status": 404,
+    "ms": 14.935,
+    "bytes": 45,
+    "ok": false,
+    "error": null,
+    "json": {
+      "success": false,
+      "message": "Route not found"
+    },
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "x-ratelimit-remaining": null,
+      "content-security-policy": "default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests",
+      "x-content-type-options": "nosniff",
+      "strict-transport-security": "max-age=31536000; includeSubDomains",
+      "x-frame-options": "SAMEORIGIN"
+    }
+  },
+  {
+    "endpoint": "/api/v1/crm/opportunities?limit=10",
+    "url": "http://localhost:3001/api/v1/crm/opportunities?limit=10",
+    "method": "GET",
+    "status": 200,
+    "ms": 16.201,
+    "bytes": 86,
+    "ok": true,
+    "error": null,
+    "json": {
+      "success": true,
+      "data": [],
+      "pagination": {
+        "page": 1,
+        "limit": 10,
+        "total": 0,
+        "totalPages": 0
+      }
+    },
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "x-ratelimit-remaining": null,
+      "content-security-policy": "default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests",
+      "x-content-type-options": "nosniff",
+      "strict-transport-security": "max-age=31536000; includeSubDomains",
+      "x-frame-options": "SAMEORIGIN"
+    }
+  },
+  {
+    "endpoint": "/api/v1/crm/complaints?limit=10",
+    "url": "http://localhost:3001/api/v1/crm/complaints?limit=10",
+    "method": "GET",
+    "status": 200,
+    "ms": 15.263,
+    "bytes": 86,
+    "ok": true,
+    "error": null,
+    "json": {
+      "success": true,
+      "data": [],
+      "pagination": {
+        "page": 1,
+        "limit": 10,
+        "total": 0,
+        "totalPages": 0
+      }
+    },
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "x-ratelimit-remaining": null,
+      "content-security-policy": "default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests",
+      "x-content-type-options": "nosniff",
+      "strict-transport-security": "max-age=31536000; includeSubDomains",
+      "x-frame-options": "SAMEORIGIN"
+    }
+  },
+  {
+    "endpoint": "/api/v1/search?q=a&limit=5",
+    "url": "http://localhost:3001/api/v1/search?q=a&limit=5",
+    "method": "GET",
+    "status": 400,
+    "ms": 13.485,
+    "bytes": 1260,
+    "ok": false,
+    "error": null,
+    "json": {
+      "success": false,
+      "message": "q: String must contain at least 2 character(s)",
+      "stack": "Error: q: String must contain at least 2 character(s)\n    at <anonymous> (C:\\Users\\Public\\APEXCORE ERP\\backend\\src\\middleware\\validate.ts:10:19)\n    at Layer.handle [as handle_request] (C:\\Users\\Public\\APEXCORE ERP\\backend\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at next (C:\\Users\\Public\\APEXCORE ERP\\backend\\node_modules\\express\\lib\\router\\route.js:149:13)\n    at Route.dispatch (C:\\Users\\Public\\APEXCORE ERP\\backend\\node_modules\\express\\lib\\router\\route.js:119:3)\n    at Layer.handle [as handle_request] (C:\\Users\\Public\\APEXCORE ERP\\backend\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at C:\\Users\\Public\\APEXCORE ERP\\backend\\node_modules\\express\\lib\\router\\index.js:284:15\n    at router.process_params (C:\\Users\\Public\\APEXCORE ERP\\backend\\node_modules\\express\\lib\\router\\index.js:346:12)\n    at next (C:\\Users\\Public\\APEXCORE ERP\\backend\\node_modules\\express\\lib\\router\\index.js:280:10)\n    at <anonymous> (C:\\Users\\Public\\APEXCORE ERP\\backend\\src\\middleware\\auth.ts:70:56)\n    at AsyncLocalStorage.run (node:internal/async_local_storage/async_context_frame:63:14)"
+    },
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "x-ratelimit-remaining": null,
+      "content-security-policy": "default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests",
+      "x-content-type-options": "nosniff",
+      "strict-transport-security": "max-age=31536000; includeSubDomains",
+      "x-frame-options": "SAMEORIGIN"
+    }
+  },
+  {
+    "endpoint": "/api/v1/tenant/company",
+    "url": "http://localhost:3001/api/v1/tenant/company",
+    "method": "GET",
+    "status": 404,
+    "ms": 12.101,
+    "bytes": 45,
+    "ok": false,
+    "error": null,
+    "json": {
+      "success": false,
+      "message": "Route not found"
+    },
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "x-ratelimit-remaining": null,
+      "content-security-policy": "default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests",
+      "x-content-type-options": "nosniff",
+      "strict-transport-security": "max-age=31536000; includeSubDomains",
+      "x-frame-options": "SAMEORIGIN"
+    }
+  },
+  {
+    "endpoint": "/api/v1/products/categories",
+    "url": "http://localhost:3001/api/v1/products/categories",
+    "method": "GET",
+    "status": 404,
+    "ms": 16.707,
+    "bytes": 284,
+    "ok": false,
+    "error": null,
+    "json": {
+      "success": false,
+      "message": "product not found",
+      "stack": "Error: product not found\n    at Object.getById (C:\\Users\\Public\\APEXCORE ERP\\backend\\src\\utils\\crud.ts:68:24)\n    at async <anonymous> (C:\\Users\\Public\\APEXCORE ERP\\backend\\src\\routes\\products.routes.ts:207:18)"
+    },
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "x-ratelimit-remaining": null,
+      "content-security-policy": "default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests",
+      "x-content-type-options": "nosniff",
+      "strict-transport-security": "max-age=31536000; includeSubDomains",
+      "x-frame-options": "SAMEORIGIN"
+    }
+  }
+]

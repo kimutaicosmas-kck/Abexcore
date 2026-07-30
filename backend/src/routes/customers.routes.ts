@@ -45,28 +45,32 @@ router.get(
   authorize('customers:read'),
   validate(customerListQuerySchema, 'query'),
   asyncHandler(async (req: AuthRequest, res: Response) => {
-    const { page, limit, search, sortBy, sortOrder, type, isActive, salesPersonId } = getQuery<{
-      page: number;
-      limit: number;
-      search?: string;
-      sortBy?: string;
-      sortOrder?: 'asc' | 'desc';
-      type?: string;
-      isActive?: boolean;
-      salesPersonId?: string;
-    }>(req.query);
+    const { page, limit, search, sortBy, sortOrder, type, isActive, salesPersonId, includeUnassigned } =
+      getQuery<{
+        page: number;
+        limit: number;
+        search?: string;
+        sortBy?: string;
+        sortOrder?: 'asc' | 'desc';
+        type?: string;
+        isActive?: boolean;
+        salesPersonId?: string;
+        includeUnassigned?: boolean;
+      }>(req.query);
 
     const where: Record<string, unknown> = {};
     if (type) where.type = type;
     if (isActive !== undefined) where.isActive = isActive;
 
-    // Sales officers only see customers assigned to them.
+    // Sales officers see their own customers plus unassigned (free) accounts.
     if (req.user!.roleName === 'Sales Officer') {
-      where.salesPersonId = req.user!.id;
+      where.OR = [{ salesPersonId: req.user!.id }, { salesPersonId: null }];
     } else if (salesPersonId === 'none') {
       where.salesPersonId = null;
     } else if (salesPersonId) {
-      where.salesPersonId = salesPersonId;
+      where.OR = includeUnassigned
+        ? [{ salesPersonId }, { salesPersonId: null }]
+        : [{ salesPersonId }];
     }
 
     const result = await customerService.list({ page, limit, search, sortBy, sortOrder, where });
@@ -114,9 +118,12 @@ router.put(
   asyncHandler(async (req: AuthRequest, res: Response) => {
     const payload = { ...req.body };
     if (req.user!.roleName === 'Sales Officer') {
-      // Officers may only edit their own customers and cannot reassign ownership.
+      // Officers may edit their own customers or free (unassigned) ones; cannot reassign ownership.
       const existing = await prisma.customer.findFirst({
-        where: { id: getParam(req.params.id), salesPersonId: req.user!.id },
+        where: {
+          id: getParam(req.params.id),
+          OR: [{ salesPersonId: req.user!.id }, { salesPersonId: null }],
+        },
         select: { id: true },
       });
       if (!existing) throw new AppError('Customer not found', 404);

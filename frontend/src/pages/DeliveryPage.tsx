@@ -74,28 +74,26 @@ function formatVehicleLabel(vehicle?: { registration: string; type?: string; mak
   return `${type}${vehicle.registration}${detail}`;
 }
 
-const NEXT_DELIVERY_STATUS: Record<string, { status: string; label: string }> = {
-  PENDING: { status: 'ASSIGNED', label: 'Assign' },
-  ASSIGNED: { status: 'IN_TRANSIT', label: 'Start Transit' },
-  IN_TRANSIT: { status: 'DELIVERED', label: 'Mark Delivered' },
-};
-
 function getDeliveryActions(status: string, isDriver: boolean) {
-  if (isDriver) {
-    if (status === 'ASSIGNED') {
-      return [
-        { status: 'IN_TRANSIT', label: 'Start Trip' },
-        { status: 'DELIVERED', label: 'Mark Delivered' },
-      ];
-    }
-    if (status === 'IN_TRANSIT') {
-      return [{ status: 'DELIVERED', label: 'Mark Delivered' }];
-    }
-    return [];
+  // Shared lifecycle: completing a delivery (admin or driver) is the same status for everyone.
+  if (status === 'DELIVERED' || status === 'FAILED' || status === 'RETURNED') return [];
+
+  if (status === 'PENDING' && !isDriver) {
+    return [{ status: 'ASSIGNED', label: 'Assign' }];
   }
 
-  const next = NEXT_DELIVERY_STATUS[status];
-  return next ? [next] : [];
+  if (status === 'ASSIGNED') {
+    return [
+      { status: 'IN_TRANSIT', label: isDriver ? 'Start Trip' : 'Start Transit' },
+      { status: 'DELIVERED', label: 'Mark Delivered' },
+    ];
+  }
+
+  if (status === 'IN_TRANSIT') {
+    return [{ status: 'DELIVERED', label: 'Mark Delivered' }];
+  }
+
+  return [];
 }
 
 export function DeliveryPage() {
@@ -108,6 +106,14 @@ export function DeliveryPage() {
   const [vehSearch, setVehSearch] = useState('');
   const [vehType, setVehType] = useState('');
   const [status, setStatus] = useState('');
+  /** Empty string = all dates; defaults to today. */
+  const [deliveryDate, setDeliveryDate] = useState(() => {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, '0');
+    const d = String(now.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  });
   const [deliveryModalOpen, setDeliveryModalOpen] = useState(false);
   const [vehicleModalOpen, setVehicleModalOpen] = useState(false);
   const [selected, setSelected] = useState<DeliveryNote | null>(null);
@@ -155,19 +161,31 @@ export function DeliveryPage() {
   });
 
   const { data: deliveries, isLoading, isError: deliveriesError, error: deliveriesErr, refetch: refetchDeliveries } = useQuery({
-    queryKey: ['deliveries', page, search, status],
+    queryKey: ['deliveries', page, search, status, deliveryDate],
     queryFn: () =>
       deliveryApi
-        .list({ page, limit: 15, search: search || undefined, status: status || undefined })
+        .list({
+          page,
+          limit: 15,
+          search: search || undefined,
+          status: status || undefined,
+          date: deliveryDate || undefined,
+        })
         .then((r) => r.data),
     enabled: isDriver ? activeTab === 0 : activeTab === 0 || activeTab === 1,
   });
 
   const { data: trips, isLoading: tripsLoading, isError: tripsError, error: tripsErr, refetch: refetchTrips } = useQuery({
-    queryKey: ['delivery-trips', page, search, status],
+    queryKey: ['delivery-trips', page, search, status, deliveryDate],
     queryFn: () =>
       deliveryApi
-        .trips({ page, limit: 15, search: search || undefined, status: status || undefined })
+        .trips({
+          page,
+          limit: 15,
+          search: search || undefined,
+          status: status || undefined,
+          date: deliveryDate || undefined,
+        })
         .then((r) => r.data),
     enabled: isDriver ? activeTab === 0 : activeTab === 0 || activeTab === 1,
   });
@@ -664,7 +682,7 @@ export function DeliveryPage() {
 
       {showDeliveries && (
         <DataPanel>
-          <div className="p-4 pb-0 flex flex-col sm:flex-row gap-3">
+          <div className="p-4 pb-0 flex flex-col sm:flex-row gap-3 sm:items-end">
             <Input
               placeholder="Search deliveries…"
               className="sm:max-w-md"
@@ -677,12 +695,53 @@ export function DeliveryPage() {
               onChange={(e) => { setStatus(e.target.value); setPage(1); }}
               className="sm:w-44"
             />
+            <Input
+              type="date"
+              label="Date"
+              value={deliveryDate}
+              onChange={(e) => { setDeliveryDate(e.target.value); setPage(1); }}
+              className="sm:w-44"
+            />
+            <Button
+              type="button"
+              variant="secondary"
+              className="sm:mb-0.5"
+              onClick={() => {
+                setDeliveryDate('');
+                setPage(1);
+              }}
+            >
+              All dates
+            </Button>
+            {!deliveryDate && (
+              <Button
+                type="button"
+                variant="secondary"
+                className="sm:mb-0.5"
+                onClick={() => {
+                  const now = new Date();
+                  const y = now.getFullYear();
+                  const m = String(now.getMonth() + 1).padStart(2, '0');
+                  const d = String(now.getDate()).padStart(2, '0');
+                  setDeliveryDate(`${y}-${m}-${d}`);
+                  setPage(1);
+                }}
+              >
+                Today
+              </Button>
+            )}
           </div>
           {(listRows.length || 0) === 0 && !isLoading && !tripsLoading ? (
             <div className="p-6">
               <EmptyState
                 title="No deliveries found"
-                description={isDriver ? 'Assigned deliveries will appear here.' : 'Create a delivery trip from one or more ready sales orders.'}
+                description={
+                  deliveryDate
+                    ? 'No deliveries for this date. Pick another day or choose All dates.'
+                    : isDriver
+                      ? 'Assigned deliveries will appear here.'
+                      : 'Create a delivery trip from one or more ready sales orders.'
+                }
                 action={
                   canCreate ? (
                     <Button onClick={() => setDeliveryModalOpen(true)}>

@@ -1,0 +1,107 @@
+[
+  {
+    "url": "http://localhost:3001/api/health",
+    "method": "GET",
+    "status": 200,
+    "ms": 70.293,
+    "bytes": 297,
+    "ok": true,
+    "error": null,
+    "json": {
+      "status": "ok",
+      "version": "2.1.0",
+      "database": "connected",
+      "integrations": [
+        {
+          "name": "mpesa",
+          "available": false,
+          "mode": "disabled"
+        },
+        {
+          "name": "email",
+          "available": false,
+          "mode": "disabled"
+        },
+        {
+          "name": "database",
+          "available": true,
+          "mode": "live"
+        }
+      ],
+      "timezone": "Africa/Nairobi",
+      "timestamp": "2026-07-28T09:01:50.187Z"
+    },
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "x-ratelimit-remaining": null,
+      "content-security-policy": "default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests",
+      "x-content-type-options": "nosniff",
+      "strict-transport-security": "max-age=31536000; includeSubDomains",
+      "x-frame-options": "SAMEORIGIN"
+    }
+  },
+  {
+    "url": "http://localhost:3001/api/health/live",
+    "method": "GET",
+    "status": 200,
+    "ms": 4.668,
+    "bytes": 100,
+    "ok": true,
+    "error": null,
+    "json": {
+      "status": "ok",
+      "version": "2.1.0",
+      "timezone": "Africa/Nairobi",
+      "timestamp": "2026-07-28T09:01:50.201Z"
+    },
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "x-ratelimit-remaining": null,
+      "content-security-policy": "default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests",
+      "x-content-type-options": "nosniff",
+      "strict-transport-security": "max-age=31536000; includeSubDomains",
+      "x-frame-options": "SAMEORIGIN"
+    }
+  },
+  {
+    "url": "http://localhost:3001/api/health/ready",
+    "method": "GET",
+    "status": 200,
+    "ms": 7.93,
+    "bytes": 297,
+    "ok": true,
+    "error": null,
+    "json": {
+      "status": "ok",
+      "version": "2.1.0",
+      "database": "connected",
+      "integrations": [
+        {
+          "name": "mpesa",
+          "available": false,
+          "mode": "disabled"
+        },
+        {
+          "name": "email",
+          "available": false,
+          "mode": "disabled"
+        },
+        {
+          "name": "database",
+          "available": true,
+          "mode": "live"
+        }
+      ],
+      "timezone": "Africa/Nairobi",
+      "timestamp": "2026-07-28T09:01:50.209Z"
+    },
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "x-ratelimit-remaining": null,
+      "content-security-policy": "default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests",
+      "x-content-type-options": "nosniff",
+      "strict-transport-security": "max-age=31536000; includeSubDomains",
+      "x-frame-options": "SAMEORIGIN"
+    }
+  }
+]

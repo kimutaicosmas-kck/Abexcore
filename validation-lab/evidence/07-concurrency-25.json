@@ -1,0 +1,20 @@
+{
+  "concurrency": 25,
+  "wallMs": 161.657,
+  "rps": 154.648,
+  "failures": 0,
+  "unauthorized": 0,
+  "latency": {
+    "count": 25,
+    "min": 101.467,
+    "max": 156.5,
+    "mean": 133.252,
+    "median": 142.639,
+    "p95": 155.607,
+    "p99": 156.5,
+    "stddev": 18.827
+  },
+  "statuses": {
+    "404": 25
+  }
+}

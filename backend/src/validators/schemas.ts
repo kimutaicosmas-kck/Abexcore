@@ -173,6 +173,11 @@ export const customerListQuerySchema = paginationSchema.extend({
     (v) => (v === '' || v === undefined ? undefined : v),
     z.union([z.string().uuid(), z.literal('none')]).optional()
   ),
+  /** When filtering by a sales person, also include customers with no owner (for assignment). */
+  includeUnassigned: z.preprocess(
+    (v) => (v === '' || v === undefined ? undefined : v === 'true' || v === true),
+    z.boolean().optional()
+  ),
 });
 
 export const createProductCategorySchema = z.object({
@@ -648,6 +653,11 @@ export const salesListQuerySchema = paginationSchema.extend({
     (v) => (v === '' || v === undefined ? undefined : v),
     z.string().uuid().optional()
   ),
+  /** Local calendar day `YYYY-MM-DD` — filter orderDate to that day. */
+  date: z.preprocess(
+    (v) => (v === '' || v === undefined ? undefined : v),
+    z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional()
+  ),
 });
 
 export const productionListQuerySchema = paginationSchema.extend({
@@ -661,6 +671,11 @@ export const deliveryListQuerySchema = paginationSchema.extend({
   status: z.preprocess(
     (v) => (v === '' || v === undefined ? undefined : v),
     z.enum(['PENDING', 'ASSIGNED', 'IN_TRANSIT', 'DELIVERED', 'FAILED', 'RETURNED']).optional()
+  ),
+  /** Local calendar day `YYYY-MM-DD` — filter by scheduledDate (fallback createdAt). */
+  date: z.preprocess(
+    (v) => (v === '' || v === undefined ? undefined : v),
+    z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional()
   ),
 });
 

@@ -27,6 +27,7 @@ import {
 import prisma from '../config/database';
 
 import { getParam, getQuery } from '../utils/request';
+import { dayRangeFromInput } from '../utils/date';
 import { injectTenantData, mergeTenantSalesOrderWhere, requireTenantId } from '../utils/tenant';
 
 import { DeliveryService } from '../services/operations.service';
@@ -53,6 +54,7 @@ function isDriverUser(req: AuthRequest) {
   return req.user!.roleName === 'Driver';
 }
 
+/** Drivers may advance or complete assigned deliveries; completion is shared with admin. */
 const DRIVER_STATUS_TRANSITIONS: Record<string, readonly string[]> = {
   ASSIGNED: ['IN_TRANSIT', 'DELIVERED'],
   IN_TRANSIT: ['DELIVERED'],
@@ -265,11 +267,12 @@ router.get(
   authorize('delivery:read'),
   validate(deliveryListQuerySchema, 'query'),
   asyncHandler(async (req: AuthRequest, res: Response) => {
-    const { page, limit, search, status } = getQuery<{
+    const { page, limit, search, status, date } = getQuery<{
       page: number;
       limit: number;
       search?: string;
       status?: string;
+      date?: string;
     }>(req.query);
     const skip = (page - 1) * limit;
 
@@ -278,6 +281,19 @@ router.get(
       where.driverId = req.user!.id;
     }
     if (status) where.status = status as Prisma.EnumDeliveryStatusFilter['equals'];
+    if (date) {
+      const range = dayRangeFromInput(date);
+      if (range) {
+        where.AND = [
+          {
+            OR: [
+              { scheduledDate: range },
+              { scheduledDate: null, createdAt: range },
+            ],
+          },
+        ];
+      }
+    }
     if (search) {
       where.OR = [
         { tripNo: { contains: search } },
@@ -360,6 +376,21 @@ router.patch(
       })
     );
 
+    // Notify assigned driver when someone else completes the trip so both sides stay aligned.
+    if (
+      status === 'DELIVERED' &&
+      existing.driverId &&
+      existing.driverId !== req.user!.id
+    ) {
+      await NotificationService.notifyUser(
+        existing.driverId,
+        'DELIVERY',
+        'Delivery completed',
+        `Trip ${delivery?.tripNo || ''} was marked delivered. It is complete on your list too.`,
+        '/delivery'
+      );
+    }
+
     res.json({ success: true, data: delivery });
   })
 );
@@ -376,7 +407,7 @@ router.get(
 
   asyncHandler(async (req: AuthRequest, res: Response) => {
 
-    const { page, limit, search, status } = getQuery<{
+    const { page, limit, search, status, date } = getQuery<{
 
       page: number;
 
@@ -385,6 +416,8 @@ router.get(
       search?: string;
 
       status?: string;
+
+      date?: string;
 
     }>(req.query);
 
@@ -401,6 +434,21 @@ router.get(
     }
 
     if (status) where.status = status as Prisma.EnumDeliveryStatusFilter['equals'];
+
+    if (date) {
+      const range = dayRangeFromInput(date);
+      if (range) {
+        where.AND = [
+          ...(Array.isArray(where.AND) ? where.AND : where.AND ? [where.AND] : []),
+          {
+            OR: [
+              { scheduledDate: range },
+              { scheduledDate: null, createdAt: range },
+            ],
+          },
+        ];
+      }
+    }
 
     if (search) {
 
@@ -666,7 +714,7 @@ router.patch(
 
       where: { id: deliveryId, salesOrder: { companyId: requireTenantId() } },
 
-      select: { id: true, driverId: true, status: true },
+      select: { id: true, driverId: true, status: true, deliveryNo: true, deliveryTripId: true },
 
     });
 
@@ -684,7 +732,19 @@ router.patch(
       })
     );
 
-
+    if (
+      status === 'DELIVERED' &&
+      existing.driverId &&
+      existing.driverId !== req.user!.id
+    ) {
+      await NotificationService.notifyUser(
+        existing.driverId,
+        'DELIVERY',
+        'Delivery completed',
+        `${existing.deliveryNo} was marked delivered. It is complete on your list too.`,
+        '/delivery'
+      );
+    }
 
     res.json({ success: true, data: delivery });
 

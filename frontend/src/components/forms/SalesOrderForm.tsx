@@ -84,7 +84,9 @@ export function SalesOrderForm({ onSuccess, onCancel }: SalesOrderFormProps) {
           isActive: true,
           search: debouncedSearch || undefined,
           ...(canAssignSalesPerson
-            ? { salesPersonId: salesPersonId || 'none' }
+            ? salesPersonId
+              ? { salesPersonId, includeUnassigned: true }
+              : { salesPersonId: 'none' }
             : {}),
         })
         .then((r) => r.data.data as Customer[]),
@@ -96,12 +98,14 @@ export function SalesOrderForm({ onSuccess, onCancel }: SalesOrderFormProps) {
     { value: '', label: customersLoading ? 'Loading customers…' : 'Select customer…' },
     ...(customersData || []).map((c) => ({
       value: c.id,
-      label: `${c.code} - ${c.name}`,
+      label: !c.salesPersonId
+        ? `${c.code} - ${c.name} (unassigned — open to sales)`
+        : `${c.code} - ${c.name}`,
     })),
   ];
 
   const salesPersonOptions = [
-    { value: '', label: 'No sales person (unassigned customers)' },
+    { value: '', label: 'Me — this sale stays under my name' },
     ...(salesOfficers || []).map((o) => ({
       value: o.id,
       label: o.name,
@@ -221,7 +225,7 @@ export function SalesOrderForm({ onSuccess, onCancel }: SalesOrderFormProps) {
 
       {canAssignSalesPerson && (
         <p className="-mt-2 text-xs text-slate-500">
-          Choose a sales person to load their customers, or leave unassigned for house-account customers.
+          Choose a sales officer, or leave as Me — the order stays under the account that created it.
         </p>
       )}
 
@@ -242,9 +246,9 @@ export function SalesOrderForm({ onSuccess, onCancel }: SalesOrderFormProps) {
         <p className="text-xs text-slate-500">
           {canAssignSalesPerson
             ? salesPersonId
-              ? 'Showing customers assigned to the selected sales person.'
-              : 'Showing unassigned customers (no sales person).'
-            : 'Showing customers assigned to you. Use search to narrow the list.'}
+              ? 'Showing this officer’s customers plus unassigned ones. Choosing an unassigned customer assigns them to that officer.'
+              : 'Showing unassigned customers. This order stays under your account name.'
+            : 'Showing your customers and unassigned (free) customers. Anyone with sales rights can sell to unassigned accounts.'}
           {(customersData?.length ?? 0) === 0 && !customersLoading
             ? ' No matching customers found.'
             : ''}

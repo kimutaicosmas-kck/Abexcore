@@ -1,0 +1,15 @@
+{
+  "finishedAt": "2026-07-28T09:03:04.219Z",
+  "loginOk": true,
+  "apiMatrix": {
+    "total": 26,
+    "passed": 16,
+    "clientErrors": 10,
+    "serverErrors": 0
+  },
+  "loadPeakRps": 228.956,
+  "stressPeakRps": 174.928,
+  "enduranceDriftMs": -2.111,
+  "dbProxyP95": 33.185,
+  "dashboardP95At25": 155.607
+}

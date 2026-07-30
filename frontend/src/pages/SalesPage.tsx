@@ -119,6 +119,14 @@ export function SalesPage() {
   const [quoteSearch, setQuoteSearch] = useState('');
   const [orderStatus, setOrderStatus] = useState('');
   const [quoteStatus, setQuoteStatus] = useState('');
+  /** Empty string = all dates; defaults to today. */
+  const [orderDate, setOrderDate] = useState(() => {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, '0');
+    const d = String(now.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  });
   const [orderModalOpen, setOrderModalOpen] = useState(false);
   const [quotationModalOpen, setQuotationModalOpen] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<SalesOrder | null>(null);
@@ -174,10 +182,16 @@ export function SalesPage() {
   });
 
   const { data: orders, isLoading: ordersLoading } = useQuery({
-    queryKey: ['sales-orders', orderPage, orderSearch, orderStatus],
+    queryKey: ['sales-orders', orderPage, orderSearch, orderStatus, orderDate],
     queryFn: () =>
       operationsApi
-        .salesOrders({ page: orderPage, limit: 15, search: orderSearch || undefined, status: orderStatus || undefined })
+        .salesOrders({
+          page: orderPage,
+          limit: 15,
+          search: orderSearch || undefined,
+          status: orderStatus || undefined,
+          date: orderDate || undefined,
+        })
         .then((r) => r.data),
     enabled: canReadSales && (activeTab === 0 || activeTab === 1),
   });
@@ -295,7 +309,9 @@ export function SalesPage() {
       key: 'salesPerson',
       label: 'Sales Person',
       render: (_: unknown, row: Record<string, unknown>) => {
-        const person = row.salesPerson as { firstName?: string; lastName?: string } | null | undefined;
+        const person =
+          (row.salesPerson as { firstName?: string; lastName?: string } | null | undefined) ||
+          (row.createdBy as { firstName?: string; lastName?: string } | null | undefined);
         if (!person) return <span className="text-slate-400">—</span>;
         return `${person.firstName || ''} ${person.lastName || ''}`.trim() || '—';
       },
@@ -553,7 +569,7 @@ export function SalesPage() {
 
       {activeTab === 1 && (
         <DataPanel className="min-w-0 overflow-hidden">
-          <div className="p-4 pb-0 flex flex-col sm:flex-row gap-3">
+          <div className="p-4 pb-0 flex flex-col sm:flex-row gap-3 sm:items-end">
             <Input
               placeholder="Search orders…"
               className="sm:max-w-md"
@@ -566,6 +582,41 @@ export function SalesPage() {
               onChange={(e) => { setOrderStatus(e.target.value); setOrderPage(1); }}
               className="sm:w-44"
             />
+            <Input
+              type="date"
+              label="Date"
+              value={orderDate}
+              onChange={(e) => { setOrderDate(e.target.value); setOrderPage(1); }}
+              className="sm:w-44"
+            />
+            <Button
+              type="button"
+              variant="secondary"
+              className="sm:mb-0.5"
+              onClick={() => {
+                setOrderDate('');
+                setOrderPage(1);
+              }}
+            >
+              All dates
+            </Button>
+            {!orderDate && (
+              <Button
+                type="button"
+                variant="secondary"
+                className="sm:mb-0.5"
+                onClick={() => {
+                  const now = new Date();
+                  const y = now.getFullYear();
+                  const m = String(now.getMonth() + 1).padStart(2, '0');
+                  const d = String(now.getDate()).padStart(2, '0');
+                  setOrderDate(`${y}-${m}-${d}`);
+                  setOrderPage(1);
+                }}
+              >
+                Today
+              </Button>
+            )}
           </div>
           {statusFeedback && (
             <div className="px-4 pt-3">
@@ -576,7 +627,11 @@ export function SalesPage() {
             <div className="p-6">
               <EmptyState
                 title="No sales orders found"
-                description="Create a sales order or convert an approved quotation."
+                description={
+                  orderDate
+                    ? 'No sales orders for this date. Pick another day or choose All dates.'
+                    : 'Create a sales order or convert an approved quotation.'
+                }
                 action={
                   canCreate ? (
                     <Button onClick={() => setOrderModalOpen(true)}>
@@ -687,9 +742,12 @@ export function SalesPage() {
               <div>
                 <p className="text-slate-500">Sales Person</p>
                 <p className="font-semibold">
-                  {activeOrder.salesPerson
-                    ? `${activeOrder.salesPerson.firstName} ${activeOrder.salesPerson.lastName}`.trim()
-                    : '—'}
+                  {(() => {
+                    const person = activeOrder.salesPerson || activeOrder.createdBy;
+                    return person
+                      ? `${person.firstName} ${person.lastName}`.trim()
+                      : '—';
+                  })()}
                 </p>
               </div>
               <div><p className="text-slate-500">Date</p><p className="font-semibold">{formatDate(activeOrder.orderDate)}</p></div>

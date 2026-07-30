@@ -1,0 +1,128 @@
+[
+  {
+    "url": "http://localhost:3001/api/v1/customers?limit=10",
+    "concurrency": 1,
+    "wallMs": 18.498,
+    "rps": 54.06,
+    "failures": 0,
+    "non200": 0,
+    "latency": {
+      "count": 1,
+      "min": 18.448,
+      "max": 18.448,
+      "mean": 18.448,
+      "median": 18.448,
+      "p95": 18.448,
+      "p99": 18.448,
+      "stddev": 0
+    },
+    "statuses": {
+      "200": 1
+    }
+  },
+  {
+    "url": "http://localhost:3001/api/v1/customers?limit=10",
+    "concurrency": 10,
+    "wallMs": 59.868,
+    "rps": 167.034,
+    "failures": 0,
+    "non200": 0,
+    "latency": {
+      "count": 10,
+      "min": 54.367,
+      "max": 57.949,
+      "mean": 56.359,
+      "median": 56.339,
+      "p95": 57.949,
+      "p99": 57.949,
+      "stddev": 0.946
+    },
+    "statuses": {
+      "200": 10
+    }
+  },
+  {
+    "url": "http://localhost:3001/api/v1/customers?limit=10",
+    "concurrency": 25,
+    "wallMs": 169.416,
+    "rps": 147.566,
+    "failures": 0,
+    "non200": 0,
+    "latency": {
+      "count": 25,
+      "min": 155.002,
+      "max": 164.217,
+      "mean": 160.227,
+      "median": 159.941,
+      "p95": 164.046,
+      "p99": 164.217,
+      "stddev": 3.088
+    },
+    "statuses": {
+      "200": 25
+    }
+  },
+  {
+    "url": "http://localhost:3001/api/v1/customers?limit=10",
+    "concurrency": 50,
+    "wallMs": 342.56,
+    "rps": 145.96,
+    "failures": 0,
+    "non200": 0,
+    "latency": {
+      "count": 50,
+      "min": 319.209,
+      "max": 336.974,
+      "mean": 329.405,
+      "median": 332.095,
+      "p95": 336.461,
+      "p99": 336.974,
+      "stddev": 6.173
+    },
+    "statuses": {
+      "200": 50
+    }
+  },
+  {
+    "url": "http://localhost:3001/api/v1/customers?limit=10",
+    "concurrency": 100,
+    "wallMs": 506.772,
+    "rps": 197.327,
+    "failures": 0,
+    "non200": 0,
+    "latency": {
+      "count": 100,
+      "min": 471.82,
+      "max": 484.62,
+      "mean": 477.563,
+      "median": 478.875,
+      "p95": 483.893,
+      "p99": 484.62,
+      "stddev": 4.336
+    },
+    "statuses": {
+      "200": 100
+    }
+  },
+  {
+    "url": "http://localhost:3001/api/v1/customers?limit=10",
+    "concurrency": 250,
+    "wallMs": 1005.302,
+    "rps": 248.681,
+    "failures": 0,
+    "non200": 0,
+    "latency": {
+      "count": 250,
+      "min": 609.389,
+      "max": 913.38,
+      "mean": 786.121,
+      "median": 796.527,
+      "p95": 906.986,
+      "p99": 913.218,
+      "stddev": 112.427
+    },
+    "statuses": {
+      "200": 250
+    }
+  }
+]

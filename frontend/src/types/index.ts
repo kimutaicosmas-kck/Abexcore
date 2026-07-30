@@ -422,6 +422,7 @@ export interface Invoice {
     orderNumber: string;
     salesPersonId?: string | null;
     salesPerson?: SalesPersonRef | null;
+    createdBy?: SalesPersonRef | null;
   } | null;
 }
 

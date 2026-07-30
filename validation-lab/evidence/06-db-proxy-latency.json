@@ -1,0 +1,27 @@
+{
+  "rounds": 30,
+  "endpoint": "/api/v1/customers?limit=50&page=1",
+  "latency": {
+    "count": 30,
+    "min": 16.926,
+    "max": 81.378,
+    "mean": 22.605,
+    "median": 19.889,
+    "p95": 33.185,
+    "p99": 81.378,
+    "stddev": 11.388
+  },
+  "bytes": {
+    "count": 30,
+    "min": 1243,
+    "max": 1243,
+    "mean": 1243,
+    "median": 1243,
+    "p95": 1243,
+    "p99": 1243,
+    "stddev": 0
+  },
+  "failures": 0,
+  "sampleStatus": 200,
+  "sampleCount": 2
+}

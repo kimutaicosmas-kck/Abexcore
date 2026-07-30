@@ -165,7 +165,8 @@ export function CustomerForm({ customer, onSuccess, onCancel }: CustomerFormProp
       </div>
       {canAssignSalesPerson && (
         <p className="-mt-2 text-xs text-slate-500">
-          Assign this customer to a sales officer, or leave unassigned for house/admin accounts.
+          Assign a sales officer to own this account, or leave blank so any sales user with rights
+          can see them and place orders.
         </p>
       )}
       <Input label="Address" {...register('address')} />

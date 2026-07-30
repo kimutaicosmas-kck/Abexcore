@@ -212,18 +212,21 @@ export async function syncDeliveryTripStatus(tx: TxClient, tripId: string) {
   if (stops.length === 0) return;
 
   const statuses = stops.map((s) => s.status);
+  const open = statuses.filter((s) => !['DELIVERED', 'FAILED', 'RETURNED'].includes(s));
   let tripStatus: DeliveryStatus = 'PENDING';
 
   if (statuses.every((s) => s === 'DELIVERED')) {
+    // Entire trip complete — same status for admin and assigned driver.
     tripStatus = 'DELIVERED';
-  } else if (statuses.some((s) => s === 'IN_TRANSIT')) {
+  } else if (open.length === 0 && statuses.some((s) => s === 'FAILED')) {
+    tripStatus = 'FAILED';
+  } else if (open.length === 0 && statuses.some((s) => s === 'RETURNED')) {
+    tripStatus = 'RETURNED';
+  } else if (statuses.some((s) => s === 'IN_TRANSIT') || statuses.some((s) => s === 'DELIVERED')) {
+    // Partial progress (some delivered, others still open) stays in transit.
     tripStatus = 'IN_TRANSIT';
   } else if (statuses.some((s) => s === 'ASSIGNED')) {
     tripStatus = 'ASSIGNED';
-  } else if (statuses.some((s) => s === 'FAILED')) {
-    tripStatus = 'FAILED';
-  } else if (statuses.some((s) => s === 'RETURNED')) {
-    tripStatus = 'RETURNED';
   }
 
   await tx.deliveryTrip.update({
@@ -236,7 +239,13 @@ export async function applyDeliveryNoteStatus(
   tx: TxClient,
   deliveryId: string,
   status: DeliveryStatus,
-  options?: { proofOfDelivery?: string; actualItems?: ActualDeliveryItemInput[]; userId?: string }
+  options?: {
+    proofOfDelivery?: string;
+    actualItems?: ActualDeliveryItemInput[];
+    userId?: string;
+    /** When cascading from trip status, skip per-stop trip sync (caller syncs once). */
+    skipTripSync?: boolean;
+  }
 ) {
   const proofOfDelivery = options?.proofOfDelivery;
   const actualItems = options?.actualItems;
@@ -261,7 +270,7 @@ export async function applyDeliveryNoteStatus(
     await syncCustomerCreditUsed(updated.salesOrder.customerId, tx);
   }
 
-  if (updated.deliveryTripId) {
+  if (updated.deliveryTripId && !options?.skipTripSync) {
     await syncDeliveryTripStatus(tx, updated.deliveryTripId);
   }
 
@@ -288,25 +297,43 @@ export async function applyDeliveryTripStatus(
   });
   if (!trip) throw new AppError('Delivery trip not found', 404);
 
-  await tx.deliveryTrip.update({
-    where: { id: tripId },
-    data: {
-      status,
-      ...(status === 'DELIVERED' ? {} : {}),
-    },
-  });
-
+  // Stops are the source of truth — update them first, then derive trip status.
+  // Completing a trip must complete every open stop so admin and driver always match.
   for (const stop of trip.stops) {
     if (stop.status === status) continue;
-    if (status === 'DELIVERED' && stop.status === 'DELIVERED') continue;
-    if (status === 'IN_TRANSIT' && !['ASSIGNED', 'PENDING', 'IN_TRANSIT'].includes(stop.status)) continue;
-    if (status === 'ASSIGNED' && !['PENDING', 'ASSIGNED'].includes(stop.status)) continue;
+
+    if (status === 'DELIVERED') {
+      if (['DELIVERED', 'FAILED', 'RETURNED'].includes(stop.status)) continue;
+    } else if (status === 'IN_TRANSIT') {
+      if (!['ASSIGNED', 'PENDING', 'IN_TRANSIT'].includes(stop.status)) continue;
+    } else if (status === 'ASSIGNED') {
+      if (!['PENDING', 'ASSIGNED'].includes(stop.status)) continue;
+    }
 
     await applyDeliveryNoteStatus(tx, stop.id, status, {
       proofOfDelivery,
       actualItems: actualItemsByStop?.find((entry) => entry.deliveryNoteId === stop.id)?.items,
       userId,
+      skipTripSync: true,
     });
+  }
+
+  await syncDeliveryTripStatus(tx, tripId);
+
+  // Explicit trip completion: if every stop that can be delivered is delivered, lock trip as DELIVERED.
+  if (status === 'DELIVERED') {
+    const remaining = await tx.deliveryNote.count({
+      where: {
+        deliveryTripId: tripId,
+        status: { notIn: ['DELIVERED', 'FAILED', 'RETURNED'] },
+      },
+    });
+    if (remaining === 0) {
+      await tx.deliveryTrip.update({
+        where: { id: tripId },
+        data: { status: 'DELIVERED' },
+      });
+    }
   }
 
   return tx.deliveryTrip.findUnique({

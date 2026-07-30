@@ -1,0 +1,846 @@
+{
+  "status": 200,
+  "ms": 492.111,
+  "ok": true,
+  "user": {
+    "id": "7ee89b37-5a70-4422-98dd-d80f6fe32fa8",
+    "email": "kimutaicosmas547@gmail.com",
+    "role": {
+      "id": "2e7a5319-9abf-466f-a359-5948429e6e0a",
+      "name": "Super Admin",
+      "description": "Super Admin role",
+      "isSystem": true,
+      "createdAt": "2026-07-13T13:13:28.567Z",
+      "updatedAt": "2026-07-13T13:13:28.567Z",
+      "permissions": [
+        {
+          "roleId": "2e7a5319-9abf-466f-a359-5948429e6e0a",
+          "permissionId": "04aae9cb-2463-4a8a-b483-ac9010b55e95",
+          "permission": {
+            "id": "04aae9cb-2463-4a8a-b483-ac9010b55e95",
+            "module": "delivery",
+            "action": "update",
+            "description": "update delivery",
+            "createdAt": "2026-07-27T08:09:04.362Z"
+          }
+        },
+        {
+          "roleId": "2e7a5319-9abf-466f-a359-5948429e6e0a",
+          "permissionId": "06aa4dc6-1e0b-41ac-a61c-859dd9584b29",
+          "permission": {
+            "id": "06aa4dc6-1e0b-41ac-a61c-859dd9584b29",
+            "module": "inventory",
+            "action": "read",
+            "description": "read inventory",
+            "createdAt": "2026-07-13T13:13:27.925Z"
+          }
+        },
+        {
+          "roleId": "2e7a5319-9abf-466f-a359-5948429e6e0a",
+          "permissionId": "070682dd-1dbe-48ad-91de-bdb7f50db37b",
+          "permission": {
+            "id": "070682dd-1dbe-48ad-91de-bdb7f50db37b",
+            "module": "production",
+            "action": "read",
+            "description": "read production",
+            "createdAt": "2026-07-13T13:13:28.068Z"
+          }
+        },
+        {
+          "roleId": "2e7a5319-9abf-466f-a359-5948429e6e0a",
+          "permissionId": "07f30153-e508-4af8-9e80-fd4bcf8e9357",
+          "permission": {
+            "id": "07f30153-e508-4af8-9e80-fd4bcf8e9357",
+            "module": "customers",
+            "action": "approve",
+            "description": "approve customers",
+            "createdAt": "2026-07-13T13:13:27.831Z"
+          }
+        },
+        {
+          "roleId": "2e7a5319-9abf-466f-a359-5948429e6e0a",
+          "permissionId": "158d3970-18e7-4732-81d0-64032f3bfe85",
+          "permission": {
+            "id": "158d3970-18e7-4732-81d0-64032f3bfe85",
+            "module": "customers",
+            "action": "create",
+            "description": "create customers",
+            "createdAt": "2026-07-13T13:13:27.777Z"
+          }
+        },
+        {
+          "roleId": "2e7a5319-9abf-466f-a359-5948429e6e0a",
+          "permissionId": "16333a51-1297-42cf-ac9b-7b416565935d",
+          "permission": {
+            "id": "16333a51-1297-42cf-ac9b-7b416565935d",
+            "module": "procurement",
+            "action": "read",
+            "description": "read procurement",
+            "createdAt": "2026-07-13T13:13:27.987Z"
+          }
+        },
+        {
+          "roleId": "2e7a5319-9abf-466f-a359-5948429e6e0a",
+          "permissionId": "18efb8cd-2e3a-4687-8e8e-db816b1549f2",
+          "permission": {
+            "id": "18efb8cd-2e3a-4687-8e8e-db816b1549f2",
+            "module": "sales",
+            "action": "update",
+            "description": "update sales",
+            "createdAt": "2026-07-13T13:13:28.165Z"
+          }
+        },
+        {
+          "roleId": "2e7a5319-9abf-466f-a359-5948429e6e0a",
+          "permissionId": "1b484591-843c-40d3-89cc-f28c0c8878a2",
+          "permission": {
+            "id": "1b484591-843c-40d3-89cc-f28c0c8878a2",
+            "module": "delivery",
+            "action": "create",
+            "description": "create delivery",
+            "createdAt": "2026-07-27T08:09:04.341Z"
+          }
+        },
+        {
+          "roleId": "2e7a5319-9abf-466f-a359-5948429e6e0a",
+          "permissionId": "1d87dbf1-6866-4c4c-ab81-180980ad7a52",
+          "permission": {
+            "id": "1d87dbf1-6866-4c4c-ab81-180980ad7a52",
+            "module": "maintenance",
+            "action": "read",
+            "description": "read maintenance",
+            "createdAt": "2026-07-13T13:13:28.354Z"
+          }
+        },
+        {
+          "roleId": "2e7a5319-9abf-466f-a359-5948429e6e0a",
+          "permissionId": "1e9a29ed-dc78-4398-8cca-b1d6e4ca2b5c",
+          "permission": {
+            "id": "1e9a29ed-dc78-4398-8cca-b1d6e4ca2b5c",
+            "module": "hr",
+            "action": "create",
+            "description": "create hr",
+            "createdAt": "2026-07-13T13:13:28.283Z"
+          }
+        },
+        {
+          "roleId": "2e7a5319-9abf-466f-a359-5948429e6e0a",
+          "permissionId": "1f7a3d9d-956e-4d33-ad84-0825e262a1ff",
+          "permission": {
+            "id": "1f7a3d9d-956e-4d33-ad84-0825e262a1ff",
+            "module": "sales",
+            "action": "approve",
+            "description": "approve sales",
+            "createdAt": "2026-07-13T13:13:28.196Z"
+          }
+        },
+        {
+          "roleId": "2e7a5319-9abf-466f-a359-5948429e6e0a",
+          "permissionId": "21261777-8d92-4eba-ba4b-9cf166cb66d6",
+          "permission": {
+            "id": "21261777-8d92-4eba-ba4b-9cf166cb66d6",
+            "module": "delivery",
+            "action": "approve",
+            "description": "approve delivery",
+            "createdAt": "2026-07-27T08:09:04.379Z"
+          }
+        },
+        {
+          "roleId": "2e7a5319-9abf-466f-a359-5948429e6e0a",
+          "permissionId": "29b15635-4349-4087-bd4f-45fb4167bb85",
+          "permission": {
+            "id": "29b15635-4349-4087-bd4f-45fb4167bb85",
+            "module": "reports",
+            "action": "delete",
+            "description": "delete reports",
+            "createdAt": "2026-07-13T13:13:28.486Z"
+          }
+        },
+        {
+          "roleId": "2e7a5319-9abf-466f-a359-5948429e6e0a",
+          "permissionId": "316902c6-a405-4675-be66-4ff7051e6724",
+          "permission": {
+            "id": "316902c6-a405-4675-be66-4ff7051e6724",
+            "module": "sales",
+            "action": "delete",
+            "description": "delete sales",
+            "createdAt": "2026-07-13T13:13:28.181Z"
+          }
+        },
+        {
+          "roleId": "2e7a5319-9abf-466f-a359-5948429e6e0a",
+          "permissionId": "376133b3-be44-42f3-acf4-10d934b4b038",
+          "permission": {
+            "id": "376133b3-be44-42f3-acf4-10d934b4b038",
+            "module": "customers",
+            "action": "delete",
+            "description": "delete customers",
+            "createdAt": "2026-07-13T13:13:27.818Z"
+          }
+        },
+        {
+          "roleId": "2e7a5319-9abf-466f-a359-5948429e6e0a",
+          "permissionId": "37c735ba-e1c2-4a05-a2ba-03d93104f294",
+          "permission": {
+            "id": "37c735ba-e1c2-4a05-a2ba-03d93104f294",
+            "module": "production",
+            "action": "approve",
+            "description": "approve production",
+            "createdAt": "2026-07-13T13:13:28.115Z"
+          }
+        },
+        {
+          "roleId": "2e7a5319-9abf-466f-a359-5948429e6e0a",
+          "permissionId": "3d0eaac1-7222-4339-8150-ef058808df89",
+          "permission": {
+            "id": "3d0eaac1-7222-4339-8150-ef058808df89",
+            "module": "inventory",
+            "action": "delete",
+            "description": "delete inventory",
+            "createdAt": "2026-07-13T13:13:27.950Z"
+          }
+        },
+        {
+          "roleId": "2e7a5319-9abf-466f-a359-5948429e6e0a",
+          "permissionId": "3e4214dc-cec5-4bce-a48a-e5bda7af0540",
+          "permission": {
+            "id": "3e4214dc-cec5-4bce-a48a-e5bda7af0540",
+            "module": "inventory",
+            "action": "update",
+            "description": "update inventory",
+            "createdAt": "2026-07-13T13:13:27.939Z"
+          }
+        },
+        {
+          "roleId": "2e7a5319-9abf-466f-a359-5948429e6e0a",
+          "permissionId": "3e601e2e-5af3-40b2-8bac-8e293b9ca975",
+          "permission": {
+            "id": "3e601e2e-5af3-40b2-8bac-8e293b9ca975",
+            "module": "sales",
+            "action": "read",
+            "description": "read sales",
+            "createdAt": "2026-07-13T13:13:28.148Z"
+          }
+        },
+        {
+          "roleId": "2e7a5319-9abf-466f-a359-5948429e6e0a",
+          "permissionId": "437a935b-91d7-4723-8250-d326d9b1a640",
+          "permission": {
+            "id": "437a935b-91d7-4723-8250-d326d9b1a640",
+            "module": "users",
+            "action": "update",
+            "description": "update users",
+            "createdAt": "2026-07-13T13:13:27.733Z"
+          }
+        },
+        {
+          "roleId": "2e7a5319-9abf-466f-a359-5948429e6e0a",
+          "permissionId": "4db1b1bc-0847-4140-ab05-7d8a37129ace",
+          "permission": {
+            "id": "4db1b1bc-0847-4140-ab05-7d8a37129ace",
+            "module": "quality",
+            "action": "approve",
+            "description": "approve quality",
+            "createdAt": "2026-07-13T13:13:28.443Z"
+          }
+        },
+        {
+          "roleId": "2e7a5319-9abf-466f-a359-5948429e6e0a",
+          "permissionId": "4fa57384-bda2-4523-8085-4c182f67debd",
+          "permission": {
+            "id": "4fa57384-bda2-4523-8085-4c182f67debd",
+            "module": "reports",
+            "action": "approve",
+            "description": "approve reports",
+            "createdAt": "2026-07-13T13:13:28.498Z"
+          }
+        },
+        {
+          "roleId": "2e7a5319-9abf-466f-a359-5948429e6e0a",
+          "permissionId": "5473b0c8-8e09-474c-990e-15ae4b2a664a",
+          "permission": {
+            "id": "5473b0c8-8e09-474c-990e-15ae4b2a664a",
+            "module": "reports",
+            "action": "update",
+            "description": "update reports",
+            "createdAt": "2026-07-13T13:13:28.477Z"
+          }
+        },
+        {
+          "roleId": "2e7a5319-9abf-466f-a359-5948429e6e0a",
+          "permissionId": "594a6619-5328-42c1-ae68-02c9a17a7574",
+          "permission": {
+            "id": "594a6619-5328-42c1-ae68-02c9a17a7574",
+            "module": "settings",
+            "action": "delete",
+            "description": "delete settings",
+            "createdAt": "2026-07-13T13:13:28.543Z"
+          }
+        },
+        {
+          "roleId": "2e7a5319-9abf-466f-a359-5948429e6e0a",
+          "permissionId": "5ff8e415-9a0d-4a3f-b1fd-c77a29097931",
+          "permission": {
+            "id": "5ff8e415-9a0d-4a3f-b1fd-c77a29097931",
+            "module": "users",
+            "action": "read",
+            "description": "read users",
+            "createdAt": "2026-07-13T13:13:27.714Z"
+          }
+        },
+        {
+          "roleId": "2e7a5319-9abf-466f-a359-5948429e6e0a",
+          "permissionId": "636e79d4-222e-4667-9b95-fd02dc05ba64",
+          "permission": {
+            "id": "636e79d4-222e-4667-9b95-fd02dc05ba64",
+            "module": "delivery",
+            "action": "delete",
+            "description": "delete delivery",
+            "createdAt": "2026-07-27T08:09:04.372Z"
+          }
+        },
+        {
+          "roleId": "2e7a5319-9abf-466f-a359-5948429e6e0a",
+          "permissionId": "65b95263-8dd9-43e5-9054-ebaae37c94c5",
+          "permission": {
+            "id": "65b95263-8dd9-43e5-9054-ebaae37c94c5",
+            "module": "maintenance",
+            "action": "delete",
+            "description": "delete maintenance",
+            "createdAt": "2026-07-13T13:13:28.378Z"
+          }
+        },
+        {
+          "roleId": "2e7a5319-9abf-466f-a359-5948429e6e0a",
+          "permissionId": "6b7f5ba9-4e06-47e8-9507-5634638062bb",
+          "permission": {
+            "id": "6b7f5ba9-4e06-47e8-9507-5634638062bb",
+            "module": "dashboard",
+            "action": "approve",
+            "description": "approve dashboard",
+            "createdAt": "2026-07-13T13:13:27.676Z"
+          }
+        },
+        {
+          "roleId": "2e7a5319-9abf-466f-a359-5948429e6e0a",
+          "permissionId": "6d1f121b-0434-4158-825d-720c66a88529",
+          "permission": {
+            "id": "6d1f121b-0434-4158-825d-720c66a88529",
+            "module": "users",
+            "action": "delete",
+            "description": "delete users",
+            "createdAt": "2026-07-13T13:13:27.746Z"
+          }
+        },
+        {
+          "roleId": "2e7a5319-9abf-466f-a359-5948429e6e0a",
+          "permissionId": "7168972a-5f98-4a1f-808b-95fb3b723308",
+          "permission": {
+            "id": "7168972a-5f98-4a1f-808b-95fb3b723308",
+            "module": "customers",
+            "action": "update",
+            "description": "update customers",
+            "createdAt": "2026-07-13T13:13:27.802Z"
+          }
+        },
+        {
+          "roleId": "2e7a5319-9abf-466f-a359-5948429e6e0a",
+          "permissionId": "71f0d190-8584-4c96-9519-0d37340d6028",
+          "permission": {
+            "id": "71f0d190-8584-4c96-9519-0d37340d6028",
+            "module": "quality",
+            "action": "read",
+            "description": "read quality",
+            "createdAt": "2026-07-13T13:13:28.410Z"
+          }
+        },
+        {
+          "roleId": "2e7a5319-9abf-466f-a359-5948429e6e0a",
+          "permissionId": "73978213-17d7-4dde-8977-1bbcc771b270",
+          "permission": {
+            "id": "73978213-17d7-4dde-8977-1bbcc771b270",
+            "module": "users",
+            "action": "create",
+            "description": "create users",
+            "createdAt": "2026-07-13T13:13:27.697Z"
+          }
+        },
+        {
+          "roleId": "2e7a5319-9abf-466f-a359-5948429e6e0a",
+          "permissionId": "7d00040e-a085-4968-a533-515cf134ff1f",
+          "permission": {
+            "id": "7d00040e-a085-4968-a533-515cf134ff1f",
+            "module": "settings",
+            "action": "create",
+            "description": "create settings",
+            "createdAt": "2026-07-13T13:13:28.509Z"
+          }
+        },
+        {
+          "roleId": "2e7a5319-9abf-466f-a359-5948429e6e0a",
+          "permissionId": "85db277f-0be4-4802-abae-94cd88b4bc5d",
+          "permission": {
+            "id": "85db277f-0be4-4802-abae-94cd88b4bc5d",
+            "module": "products",
+            "action": "read",
+            "description": "read products",
+            "createdAt": "2026-07-13T13:13:27.859Z"
+          }
+        },
+        {
+          "roleId": "2e7a5319-9abf-466f-a359-5948429e6e0a",
+          "permissionId": "8760e2fe-b488-40e8-a41c-4a6ca0f42096",
+          "permission": {
+            "id": "8760e2fe-b488-40e8-a41c-4a6ca0f42096",
+            "module": "production",
+            "action": "update",
+            "description": "update production",
+            "createdAt": "2026-07-13T13:13:28.083Z"
+          }
+        },
+        {
+          "roleId": "2e7a5319-9abf-466f-a359-5948429e6e0a",
+          "permissionId": "89daa142-01e8-4fc5-93d1-25bf9e0bce25",
+          "permission": {
+            "id": "89daa142-01e8-4fc5-93d1-25bf9e0bce25",
+            "module": "finance",
+            "action": "create",
+            "description": "create finance",
+            "createdAt": "2026-07-13T13:13:28.210Z"
+          }
+        },
+        {
+          "roleId": "2e7a5319-9abf-466f-a359-5948429e6e0a",
+          "permissionId": "8bf441ce-711a-43e2-bf09-e6129a028a5f",
+          "permission": {
+            "id": "8bf441ce-711a-43e2-bf09-e6129a028a5f",
+            "module": "quality",
+            "action": "update",
+            "description": "update quality",
+            "createdAt": "2026-07-13T13:13:28.420Z"
+          }
+        },
+        {
+          "roleId": "2e7a5319-9abf-466f-a359-5948429e6e0a",
+          "permissionId": "8db10e83-4924-4d72-9783-df1f914d64a0",
+          "permission": {
+            "id": "8db10e83-4924-4d72-9783-df1f914d64a0",
+            "module": "settings",
+            "action": "read",
+            "description": "read settings",
+            "createdAt": "2026-07-13T13:13:28.520Z"
+          }
+        },
+        {
+          "roleId": "2e7a5319-9abf-466f-a359-5948429e6e0a",
+          "permissionId": "9182fd1b-20d6-4189-bc8f-1d6d7095a7fb",
+          "permission": {
+            "id": "9182fd1b-20d6-4189-bc8f-1d6d7095a7fb",
+            "module": "hr",
+            "action": "update",
+            "description": "update hr",
+            "createdAt": "2026-07-13T13:13:28.310Z"
+          }
+        },
+        {
+          "roleId": "2e7a5319-9abf-466f-a359-5948429e6e0a",
+          "permissionId": "95ad7f79-2c99-464d-b60f-a46ec316c60d",
+          "permission": {
+            "id": "95ad7f79-2c99-464d-b60f-a46ec316c60d",
+            "module": "hr",
+            "action": "delete",
+            "description": "delete hr",
+            "createdAt": "2026-07-13T13:13:28.322Z"
+          }
+        },
+        {
+          "roleId": "2e7a5319-9abf-466f-a359-5948429e6e0a",
+          "permissionId": "9dc94038-c7a4-49ef-928c-c24f88a288f9",
+          "permission": {
+            "id": "9dc94038-c7a4-49ef-928c-c24f88a288f9",
+            "module": "reports",
+            "action": "create",
+            "description": "create reports",
+            "createdAt": "2026-07-13T13:13:28.455Z"
+          }
+        },
+        {
+          "roleId": "2e7a5319-9abf-466f-a359-5948429e6e0a",
+          "permissionId": "9f0d57b7-9c8a-46d6-9094-b33093857680",
+          "permission": {
+            "id": "9f0d57b7-9c8a-46d6-9094-b33093857680",
+            "module": "inventory",
+            "action": "create",
+            "description": "create inventory",
+            "createdAt": "2026-07-13T13:13:27.912Z"
+          }
+        },
+        {
+          "roleId": "2e7a5319-9abf-466f-a359-5948429e6e0a",
+          "permissionId": "a94977a8-3fea-4aad-b587-949f50c8edde",
+          "permission": {
+            "id": "a94977a8-3fea-4aad-b587-949f50c8edde",
+            "module": "settings",
+            "action": "approve",
+            "description": "approve settings",
+            "createdAt": "2026-07-13T13:13:28.555Z"
+          }
+        },
+        {
+          "roleId": "2e7a5319-9abf-466f-a359-5948429e6e0a",
+          "permissionId": "af313756-be81-4c0d-a5a6-e5e9ed341383",
+          "permission": {
+            "id": "af313756-be81-4c0d-a5a6-e5e9ed341383",
+            "module": "dashboard",
+            "action": "update",
+            "description": "update dashboard",
+            "createdAt": "2026-07-13T13:13:27.637Z"
+          }
+        },
+        {
+          "roleId": "2e7a5319-9abf-466f-a359-5948429e6e0a",
+          "permissionId": "b27a507a-ee3c-4bea-93e1-0df2d0d9efe4",
+          "permission": {
+            "id": "b27a507a-ee3c-4bea-93e1-0df2d0d9efe4",
+            "module": "production",
+            "action": "delete",
+            "description": "delete production",
+            "createdAt": "2026-07-13T13:13:28.098Z"
+          }
+        },
+        {
+          "roleId": "2e7a5319-9abf-466f-a359-5948429e6e0a",
+          "permissionId": "b28c1233-0a46-4c9d-aa49-4ce868c4d0d1",
+          "permission": {
+            "id": "b28c1233-0a46-4c9d-aa49-4ce868c4d0d1",
+            "module": "procurement",
+            "action": "update",
+            "description": "update procurement",
+            "createdAt": "2026-07-13T13:13:28.002Z"
+          }
+        },
+        {
+          "roleId": "2e7a5319-9abf-466f-a359-5948429e6e0a",
+          "permissionId": "b49c7f7e-a521-4443-afbd-257b8e2e86c1",
+          "permission": {
+            "id": "b49c7f7e-a521-4443-afbd-257b8e2e86c1",
+            "module": "dashboard",
+            "action": "create",
+            "description": "create dashboard",
+            "createdAt": "2026-07-13T13:13:27.585Z"
+          }
+        },
+        {
+          "roleId": "2e7a5319-9abf-466f-a359-5948429e6e0a",
+          "permissionId": "b739931a-7cb7-4a22-92fe-747ce98e9c85",
+          "permission": {
+            "id": "b739931a-7cb7-4a22-92fe-747ce98e9c85",
+            "module": "users",
+            "action": "approve",
+            "description": "approve users",
+            "createdAt": "2026-07-13T13:13:27.761Z"
+          }
+        },
+        {
+          "roleId": "2e7a5319-9abf-466f-a359-5948429e6e0a",
+          "permissionId": "b8dbaf4a-1a54-47f8-b195-2952af9c5da2",
+          "permission": {
+            "id": "b8dbaf4a-1a54-47f8-b195-2952af9c5da2",
+            "module": "maintenance",
+            "action": "approve",
+            "description": "approve maintenance",
+            "createdAt": "2026-07-13T13:13:28.388Z"
+          }
+        },
+        {
+          "roleId": "2e7a5319-9abf-466f-a359-5948429e6e0a",
+          "permissionId": "bbcc1136-2942-4293-9823-905df59eb855",
+          "permission": {
+            "id": "bbcc1136-2942-4293-9823-905df59eb855",
+            "module": "delivery",
+            "action": "read",
+            "description": "read delivery",
+            "createdAt": "2026-07-27T08:09:04.352Z"
+          }
+        },
+        {
+          "roleId": "2e7a5319-9abf-466f-a359-5948429e6e0a",
+          "permissionId": "bbd23029-8658-4b34-9871-e9c7bb12d627",
+          "permission": {
+            "id": "bbd23029-8658-4b34-9871-e9c7bb12d627",
+            "module": "procurement",
+            "action": "approve",
+            "description": "approve procurement",
+            "createdAt": "2026-07-13T13:13:28.035Z"
+          }
+        },
+        {
+          "roleId": "2e7a5319-9abf-466f-a359-5948429e6e0a",
+          "permissionId": "bca73d1b-d8b3-4e40-be65-d77beed372ed",
+          "permission": {
+            "id": "bca73d1b-d8b3-4e40-be65-d77beed372ed",
+            "module": "quality",
+            "action": "delete",
+            "description": "delete quality",
+            "createdAt": "2026-07-13T13:13:28.432Z"
+          }
+        },
+        {
+          "roleId": "2e7a5319-9abf-466f-a359-5948429e6e0a",
+          "permissionId": "bcac3b1c-4a5b-4298-a036-4ea095e9aca8",
+          "permission": {
+            "id": "bcac3b1c-4a5b-4298-a036-4ea095e9aca8",
+            "module": "maintenance",
+            "action": "update",
+            "description": "update maintenance",
+            "createdAt": "2026-07-13T13:13:28.366Z"
+          }
+        },
+        {
+          "roleId": "2e7a5319-9abf-466f-a359-5948429e6e0a",
+          "permissionId": "c1eccebf-bd80-4b6e-80ac-bfcc8053f7a6",
+          "permission": {
+            "id": "c1eccebf-bd80-4b6e-80ac-bfcc8053f7a6",
+            "module": "maintenance",
+            "action": "create",
+            "description": "create maintenance",
+            "createdAt": "2026-07-13T13:13:28.343Z"
+          }
+        },
+        {
+          "roleId": "2e7a5319-9abf-466f-a359-5948429e6e0a",
+          "permissionId": "c541e4ca-bdd1-43b1-af7d-14a7a4f4ae2e",
+          "permission": {
+            "id": "c541e4ca-bdd1-43b1-af7d-14a7a4f4ae2e",
+            "module": "sales",
+            "action": "create",
+            "description": "create sales",
+            "createdAt": "2026-07-13T13:13:28.132Z"
+          }
+        },
+        {
+          "roleId": "2e7a5319-9abf-466f-a359-5948429e6e0a",
+          "permissionId": "c580135d-ddb7-440d-b56f-270284be2212",
+          "permission": {
+            "id": "c580135d-ddb7-440d-b56f-270284be2212",
+            "module": "inventory",
+            "action": "approve",
+            "description": "approve inventory",
+            "createdAt": "2026-07-13T13:13:27.962Z"
+          }
+        },
+        {
+          "roleId": "2e7a5319-9abf-466f-a359-5948429e6e0a",
+          "permissionId": "cfd98a1e-3a38-4696-ad8e-a2433a11ddc8",
+          "permission": {
+            "id": "cfd98a1e-3a38-4696-ad8e-a2433a11ddc8",
+            "module": "products",
+            "action": "create",
+            "description": "create products",
+            "createdAt": "2026-07-13T13:13:27.845Z"
+          }
+        },
+        {
+          "roleId": "2e7a5319-9abf-466f-a359-5948429e6e0a",
+          "permissionId": "d0f7de3b-ac36-41ec-a4e9-3480327c893a",
+          "permission": {
+            "id": "d0f7de3b-ac36-41ec-a4e9-3480327c893a",
+            "module": "finance",
+            "action": "delete",
+            "description": "delete finance",
+            "createdAt": "2026-07-13T13:13:28.257Z"
+          }
+        },
+        {
+          "roleId": "2e7a5319-9abf-466f-a359-5948429e6e0a",
+          "permissionId": "d6cf63d7-ca45-4870-8cce-692da60ded1d",
+          "permission": {
+            "id": "d6cf63d7-ca45-4870-8cce-692da60ded1d",
+            "module": "dashboard",
+            "action": "read",
+            "description": "read dashboard",
+            "createdAt": "2026-07-13T13:13:27.618Z"
+          }
+        },
+        {
+          "roleId": "2e7a5319-9abf-466f-a359-5948429e6e0a",
+          "permissionId": "db847681-f64f-41e8-aea9-009cac3574b3",
+          "permission": {
+            "id": "db847681-f64f-41e8-aea9-009cac3574b3",
+            "module": "finance",
+            "action": "approve",
+            "description": "approve finance",
+            "createdAt": "2026-07-13T13:13:28.269Z"
+          }
+        },
+        {
+          "roleId": "2e7a5319-9abf-466f-a359-5948429e6e0a",
+          "permissionId": "de541cdf-37b8-4d0a-ad09-f4eb8b1a4512",
+          "permission": {
+            "id": "de541cdf-37b8-4d0a-ad09-f4eb8b1a4512",
+            "module": "quality",
+            "action": "create",
+            "description": "create quality",
+            "createdAt": "2026-07-13T13:13:28.400Z"
+          }
+        },
+        {
+          "roleId": "2e7a5319-9abf-466f-a359-5948429e6e0a",
+          "permissionId": "de9be410-fb47-49d9-846a-24754f6e7215",
+          "permission": {
+            "id": "de9be410-fb47-49d9-846a-24754f6e7215",
+            "module": "hr",
+            "action": "approve",
+            "description": "approve hr",
+            "createdAt": "2026-07-13T13:13:28.334Z"
+          }
+        },
+        {
+          "roleId": "2e7a5319-9abf-466f-a359-5948429e6e0a",
+          "permissionId": "e0c30a50-d220-4d05-b1be-b88555d66035",
+          "permission": {
+            "id": "e0c30a50-d220-4d05-b1be-b88555d66035",
+            "module": "reports",
+            "action": "read",
+            "description": "read reports",
+            "createdAt": "2026-07-13T13:13:28.466Z"
+          }
+        },
+        {
+          "roleId": "2e7a5319-9abf-466f-a359-5948429e6e0a",
+          "permissionId": "e4b8374e-560c-4501-b017-d4bf2683cd36",
+          "permission": {
+            "id": "e4b8374e-560c-4501-b017-d4bf2683cd36",
+            "module": "products",
+            "action": "delete",
+            "description": "delete products",
+            "createdAt": "2026-07-13T13:13:27.883Z"
+          }
+        },
+        {
+          "roleId": "2e7a5319-9abf-466f-a359-5948429e6e0a",
+          "permissionId": "e8e13e7c-93bc-4345-8fb5-7606afe4fabf",
+          "permission": {
+            "id": "e8e13e7c-93bc-4345-8fb5-7606afe4fabf",
+            "module": "customers",
+            "action": "read",
+            "description": "read customers",
+            "createdAt": "2026-07-13T13:13:27.790Z"
+          }
+        },
+        {
+          "roleId": "2e7a5319-9abf-466f-a359-5948429e6e0a",
+          "permissionId": "ebcf18f5-282a-443e-8618-91b06eb0561c",
+          "permission": {
+            "id": "ebcf18f5-282a-443e-8618-91b06eb0561c",
+            "module": "dashboard",
+            "action": "delete",
+            "description": "delete dashboard",
+            "createdAt": "2026-07-13T13:13:27.657Z"
+          }
+        },
+        {
+          "roleId": "2e7a5319-9abf-466f-a359-5948429e6e0a",
+          "permissionId": "ecfff332-a54c-4a64-8dbd-e3e723779ee5",
+          "permission": {
+            "id": "ecfff332-a54c-4a64-8dbd-e3e723779ee5",
+            "module": "production",
+            "action": "create",
+            "description": "create production",
+            "createdAt": "2026-07-13T13:13:28.050Z"
+          }
+        },
+        {
+          "roleId": "2e7a5319-9abf-466f-a359-5948429e6e0a",
+          "permissionId": "ef032f31-043e-4022-b055-efbcebccab4f",
+          "permission": {
+            "id": "ef032f31-043e-4022-b055-efbcebccab4f",
+            "module": "procurement",
+            "action": "delete",
+            "description": "delete procurement",
+            "createdAt": "2026-07-13T13:13:28.018Z"
+          }
+        },
+        {
+          "roleId": "2e7a5319-9abf-466f-a359-5948429e6e0a",
+          "permissionId": "f2dc18a3-dda4-4e8e-9e63-a327088cc1ac",
+          "permission": {
+            "id": "f2dc18a3-dda4-4e8e-9e63-a327088cc1ac",
+            "module": "finance",
+            "action": "update",
+            "description": "update finance",
+            "createdAt": "2026-07-13T13:13:28.243Z"
+          }
+        },
+        {
+          "roleId": "2e7a5319-9abf-466f-a359-5948429e6e0a",
+          "permissionId": "f39f9c51-e084-448d-8bbd-de9825cee30b",
+          "permission": {
+            "id": "f39f9c51-e084-448d-8bbd-de9825cee30b",
+            "module": "finance",
+            "action": "read",
+            "description": "read finance",
+            "createdAt": "2026-07-13T13:13:28.229Z"
+          }
+        },
+        {
+          "roleId": "2e7a5319-9abf-466f-a359-5948429e6e0a",
+          "permissionId": "f5ee12df-33dd-43d2-8b1a-f06b6e12419e",
+          "permission": {
+            "id": "f5ee12df-33dd-43d2-8b1a-f06b6e12419e",
+            "module": "products",
+            "action": "update",
+            "description": "update products",
+            "createdAt": "2026-07-13T13:13:27.873Z"
+          }
+        },
+        {
+          "roleId": "2e7a5319-9abf-466f-a359-5948429e6e0a",
+          "permissionId": "fabc399b-5bc2-4dcb-a64b-61b5a7fd04fb",
+          "permission": {
+            "id": "fabc399b-5bc2-4dcb-a64b-61b5a7fd04fb",
+            "module": "hr",
+            "action": "read",
+            "description": "read hr",
+            "createdAt": "2026-07-13T13:13:28.297Z"
+          }
+        },
+        {
+          "roleId": "2e7a5319-9abf-466f-a359-5948429e6e0a",
+          "permissionId": "fc1335c1-d7e1-48c8-b484-7b9a66ec170b",
+          "permission": {
+            "id": "fc1335c1-d7e1-48c8-b484-7b9a66ec170b",
+            "module": "products",
+            "action": "approve",
+            "description": "approve products",
+            "createdAt": "2026-07-13T13:13:27.896Z"
+          }
+        },
+        {
+          "roleId": "2e7a5319-9abf-466f-a359-5948429e6e0a",
+          "permissionId": "fcc2af24-675c-43b9-a4b1-d68cc190292b",
+          "permission": {
+            "id": "fcc2af24-675c-43b9-a4b1-d68cc190292b",
+            "module": "procurement",
+            "action": "create",
+            "description": "create procurement",
+            "createdAt": "2026-07-13T13:13:27.975Z"
+          }
+        },
+        {
+          "roleId": "2e7a5319-9abf-466f-a359-5948429e6e0a",
+          "permissionId": "ff1ac72e-aa42-41d7-b5d7-77e5fbefbb7e",
+          "permission": {
+            "id": "ff1ac72e-aa42-41d7-b5d7-77e5fbefbb7e",
+            "module": "settings",
+            "action": "update",
+            "description": "update settings",
+            "createdAt": "2026-07-13T13:13:28.532Z"
+          }
+        }
+      ]
+    },
+    "companyId": "00000000-0000-0000-0000-000000000001"
+  },
+  "message": null
+}

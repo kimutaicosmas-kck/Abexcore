@@ -1,0 +1,122 @@
+[
+  {
+    "concurrency": 1,
+    "wallMs": 33.869,
+    "rps": 29.525,
+    "failures": 0,
+    "unauthorized": 0,
+    "latency": {
+      "count": 1,
+      "min": 33.657,
+      "max": 33.657,
+      "mean": 33.657,
+      "median": 33.657,
+      "p95": 33.657,
+      "p99": 33.657,
+      "stddev": 0
+    },
+    "statuses": {
+      "404": 1
+    }
+  },
+  {
+    "concurrency": 10,
+    "wallMs": 46.241,
+    "rps": 216.26,
+    "failures": 0,
+    "unauthorized": 0,
+    "latency": {
+      "count": 10,
+      "min": 33.242,
+      "max": 39.485,
+      "mean": 37.549,
+      "median": 38.618,
+      "p95": 39.485,
+      "p99": 39.485,
+      "stddev": 2.077
+    },
+    "statuses": {
+      "404": 10
+    }
+  },
+  {
+    "concurrency": 25,
+    "wallMs": 136.756,
+    "rps": 182.807,
+    "failures": 0,
+    "unauthorized": 0,
+    "latency": {
+      "count": 25,
+      "min": 87.111,
+      "max": 126.529,
+      "mean": 109.206,
+      "median": 111.227,
+      "p95": 126.353,
+      "p99": 126.529,
+      "stddev": 11.379
+    },
+    "statuses": {
+      "404": 25
+    }
+  },
+  {
+    "concurrency": 50,
+    "wallMs": 471.579,
+    "rps": 106.027,
+    "failures": 0,
+    "unauthorized": 0,
+    "latency": {
+      "count": 50,
+      "min": 162.302,
+      "max": 462.227,
+      "mean": 380.889,
+      "median": 402.835,
+      "p95": 456.285,
+      "p99": 462.227,
+      "stddev": 81.162
+    },
+    "statuses": {
+      "404": 50
+    }
+  },
+  {
+    "concurrency": 100,
+    "wallMs": 466.994,
+    "rps": 214.135,
+    "failures": 0,
+    "unauthorized": 0,
+    "latency": {
+      "count": 100,
+      "min": 124.288,
+      "max": 411.667,
+      "mean": 307.027,
+      "median": 344.75,
+      "p95": 409.7,
+      "p99": 411.667,
+      "stddev": 88.416
+    },
+    "statuses": {
+      "404": 100
+    }
+  },
+  {
+    "concurrency": 250,
+    "wallMs": 1091.914,
+    "rps": 228.956,
+    "failures": 0,
+    "unauthorized": 0,
+    "latency": {
+      "count": 250,
+      "min": 231.709,
+      "max": 994.81,
+      "mean": 631.694,
+      "median": 552.832,
+      "p95": 983.338,
+      "p99": 992.512,
+      "stddev": 208.675
+    },
+    "statuses": {
+      "404": 250
+    }
+  }
+]

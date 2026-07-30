@@ -1,0 +1,350 @@
+{
+  "startedAt": "2026-07-28T09:12:15.279Z",
+  "queries": {
+    "ping": {
+      "ms": 25.36,
+      "result": [
+        {
+          "ok": 1
+        }
+      ]
+    },
+    "version": {
+      "ms": 2.493,
+      "result": [
+        {
+          "version": "8.0.46"
+        }
+      ]
+    },
+    "topTables": {
+      "ms": 8.514,
+      "tables": [
+        {
+          "name": "invoices",
+          "approxRows": 6,
+          "dataLength": 16384,
+          "indexLength": 180224
+        },
+        {
+          "name": "sales_orders",
+          "approxRows": 7,
+          "dataLength": 16384,
+          "indexLength": 114688
+        },
+        {
+          "name": "delivery_notes",
+          "approxRows": 7,
+          "dataLength": 16384,
+          "indexLength": 98304
+        },
+        {
+          "name": "role_permissions",
+          "approxRows": 310,
+          "dataLength": 65536,
+          "indexLength": 49152
+        },
+        {
+          "name": "purchase_orders",
+          "approxRows": 0,
+          "dataLength": 16384,
+          "indexLength": 81920
+        },
+        {
+          "name": "production_orders",
+          "approxRows": 0,
+          "dataLength": 16384,
+          "indexLength": 81920
+        },
+        {
+          "name": "quality_inspections",
+          "approxRows": 2,
+          "dataLength": 16384,
+          "indexLength": 81920
+        },
+        {
+          "name": "audit_logs",
+          "approxRows": 75,
+          "dataLength": 65536,
+          "indexLength": 32768
+        },
+        {
+          "name": "stock_levels",
+          "approxRows": 2,
+          "dataLength": 16384,
+          "indexLength": 65536
+        },
+        {
+          "name": "users",
+          "approxRows": 4,
+          "dataLength": 16384,
+          "indexLength": 65536
+        },
+        {
+          "name": "customers",
+          "approxRows": 2,
+          "dataLength": 16384,
+          "indexLength": 65536
+        },
+        {
+          "name": "products",
+          "approxRows": 2,
+          "dataLength": 16384,
+          "indexLength": 65536
+        },
+        {
+          "name": "mpesa_transactions",
+          "approxRows": 0,
+          "dataLength": 16384,
+          "indexLength": 49152
+        },
+        {
+          "name": "purchase_requisitions",
+          "approxRows": 0,
+          "dataLength": 16384,
+          "indexLength": 49152
+        },
+        {
+          "name": "journal_entries",
+          "approxRows": 17,
+          "dataLength": 16384,
+          "indexLength": 49152
+        },
+        {
+          "name": "delivery_trips",
+          "approxRows": 0,
+          "dataLength": 16384,
+          "indexLength": 49152
+        },
+        {
+          "name": "raw_materials",
+          "approxRows": 0,
+          "dataLength": 16384,
+          "indexLength": 49152
+        },
+        {
+          "name": "employees",
+          "approxRows": 0,
+          "dataLength": 16384,
+          "indexLength": 49152
+        },
+        {
+          "name": "goods_receipts",
+          "approxRows": 0,
+          "dataLength": 16384,
+          "indexLength": 49152
+        },
+        {
+          "name": "production_consumption",
+          "approxRows": 0,
+          "dataLength": 16384,
+          "indexLength": 32768
+        },
+        {
+          "name": "accounts",
+          "approxRows": 17,
+          "dataLength": 16384,
+          "indexLength": 32768
+        },
+        {
+          "name": "production_batches",
+          "approxRows": 0,
+          "dataLength": 16384,
+          "indexLength": 32768
+        },
+        {
+          "name": "product_categories",
+          "approxRows": 4,
+          "dataLength": 16384,
+          "indexLength": 32768
+        },
+        {
+          "name": "payments",
+          "approxRows": 1,
+          "dataLength": 16384,
+          "indexLength": 32768
+        },
+        {
+          "name": "payment_allocations",
+          "approxRows": 0,
+          "dataLength": 16384,
+          "indexLength": 32768
+        },
+        {
+          "name": "quotation_items",
+          "approxRows": 0,
+          "dataLength": 16384,
+          "indexLength": 32768
+        },
+        {
+          "name": "refresh_tokens",
+          "approxRows": 74,
+          "dataLength": 16384,
+          "indexLength": 32768
+        },
+        {
+          "name": "request_for_quotations",
+          "approxRows": 0,
+          "dataLength": 16384,
+          "indexLength": 32768
+        },
+        {
+          "name": "sales_order_items",
+          "approxRows": 14,
+          "dataLength": 16384,
+          "indexLength": 32768
+        },
+        {
+          "name": "sales_quotations",
+          "approxRows": 0,
+          "dataLength": 16384,
+          "indexLength": 32768
+        },
+        {
+          "name": "supplier_quotations",
+          "approxRows": 0,
+          "dataLength": 16384,
+          "indexLength": 32768
+        },
+        {
+          "name": "warehouses",
+          "approxRows": 2,
+          "dataLength": 16384,
+          "indexLength": 32768
+        },
+        {
+          "name": "warranties",
+          "approxRows": 0,
+          "dataLength": 16384,
+          "indexLength": 32768
+        },
+        {
+          "name": "bill_of_material_items",
+          "approxRows": 0,
+          "dataLength": 16384,
+          "indexLength": 32768
+        },
+        {
+          "name": "complaints",
+          "approxRows": 0,
+          "dataLength": 16384,
+          "indexLength": 32768
+        },
+        {
+          "name": "opportunities",
+          "approxRows": 0,
+          "dataLength": 16384,
+          "indexLength": 32768
+        },
+        {
+          "name": "branches",
+          "approxRows": 0,
+          "dataLength": 16384,
+          "indexLength": 32768
+        },
+        {
+          "name": "inventory_transactions",
+          "approxRows": 16,
+          "dataLength": 16384,
+          "indexLength": 32768
+        },
+        {
+          "name": "journal_entry_lines",
+          "approxRows": 41,
+          "dataLength": 16384,
+          "indexLength": 32768
+        },
+        {
+          "name": "material_types",
+          "approxRows": 0,
+          "dataLength": 16384,
+          "indexLength": 32768
+        }
+      ]
+    }
+  },
+  "counts": {
+    "company": {
+      "count": 1,
+      "ms": 3.947
+    },
+    "user": {
+      "count": 4,
+      "ms": 2.564
+    },
+    "customer": {
+      "count": 2,
+      "ms": 3.119
+    },
+    "product": {
+      "count": 2,
+      "ms": 2.449
+    },
+    "salesOrder": {
+      "count": 10,
+      "ms": 1.931
+    },
+    "invoice": {
+      "count": 14,
+      "ms": 2.026
+    },
+    "deliveryNote": {
+      "count": 10,
+      "ms": 2.243
+    }
+  },
+  "customerFindMany50": {
+    "count": 25,
+    "min": 1.14,
+    "max": 3.175,
+    "mean": 1.544,
+    "median": 1.454,
+    "p95": 1.904,
+    "p99": 3.175
+  },
+  "salesOrderFindMany50": {
+    "count": 25,
+    "min": 3.323,
+    "max": 6.832,
+    "mean": 4.135,
+    "median": 4.03,
+    "p95": 5.03,
+    "p99": 6.832
+  },
+  "relevantIndexes": {
+    "ms": 9.669,
+    "rows": [
+      {
+        "tableName": "invoices",
+        "indexName": "invoices_status_idx",
+        "nonUnique": 1,
+        "columnName": "status"
+      },
+      {
+        "tableName": "purchase_orders",
+        "indexName": "purchase_orders_status_idx",
+        "nonUnique": 1,
+        "columnName": "status"
+      },
+      {
+        "tableName": "quality_inspections",
+        "indexName": "quality_inspections_company_id_status_idx",
+        "nonUnique": 1,
+        "columnName": "status"
+      },
+      {
+        "tableName": "quality_inspections",
+        "indexName": "quality_inspections_product_id_status_idx",
+        "nonUnique": 1,
+        "columnName": "status"
+      },
+      {
+        "tableName": "sales_orders",
+        "indexName": "sales_orders_status_idx",
+        "nonUnique": 1,
+        "columnName": "status"
+      }
+    ]
+  },
+  "finishedAt": "2026-07-28T09:12:15.486Z"
+}

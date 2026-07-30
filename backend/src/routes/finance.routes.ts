@@ -180,6 +180,7 @@ router.get(
           orderNumber: true,
           salesPersonId: true,
           salesPerson: { select: { id: true, firstName: true, lastName: true } },
+          createdBy: { select: { id: true, firstName: true, lastName: true } },
         },
       },
     } as const;
@@ -246,6 +247,7 @@ router.get(
             orderNumber: true,
             salesPersonId: true,
             salesPerson: { select: { id: true, firstName: true, lastName: true } },
+            createdBy: { select: { id: true, firstName: true, lastName: true } },
           },
         },
       },

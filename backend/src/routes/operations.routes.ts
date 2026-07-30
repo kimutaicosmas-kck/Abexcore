@@ -14,7 +14,7 @@ import {
   productionListQuerySchema,
 } from '../validators/schemas';
 import prisma from '../config/database';
-import { generateNumber, nextQualityInspectionNumber } from '../utils/date';
+import { dayRangeFromInput, generateNumber, nextQualityInspectionNumber } from '../utils/date';
 import { getParam, getQuery } from '../utils/request';
 import { SalesService, ProductionStatsService, QualityService } from '../services/operations.service';
 import { getVatRate, calcTax } from '../utils/company';
@@ -66,12 +66,13 @@ router.get(
   authorizeAny('sales:read', 'finance:read', 'finance:create'),
   validate(salesListQuerySchema, 'query'),
   asyncHandler(async (req: AuthRequest, res: Response) => {
-    const { page, limit, search, status, salesPersonId } = getQuery<{
+    const { page, limit, search, status, salesPersonId, date } = getQuery<{
       page: number;
       limit: number;
       search?: string;
       status?: string;
       salesPersonId?: string;
+      date?: string;
     }>(req.query);
     const skip = (page - 1) * limit;
 
@@ -82,6 +83,11 @@ router.get(
       Object.assign(where, salesPersonOrderFilter(req.user!.id));
     } else if (salesPersonId) {
       Object.assign(where, salesPersonOrderFilter(salesPersonId));
+    }
+
+    if (date) {
+      const range = dayRangeFromInput(date);
+      if (range) where.orderDate = range;
     }
 
     if (search) {
@@ -184,15 +190,19 @@ router.post(
     const count = await prisma.salesOrder.count();
     const orderNumber = generateNumber('SO', count + 1);
     const vatRate = await getVatRate();
+    const isSalesOfficer = req.user!.roleName === 'Sales Officer';
 
-    // Sales Officers always own their orders. Admins may assign a salesperson or leave unassigned.
-    let assignedSalesPersonId: string | null =
-      req.user!.roleName === 'Sales Officer' ? req.user!.id : salesPersonId || null;
+    // Sales Officers always own their orders.
+    // Admins may assign an officer, or leave blank to record the sale under themselves (accountability).
+    let assignedSalesPersonId: string;
+    let attributingToCreator = false;
 
-    if (assignedSalesPersonId && req.user!.roleName !== 'Sales Officer') {
+    if (isSalesOfficer) {
+      assignedSalesPersonId = req.user!.id;
+    } else if (salesPersonId) {
       const officer = await prisma.user.findFirst({
         where: {
-          id: assignedSalesPersonId,
+          id: salesPersonId,
           companyId: requireTenantId(),
           deletedAt: null,
           status: 'ACTIVE',
@@ -203,6 +213,10 @@ router.post(
       if (!officer) {
         throw new AppError('Selected sales person is not a valid Sales Officer', 400);
       }
+      assignedSalesPersonId = officer.id;
+    } else {
+      assignedSalesPersonId = req.user!.id;
+      attributingToCreator = true;
     }
 
     const customer = await prisma.customer.findFirst({
@@ -211,14 +225,16 @@ router.post(
     });
     if (!customer) throw new AppError('Customer not found', 404);
 
-    // Orders must use customers owned by the same sales person (or both unassigned).
-    if ((customer.salesPersonId || null) !== (assignedSalesPersonId || null)) {
-      throw new AppError(
-        assignedSalesPersonId
-          ? 'Select a customer assigned to this sales person.'
-          : 'Select an unassigned customer, or choose the sales person who owns this customer.',
-        400
-      );
+    if (attributingToCreator) {
+      // House-account order: only unassigned customers (or already owned by this admin).
+      if (customer.salesPersonId && customer.salesPersonId !== req.user!.id) {
+        throw new AppError(
+          'This customer is assigned to a sales person. Choose that sales person, or reassign the customer first.',
+          400
+        );
+      }
+    } else if (customer.salesPersonId && customer.salesPersonId !== assignedSalesPersonId) {
+      throw new AppError('Select a customer assigned to this sales person (or an unassigned customer).', 400);
     }
 
     const subtotal = items.reduce(
@@ -234,6 +250,15 @@ router.post(
     await assertCreditLimit(customerId, totalAmount);
 
     const order = await prisma.$transaction(async (tx) => {
+      // Only an admin explicitly choosing an officer claims a free customer.
+      // Sales officers may sell to unassigned customers without locking ownership.
+      if (!isSalesOfficer && !attributingToCreator && salesPersonId && !customer.salesPersonId) {
+        await tx.customer.update({
+          where: { id: customerId },
+          data: { salesPersonId: assignedSalesPersonId },
+        });
+      }
+
       const created = await tx.salesOrder.create({
         data: injectTenantData({
           orderNumber,
@@ -650,8 +675,8 @@ router.post(
 
     const count = await prisma.salesOrder.count();
     const orderNumber = generateNumber('SO', count + 1);
-    const assignedSalesPersonId =
-      req.user!.roleName === 'Sales Officer' ? req.user!.id : null;
+    // Always attribute to the account that converted — never leave unassigned.
+    const assignedSalesPersonId = req.user!.id;
 
     const order = await prisma.$transaction(async (tx) => {
       const so = await tx.salesOrder.create({

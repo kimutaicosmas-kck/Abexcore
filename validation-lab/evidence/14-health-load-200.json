@@ -1,0 +1,17 @@
+{
+  "requests": 200,
+  "failures": 0,
+  "latency": {
+    "count": 200,
+    "min": 0.545,
+    "max": 5.69,
+    "mean": 1.872,
+    "median": 2.119,
+    "p95": 3.535,
+    "p99": 4.019,
+    "stddev": 1.071
+  },
+  "statuses": {
+    "200": 200
+  }
+}

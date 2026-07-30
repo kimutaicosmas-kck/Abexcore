@@ -1,0 +1,109 @@
+{
+    "capturedAt":  "2026-07-28T12:12:20.5587659+03:00",
+    "os":  "Microsoft Windows 11 Pro",
+    "osVersion":  "10.0.26200",
+    "totalRAM_MB":  16064.2,
+    "freeRAM_MB":  1972.2,
+    "cpu":  "11th Gen Intel(R) Core(TM) i5-1145G7 @ 2.60GHz",
+    "cores":  4,
+    "logical":  8,
+    "nodeProcesses":  [
+                          {
+                              "workingSetMB":  23.8,
+                              "cpu":  0.375,
+                              "id":  4176
+                          },
+                          {
+                              "workingSetMB":  47.8,
+                              "cpu":  2.625,
+                              "id":  4188
+                          },
+                          {
+                              "workingSetMB":  64.6,
+                              "cpu":  12.234375,
+                              "id":  6764
+                          },
+                          {
+                              "workingSetMB":  20.9,
+                              "cpu":  0.203125,
+                              "id":  7552
+                          },
+                          {
+                              "workingSetMB":  17.8,
+                              "cpu":  0.875,
+                              "id":  7696
+                          },
+                          {
+                              "workingSetMB":  30.7,
+                              "cpu":  2.75,
+                              "id":  8432
+                          },
+                          {
+                              "workingSetMB":  951.9,
+                              "cpu":  82.953125,
+                              "id":  9732
+                          },
+                          {
+                              "workingSetMB":  21.5,
+                              "cpu":  0.21875,
+                              "id":  11560
+                          },
+                          {
+                              "workingSetMB":  16.8,
+                              "cpu":  0.53125,
+                              "id":  12660
+                          },
+                          {
+                              "workingSetMB":  16.4,
+                              "cpu":  0.265625,
+                              "id":  14812
+                          },
+                          {
+                              "workingSetMB":  16.5,
+                              "cpu":  0.28125,
+                              "id":  16544
+                          },
+                          {
+                              "workingSetMB":  59.7,
+                              "cpu":  93.609375,
+                              "id":  16548
+                          },
+                          {
+                              "workingSetMB":  134.8,
+                              "cpu":  21.40625,
+                              "id":  17360
+                          },
+                          {
+                              "workingSetMB":  52.8,
+                              "cpu":  0.6875,
+                              "id":  19664
+                          },
+                          {
+                              "workingSetMB":  38,
+                              "cpu":  12.15625,
+                              "id":  20916
+                          },
+                          {
+                              "workingSetMB":  69.9,
+                              "cpu":  0.125,
+                              "id":  23092
+                          },
+                          {
+                              "workingSetMB":  62.3,
+                              "cpu":  8.5625,
+                              "id":  23900
+                          },
+                          {
+                              "workingSetMB":  90.6,
+                              "cpu":  0.890625,
+                              "id":  27468
+                          }
+                      ],
+    "dockerStats":  [
+                        "erp-mysql,45.77%,632.2MiB / 7.602GiB,58.2MB / 201MB,104MB / 467MB",
+                        "cemes-web,0.00%,60.76MiB / 7.602GiB,2.08kB / 126B,7.96MB / 4.1kB",
+                        "cemes-api,0.79%,120MiB / 7.602GiB,1.43MB / 1.42MB,92MB / 0B",
+                        "cemes-minio,0.09%,83.97MiB / 7.602GiB,26.2kB / 10.3kB,115MB / 42MB",
+                        "cemes-mssql,2.35%,1.361GiB / 7.602GiB,3.17MB / 1.82MB,1.46GB / 70MB"
+                    ]
+}

@@ -10,6 +10,25 @@ export function endOfDay(date: Date): Date {
   return d;
 }
 
+/** Parse `YYYY-MM-DD` as a local calendar day (avoids UTC off-by-one). */
+export function parseLocalDateInput(dateStr: string): Date | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateStr.trim());
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const d = new Date(year, month - 1, day);
+  if (d.getFullYear() !== year || d.getMonth() !== month - 1 || d.getDate() !== day) return null;
+  return d;
+}
+
+/** Inclusive local-day range for Prisma DateTime filters. */
+export function dayRangeFromInput(dateStr: string): { gte: Date; lte: Date } | null {
+  const day = parseLocalDateInput(dateStr);
+  if (!day) return null;
+  return { gte: startOfDay(day), lte: endOfDay(day) };
+}
+
 export function startOfMonth(date: Date): Date {
   return new Date(date.getFullYear(), date.getMonth(), 1);
 }

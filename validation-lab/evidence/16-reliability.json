@@ -1,0 +1,50 @@
+{
+  "startedAt": "2026-07-28T09:12:15.561Z",
+  "probes": {
+    "healthContinuity": {
+      "samples": 20,
+      "failures": 0,
+      "latencyMs": [
+        56.408,
+        71.41,
+        130.275,
+        266.555,
+        373.49,
+        206.501,
+        9.063,
+        596.208,
+        190.424,
+        5.891,
+        937.093,
+        1104.604,
+        407.393,
+        4.297,
+        5.19,
+        4.54,
+        4.694,
+        5.127,
+        4.604,
+        4.825
+      ]
+    },
+    "login": {
+      "status": 200,
+      "hasToken": true
+    },
+    "tokenAfter2s": {
+      "status": 200,
+      "ms": 17.479,
+      "bytes": 662
+    },
+    "postBurstRecovery": {
+      "failures": 0,
+      "meanMs": 4.767
+    },
+    "publicUploads": {
+      "status": 404,
+      "ms": 7.118,
+      "bytes": 45
+    }
+  },
+  "finishedAt": "2026-07-28T09:12:35.324Z"
+}

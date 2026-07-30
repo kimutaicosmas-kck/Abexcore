@@ -1,0 +1,158 @@
+[
+  {
+    "ep": "/api/v1/dashboard/stats",
+    "status": 404,
+    "ms": 22.133,
+    "bytes": 45
+  },
+  {
+    "ep": "/api/v1/customers?limit=10",
+    "status": 200,
+    "ms": 51.816,
+    "bytes": 1243
+  },
+  {
+    "ep": "/api/v1/products?limit=10",
+    "status": 200,
+    "ms": 37.726,
+    "bytes": 2192
+  },
+  {
+    "ep": "/api/v1/users?limit=10",
+    "status": 200,
+    "ms": 29.473,
+    "bytes": 5575
+  },
+  {
+    "ep": "/api/v1/inventory/stock?limit=10",
+    "status": 404,
+    "ms": 15.404,
+    "bytes": 45
+  },
+  {
+    "ep": "/api/v1/inventory/warehouses",
+    "status": 200,
+    "ms": 32.752,
+    "bytes": 2134
+  },
+  {
+    "ep": "/api/v1/inventory/materials?limit=10",
+    "status": 200,
+    "ms": 21.565,
+    "bytes": 86
+  },
+  {
+    "ep": "/api/v1/operations/orders?limit=10",
+    "status": 200,
+    "ms": 44.867,
+    "bytes": 20395
+  },
+  {
+    "ep": "/api/v1/operations/quotations?limit=10",
+    "status": 200,
+    "ms": 20.067,
+    "bytes": 86
+  },
+  {
+    "ep": "/api/v1/operations/sales-officers",
+    "status": 200,
+    "ms": 23.433,
+    "bytes": 221
+  },
+  {
+    "ep": "/api/v1/operations/work-orders?limit=10",
+    "status": 404,
+    "ms": 13.622,
+    "bytes": 45
+  },
+  {
+    "ep": "/api/v1/finance/invoices?limit=10",
+    "status": 200,
+    "ms": 47.219,
+    "bytes": 14695
+  },
+  {
+    "ep": "/api/v1/finance/accounts",
+    "status": 200,
+    "ms": 18.35,
+    "bytes": 4640
+  },
+  {
+    "ep": "/api/v1/finance/my-sales?limit=10",
+    "status": 400,
+    "ms": 29.417,
+    "bytes": 500
+  },
+  {
+    "ep": "/api/v1/delivery/notes?limit=10",
+    "status": 404,
+    "ms": 26.602,
+    "bytes": 187
+  },
+  {
+    "ep": "/api/v1/delivery/trips?limit=10",
+    "status": 200,
+    "ms": 18.81,
+    "bytes": 86
+  },
+  {
+    "ep": "/api/v1/delivery/vehicles",
+    "status": 200,
+    "ms": 17.799,
+    "bytes": 598
+  },
+  {
+    "ep": "/api/v1/quality/inspections?limit=10",
+    "status": 404,
+    "ms": 18.936,
+    "bytes": 190
+  },
+  {
+    "ep": "/api/v1/hr/employees?limit=10",
+    "status": 200,
+    "ms": 16.646,
+    "bytes": 86
+  },
+  {
+    "ep": "/api/v1/maintenance/machines",
+    "status": 200,
+    "ms": 17.445,
+    "bytes": 86
+  },
+  {
+    "ep": "/api/v1/maintenance/schedules?limit=10",
+    "status": 404,
+    "ms": 14.935,
+    "bytes": 45
+  },
+  {
+    "ep": "/api/v1/crm/opportunities?limit=10",
+    "status": 200,
+    "ms": 16.201,
+    "bytes": 86
+  },
+  {
+    "ep": "/api/v1/crm/complaints?limit=10",
+    "status": 200,
+    "ms": 15.263,
+    "bytes": 86
+  },
+  {
+    "ep": "/api/v1/search?q=a&limit=5",
+    "status": 400,
+    "ms": 13.485,
+    "bytes": 1260
+  },
+  {
+    "ep": "/api/v1/tenant/company",
+    "status": 404,
+    "ms": 12.101,
+    "bytes": 45
+  },
+  {
+    "ep": "/api/v1/products/categories",
+    "status": 404,
+    "ms": 16.707,
+    "bytes": 284
+  }
+]
