@@ -11,6 +11,7 @@ import { config } from './config';
 import { errorHandler, notFound } from './middleware/errorHandler';
 import { isCorsOriginAllowed } from './utils/corsOrigins';
 import { authenticate, requireSuperAdmin } from './middleware/auth';
+import { authenticateUpload } from './middleware/uploadAuth';
 
 import authRoutes from './routes/auth.routes';
 import dashboardRoutes from './routes/dashboard.routes';
@@ -61,22 +62,41 @@ export function createApp() {
   app.use(express.urlencoded({ extended: true }));
   app.use(cookieParser());
 
-  if (config.nodeEnv === 'production') {
+  // Global limiter: production always; non-test envs get a higher ceiling so RateLimit headers are present in staging/demo.
+  if (config.nodeEnv !== 'test') {
     app.use(
       rateLimit({
         windowMs: 15 * 60 * 1000,
-        max: 500,
+        max: config.nodeEnv === 'production' ? 500 : 2000,
+        standardHeaders: true,
+        legacyHeaders: false,
         message: { success: false, message: 'Too many requests' },
       })
     );
   }
 
-  app.use('/uploads', express.static(path.resolve(config.uploadDir), {
-    maxAge: config.nodeEnv === 'production' ? '7d' : 0,
-    setHeaders: (res) => {
-      res.setHeader('Cache-Control', config.nodeEnv === 'production' ? 'public, max-age=604800' : 'no-cache');
-    },
-  }));
+  // Uploads require auth (Bearer or ?access_token=). No directory listing.
+  app.use(
+    '/uploads',
+    authenticateUpload,
+    express.static(path.resolve(config.uploadDir), {
+      index: false,
+      dotfiles: 'deny',
+      maxAge: config.nodeEnv === 'production' ? '7d' : 0,
+      setHeaders: (res, filePath) => {
+        res.setHeader(
+          'Cache-Control',
+          config.nodeEnv === 'production' ? 'private, max-age=604800' : 'no-cache'
+        );
+        res.setHeader('X-Content-Type-Options', 'nosniff');
+        // Prefer not serving executable SVG as a script vector
+        if (filePath.toLowerCase().endsWith('.svg')) {
+          res.setHeader('Content-Type', 'image/svg+xml');
+          res.setHeader('Content-Disposition', 'attachment');
+        }
+      },
+    })
+  );
 
   const swaggerSpec = swaggerJsdoc({
     definition: {

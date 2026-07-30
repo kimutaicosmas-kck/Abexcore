@@ -27,59 +27,63 @@ router.get(
   })
 );
 
+const listQualityInspections = asyncHandler(async (req: AuthRequest, res: Response) => {
+  const { page, limit, search, status, type, productionOrderId, productId } = getQuery<{
+    page: number;
+    limit: number;
+    search?: string;
+    status?: string;
+    type?: string;
+    productionOrderId?: string;
+    productId?: string;
+  }>(req.query);
+  const companyId = requireTenantId();
+  const skip = (page - 1) * limit;
+
+  const where: Prisma.QualityInspectionWhereInput = { companyId };
+  if (status) where.status = status as Prisma.EnumQualityStatusFilter['equals'];
+  if (type) where.type = type;
+  if (productionOrderId) where.productionOrderId = productionOrderId;
+  if (productId) where.productId = productId;
+  if (search) {
+    where.OR = [
+      { inspectionNo: { contains: search } },
+      { type: { contains: search } },
+      { result: { contains: search } },
+    ];
+  }
+
+  const [data, total] = await Promise.all([
+    prisma.qualityInspection.findMany({
+      where,
+      skip,
+      take: limit,
+      include: {
+        goodsReceipt: { select: { grnNumber: true } },
+        productionOrder: {
+          select: { orderNumber: true, product: { select: { name: true, sku: true } } },
+        },
+        product: { select: { name: true, sku: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    }),
+    prisma.qualityInspection.count({ where }),
+  ]);
+
+  res.json({
+    success: true,
+    data,
+    pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
+  });
+});
+
+router.get('/', authorize('quality:read'), validate(qualityListQuerySchema, 'query'), listQualityInspections);
+/** Compatibility alias — validation probes used /inspections. */
 router.get(
-  '/',
+  '/inspections',
   authorize('quality:read'),
   validate(qualityListQuerySchema, 'query'),
-  asyncHandler(async (req: AuthRequest, res: Response) => {
-    const { page, limit, search, status, type, productionOrderId, productId } = getQuery<{
-      page: number;
-      limit: number;
-      search?: string;
-      status?: string;
-      type?: string;
-      productionOrderId?: string;
-      productId?: string;
-    }>(req.query);
-    const companyId = requireTenantId();
-    const skip = (page - 1) * limit;
-
-    const where: Prisma.QualityInspectionWhereInput = { companyId };
-    if (status) where.status = status as Prisma.EnumQualityStatusFilter['equals'];
-    if (type) where.type = type;
-    if (productionOrderId) where.productionOrderId = productionOrderId;
-    if (productId) where.productId = productId;
-    if (search) {
-      where.OR = [
-        { inspectionNo: { contains: search } },
-        { type: { contains: search } },
-        { result: { contains: search } },
-      ];
-    }
-
-    const [data, total] = await Promise.all([
-      prisma.qualityInspection.findMany({
-        where,
-        skip,
-        take: limit,
-        include: {
-          goodsReceipt: { select: { grnNumber: true } },
-          productionOrder: {
-            select: { orderNumber: true, product: { select: { name: true, sku: true } } },
-          },
-          product: { select: { name: true, sku: true } },
-        },
-        orderBy: { createdAt: 'desc' },
-      }),
-      prisma.qualityInspection.count({ where }),
-    ]);
-
-    res.json({
-      success: true,
-      data,
-      pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
-    });
-  })
+  listQualityInspections
 );
 
 router.get(

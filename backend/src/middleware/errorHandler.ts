@@ -38,11 +38,17 @@ export const errorHandler = (
     logger.warn(message, meta);
   }
 
+  // Never leak stack traces to clients unless explicitly opted in (CF-01).
+  // Server logs above already capture stacks for 5xx errors.
+  const exposeStack = process.env.EXPOSE_ERROR_STACK === 'true';
+
   res.status(statusCode).json({
     success: false,
-    message,
+    message: statusCode >= 500 && process.env.NODE_ENV === 'production'
+      ? 'Internal server error'
+      : message,
     ...(err instanceof AppError && err.code ? { code: err.code } : {}),
-    ...(process.env.NODE_ENV === 'development' && { stack: err.stack }),
+    ...(exposeStack && err.stack ? { stack: err.stack } : {}),
   });
 };
 

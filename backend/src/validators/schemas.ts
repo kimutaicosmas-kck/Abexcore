@@ -787,7 +787,9 @@ export const approveLeaveSchema = z.object({
 });
 
 export const searchQuerySchema = z.object({
-  q: z.string().min(2).max(100).optional(),
+  // Short queries return empty results in the route handler (min 2 chars searched).
+  q: z.preprocess((v) => (v === '' ? undefined : v), z.string().max(100).optional()),
+  limit: z.coerce.number().int().min(1).max(50).optional(),
 });
 
 export const grnIdParamSchema = z.object({

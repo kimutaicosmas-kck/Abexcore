@@ -22,6 +22,12 @@ const stkPushSchema = z.object({
 router.post(
   '/callback',
   asyncHandler(async (req: Request, res: Response) => {
+    // Live Daraja must fail closed — callback secret is required outside stub mode.
+    const isLiveMpesa =
+      process.env.MPESA_ENV !== 'stub' && Boolean(process.env.MPESA_CONSUMER_KEY);
+    if (isLiveMpesa && !config.mpesa.callbackSecret) {
+      throw new AppError('M-Pesa callback secret is not configured', 503);
+    }
     if (config.mpesa.callbackSecret) {
       const provided = req.headers['x-mpesa-callback-secret'];
       if (provided !== config.mpesa.callbackSecret) {

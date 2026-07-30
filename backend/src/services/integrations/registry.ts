@@ -1,6 +1,7 @@
 import { listCircuitBreakers } from '../../utils/circuitBreaker';
 import { MpesaService } from '../mpesa.service';
 import { EmailService } from '../email.service';
+import { KraEtimsService } from '../kra-etims.service';
 
 export type IntegrationStatus = {
   name: string;
@@ -16,6 +17,8 @@ export type IntegrationStatus = {
 export class IntegrationRegistry {
   static getStatuses(): IntegrationStatus[] {
     const circuits = new Map(listCircuitBreakers().map((row) => [row.name.toLowerCase(), row]));
+    const etimsLive = KraEtimsService.isConfigured();
+    const etimsStub = process.env.KRA_ETIMS_ENV === 'stub';
 
     return [
       {
@@ -29,6 +32,12 @@ export class IntegrationRegistry {
         available: EmailService.isConfigured(),
         mode: EmailService.isConfigured() ? 'live' : 'disabled',
         circuit: circuits.get('email'),
+      },
+      {
+        name: 'kra-etims',
+        available: etimsLive || etimsStub,
+        mode: etimsLive ? 'live' : etimsStub ? 'stub' : 'disabled',
+        circuit: circuits.get('kra-etims') || circuits.get('etims'),
       },
       {
         name: 'database',

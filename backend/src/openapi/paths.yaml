@@ -426,6 +426,21 @@ paths:
           description: Unauthorized
         '403':
           description: Forbidden
+  /dashboard/stats:
+    get:
+      tags: [Dashboard]
+      summary: GET /dashboard/stats
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
   /delivery/:
     get:
       tags: [Delivery]
@@ -459,6 +474,21 @@ paths:
     get:
       tags: [Delivery]
       summary: GET /delivery/drivers/list
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /delivery/notes:
+    get:
+      tags: [Delivery]
+      summary: GET /delivery/notes
       security:
         - bearerAuth: []
       responses:
@@ -563,6 +593,21 @@ paths:
     get:
       tags: [Delivery]
       summary: GET /delivery/{id}
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /delivery/{id}/pdf:
+    get:
+      tags: [Delivery]
+      summary: GET /delivery/{id}/pdf
       security:
         - bearerAuth: []
       responses:
@@ -1919,6 +1964,21 @@ paths:
           description: Unauthorized
         '403':
           description: Forbidden
+  /inventory/stock:
+    get:
+      tags: [Inventory]
+      summary: GET /inventory/stock
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
   /inventory/stock-levels:
     get:
       tags: [Inventory]
@@ -2114,6 +2174,21 @@ paths:
     patch:
       tags: [Maintenance]
       summary: PATCH /maintenance/requests/{id}/complete
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /maintenance/schedules:
+    get:
+      tags: [Maintenance]
+      summary: GET /maintenance/schedules
       security:
         - bearerAuth: []
       responses:
@@ -2377,10 +2452,40 @@ paths:
           description: Unauthorized
         '403':
           description: Forbidden
+  /operations/sales-officers:
+    get:
+      tags: [Operations]
+      summary: GET /operations/sales-officers
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
   /operations/stats:
     get:
       tags: [Operations]
       summary: GET /operations/stats
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /operations/work-orders:
+    get:
+      tags: [Operations]
+      summary: GET /operations/work-orders
       security:
         - bearerAuth: []
       responses:
@@ -2422,6 +2527,20 @@ paths:
         '403':
           description: Forbidden
   /products/categories:
+    get:
+      tags: [Products]
+      summary: GET /products/categories
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
     post:
       tags: [Products]
       summary: POST /products/categories
@@ -2627,6 +2746,21 @@ paths:
           description: Unauthorized
         '403':
           description: Forbidden
+  /quality/inspections:
+    get:
+      tags: [Quality]
+      summary: GET /quality/inspections
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
   /quality/stats:
     get:
       tags: [Quality]
@@ -2749,6 +2883,21 @@ paths:
     patch:
       tags: [Tenant]
       summary: PATCH /tenant/companies/{id}/status
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /tenant/company:
+    get:
+      tags: [Tenant]
+      summary: GET /tenant/company
       security:
         - bearerAuth: []
       responses:

@@ -54,36 +54,36 @@ async function storeCompanyLogo(filePath: string): Promise<string> {
 
 router.use(authenticate);
 
-router.get(
-  '/workspace',
-  authorize('settings:read'),
-  asyncHandler(async (_req: AuthRequest, res: Response) => {
-    const companyId = requireTenantId();
-    const company = await getCompanySettings(companyId);
-    if (!company) throw new AppError('Company not found', 404);
+const getWorkspace = asyncHandler(async (_req: AuthRequest, res: Response) => {
+  const companyId = requireTenantId();
+  const company = await getCompanySettings(companyId);
+  if (!company) throw new AppError('Company not found', 404);
 
-    const [userCount, activeUsers] = await Promise.all([
-      prisma.user.count({ where: { companyId, deletedAt: null } }),
-      prisma.user.count({ where: { companyId, deletedAt: null, status: 'ACTIVE' } }),
-    ]);
+  const [userCount, activeUsers] = await Promise.all([
+    prisma.user.count({ where: { companyId, deletedAt: null } }),
+    prisma.user.count({ where: { companyId, deletedAt: null, status: 'ACTIVE' } }),
+  ]);
 
-    res.json({
-      success: true,
-      data: {
-        id: company.id,
-        slug: company.slug,
-        name: company.name,
-        logo: company.logo,
-        isActive: company.isActive,
-        qualityModuleEnabled: company.qualityModuleEnabled,
-        currency: company.currency,
-        vatRate: Number(company.vatRate),
-        userCount,
-        activeUsers,
-      },
-    });
-  })
-);
+  res.json({
+    success: true,
+    data: {
+      id: company.id,
+      slug: company.slug,
+      name: company.name,
+      logo: company.logo,
+      isActive: company.isActive,
+      qualityModuleEnabled: company.qualityModuleEnabled,
+      currency: company.currency,
+      vatRate: Number(company.vatRate),
+      userCount,
+      activeUsers,
+    },
+  });
+});
+
+router.get('/workspace', authorize('settings:read'), getWorkspace);
+/** Compatibility alias — validation probes used /company. */
+router.get('/company', authorize('settings:read'), getWorkspace);
 
 const workspaceSettingsSchema = companySettingsSchema.partial().extend({
   qualityModuleEnabled: z.boolean().optional(),

@@ -1,6 +1,6 @@
 {
   "name": "apexcore-erp-backend",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "ApexCore ERP Backend API — Designed by ApexCore Technologies",
   "main": "dist/index.js",
   "scripts": {
@@ -68,7 +68,7 @@
     "prisma": "^6.5.0",
     "supertest": "^7.1.0",
     "tsx": "^4.19.3",
-    "typescript": "^5.8.2",
+    "typescript": "^6.0.3",
     "vitest": "^3.0.9"
   },
   "optionalDependencies": {

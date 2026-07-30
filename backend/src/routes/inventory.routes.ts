@@ -255,7 +255,7 @@ router.get('/warehouses', authorize('inventory:read'), asyncHandler(async (_req:
   res.json({ success: true, data: warehouses });
 }));
 
-router.get('/stock-levels', authorize('inventory:read'), validate(paginationSchema, 'query'), asyncHandler(async (req: AuthRequest, res: Response) => {
+const listStockLevels = asyncHandler(async (req: AuthRequest, res: Response) => {
   const { page, limit, search } = getQuery<{ page: number; limit: number; search?: string }>(req.query);
   const skip = (page - 1) * limit;
 
@@ -284,7 +284,11 @@ router.get('/stock-levels', authorize('inventory:read'), validate(paginationSche
   ]);
 
   res.json({ success: true, data, pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } });
-}));
+});
+
+router.get('/stock-levels', authorize('inventory:read'), validate(paginationSchema, 'query'), listStockLevels);
+/** Compatibility alias — validation probes used /stock. */
+router.get('/stock', authorize('inventory:read'), validate(paginationSchema, 'query'), listStockLevels);
 
 router.post('/adjust', authorize('inventory:update'), validate(stockAdjustSchema), asyncHandler(async (req: AuthRequest, res: Response) => {
   const { warehouseId, productId, rawMaterialId, quantity, type, notes, batchNumber } = req.body;

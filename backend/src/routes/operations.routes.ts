@@ -729,52 +729,61 @@ router.get(
 );
 
 // Production Orders
+const listProductionOrders = asyncHandler(async (req: AuthRequest, res: Response) => {
+  const { page, limit, search, status } = getQuery<{
+    page: number;
+    limit: number;
+    search?: string;
+    status?: string;
+  }>(req.query);
+  const skip = (page - 1) * limit;
+
+  const where: Prisma.ProductionOrderWhereInput = {};
+  if (search) {
+    where.OR = [
+      { orderNumber: { contains: search } },
+      { product: { name: { contains: search } } },
+    ];
+  }
+  if (status) {
+    where.status = status as Prisma.EnumProductionStatusFilter['equals'];
+  }
+
+  const [data, total] = await Promise.all([
+    prisma.productionOrder.findMany({
+      where,
+      skip,
+      take: limit,
+      include: {
+        product: true,
+        machine: true,
+        assignedTo: { select: { firstName: true, lastName: true } },
+        consumption: { include: { rawMaterial: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    }),
+    prisma.productionOrder.count({ where }),
+  ]);
+
+  res.json({
+    success: true,
+    data,
+    pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
+  });
+});
+
 router.get(
   '/production',
   authorize('production:read'),
   validate(productionListQuerySchema, 'query'),
-  asyncHandler(async (req: AuthRequest, res: Response) => {
-    const { page, limit, search, status } = getQuery<{
-      page: number;
-      limit: number;
-      search?: string;
-      status?: string;
-    }>(req.query);
-    const skip = (page - 1) * limit;
-
-    const where: Prisma.ProductionOrderWhereInput = {};
-    if (search) {
-      where.OR = [
-        { orderNumber: { contains: search } },
-        { product: { name: { contains: search } } },
-      ];
-    }
-    if (status) {
-      where.status = status as Prisma.EnumProductionStatusFilter['equals'];
-    }
-
-    const [data, total] = await Promise.all([
-      prisma.productionOrder.findMany({
-        where,
-        skip,
-        take: limit,
-        include: {
-          product: true,
-          machine: true,
-          assignedTo: { select: { firstName: true, lastName: true } },
-          consumption: { include: { rawMaterial: true } },
-        },
-        orderBy: { createdAt: 'desc' },
-      }),
-      prisma.productionOrder.count({ where }),
-    ]);
-
-    res.json({
-      success: true,
-      data,
-      pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
-    });
-  })
+  listProductionOrders
+);
+/** Compatibility alias — some clients probe /work-orders. */
+router.get(
+  '/work-orders',
+  authorize('production:read'),
+  validate(productionListQuerySchema, 'query'),
+  listProductionOrders
 );
 
 router.post(

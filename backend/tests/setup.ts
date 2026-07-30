@@ -2,6 +2,7 @@ import 'dotenv/config';
 import { it } from 'vitest';
 import { createApp } from '../src/app';
 import { checkDbConnected, loginAsPlatformOwner } from './helpers/testAuth';
+import { ensureWorkflowFixtures } from './helpers/ensureFixtures';
 
 const app = createApp();
 
@@ -16,6 +17,7 @@ testCtx.dbConnected = connected;
 
 if (connected) {
   testCtx.authToken = await loginAsPlatformOwner(app);
+  await ensureWorkflowFixtures(testCtx.authToken);
 }
 
 /** Run an integration test only when the database is available (evaluated at run time, not collection). */

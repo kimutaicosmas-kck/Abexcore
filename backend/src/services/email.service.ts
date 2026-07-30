@@ -1,8 +1,15 @@
 import nodemailer from 'nodemailer';
 import { config } from '../config';
 import { logger } from '../config/logger';
+import { decryptSecret, encryptSecret } from '../utils/crypto';
+import prisma from '../config/database';
 
 let transporter: nodemailer.Transporter | null = null;
+
+function smtpPassword(): string {
+  // Supports plaintext or AES-GCM payload from encryptSecret / EmailConfig at rest.
+  return decryptSecret(config.smtp.pass);
+}
 
 function getTransporter() {
   if (!transporter && config.smtp.user && config.smtp.pass) {
@@ -10,7 +17,7 @@ function getTransporter() {
       host: config.smtp.host,
       port: config.smtp.port,
       secure: config.smtp.port === 465,
-      auth: { user: config.smtp.user, pass: config.smtp.pass },
+      auth: { user: config.smtp.user, pass: smtpPassword() },
     });
   }
   return transporter;
@@ -40,6 +47,52 @@ export class EmailService {
       logger.error('Email send failed', error);
       return false;
     }
+  }
+
+  /** Persist tenant SMTP settings with password encrypted at rest. */
+  static async upsertCompanyEmailConfig(
+    companyId: string,
+    data: {
+      host: string;
+      port: number;
+      secure?: boolean;
+      username: string;
+      password: string;
+      fromEmail: string;
+      fromName: string;
+      isActive?: boolean;
+    }
+  ) {
+    const encryptedPassword = encryptSecret(data.password);
+    const existing = await prisma.emailConfig.findFirst({ where: { companyId } });
+    if (existing) {
+      return prisma.emailConfig.update({
+        where: { id: existing.id },
+        data: {
+          host: data.host,
+          port: data.port,
+          secure: data.secure ?? false,
+          username: data.username,
+          password: encryptedPassword,
+          fromEmail: data.fromEmail,
+          fromName: data.fromName,
+          isActive: data.isActive ?? true,
+        },
+      });
+    }
+    return prisma.emailConfig.create({
+      data: {
+        companyId,
+        host: data.host,
+        port: data.port,
+        secure: data.secure ?? false,
+        username: data.username,
+        password: encryptedPassword,
+        fromEmail: data.fromEmail,
+        fromName: data.fromName,
+        isActive: data.isActive ?? true,
+      },
+    });
   }
 
   static async sendNotificationEmail(

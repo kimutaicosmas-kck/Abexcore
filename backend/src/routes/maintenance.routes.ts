@@ -80,46 +80,55 @@ router.post(
   })
 );
 
+const listMaintenanceRequests = asyncHandler(async (req: AuthRequest, res: Response) => {
+  const { page, limit, search, status } = getQuery<{
+    page: number;
+    limit: number;
+    search?: string;
+    status?: string;
+  }>(req.query);
+  const skip = (page - 1) * limit;
+
+  const where: Prisma.MaintenanceRequestWhereInput = {};
+  if (status) where.status = status as Prisma.EnumMaintenanceStatusFilter['equals'];
+  if (search) {
+    where.OR = [
+      { description: { contains: search } },
+      { type: { contains: search } },
+      { machine: { name: { contains: search } } },
+    ];
+  }
+
+  const [data, total] = await Promise.all([
+    prisma.maintenanceRequest.findMany({
+      where,
+      skip,
+      take: limit,
+      include: { machine: true },
+      orderBy: { createdAt: 'desc' },
+    }),
+    prisma.maintenanceRequest.count({ where }),
+  ]);
+
+  res.json({
+    success: true,
+    data,
+    pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
+  });
+});
+
 router.get(
   '/requests',
   authorize('maintenance:read'),
   validate(maintenanceListQuerySchema, 'query'),
-  asyncHandler(async (req: AuthRequest, res: Response) => {
-    const { page, limit, search, status } = getQuery<{
-      page: number;
-      limit: number;
-      search?: string;
-      status?: string;
-    }>(req.query);
-    const skip = (page - 1) * limit;
-
-    const where: Prisma.MaintenanceRequestWhereInput = {};
-    if (status) where.status = status as Prisma.EnumMaintenanceStatusFilter['equals'];
-    if (search) {
-      where.OR = [
-        { description: { contains: search } },
-        { type: { contains: search } },
-        { machine: { name: { contains: search } } },
-      ];
-    }
-
-    const [data, total] = await Promise.all([
-      prisma.maintenanceRequest.findMany({
-        where,
-        skip,
-        take: limit,
-        include: { machine: true },
-        orderBy: { createdAt: 'desc' },
-      }),
-      prisma.maintenanceRequest.count({ where }),
-    ]);
-
-    res.json({
-      success: true,
-      data,
-      pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
-    });
-  })
+  listMaintenanceRequests
+);
+/** Compatibility alias — validation probes used /schedules. */
+router.get(
+  '/schedules',
+  authorize('maintenance:read'),
+  validate(maintenanceListQuerySchema, 'query'),
+  listMaintenanceRequests
 );
 
 router.get(

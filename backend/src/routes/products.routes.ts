@@ -54,18 +54,18 @@ router.get(
   })
 );
 
-router.get(
-  '/categories/list',
-  authorize('products:read'),
-  asyncHandler(async (_req: AuthRequest, res: Response) => {
-    const categories = await prisma.productCategory.findMany({
-      where: { isActive: true },
-      select: { id: true, name: true, sortOrder: true },
-      orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
-    });
-    res.json({ success: true, data: categories });
-  })
-);
+const listProductCategories = asyncHandler(async (_req: AuthRequest, res: Response) => {
+  const categories = await prisma.productCategory.findMany({
+    where: { isActive: true },
+    select: { id: true, name: true, sortOrder: true },
+    orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+  });
+  res.json({ success: true, data: categories });
+});
+
+router.get('/categories/list', authorize('products:read'), listProductCategories);
+/** Compatibility alias — GET /categories (POST remains create). */
+router.get('/categories', authorize('products:read'), listProductCategories);
 
 router.post(
   '/categories',
