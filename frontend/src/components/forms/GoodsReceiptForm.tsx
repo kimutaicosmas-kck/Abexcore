@@ -103,11 +103,17 @@ export function GoodsReceiptForm({ onSuccess, onCancel }: GoodsReceiptFormProps)
   const mutation = useMutation({
     mutationFn: (data: GoodsReceiptFormData) => {
       const payload = {
-        ...data,
+        supplierId: data.supplierId,
+        warehouseId: data.warehouseId,
         purchaseOrderId: data.purchaseOrderId || undefined,
+        notes: data.notes?.trim() || undefined,
         items: data.items.map((item) => ({
-          ...item,
           rawMaterialId: item.rawMaterialId || undefined,
+          batchNumber: item.batchNumber?.trim() || undefined,
+          quantity: item.quantity,
+          unit: item.unit || undefined,
+          unitCost: item.unitCost,
+          expiryDate: item.expiryDate?.trim() || undefined,
         })),
       };
       return inventoryApi.createGoodsReceipt(payload);
@@ -125,7 +131,8 @@ export function GoodsReceiptForm({ onSuccess, onCancel }: GoodsReceiptFormProps)
     <form onSubmit={handleSubmit((data) => mutation.mutate(data))} className="space-y-4">
       {mutation.isError && (
         <div className="p-3 rounded-lg bg-red-50 text-red-700 text-sm">
-          Failed to create goods receipt. Please check all fields.
+          {(mutation.error as { response?: { data?: { message?: string } } })?.response?.data?.message ||
+            'Failed to create goods receipt. Please check all fields.'}
         </div>
       )}
 

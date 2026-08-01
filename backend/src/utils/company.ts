@@ -26,3 +26,12 @@ export async function getVatMultiplier(companyId?: string): Promise<number> {
 export function calcTax(subtotal: number, vatRate: number): number {
   return subtotal * (vatRate / 100);
 }
+
+/** Effective VAT % for a customer: Non-VAT customers are invoiced at 0%. */
+export async function getCustomerVatRate(
+  customer?: { vatStatus?: string | null } | null,
+  companyId?: string
+): Promise<number> {
+  if (customer?.vatStatus === 'NON_VAT') return 0;
+  return getVatRate(companyId);
+}

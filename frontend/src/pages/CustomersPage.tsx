@@ -13,8 +13,12 @@ import {
   UserPlus,
   MessageSquarePlus,
   Target,
+  FileText,
+  FileSpreadsheet,
+  Download,
 } from 'lucide-react';
 import { customersApi, crmApi, operationsApi } from '../services/api';
+import { downloadFile } from '../utils/download';
 import {
   PageHeader,
   Table,
@@ -63,6 +67,17 @@ const CUSTOMER_STATUS_OPTIONS = [
   { value: 'false', label: 'Inactive' },
 ];
 
+const CUSTOMER_VAT_OPTIONS = [
+  { value: '', label: 'All VAT status' },
+  { value: 'VAT', label: 'VAT' },
+  { value: 'NON_VAT', label: 'Non-VAT' },
+];
+
+const STATEMENT_MODE_OPTIONS = [
+  { value: 'FULL', label: 'Full statement (with payments)' },
+  { value: 'OUTSTANDING', label: 'Outstanding invoices (amount due)' },
+];
+
 const COMPLAINT_STATUS_OPTIONS = [
   { value: '', label: 'All' },
   { value: 'open', label: 'Open' },
@@ -99,8 +114,15 @@ export function CustomersPage() {
   const [custSearch, setCustSearch] = useState('');
   const [custSearchInput, setCustSearchInput] = useState('');
   const [custType, setCustType] = useState('');
+  const [custVatStatus, setCustVatStatus] = useState('');
   const [custActive, setCustActive] = useState('');
   const [custSalesPerson, setCustSalesPerson] = useState('');
+  const [statementCustomer, setStatementCustomer] = useState<Customer | null>(null);
+  const [statementFrom, setStatementFrom] = useState('');
+  const [statementTo, setStatementTo] = useState('');
+  const [statementMode, setStatementMode] = useState<'FULL' | 'OUTSTANDING'>('FULL');
+  const [statementExportError, setStatementExportError] = useState<string | null>(null);
+  const [statementExporting, setStatementExporting] = useState<'pdf' | 'excel' | null>(null);
 
   const [compPage, setCompPage] = useState(1);
   const [compSearch, setCompSearch] = useState('');
@@ -149,7 +171,7 @@ export function CustomersPage() {
   });
 
   const { data: customersRes, isLoading: custLoading, isError: custError, refetch: refetchCustomers } = useQuery({
-    queryKey: ['customers', custPage, custSearch, custType, custActive, custSalesPerson],
+    queryKey: ['customers', custPage, custSearch, custType, custVatStatus, custActive, custSalesPerson],
     queryFn: () =>
       customersApi
         .list({
@@ -157,11 +179,57 @@ export function CustomersPage() {
           limit: 15,
           search: custSearch || undefined,
           type: custType || undefined,
+          vatStatus: custVatStatus || undefined,
           isActive: custActive === '' ? undefined : custActive === 'true',
           salesPersonId: custSalesPerson || undefined,
         })
         .then((r) => r.data),
     enabled: activeTab === 0 || activeTab === 1,
+  });
+
+  const { data: statementData, isLoading: statementLoading, isError: statementError, refetch: refetchStatement } = useQuery({
+    queryKey: ['customer-statement', statementCustomer?.id, statementFrom, statementTo, statementMode],
+    queryFn: () =>
+      customersApi
+        .statement(statementCustomer!.id, {
+          from: statementFrom || undefined,
+          to: statementTo || undefined,
+          mode: statementMode,
+        })
+        .then((r) => r.data.data as {
+          mode: 'FULL' | 'OUTSTANDING';
+          customer: Customer;
+          period: { from: string | null; to: string };
+          openingBalance: number;
+          periodDebits: number;
+          periodCredits: number;
+          closingBalance: number;
+          totalDue: number;
+          aging: {
+            current: number;
+            days1_30: number;
+            days31_60: number;
+            days61_90: number;
+            days90Plus: number;
+            amountDue: number;
+          };
+          lines: {
+            date: string;
+            type: string;
+            reference: string;
+            description: string;
+            debit: number;
+            credit: number;
+            balance: number;
+            paymentMethod?: string | null;
+            invoiceTotal?: number;
+            paidAmount?: number;
+            balanceDue?: number;
+            dueDate?: string | null;
+            status?: string;
+          }[];
+        }),
+    enabled: !!statementCustomer,
   });
 
   const { data: complaintsRes, isLoading: compLoading } = useQuery({
@@ -245,6 +313,36 @@ export function CustomersPage() {
   const openCreate = () => { setEditing(null); setCustomerModalOpen(true); };
   const openEdit = (customer: Customer) => { setEditing(customer); setCustomerModalOpen(true); setDetailModalOpen(false); };
   const openDetail = (customer: Customer) => { setSelectedCustomer(customer); setDetailModalOpen(true); };
+  const openStatement = (customer: Customer) => {
+    setStatementCustomer(customer);
+    setStatementFrom('');
+    setStatementTo('');
+    setStatementMode('FULL');
+    setStatementExportError(null);
+  };
+
+  const exportStatement = async (format: 'pdf' | 'excel') => {
+    if (!statementCustomer) return;
+    setStatementExportError(null);
+    setStatementExporting(format);
+    const suffix = statementMode === 'OUTSTANDING' ? 'outstanding' : 'statement';
+    const ext = format === 'pdf' ? 'pdf' : 'xlsx';
+    try {
+      await downloadFile(
+        `/customers/${statementCustomer.id}/statement/${format}`,
+        `${statementCustomer.code}-${suffix}.${ext}`,
+        {
+          from: statementFrom || undefined,
+          to: statementTo || undefined,
+          mode: statementMode,
+        }
+      );
+    } catch (err) {
+      setStatementExportError(err instanceof Error ? err.message : 'Export failed');
+    } finally {
+      setStatementExporting(null);
+    }
+  };
   const openEditOpportunity = (opp: Opportunity) => { setEditingOpportunity(opp); setOpportunityModalOpen(true); };
 
   const recentCustomers = activeTab === 0 ? ((customersRes?.data as Customer[]) || []).slice(0, 6) : [];
@@ -268,6 +366,15 @@ export function CustomersPage() {
       key: 'type',
       label: 'Type',
       render: (val: unknown) => <Badge variant="info">{(val as string).replace(/_/g, ' ')}</Badge>,
+    },
+    {
+      key: 'vatStatus',
+      label: 'VAT',
+      render: (val: unknown) => (
+        <Badge variant={val === 'VAT' ? 'success' : 'default'}>
+          {val === 'NON_VAT' ? 'Non-VAT' : 'VAT'}
+        </Badge>
+      ),
     },
     {
       key: 'salesPerson',
@@ -301,6 +408,14 @@ export function CustomersPage() {
       label: '',
       render: (_: unknown, row: Record<string, unknown>) => (
         <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
+          <Button
+            size="sm"
+            variant="ghost"
+            title="Customer statement"
+            onClick={() => openStatement(row as unknown as Customer)}
+          >
+            <FileText className="h-4 w-4" />
+          </Button>
           {canUpdate && (
             <Button size="sm" variant="ghost" onClick={() => openEdit(row as unknown as Customer)}>
               <Pencil className="h-4 w-4" />
@@ -596,6 +711,7 @@ export function CustomersPage() {
               <Input placeholder="Search customers…" value={custSearchInput} onChange={(e) => setCustSearchInput(e.target.value)} />
             </form>
             <Select options={CUSTOMER_TYPE_OPTIONS} value={custType} onChange={(e) => { setCustType(e.target.value); setCustPage(1); }} className="w-40" />
+            <Select options={CUSTOMER_VAT_OPTIONS} value={custVatStatus} onChange={(e) => { setCustVatStatus(e.target.value); setCustPage(1); }} className="w-40" />
             <Select options={CUSTOMER_STATUS_OPTIONS} value={custActive} onChange={(e) => { setCustActive(e.target.value); setCustPage(1); }} className="w-36" />
             {!isSalesOfficer && (
               <Select
@@ -612,6 +728,7 @@ export function CustomersPage() {
                 setCustSearchInput('');
                 setCustSearch('');
                 setCustType('');
+                setCustVatStatus('');
                 setCustActive('');
                 setCustSalesPerson('');
                 setCustPage(1);
@@ -793,6 +910,13 @@ export function CustomersPage() {
               <div><p className="text-slate-500">Name</p><p className="font-semibold">{customerDetail.name}</p></div>
               <div><p className="text-slate-500">Type</p><Badge variant="info">{customerDetail.type.replace(/_/g, ' ')}</Badge></div>
               <div>
+                <p className="text-slate-500">VAT status</p>
+                <Badge variant={customerDetail.vatStatus === 'VAT' ? 'success' : 'default'}>
+                  {customerDetail.vatStatus === 'NON_VAT' ? 'Non-VAT' : 'VAT'}
+                </Badge>
+              </div>
+              <div><p className="text-slate-500">Tax PIN</p><p className="font-semibold">{customerDetail.taxPin || '—'}</p></div>
+              <div>
                 <p className="text-slate-500">Sales Person</p>
                 <p className="font-semibold">
                   {customerDetail.salesPerson
@@ -866,6 +990,9 @@ export function CustomersPage() {
             )}
 
             <div className="flex justify-end gap-3 pt-4 border-t">
+              <Button variant="secondary" onClick={() => openStatement(customerDetail)}>
+                <FileText className="h-4 w-4 mr-1.5" />Statement
+              </Button>
               {canUpdate && <Button variant="secondary" onClick={() => openEdit(customerDetail)}><Pencil className="h-4 w-4 mr-1.5" />Edit</Button>}
               {canDelete && customerDetail.isActive && (
                 <Button variant="danger" onClick={() => setDeactivateModalOpen(true)}><Trash2 className="h-4 w-4 mr-1.5" />Deactivate</Button>
@@ -931,6 +1058,174 @@ export function CustomersPage() {
           );
         }}
       />
+
+      <Modal
+        open={!!statementCustomer}
+        onClose={() => setStatementCustomer(null)}
+        title={statementCustomer ? `Statement — ${statementCustomer.name}` : 'Customer statement'}
+        size="xl"
+      >
+        <div className="space-y-4">
+          <div className="flex flex-wrap items-end gap-3">
+            <Select
+              label="Statement type"
+              options={STATEMENT_MODE_OPTIONS}
+              value={statementMode}
+              onChange={(e) => setStatementMode(e.target.value as 'FULL' | 'OUTSTANDING')}
+              className="w-64"
+            />
+            <Input
+              label="From"
+              type="date"
+              value={statementFrom}
+              onChange={(e) => setStatementFrom(e.target.value)}
+              className="w-44"
+            />
+            <Input
+              label="To"
+              type="date"
+              value={statementTo}
+              onChange={(e) => setStatementTo(e.target.value)}
+              className="w-44"
+            />
+            <Button variant="secondary" size="sm" onClick={() => refetchStatement()}>
+              Refresh
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              loading={statementExporting === 'pdf'}
+              disabled={!!statementExporting || statementLoading}
+              onClick={() => exportStatement('pdf')}
+            >
+              <Download className="h-4 w-4 mr-1" />
+              PDF
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              loading={statementExporting === 'excel'}
+              disabled={!!statementExporting || statementLoading}
+              onClick={() => exportStatement('excel')}
+            >
+              <FileSpreadsheet className="h-4 w-4 mr-1" />
+              Excel
+            </Button>
+          </div>
+          {statementCustomer && (
+            <p className="text-xs text-slate-500">
+              {statementCustomer.code}
+              {statementCustomer.vatStatus === 'NON_VAT' ? ' · Non-VAT (invoices at 0% VAT)' : ' · VAT customer'}
+              {statementMode === 'OUTSTANDING'
+                ? ' · Open invoices the customer still owes'
+                : ' · Full ledger including payments'}
+            </p>
+          )}
+          {statementExportError && <Alert variant="error">{statementExportError}</Alert>}
+          {statementLoading && <p className="text-sm text-slate-500 py-6 text-center">Loading statement…</p>}
+          {statementError && (
+            <Alert variant="error">Failed to load statement. Try again.</Alert>
+          )}
+          {statementData && !statementLoading && (
+            <>
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-sm rounded-xl bg-slate-900 text-white p-3">
+                {[
+                  { label: 'Current', value: statementData.aging?.current ?? 0 },
+                  { label: '1–30 past due', value: statementData.aging?.days1_30 ?? 0 },
+                  { label: '31–60 days past due', value: statementData.aging?.days31_60 ?? 0 },
+                  {
+                    label: '61–90 days past due',
+                    value: (statementData.aging?.days61_90 ?? 0) + (statementData.aging?.days90Plus ?? 0),
+                  },
+                  { label: 'Amount due', value: statementData.aging?.amountDue ?? statementData.totalDue, emphasize: true },
+                ].map((col) => (
+                  <div key={col.label} className="px-1 py-1 text-center">
+                    <p className={`text-[10px] uppercase tracking-wide ${col.emphasize ? 'text-slate-200' : 'text-slate-400'}`}>
+                      {col.label}
+                    </p>
+                    <p className={`tabular-nums font-semibold mt-1 ${col.emphasize ? 'text-base' : 'text-sm'}`}>
+                      {formatCurrency(col.value)}
+                    </p>
+                  </div>
+                ))}
+              </div>
+              {statementData.lines.length === 0 ? (
+                <EmptyState
+                  title={statementMode === 'OUTSTANDING' ? 'No outstanding invoices' : 'No transactions in this period'}
+                  description={
+                    statementMode === 'OUTSTANDING'
+                      ? 'This customer has no open balances for the selected dates.'
+                      : 'Adjust the date range or wait for invoices and payments.'
+                  }
+                />
+              ) : (
+                <div className="overflow-x-auto max-h-[50vh] border border-border/60 rounded-xl">
+                  <table className="min-w-full text-sm">
+                    <thead className="bg-surface-muted/80 sticky top-0">
+                      {statementMode === 'OUTSTANDING' ? (
+                        <tr className="text-left text-xs text-slate-500">
+                          <th className="px-3 py-2 font-medium">Date</th>
+                          <th className="px-3 py-2 font-medium">Invoice</th>
+                          <th className="px-3 py-2 font-medium">Due</th>
+                          <th className="px-3 py-2 font-medium">Status</th>
+                          <th className="px-3 py-2 font-medium text-right">Invoiced</th>
+                          <th className="px-3 py-2 font-medium text-right">Paid</th>
+                          <th className="px-3 py-2 font-medium text-right">Balance due</th>
+                        </tr>
+                      ) : (
+                        <tr className="text-left text-xs text-slate-500">
+                          <th className="px-3 py-2 font-medium">Date</th>
+                          <th className="px-3 py-2 font-medium">Type</th>
+                          <th className="px-3 py-2 font-medium">Reference</th>
+                          <th className="px-3 py-2 font-medium">Description</th>
+                          <th className="px-3 py-2 font-medium text-right">Debit</th>
+                          <th className="px-3 py-2 font-medium text-right">Credit</th>
+                          <th className="px-3 py-2 font-medium text-right">Balance</th>
+                        </tr>
+                      )}
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {statementData.lines.map((line, i) =>
+                        statementMode === 'OUTSTANDING' ? (
+                          <tr key={`${line.reference}-${i}`}>
+                            <td className="px-3 py-2 whitespace-nowrap">{formatDate(line.date)}</td>
+                            <td className="px-3 py-2 font-medium">{line.reference}</td>
+                            <td className="px-3 py-2 whitespace-nowrap">{line.dueDate ? formatDate(line.dueDate) : '—'}</td>
+                            <td className="px-3 py-2">
+                              <Badge variant={getStatusBadge(line.status || 'UNPAID')}>
+                                {(line.status || 'UNPAID').replace(/_/g, ' ')}
+                              </Badge>
+                            </td>
+                            <td className="px-3 py-2 text-right tabular-nums">{formatCurrency(line.invoiceTotal || 0)}</td>
+                            <td className="px-3 py-2 text-right tabular-nums">{formatCurrency(line.paidAmount || 0)}</td>
+                            <td className="px-3 py-2 text-right tabular-nums font-medium">{formatCurrency(line.balanceDue || line.debit)}</td>
+                          </tr>
+                        ) : (
+                          <tr key={`${line.reference}-${i}`}>
+                            <td className="px-3 py-2 whitespace-nowrap">{formatDate(line.date)}</td>
+                            <td className="px-3 py-2">
+                              <Badge variant={line.type === 'PAYMENT' ? 'success' : 'info'}>
+                                {line.type === 'PAYMENT'
+                                  ? line.paymentMethod || 'Payment'
+                                  : line.type.replace(/_/g, ' ')}
+                              </Badge>
+                            </td>
+                            <td className="px-3 py-2 font-medium">{line.reference}</td>
+                            <td className="px-3 py-2 text-slate-600 max-w-[220px] truncate" title={line.description}>{line.description}</td>
+                            <td className="px-3 py-2 text-right tabular-nums">{line.debit ? formatCurrency(line.debit) : '—'}</td>
+                            <td className="px-3 py-2 text-right tabular-nums">{line.credit ? formatCurrency(line.credit) : '—'}</td>
+                            <td className="px-3 py-2 text-right tabular-nums font-medium">{formatCurrency(line.balance)}</td>
+                          </tr>
+                        )
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </Modal>
     </div>
   );
 }

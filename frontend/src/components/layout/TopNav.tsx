@@ -15,6 +15,8 @@ interface TopNavProps {
 }
 
 const routeTitles: Record<string, string> = {
+  '/available-products': 'Available Products',
+  '/my-leave': 'My Leave',
   '/': 'Dashboard',
   '/users': 'Users',
   '/customers': 'Customers',

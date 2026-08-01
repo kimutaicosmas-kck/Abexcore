@@ -5,6 +5,9 @@ import {
   Plus,
   ClipboardList,
   FileText,
+  FileSpreadsheet,
+  Download,
+  Mail,
   Users,
   ShoppingCart,
   PackageCheck,
@@ -13,6 +16,8 @@ import {
   Truck,
 } from 'lucide-react';
 import { inventoryApi, financeApi } from '../services/api';
+import { downloadFile } from '../utils/download';
+import { getApiErrorMessage } from '../utils/apiError';
 import {
   PageHeader,
   Table,
@@ -23,6 +28,7 @@ import {
   StatCard,
   StatGrid,
   Card,
+  Alert,
   EmptyState,
   DataPanel,
   TablePagination,
@@ -53,7 +59,46 @@ const STATUS_FILTER = [
   { value: 'CANCELLED', label: 'Cancelled' },
 ];
 
+const STATEMENT_MODE_OPTIONS = [
+  { value: 'FULL', label: 'Full statement (with payments)' },
+  { value: 'OUTSTANDING', label: 'Outstanding invoices (amount due)' },
+];
+
 type ModalType = 'po' | 'requisition' | 'gr' | 'supplier' | 'rfq' | null;
+
+type VendorStatementData = {
+  mode: 'FULL' | 'OUTSTANDING';
+  supplier: Supplier;
+  period: { from: string | null; to: string };
+  openingBalance: number;
+  periodDebits: number;
+  periodCredits: number;
+  closingBalance: number;
+  totalDue: number;
+  aging: {
+    current: number;
+    days1_30: number;
+    days31_60: number;
+    days61_90: number;
+    days90Plus: number;
+    amountDue: number;
+  };
+  lines: {
+    date: string;
+    type: string;
+    reference: string;
+    description: string;
+    debit: number;
+    credit: number;
+    balance: number;
+    paymentMethod?: string | null;
+    invoiceTotal?: number;
+    paidAmount?: number;
+    balanceDue?: number;
+    dueDate?: string | null;
+    status?: string;
+  }[];
+};
 
 export function ProcurementPage() {
   const queryClient = useQueryClient();
@@ -88,6 +133,15 @@ export function ProcurementPage() {
     | { type: 'purchase-invoice'; id: string }
     | null
   >(null);
+  const [statementSupplier, setStatementSupplier] = useState<Supplier | null>(null);
+  const [statementFrom, setStatementFrom] = useState('');
+  const [statementTo, setStatementTo] = useState('');
+  const [statementMode, setStatementMode] = useState<'FULL' | 'OUTSTANDING'>('FULL');
+  const [statementExportError, setStatementExportError] = useState<string | null>(null);
+  const [statementExporting, setStatementExporting] = useState<'pdf' | 'excel' | null>(null);
+  const [poPdfLoading, setPoPdfLoading] = useState(false);
+  const [poActionError, setPoActionError] = useState<string | null>(null);
+  const [poActionSuccess, setPoActionSuccess] = useState<string | null>(null);
 
   const canCreate = hasPermission('procurement:create');
   const canUpdate = hasPermission('procurement:update');
@@ -126,6 +180,24 @@ export function ProcurementPage() {
     queryKey: ['suppliers', supPage, supSearch],
     queryFn: () => inventoryApi.suppliers({ page: supPage, limit: 15, search: supSearch || undefined }).then((r) => r.data),
     enabled: activeTab === 0 || activeTab === 5,
+  });
+
+  const {
+    data: statementData,
+    isLoading: statementLoading,
+    isError: statementError,
+    refetch: refetchStatement,
+  } = useQuery({
+    queryKey: ['vendor-statement', statementSupplier?.id, statementFrom, statementTo, statementMode],
+    queryFn: () =>
+      inventoryApi
+        .vendorStatement(statementSupplier!.id, {
+          from: statementFrom || undefined,
+          to: statementTo || undefined,
+          mode: statementMode,
+        })
+        .then((r) => r.data.data as VendorStatementData),
+    enabled: !!statementSupplier,
   });
 
   const approveMutation = useMutation({
@@ -187,6 +259,62 @@ export function ProcurementPage() {
 
   const goToTab = (index: number) => setActiveTab(index);
 
+  const downloadPoPdf = async (po: PurchaseOrder) => {
+    setPoActionError(null);
+    setPoActionSuccess(null);
+    setPoPdfLoading(true);
+    try {
+      await downloadFile(inventoryApi.purchaseOrderPdfPath(po.id), `${po.poNumber}.pdf`);
+    } catch (err) {
+      setPoActionError(err instanceof Error ? err.message : 'Failed to download purchase order PDF');
+    } finally {
+      setPoPdfLoading(false);
+    }
+  };
+
+  const sendPoMutation = useMutation({
+    mutationFn: (id: string) => inventoryApi.sendPurchaseOrder(id),
+    onSuccess: (res) => {
+      setPoActionError(null);
+      setPoActionSuccess((res.data?.message as string) || 'Purchase order emailed to supplier');
+    },
+    onError: (err) => {
+      setPoActionSuccess(null);
+      setPoActionError(getApiErrorMessage(err));
+    },
+  });
+
+  const openStatement = (supplier: Supplier) => {
+    setStatementSupplier(supplier);
+    setStatementFrom('');
+    setStatementTo('');
+    setStatementMode('FULL');
+    setStatementExportError(null);
+  };
+
+  const exportStatement = async (format: 'pdf' | 'excel') => {
+    if (!statementSupplier) return;
+    setStatementExportError(null);
+    setStatementExporting(format);
+    const suffix = statementMode === 'OUTSTANDING' ? 'outstanding' : 'statement';
+    const ext = format === 'pdf' ? 'pdf' : 'xlsx';
+    try {
+      await downloadFile(
+        `/inventory/suppliers/${statementSupplier.id}/statement/${format}`,
+        `${statementSupplier.code}-${suffix}.${ext}`,
+        {
+          from: statementFrom || undefined,
+          to: statementTo || undefined,
+          mode: statementMode,
+        }
+      );
+    } catch (err) {
+      setStatementExportError(err instanceof Error ? err.message : 'Export failed');
+    } finally {
+      setStatementExporting(null);
+    }
+  };
+
   const openModal = (type: ModalType, supplier?: Supplier | null) => {
     setEditingSupplier(supplier ?? null);
     setModalType(type);
@@ -239,6 +367,23 @@ export function ProcurementPage() {
       label: 'Status',
       render: (val: unknown) => (
         <Badge variant={getStatusBadge(val as string)}>{(val as string).replace(/_/g, ' ')}</Badge>
+      ),
+    },
+    {
+      key: 'actions',
+      label: '',
+      render: (_: unknown, row: Record<string, unknown>) => (
+        <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
+          <Button
+            size="sm"
+            variant="ghost"
+            title="Download PDF"
+            loading={poPdfLoading && selectedPo?.id === (row.id as string)}
+            onClick={() => downloadPoPdf(row as unknown as PurchaseOrder)}
+          >
+            <Download className="h-4 w-4" />
+          </Button>
+        </div>
       ),
     },
   ];
@@ -399,6 +544,22 @@ export function ProcurementPage() {
       key: 'rating',
       label: 'Rating',
       render: (val: unknown) => `${val}/5`,
+    },
+    {
+      key: 'actions',
+      label: '',
+      render: (_: unknown, row: Record<string, unknown>) => (
+        <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
+          <Button
+            size="sm"
+            variant="ghost"
+            title="Vendor statement"
+            onClick={() => openStatement(row as unknown as Supplier)}
+          >
+            <FileText className="h-4 w-4" />
+          </Button>
+        </div>
+      ),
     },
   ];
 
@@ -798,7 +959,17 @@ export function ProcurementPage() {
         )}
       </Modal>
 
-      <Modal open={poDetailOpen} onClose={() => { setPoDetailOpen(false); setSelectedPo(null); }} title="Purchase Order Details" size="lg">
+      <Modal
+        open={poDetailOpen}
+        onClose={() => {
+          setPoDetailOpen(false);
+          setSelectedPo(null);
+          setPoActionError(null);
+          setPoActionSuccess(null);
+        }}
+        title="Purchase Order Details"
+        size="lg"
+      >
         {selectedPo && (
           <div className="space-y-4 text-sm">
             <div className="grid grid-cols-2 gap-4">
@@ -818,8 +989,206 @@ export function ProcurementPage() {
                 ))}
               </Card>
             )}
+            {poActionError && <Alert variant="error">{poActionError}</Alert>}
+            {poActionSuccess && <Alert variant="success">{poActionSuccess}</Alert>}
+            <div className="flex flex-wrap justify-end gap-2 pt-2">
+              <Button
+                variant="secondary"
+                loading={poPdfLoading}
+                onClick={() => downloadPoPdf(selectedPo)}
+              >
+                <Download className="h-4 w-4 mr-1.5" />
+                Download PDF
+              </Button>
+              {selectedPo.supplier?.email && (canCreate || canUpdate) && (
+                <Button
+                  variant="secondary"
+                  loading={sendPoMutation.isPending}
+                  onClick={() => sendPoMutation.mutate(selectedPo.id)}
+                >
+                  <Mail className="h-4 w-4 mr-1.5" />
+                  Email to supplier
+                </Button>
+              )}
+              {selectedPo.supplier?.id && (
+                <Button
+                  variant="secondary"
+                  onClick={() => openStatement(selectedPo.supplier)}
+                >
+                  <FileText className="h-4 w-4 mr-1.5" />
+                  Vendor statement
+                </Button>
+              )}
+            </div>
           </div>
         )}
+      </Modal>
+
+      <Modal
+        open={!!statementSupplier}
+        onClose={() => setStatementSupplier(null)}
+        title={statementSupplier ? `Vendor statement — ${statementSupplier.name}` : 'Vendor statement'}
+        size="xl"
+      >
+        <div className="space-y-4">
+          <div className="flex flex-wrap items-end gap-3">
+            <Select
+              label="Statement type"
+              options={STATEMENT_MODE_OPTIONS}
+              value={statementMode}
+              onChange={(e) => setStatementMode(e.target.value as 'FULL' | 'OUTSTANDING')}
+              className="w-64"
+            />
+            <Input
+              label="From"
+              type="date"
+              value={statementFrom}
+              onChange={(e) => setStatementFrom(e.target.value)}
+              className="w-44"
+            />
+            <Input
+              label="To"
+              type="date"
+              value={statementTo}
+              onChange={(e) => setStatementTo(e.target.value)}
+              className="w-44"
+            />
+            <Button variant="secondary" size="sm" onClick={() => refetchStatement()}>
+              Refresh
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              loading={statementExporting === 'pdf'}
+              disabled={!!statementExporting || statementLoading}
+              onClick={() => exportStatement('pdf')}
+            >
+              <Download className="h-4 w-4 mr-1" />
+              PDF
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              loading={statementExporting === 'excel'}
+              disabled={!!statementExporting || statementLoading}
+              onClick={() => exportStatement('excel')}
+            >
+              <FileSpreadsheet className="h-4 w-4 mr-1" />
+              Excel
+            </Button>
+          </div>
+          {statementSupplier && (
+            <p className="text-xs text-slate-500">
+              {statementSupplier.code}
+              {statementMode === 'OUTSTANDING'
+                ? ' · Open purchase invoices still owed to this vendor'
+                : ' · Full AP ledger including payments'}
+            </p>
+          )}
+          {statementExportError && <Alert variant="error">{statementExportError}</Alert>}
+          {statementLoading && <p className="text-sm text-slate-500 py-6 text-center">Loading statement…</p>}
+          {statementError && (
+            <Alert variant="error">Failed to load statement. Try again.</Alert>
+          )}
+          {statementData && !statementLoading && (
+            <>
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-sm rounded-xl bg-slate-900 text-white p-3">
+                {[
+                  { label: 'Current', value: statementData.aging?.current ?? 0 },
+                  { label: '1–30 past due', value: statementData.aging?.days1_30 ?? 0 },
+                  { label: '31–60 days past due', value: statementData.aging?.days31_60 ?? 0 },
+                  {
+                    label: '61–90 days past due',
+                    value: (statementData.aging?.days61_90 ?? 0) + (statementData.aging?.days90Plus ?? 0),
+                  },
+                  { label: 'Amount due', value: statementData.aging?.amountDue ?? statementData.totalDue, emphasize: true },
+                ].map((col) => (
+                  <div key={col.label} className="px-1 py-1 text-center">
+                    <p className={`text-[10px] uppercase tracking-wide ${col.emphasize ? 'text-slate-200' : 'text-slate-400'}`}>
+                      {col.label}
+                    </p>
+                    <p className={`tabular-nums font-semibold mt-1 ${col.emphasize ? 'text-base' : 'text-sm'}`}>
+                      {formatCurrency(col.value)}
+                    </p>
+                  </div>
+                ))}
+              </div>
+              {statementData.lines.length === 0 ? (
+                <EmptyState
+                  title={statementMode === 'OUTSTANDING' ? 'No outstanding invoices' : 'No transactions in this period'}
+                  description={
+                    statementMode === 'OUTSTANDING'
+                      ? 'This vendor has no open balances for the selected dates.'
+                      : 'Adjust the date range or wait for purchase invoices and payments.'
+                  }
+                />
+              ) : (
+                <div className="overflow-x-auto max-h-[50vh] border border-border/60 rounded-xl">
+                  <table className="min-w-full text-sm">
+                    <thead className="bg-surface-muted/80 sticky top-0">
+                      {statementMode === 'OUTSTANDING' ? (
+                        <tr className="text-left text-xs text-slate-500">
+                          <th className="px-3 py-2 font-medium">Date</th>
+                          <th className="px-3 py-2 font-medium">Invoice</th>
+                          <th className="px-3 py-2 font-medium">Due</th>
+                          <th className="px-3 py-2 font-medium">Status</th>
+                          <th className="px-3 py-2 font-medium text-right">Invoiced</th>
+                          <th className="px-3 py-2 font-medium text-right">Paid</th>
+                          <th className="px-3 py-2 font-medium text-right">Balance due</th>
+                        </tr>
+                      ) : (
+                        <tr className="text-left text-xs text-slate-500">
+                          <th className="px-3 py-2 font-medium">Date</th>
+                          <th className="px-3 py-2 font-medium">Type</th>
+                          <th className="px-3 py-2 font-medium">Reference</th>
+                          <th className="px-3 py-2 font-medium">Description</th>
+                          <th className="px-3 py-2 font-medium text-right">Debit</th>
+                          <th className="px-3 py-2 font-medium text-right">Credit</th>
+                          <th className="px-3 py-2 font-medium text-right">Balance</th>
+                        </tr>
+                      )}
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {statementData.lines.map((line, i) =>
+                        statementMode === 'OUTSTANDING' ? (
+                          <tr key={`${line.reference}-${i}`}>
+                            <td className="px-3 py-2 whitespace-nowrap">{formatDate(line.date)}</td>
+                            <td className="px-3 py-2 font-medium">{line.reference}</td>
+                            <td className="px-3 py-2 whitespace-nowrap">{line.dueDate ? formatDate(line.dueDate) : '—'}</td>
+                            <td className="px-3 py-2">
+                              <Badge variant={getStatusBadge(line.status || 'UNPAID')}>
+                                {(line.status || 'UNPAID').replace(/_/g, ' ')}
+                              </Badge>
+                            </td>
+                            <td className="px-3 py-2 text-right tabular-nums">{formatCurrency(line.invoiceTotal || 0)}</td>
+                            <td className="px-3 py-2 text-right tabular-nums">{formatCurrency(line.paidAmount || 0)}</td>
+                            <td className="px-3 py-2 text-right tabular-nums font-medium">{formatCurrency(line.balanceDue || line.debit)}</td>
+                          </tr>
+                        ) : (
+                          <tr key={`${line.reference}-${i}`}>
+                            <td className="px-3 py-2 whitespace-nowrap">{formatDate(line.date)}</td>
+                            <td className="px-3 py-2">
+                              <Badge variant={line.type === 'PAYMENT' ? 'success' : 'info'}>
+                                {line.type === 'PAYMENT'
+                                  ? line.paymentMethod || 'Payment'
+                                  : line.type.replace(/_/g, ' ')}
+                              </Badge>
+                            </td>
+                            <td className="px-3 py-2 font-medium">{line.reference}</td>
+                            <td className="px-3 py-2 text-slate-600 max-w-[220px] truncate" title={line.description}>{line.description}</td>
+                            <td className="px-3 py-2 text-right tabular-nums">{line.debit ? formatCurrency(line.debit) : '—'}</td>
+                            <td className="px-3 py-2 text-right tabular-nums">{line.credit ? formatCurrency(line.credit) : '—'}</td>
+                            <td className="px-3 py-2 text-right tabular-nums font-medium">{formatCurrency(line.balance)}</td>
+                          </tr>
+                        )
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </>
+          )}
+        </div>
       </Modal>
 
       <ConfirmDialog

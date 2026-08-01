@@ -322,10 +322,73 @@ async function main() {
 
   // Customers
   const customers = await Promise.all([
-    prisma.customer.upsert({ where: { companyId_code: { companyId: cid, code: 'CUST-001' } }, update: {}, create: { companyId: cid, code: 'CUST-001', name: 'Auto Parts Kenya Ltd', type: 'DEALER', email: 'orders@autopartskenya.co.ke', phone: '+254 744 444 444', city: 'Nairobi', creditLimit: 500000, paymentTerms: 30 } }),
-    prisma.customer.upsert({ where: { companyId_code: { companyId: cid, code: 'CUST-002' } }, update: {}, create: { companyId: cid, code: 'CUST-002', name: 'Mombasa Motors', type: 'DEALER', email: 'sales@mombasamotors.co.ke', phone: '+254 755 555 555', city: 'Mombasa', creditLimit: 300000, paymentTerms: 30 } }),
-    prisma.customer.upsert({ where: { companyId_code: { companyId: cid, code: 'CUST-003' } }, update: {}, create: { companyId: cid, code: 'CUST-003', name: 'East Africa Industries', type: 'INDUSTRY', email: 'procurement@eaindustries.co.ke', phone: '+254 766 666 666', city: 'Nairobi', creditLimit: 1000000, paymentTerms: 45 } }),
-    prisma.customer.upsert({ where: { companyId_code: { companyId: cid, code: 'CUST-004' } }, update: {}, create: { companyId: cid, code: 'CUST-004', name: 'Quick Lube Service Center', type: 'RETAIL_SHOP', email: 'info@quicklube.co.ke', phone: '+254 777 777 777', city: 'Nairobi', creditLimit: 50000, paymentTerms: 15 } }),
+    prisma.customer.upsert({
+      where: { companyId_code: { companyId: cid, code: 'CUST-001' } },
+      update: { vatStatus: 'VAT', taxPin: 'P051234567A' },
+      create: {
+        companyId: cid,
+        code: 'CUST-001',
+        name: 'Auto Parts Kenya Ltd',
+        type: 'DEALER',
+        vatStatus: 'VAT',
+        taxPin: 'P051234567A',
+        email: 'orders@autopartskenya.co.ke',
+        phone: '+254 744 444 444',
+        city: 'Nairobi',
+        creditLimit: 500000,
+        paymentTerms: 30,
+      },
+    }),
+    prisma.customer.upsert({
+      where: { companyId_code: { companyId: cid, code: 'CUST-002' } },
+      update: { vatStatus: 'VAT', taxPin: 'P051111111B' },
+      create: {
+        companyId: cid,
+        code: 'CUST-002',
+        name: 'Mombasa Motors',
+        type: 'DEALER',
+        vatStatus: 'VAT',
+        taxPin: 'P051111111B',
+        email: 'sales@mombasamotors.co.ke',
+        phone: '+254 755 555 555',
+        city: 'Mombasa',
+        creditLimit: 300000,
+        paymentTerms: 30,
+      },
+    }),
+    prisma.customer.upsert({
+      where: { companyId_code: { companyId: cid, code: 'CUST-003' } },
+      update: { vatStatus: 'VAT', taxPin: 'P052222222C' },
+      create: {
+        companyId: cid,
+        code: 'CUST-003',
+        name: 'East Africa Industries',
+        type: 'INDUSTRY',
+        vatStatus: 'VAT',
+        taxPin: 'P052222222C',
+        email: 'procurement@eaindustries.co.ke',
+        phone: '+254 766 666 666',
+        city: 'Nairobi',
+        creditLimit: 1000000,
+        paymentTerms: 45,
+      },
+    }),
+    prisma.customer.upsert({
+      where: { companyId_code: { companyId: cid, code: 'CUST-004' } },
+      update: { vatStatus: 'NON_VAT' },
+      create: {
+        companyId: cid,
+        code: 'CUST-004',
+        name: 'Quick Lube Service Center',
+        type: 'RETAIL_SHOP',
+        vatStatus: 'NON_VAT',
+        email: 'info@quicklube.co.ke',
+        phone: '+254 777 777 777',
+        city: 'Nairobi',
+        creditLimit: 50000,
+        paymentTerms: 15,
+      },
+    }),
   ]);
 
   // Machines

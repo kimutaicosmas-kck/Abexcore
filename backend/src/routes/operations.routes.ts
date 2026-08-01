@@ -17,7 +17,7 @@ import prisma from '../config/database';
 import { dayRangeFromInput, generateNumber, nextQualityInspectionNumber } from '../utils/date';
 import { getParam, getQuery } from '../utils/request';
 import { SalesService, ProductionStatsService, QualityService } from '../services/operations.service';
-import { getVatRate, calcTax } from '../utils/company';
+import { getVatRate, getCustomerVatRate, calcTax } from '../utils/company';
 import { assertCreditLimit, assertOrderStatusTransition, syncCustomerCreditUsed } from '../utils/credit';
 import { StockMovementService } from '../services/inventory.service';
 import { SalesOrderService, StockShortage } from '../services/sales-order.service';
@@ -63,7 +63,7 @@ router.get(
 // Sales Orders
 router.get(
   '/orders',
-  authorizeAny('sales:read', 'finance:read', 'finance:create'),
+  authorizeAny('sales:read', 'finance:read', 'finance:create', 'delivery:read', 'delivery:create'),
   validate(salesListQuerySchema, 'query'),
   asyncHandler(async (req: AuthRequest, res: Response) => {
     const { page, limit, search, status, salesPersonId, date } = getQuery<{
@@ -186,10 +186,10 @@ router.post(
   validate(createSalesOrderSchema),
   auditLog('sales', 'create', 'sales_order'),
   asyncHandler(async (req: AuthRequest, res: Response) => {
-    const { customerId, quotationId, salesPersonId, requiredDate, notes, items } = req.body;
+    const { customerId, quotationId, salesPersonId, requiredDate, customerPoNumber, notes, items } =
+      req.body;
     const count = await prisma.salesOrder.count();
     const orderNumber = generateNumber('SO', count + 1);
-    const vatRate = await getVatRate();
     const isSalesOfficer = req.user!.roleName === 'Sales Officer';
 
     // Sales Officers always own their orders.
@@ -221,9 +221,10 @@ router.post(
 
     const customer = await prisma.customer.findFirst({
       where: { id: customerId, isActive: true, deletedAt: null },
-      select: { id: true, salesPersonId: true, name: true },
+      select: { id: true, salesPersonId: true, name: true, vatStatus: true },
     });
     if (!customer) throw new AppError('Customer not found', 404);
+    const vatRate = await getCustomerVatRate(customer);
 
     if (attributingToCreator) {
       // House-account order: only unassigned customers (or already owned by this admin).
@@ -267,6 +268,7 @@ router.post(
           createdById: req.user!.id,
           salesPersonId: assignedSalesPersonId,
           requiredDate: requiredDate ? new Date(requiredDate) : undefined,
+          customerPoNumber: customerPoNumber || undefined,
           notes,
           subtotal,
           taxAmount,
@@ -621,7 +623,12 @@ router.post(
     const { customerId, validUntil, notes, items } = req.body;
     const count = await prisma.salesQuotation.count();
     const quotationNo = generateNumber('QT', count + 1);
-    const vatRate = await getVatRate();
+    const customer = await prisma.customer.findFirst({
+      where: { id: customerId, deletedAt: null },
+      select: { id: true, vatStatus: true },
+    });
+    if (!customer) throw new AppError('Customer not found', 404);
+    const vatRate = await getCustomerVatRate(customer);
 
     const subtotal = items.reduce(
       (sum: number, item: { quantity: number; unitPrice: number; discount?: number }) =>

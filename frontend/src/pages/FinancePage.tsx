@@ -128,6 +128,10 @@ export function FinancePage() {
 
   const [payPage, setPayPage] = useState(1);
   const [paySearch, setPaySearch] = useState('');
+  const [payPeriod, setPayPeriod] = useState('this_week_taken_and_paid');
+  const [payMethod, setPayMethod] = useState('');
+  const [payFrom, setPayFrom] = useState('');
+  const [payTo, setPayTo] = useState('');
 
   const [journalPage, setJournalPage] = useState(1);
   const [journalSearch, setJournalSearch] = useState('');
@@ -172,10 +176,23 @@ export function FinancePage() {
     enabled: !!selectedInvoiceId && detailOpen,
   });
 
+  const payPeriodPreset =
+    payPeriod && payPeriod !== 'custom' ? payPeriod : undefined;
+
   const { data: payments, isLoading: payLoading } = useQuery({
-    queryKey: ['payments', payPage, paySearch],
+    queryKey: ['payments', payPage, paySearch, payPeriod, payMethod, payFrom, payTo],
     queryFn: () =>
-      financeApi.listPayments({ page: payPage, limit: 15, search: paySearch || undefined }).then((r) => r.data),
+      financeApi
+        .listPayments({
+          page: payPage,
+          limit: 15,
+          search: paySearch || undefined,
+          period: payPeriodPreset,
+          method: payMethod || undefined,
+          from: !payPeriodPreset && payFrom ? payFrom : undefined,
+          to: !payPeriodPreset && payTo ? payTo : undefined,
+        })
+        .then((r) => r.data),
     enabled: activeTab === 2,
   });
 
@@ -284,6 +301,15 @@ export function FinancePage() {
         (row.customer as { name: string })?.name || (row.supplier as { name: string })?.name || '—',
     },
     {
+      key: 'customerPoNumber',
+      label: 'LPO',
+      render: (val: unknown, row: Record<string, unknown>) => {
+        const fromOrder = (row.salesOrder as { customerPoNumber?: string | null } | null | undefined)
+          ?.customerPoNumber;
+        return (val as string) || fromOrder || '—';
+      },
+    },
+    {
       key: 'salesPerson',
       label: 'Sales Person',
       render: (_: unknown, row: Record<string, unknown>) => {
@@ -347,10 +373,24 @@ export function FinancePage() {
     { key: 'paymentNumber', label: 'Payment #' },
     {
       key: 'invoice',
-      label: 'Invoice',
+      label: 'Invoice / Order',
       render: (val: unknown) => {
         const inv = val as Payment['invoice'];
-        return inv ? inv.invoiceNumber : '—';
+        if (!inv) return '—';
+        return (
+          <div>
+            <p className="font-medium text-slate-900">{inv.invoiceNumber}</p>
+            {inv.salesOrder?.orderNumber && (
+              <p className="text-xs text-slate-500">
+                Order {inv.salesOrder.orderNumber}
+                {inv.salesOrder.orderDate ? ` · ${formatDate(inv.salesOrder.orderDate)}` : ''}
+              </p>
+            )}
+            {!inv.salesOrder?.orderNumber && inv.invoiceDate && (
+              <p className="text-xs text-slate-500">Invoiced {formatDate(inv.invoiceDate)}</p>
+            )}
+          </div>
+        );
       },
     },
     {
@@ -361,7 +401,35 @@ export function FinancePage() {
         return inv?.customer?.name || inv?.supplier?.name || '—';
       },
     },
-    { key: 'paymentDate', label: 'Date', render: (val: unknown) => formatDate(val as string) },
+    {
+      key: 'paymentDate',
+      label: 'Paid on',
+      render: (val: unknown, row: Record<string, unknown>) => {
+        const pay = row as unknown as Payment;
+        return (
+          <div>
+            <p>{formatDate(val as string)}</p>
+            {pay.invoice?.invoiceDate && (
+              <p className="text-xs text-slate-500">Invoice {formatDate(pay.invoice.invoiceDate)}</p>
+            )}
+          </div>
+        );
+      },
+    },
+    {
+      key: 'timing',
+      label: 'Timing',
+      render: (_: unknown, row: Record<string, unknown>) => {
+        const pay = row as unknown as Payment;
+        if (pay.paidSameWeekAsInvoice) {
+          return <Badge variant="success">Paid in invoice week</Badge>;
+        }
+        if (pay.paidSameMonthAsInvoice) {
+          return <Badge variant="info">Paid in invoice month</Badge>;
+        }
+        return <Badge variant="default">Later payment</Badge>;
+      },
+    },
     {
       key: 'method',
       label: 'Method',
@@ -375,6 +443,30 @@ export function FinancePage() {
       render: (val: unknown) => <span className="font-semibold text-emerald-700">{formatCurrency(val as number)}</span>,
     },
     { key: 'reference', label: 'Reference', render: (val: unknown) => (val as string) || '—' },
+  ];
+
+  const PAY_PERIOD_OPTIONS = [
+    { value: 'this_week_taken_and_paid', label: 'Taken & paid this week' },
+    { value: 'this_month_taken_and_paid', label: 'Taken & paid this month' },
+    { value: 'same_week_as_invoice', label: 'Paid in week invoice was taken' },
+    { value: 'same_month_as_invoice', label: 'Paid in month invoice was taken' },
+    { value: 'this_week', label: 'Paid this week (any invoice)' },
+    { value: 'last_week', label: 'Paid last week (any invoice)' },
+    { value: 'this_month', label: 'Paid this month (any invoice)' },
+    { value: 'last_month', label: 'Paid last month (any invoice)' },
+    { value: '', label: 'All payment dates' },
+    { value: 'custom', label: 'Custom dates…' },
+  ];
+
+  const PAY_METHOD_OPTIONS = [
+    { value: '', label: 'All methods' },
+    { value: 'CASH', label: 'Cash' },
+    { value: 'MPESA', label: 'M-Pesa' },
+    { value: 'BANK_TRANSFER', label: 'Bank transfer' },
+    { value: 'CHEQUE', label: 'Cheque' },
+    { value: 'COOP_PAYBILL', label: 'Co-op Paybill' },
+    { value: 'CARD', label: 'Card' },
+    { value: 'CREDIT', label: 'Credit' },
   ];
 
   const unpaidInvoices = ((invoices?.data as Invoice[]) || []).filter((i) => invoiceBalance(i) > 0);
@@ -740,18 +832,84 @@ export function FinancePage() {
       {/* Payments */}
       {activeTab === 2 && (
         <DataPanel>
-          <div className="p-4 pb-0 max-w-sm">
+          <div className="p-4 pb-0 flex flex-wrap items-end gap-3">
             <Input
               placeholder="Search payments…"
               value={paySearch}
               onChange={(e) => { setPaySearch(e.target.value); setPayPage(1); }}
+              className="min-w-[200px] sm:max-w-xs"
             />
+            <Select
+              label="Paid period"
+              options={PAY_PERIOD_OPTIONS}
+              value={payPeriod}
+              onChange={(e) => {
+                const v = e.target.value;
+                setPayPeriod(v);
+                if (v !== 'custom') {
+                  setPayFrom('');
+                  setPayTo('');
+                }
+                setPayPage(1);
+              }}
+              className="w-48"
+            />
+            {payPeriod === 'custom' && (
+              <>
+                <Input
+                  label="From"
+                  type="date"
+                  value={payFrom}
+                  onChange={(e) => {
+                    setPayFrom(e.target.value);
+                    setPayPage(1);
+                  }}
+                  className="w-40"
+                />
+                <Input
+                  label="To"
+                  type="date"
+                  value={payTo}
+                  onChange={(e) => {
+                    setPayTo(e.target.value);
+                    setPayPage(1);
+                  }}
+                  className="w-40"
+                />
+              </>
+            )}
+            <Select
+              label="Method"
+              options={PAY_METHOD_OPTIONS}
+              value={payMethod}
+              onChange={(e) => { setPayMethod(e.target.value); setPayPage(1); }}
+              className="w-40"
+            />
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => {
+                setPaySearch('');
+                setPayPeriod('this_week_taken_and_paid');
+                setPayMethod('');
+                setPayFrom('');
+                setPayTo('');
+                setPayPage(1);
+              }}
+            >
+              Reset
+            </Button>
           </div>
+          <p className="px-4 pt-2 text-xs text-slate-500">
+            “Taken & paid this week/month” = invoice issued and paid in that same period.
+            “Paid in week/month invoice was taken” = payment landed in the invoice’s own week or month (any period).
+            “Paid this week (any invoice)” also includes older invoices paid this week.
+          </p>
           {(payments?.data?.length || 0) === 0 && !payLoading ? (
             <div className="p-6">
               <EmptyState
-                title="No payments recorded"
-                description="Record a payment against an open invoice."
+                title="No payments in this period"
+                description="Try another paid period, or record a payment against an open invoice."
                 action={
                   canCreate ? (
                     <Button onClick={() => openPaymentModal()}>
@@ -798,6 +956,14 @@ export function FinancePage() {
                 { key: 'entryNumber', label: 'Entry #' },
                 { key: 'date', label: 'Date', render: (v: unknown) => formatDate(v as string) },
                 { key: 'description', label: 'Description' },
+                {
+                  key: 'invoice',
+                  label: 'Invoice',
+                  render: (_: unknown, row: Record<string, unknown>) => {
+                    const inv = row.invoice as { invoiceNumber?: string } | null | undefined;
+                    return inv?.invoiceNumber || '—';
+                  },
+                },
                 { key: 'reference', label: 'Reference', render: (v: unknown) => (v as string) || '—' },
                 { key: 'lines', label: 'Lines', render: (v: unknown) => (v as unknown[])?.length || 0 },
                 { key: 'isPosted', label: 'Status', render: (v: unknown) => <Badge variant={v ? 'success' : 'warning'}>{v ? 'Posted' : 'Draft'}</Badge> },
@@ -993,6 +1159,14 @@ export function FinancePage() {
                   Issued {formatDate(invoiceDetail.invoiceDate)}
                   {invoiceDetail.dueDate && ` · Due ${formatDate(invoiceDetail.dueDate)}`}
                 </p>
+                <p className="text-sm text-slate-600 mt-1">
+                  LPO / Customer PO:{' '}
+                  <span className="font-medium text-slate-900">
+                    {invoiceDetail.customerPoNumber ||
+                      invoiceDetail.salesOrder?.customerPoNumber ||
+                      '—'}
+                  </span>
+                </p>
               </div>
               <div className="text-right">
                 <p className="text-xs text-slate-500 uppercase tracking-wide">Balance due</p>
@@ -1104,6 +1278,13 @@ export function FinancePage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
               <div><p className="text-slate-500">Entry #</p><p className="font-semibold">{selectedJournal.entryNumber as string}</p></div>
               <div><p className="text-slate-500">Date</p><p className="font-semibold">{formatDate(selectedJournal.date as string)}</p></div>
+              <div>
+                <p className="text-slate-500">Invoice</p>
+                <p className="font-semibold">
+                  {(selectedJournal.invoice as { invoiceNumber?: string } | null | undefined)?.invoiceNumber || '—'}
+                </p>
+              </div>
+              <div><p className="text-slate-500">Reference</p><p className="font-semibold">{(selectedJournal.reference as string) || '—'}</p></div>
               <div className="sm:col-span-2"><p className="text-slate-500">Description</p><p>{(selectedJournal.description as string) || '—'}</p></div>
             </div>
             <Card title="Lines" padding={false}>

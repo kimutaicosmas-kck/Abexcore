@@ -8,13 +8,19 @@ import {
   hrListQuerySchema,
   paginationSchema,
   approveLeaveSchema,
+  createLeaveSchema,
+  createMyLeaveSchema,
+  linkEmployeeUserSchema,
 } from '../validators/schemas';
 import prisma from '../config/database';
 import { getParam, getQuery } from '../utils/request';
 import { HrService } from '../services/admin.service';
 import { calculateKenyaPayroll } from '../services/payroll.service';
 import { AccountingService } from '../services/accounting.service';
+import { LeaveService } from '../services/leave.service';
 import { Prisma } from '@prisma/client';
+import { parseLocalDateInput } from '../utils/date';
+import { injectTenantData } from '../utils/tenant';
 
 const router = Router();
 router.use(authenticate);
@@ -52,12 +58,24 @@ router.get(
       ];
     }
 
+    const employeeUserSelect = {
+      id: true,
+      email: true,
+      firstName: true,
+      lastName: true,
+      status: true,
+    } as const;
+
     const [data, total] = await Promise.all([
       prisma.employee.findMany({
         where,
         skip,
         take: limit,
-        include: { department: true, branch: true },
+        include: {
+          department: true,
+          branch: true,
+          user: { select: employeeUserSelect },
+        },
         orderBy: { createdAt: 'desc' },
       }),
       prisma.employee.count({ where }),
@@ -71,13 +89,44 @@ router.get(
   })
 );
 
+/** Active logins not yet linked to an employee — for HR link picker. */
+router.get(
+  '/linkable-users',
+  authorize('hr:read'),
+  asyncHandler(async (_req: AuthRequest, res: Response) => {
+    const users = await prisma.user.findMany({
+      where: {
+        deletedAt: null,
+        status: 'ACTIVE',
+        employee: null,
+      },
+      select: {
+        id: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+        role: { select: { name: true } },
+      },
+      orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
+      take: 500,
+    });
+    res.json({ success: true, data: users });
+  })
+);
+
 router.get(
   '/employees/:id',
   authorize('hr:read'),
   asyncHandler(async (req: AuthRequest, res: Response) => {
     const data = await prisma.employee.findFirst({
       where: { id: getParam(req.params.id), deletedAt: null },
-      include: { department: true, branch: true },
+      include: {
+        department: true,
+        branch: true,
+        user: {
+          select: { id: true, email: true, firstName: true, lastName: true, status: true },
+        },
+      },
     });
     if (!data) throw new AppError('Employee not found', 404);
     res.json({ success: true, data });
@@ -90,10 +139,49 @@ router.post(
   validate(createEmployeeSchema),
   auditLog('hr', 'create', 'employee'),
   asyncHandler(async (req: AuthRequest, res: Response) => {
-    const { hireDate, ...rest } = req.body;
+    const { hireDate, userId, ...rest } = req.body as {
+      hireDate: string;
+      userId?: string | null;
+      employeeNo: string;
+      firstName: string;
+      lastName: string;
+      email?: string;
+      phone?: string;
+      departmentId?: string;
+      branchId?: string;
+      position?: string;
+      salary?: number;
+    };
+
+    let resolvedUserId = userId ?? null;
+    if (resolvedUserId) {
+      await LeaveService.assertUserAvailableForLink(resolvedUserId);
+    } else if (rest.email) {
+      const match = await prisma.user.findFirst({
+        where: {
+          email: rest.email.toLowerCase(),
+          deletedAt: null,
+          employee: null,
+        },
+        select: { id: true },
+      });
+      if (match) resolvedUserId = match.id;
+    }
+
     const employee = await prisma.employee.create({
-      data: { ...rest, hireDate: new Date(hireDate) },
-      include: { department: true, branch: true },
+      data: injectTenantData({
+        ...rest,
+        email: rest.email?.toLowerCase(),
+        hireDate: new Date(hireDate),
+        userId: resolvedUserId,
+      }),
+      include: {
+        department: true,
+        branch: true,
+        user: {
+          select: { id: true, email: true, firstName: true, lastName: true, status: true },
+        },
+      },
     });
     res.status(201).json({ success: true, data: employee });
   })
@@ -105,12 +193,53 @@ router.put(
   validate(createEmployeeSchema.partial()),
   auditLog('hr', 'update', 'employee'),
   asyncHandler(async (req: AuthRequest, res: Response) => {
-    const { hireDate, ...rest } = req.body;
+    const id = getParam(req.params.id);
+    const { hireDate, userId, ...rest } = req.body as {
+      hireDate?: string;
+      userId?: string | null;
+      email?: string;
+      [key: string]: unknown;
+    };
+
+    const existing = await prisma.employee.findFirst({ where: { id, deletedAt: null } });
+    if (!existing) throw new AppError('Employee not found', 404);
+
+    if (userId) {
+      await LeaveService.assertUserAvailableForLink(userId, id);
+    }
+
     const employee = await prisma.employee.update({
-      where: { id: getParam(req.params.id) },
-      data: { ...rest, ...(hireDate ? { hireDate: new Date(hireDate) } : {}) },
-      include: { department: true, branch: true },
+      where: { id },
+      data: {
+        ...rest,
+        ...(rest.email !== undefined
+          ? { email: typeof rest.email === 'string' ? rest.email.toLowerCase() : rest.email }
+          : {}),
+        ...(hireDate ? { hireDate: new Date(hireDate) } : {}),
+        ...(userId !== undefined ? { userId } : {}),
+      },
+      include: {
+        department: true,
+        branch: true,
+        user: {
+          select: { id: true, email: true, firstName: true, lastName: true, status: true },
+        },
+      },
     });
+    res.json({ success: true, data: employee });
+  })
+);
+
+router.patch(
+  '/employees/:id/link-user',
+  authorize('hr:update'),
+  validate(linkEmployeeUserSchema),
+  auditLog('hr', 'update', 'employee'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const employee = await LeaveService.linkEmployeeToUser(
+      getParam(req.params.id),
+      req.body.userId as string | null
+    );
     res.json({ success: true, data: employee });
   })
 );
@@ -183,6 +312,78 @@ router.post(
 );
 
 router.get(
+  '/leave/mine',
+  validate(paginationSchema, 'query'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    if (!req.user) throw new AppError('Authentication required', 401);
+    const { page, limit } = getQuery<{ page: number; limit: number }>(req.query);
+    const skip = (page - 1) * limit;
+    const employee = await LeaveService.ensureEmployeeForUser(req.user.id);
+
+    const where: Prisma.LeaveRequestWhereInput = { employeeId: employee.id };
+    const [data, total] = await Promise.all([
+      prisma.leaveRequest.findMany({
+        where,
+        skip,
+        take: limit,
+        include: {
+          employee: { select: { firstName: true, lastName: true, employeeNo: true } },
+          approvedBy: { select: { firstName: true, lastName: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+      }),
+      prisma.leaveRequest.count({ where }),
+    ]);
+
+    res.json({
+      success: true,
+      data,
+      pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
+    });
+  })
+);
+
+router.post(
+  '/leave/me',
+  validate(createMyLeaveSchema),
+  auditLog('hr', 'create', 'leave_request'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    if (!req.user) throw new AppError('Authentication required', 401);
+    const { type, startDate, endDate, reason } = req.body as {
+      type: string;
+      startDate: string;
+      endDate: string;
+      reason?: string;
+    };
+    const start = parseLocalDateInput(startDate) || new Date(startDate);
+    const end = parseLocalDateInput(endDate) || new Date(endDate);
+    if (end < start) throw new AppError('End date must be on or after start date', 400);
+
+    const employee = await LeaveService.ensureEmployeeForUser(req.user.id);
+    const record = await prisma.leaveRequest.create({
+      data: {
+        employeeId: employee.id,
+        requestedByUserId: req.user.id,
+        type,
+        startDate: start,
+        endDate: end,
+        reason,
+      },
+      include: { employee: { select: { firstName: true, lastName: true, employeeNo: true } } },
+    });
+
+    await LeaveService.notifyApproversOfRequest({
+      employeeName: `${employee.firstName} ${employee.lastName}`,
+      type,
+      startDate: start,
+      endDate: end,
+    });
+
+    res.status(201).json({ success: true, data: record });
+  })
+);
+
+router.get(
   '/leave',
   authorize('hr:read'),
   validate(hrListQuerySchema, 'query'),
@@ -210,7 +411,11 @@ router.get(
         where,
         skip,
         take: limit,
-        include: { employee: { select: { firstName: true, lastName: true, employeeNo: true } } },
+        include: {
+          employee: { select: { firstName: true, lastName: true, employeeNo: true } },
+          requestedBy: { select: { firstName: true, lastName: true } },
+          approvedBy: { select: { firstName: true, lastName: true } },
+        },
         orderBy: { createdAt: 'desc' },
       }),
       prisma.leaveRequest.count({ where }),
@@ -227,19 +432,44 @@ router.get(
 router.post(
   '/leave',
   authorize('hr:create'),
+  validate(createLeaveSchema),
   auditLog('hr', 'create', 'leave_request'),
   asyncHandler(async (req: AuthRequest, res: Response) => {
-    const { employeeId, type, startDate, endDate, reason } = req.body;
+    const { employeeId, type, startDate, endDate, reason } = req.body as {
+      employeeId: string;
+      type: string;
+      startDate: string;
+      endDate: string;
+      reason?: string;
+    };
+    const start = parseLocalDateInput(startDate) || new Date(startDate);
+    const end = parseLocalDateInput(endDate) || new Date(endDate);
+    if (end < start) throw new AppError('End date must be on or after start date', 400);
+
+    const employee = await prisma.employee.findFirst({
+      where: { id: employeeId, deletedAt: null },
+    });
+    if (!employee) throw new AppError('Employee not found', 404);
+
     const record = await prisma.leaveRequest.create({
       data: {
         employeeId,
+        requestedByUserId: req.user?.id,
         type,
-        startDate: new Date(startDate),
-        endDate: new Date(endDate),
+        startDate: start,
+        endDate: end,
         reason,
       },
-      include: { employee: { select: { firstName: true, lastName: true } } },
+      include: { employee: { select: { firstName: true, lastName: true, employeeNo: true } } },
     });
+
+    await LeaveService.notifyApproversOfRequest({
+      employeeName: `${employee.firstName} ${employee.lastName}`,
+      type,
+      startDate: start,
+      endDate: end,
+    });
+
     res.status(201).json({ success: true, data: record });
   })
 );
@@ -250,11 +480,45 @@ router.patch(
   validate(approveLeaveSchema),
   auditLog('hr', 'update', 'leave_request'),
   asyncHandler(async (req: AuthRequest, res: Response) => {
-    const record = await prisma.leaveRequest.update({
-      where: { id: getParam(req.params.id) },
-      data: { status: req.body.status },
-      include: { employee: { select: { firstName: true, lastName: true } } },
+    if (!req.user) throw new AppError('Authentication required', 401);
+    const id = getParam(req.params.id);
+    const { status, decisionNote } = req.body as {
+      status: 'APPROVED' | 'REJECTED' | 'CANCELLED';
+      decisionNote?: string;
+    };
+
+    const existing = await prisma.leaveRequest.findUnique({
+      where: { id },
+      include: {
+        employee: { select: { firstName: true, lastName: true, email: true } },
+      },
     });
+    if (!existing) throw new AppError('Leave request not found', 404);
+
+    const record = await prisma.leaveRequest.update({
+      where: { id },
+      data: {
+        status,
+        approvedById: req.user.id,
+        approvedAt: new Date(),
+        decisionNote: decisionNote || null,
+      },
+      include: {
+        employee: { select: { firstName: true, lastName: true, employeeNo: true, email: true } },
+        approvedBy: { select: { firstName: true, lastName: true } },
+      },
+    });
+
+    await LeaveService.notifyRequesterOfDecision({
+      requestedByUserId: existing.requestedByUserId,
+      employeeEmail: existing.employee.email,
+      status,
+      type: existing.type,
+      startDate: existing.startDate,
+      endDate: existing.endDate,
+      decisionNote,
+    });
+
     res.json({ success: true, data: record });
   })
 );

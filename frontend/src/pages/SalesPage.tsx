@@ -137,11 +137,35 @@ export function SalesPage() {
   const [quoteFeedback, setQuoteFeedback] = useState<{ text: string; variant: 'error' | 'info' } | null>(null);
   const [pendingStatusChange, setPendingStatusChange] = useState<{ id: string; status: string; label: string } | null>(null);
   const [orderEditMode, setOrderEditMode] = useState(false);
+  const [selectedDeliveryOrderIds, setSelectedDeliveryOrderIds] = useState<string[]>([]);
 
   const canCreate = hasPermission('sales:create');
   const canUpdate = hasPermission('sales:update');
   const canReadSales = hasPermission('sales:read');
   const canCreateDelivery = hasPermission('delivery:create');
+
+  const isDeliverableStatus = (status: string) =>
+    status === 'READY' || status === 'PARTIALLY_DELIVERED';
+
+  const toggleDeliveryOrder = (orderId: string, checked: boolean) => {
+    setSelectedDeliveryOrderIds((prev) => {
+      if (checked) return prev.includes(orderId) ? prev : [...prev, orderId];
+      return prev.filter((id) => id !== orderId);
+    });
+  };
+
+  const startBulkDelivery = (orderIds: string[]) => {
+    if (orderIds.length === 0) return;
+    const unique = [...new Set(orderIds.filter(Boolean))];
+    if (unique.length === 0) return;
+    setSelectedDeliveryOrderIds([]);
+    // Query params survive remounts; router state alone was getting cleared before the modal opened.
+    const params = new URLSearchParams({
+      create: '1',
+      orders: unique.join(','),
+    });
+    navigate(`/delivery?${params.toString()}`);
+  };
   const canViewPerformance = hasPermission('reports:read') || hasPermission('finance:read');
   const canDownloadInvoice = hasPermission('finance:read');
   const [downloadingInvoiceId, setDownloadingInvoiceId] = useState<string | null>(null);
@@ -298,6 +322,32 @@ export function SalesPage() {
     : [];
 
   const orderColumns = [
+    ...(canCreateDelivery
+      ? [
+          {
+            key: 'select',
+            label: '',
+            render: (_: unknown, row: Record<string, unknown>) => {
+              const status = row.status as string;
+              if (!isDeliverableStatus(status)) {
+                return <span className="inline-block w-4" />;
+              }
+              const id = row.id as string;
+              const checked = selectedDeliveryOrderIds.includes(id);
+              return (
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
+                  checked={checked}
+                  onClick={(e) => e.stopPropagation()}
+                  onChange={(e) => toggleDeliveryOrder(id, e.target.checked)}
+                  aria-label={`Select ${row.orderNumber as string} for delivery`}
+                />
+              );
+            },
+          },
+        ]
+      : []),
     { key: 'orderNumber', label: 'Order #' },
     {
       key: 'customer',
@@ -424,18 +474,31 @@ export function SalesPage() {
   ];
 
   const toolbarActions =
-    canCreate &&
-    (activeTab === 1 ? (
-      <Button size="sm" onClick={() => setOrderModalOpen(true)}>
-        <Plus className="h-4 w-4 mr-1.5" />
-        New Sales Order
-      </Button>
-    ) : activeTab === 2 ? (
+    activeTab === 1 ? (
+      <div className="flex flex-wrap items-center gap-2">
+        {canCreateDelivery && selectedDeliveryOrderIds.length > 0 && (
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => startBulkDelivery(selectedDeliveryOrderIds)}
+          >
+            <Truck className="h-4 w-4 mr-1.5" />
+            Create delivery ({selectedDeliveryOrderIds.length})
+          </Button>
+        )}
+        {canCreate && (
+          <Button size="sm" onClick={() => setOrderModalOpen(true)}>
+            <Plus className="h-4 w-4 mr-1.5" />
+            New Sales Order
+          </Button>
+        )}
+      </div>
+    ) : activeTab === 2 && canCreate ? (
       <Button size="sm" onClick={() => setQuotationModalOpen(true)}>
         <Plus className="h-4 w-4 mr-1.5" />
         New Quotation
       </Button>
-    ) : undefined);
+    ) : undefined;
 
   return (
     <div className="space-y-4">
@@ -623,6 +686,40 @@ export function SalesPage() {
               <Alert variant={statusFeedback.variant}>{statusFeedback.text}</Alert>
             </div>
           )}
+          {canCreateDelivery && (
+            <div className="px-4 pt-3 space-y-3">
+              <Alert variant="info">
+                Tick Ready / Partially Delivered orders below, then click{' '}
+                <strong>Create delivery</strong> (top right, or the button under this message).
+              </Alert>
+              {selectedDeliveryOrderIds.length > 0 && (
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-primary-200 bg-primary-50 px-3 py-2.5">
+                  <p className="text-sm text-primary-900">
+                    <strong>{selectedDeliveryOrderIds.length}</strong> order
+                    {selectedDeliveryOrderIds.length === 1 ? '' : 's'} selected for one delivery trip.
+                  </p>
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setSelectedDeliveryOrderIds([])}
+                    >
+                      Clear
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={() => startBulkDelivery(selectedDeliveryOrderIds)}
+                    >
+                      <Truck className="h-4 w-4 mr-1.5" />
+                      Create delivery ({selectedDeliveryOrderIds.length})
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
           {(orders?.data?.length || 0) === 0 && !ordersLoading ? (
             <div className="p-6">
               <EmptyState
@@ -740,6 +837,10 @@ export function SalesPage() {
               <div><p className="text-slate-500">Order #</p><p className="font-semibold">{activeOrder.orderNumber}</p></div>
               <div><p className="text-slate-500">Customer</p><p className="font-semibold">{activeOrder.customer?.name}</p></div>
               <div>
+                <p className="text-slate-500">LPO / Customer PO</p>
+                <p className="font-semibold">{activeOrder.customerPoNumber || '—'}</p>
+              </div>
+              <div>
                 <p className="text-slate-500">Sales Person</p>
                 <p className="font-semibold">
                   {(() => {
@@ -833,9 +934,11 @@ export function SalesPage() {
                 </Button>
               )}
               {canCreateDelivery
-                && !activeOrder.deliveries?.length
                 && (activeOrder.status === 'READY' || activeOrder.status === 'PARTIALLY_DELIVERED') && (
-                <Button variant="secondary" onClick={() => navigate('/delivery')}>
+                <Button
+                  variant="secondary"
+                  onClick={() => startBulkDelivery([activeOrder.id])}
+                >
                   <Truck className="h-4 w-4 mr-2" />
                   Create delivery note
                 </Button>

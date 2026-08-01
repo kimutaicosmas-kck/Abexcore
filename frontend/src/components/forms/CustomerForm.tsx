@@ -8,21 +8,32 @@ import { Input, Select, FormActions, ModalFormBody } from '../ui';
 import { Customer } from '../../types';
 import { useAuth } from '../../contexts/AuthContext';
 
-const customerSchema = z.object({
-  code: z.string().min(1, 'Code is required'),
-  name: z.string().min(1, 'Name is required'),
-  type: z.enum(['DEALER', 'RETAIL_SHOP', 'INDUSTRY', 'GOVERNMENT', 'NGO']),
-  email: z.string().email().optional().or(z.literal('')),
-  phone: z.string().optional(),
-  address: z.string().optional(),
-  city: z.string().optional(),
-  taxPin: z.string().optional(),
-  creditLimit: z.coerce.number().min(0).optional(),
-  paymentTerms: z.coerce.number().int().min(0).optional(),
-  salesPersonId: z.string().optional(),
-  notes: z.string().optional(),
-  isActive: z.boolean().optional(),
-});
+const customerSchema = z
+  .object({
+    code: z.string().min(1, 'Code is required'),
+    name: z.string().min(1, 'Name is required'),
+    type: z.enum(['DEALER', 'RETAIL_SHOP', 'INDUSTRY', 'GOVERNMENT', 'NGO']),
+    vatStatus: z.enum(['VAT', 'NON_VAT'], { required_error: 'VAT status is required' }),
+    email: z.string().email().optional().or(z.literal('')),
+    phone: z.string().optional(),
+    address: z.string().optional(),
+    city: z.string().optional(),
+    taxPin: z.string().optional(),
+    creditLimit: z.coerce.number().min(0).optional(),
+    paymentTerms: z.coerce.number().int().min(0).optional(),
+    salesPersonId: z.string().optional(),
+    notes: z.string().optional(),
+    isActive: z.boolean().optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.vatStatus === 'VAT' && !data.taxPin?.trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Tax PIN is required for VAT customers',
+        path: ['taxPin'],
+      });
+    }
+  });
 
 type CustomerFormData = z.infer<typeof customerSchema>;
 
@@ -32,6 +43,11 @@ const customerTypes = [
   { value: 'INDUSTRY', label: 'Industry' },
   { value: 'GOVERNMENT', label: 'Government' },
   { value: 'NGO', label: 'NGO' },
+];
+
+const vatStatusOptions = [
+  { value: 'VAT', label: 'VAT registered' },
+  { value: 'NON_VAT', label: 'Non-VAT' },
 ];
 
 interface CustomerFormProps {
@@ -60,13 +76,14 @@ export function CustomerForm({ customer, onSuccess, onCancel }: CustomerFormProp
     enabled: canAssignSalesPerson,
   });
 
-  const { register, handleSubmit, formState: { errors } } = useForm<CustomerFormData>({
+  const { register, handleSubmit, watch, formState: { errors } } = useForm<CustomerFormData>({
     resolver: zodResolver(customerSchema),
     defaultValues: customer
       ? {
           code: customer.code,
           name: customer.name,
           type: customer.type as CustomerFormData['type'],
+          vatStatus: customer.vatStatus || 'NON_VAT',
           email: customer.email || '',
           phone: customer.phone || '',
           address: customer.address || '',
@@ -80,12 +97,15 @@ export function CustomerForm({ customer, onSuccess, onCancel }: CustomerFormProp
         }
       : {
           type: 'DEALER',
+          vatStatus: 'NON_VAT',
           creditLimit: 0,
           paymentTerms: 30,
           salesPersonId: '',
           isActive: true,
         },
   });
+
+  const vatStatus = watch('vatStatus');
 
   const mutation = useMutation({
     mutationFn: (data: CustomerFormData) => {
@@ -94,6 +114,7 @@ export function CustomerForm({ customer, onSuccess, onCancel }: CustomerFormProp
         email: data.email || undefined,
         address: data.address || undefined,
         notes: data.notes || undefined,
+        taxPin: data.taxPin || undefined,
         salesPersonId: data.salesPersonId || null,
       };
       return isEdit
@@ -132,6 +153,12 @@ export function CustomerForm({ customer, onSuccess, onCancel }: CustomerFormProp
         <Input label="Customer Code *" {...register('code')} error={errors.code?.message} disabled={isEdit} />
         <Input label="Name *" {...register('name')} error={errors.name?.message} />
         <Select label="Type" options={customerTypes} {...register('type')} error={errors.type?.message} />
+        <Select
+          label="VAT status *"
+          options={vatStatusOptions}
+          {...register('vatStatus')}
+          error={errors.vatStatus?.message}
+        />
         {canAssignSalesPerson && (
           <Select
             label="Sales Person"
@@ -142,7 +169,12 @@ export function CustomerForm({ customer, onSuccess, onCancel }: CustomerFormProp
         <Input label="Email" type="email" {...register('email')} error={errors.email?.message} />
         <Input label="Phone" {...register('phone')} />
         <Input label="City" {...register('city')} />
-        <Input label="Tax PIN" {...register('taxPin')} />
+        <Input
+          label={vatStatus === 'VAT' ? 'Tax PIN *' : 'Tax PIN'}
+          {...register('taxPin')}
+          error={errors.taxPin?.message}
+          placeholder={vatStatus === 'VAT' ? 'Required for VAT customers' : 'Optional'}
+        />
         <div>
           <Input label="Credit Limit (KES)" type="number" min={0} step="0.01" {...register('creditLimit')} />
           <p className="text-xs text-slate-500 mt-1">
@@ -163,6 +195,11 @@ export function CustomerForm({ customer, onSuccess, onCancel }: CustomerFormProp
           />
         )}
       </div>
+      <p className="text-xs text-slate-500 -mt-1">
+        {vatStatus === 'NON_VAT'
+          ? 'Non-VAT: the company still creates sales invoices for this customer, charged at 0% VAT.'
+          : 'VAT: invoices include company VAT. Tax PIN is required.'}
+      </p>
       {canAssignSalesPerson && (
         <p className="-mt-2 text-xs text-slate-500">
           Assign a sales officer to own this account, or leave blank so any sales user with rights

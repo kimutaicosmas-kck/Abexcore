@@ -6,11 +6,13 @@ import { auditLog } from '../middleware/auditLog';
 import {
   companySettingsSchema,
   financeListQuerySchema,
+  paymentListQuerySchema,
   paginationSchema,
   createInvoiceSchema,
   createPaymentSchema,
   createJournalEntrySchema,
   salesByPersonQuerySchema,
+  productsSoldQuerySchema,
   mySalesQuerySchema,
   salesPerformanceQuerySchema,
   upsertSalesTargetSchema,
@@ -18,20 +20,97 @@ import {
   orderIdParamSchema,
 } from '../validators/schemas';
 import prisma from '../config/database';
-import { generateNumber } from '../utils/date';
+import {
+  dayRangeFromInput,
+  generateNumber,
+  isSameLocalMonth,
+  isSameLocalWeek,
+  paymentPeriodRange,
+  type PaymentInvoiceTimingPreset,
+  type PaymentPeriodPreset,
+} from '../utils/date';
 import { nextInvoiceNumber } from '../utils/numbering';
 import { getParam, getQuery } from '../utils/request';
 import { FinanceService, ReportsService } from '../services/admin.service';
 import { AccountingService } from '../services/accounting.service';
 import { FinanceInvoiceService, FinancePaymentService } from '../services/finance.service';
 import { SalesOrderService } from '../services/sales-order.service';
-import { getCompanySettings, getVatRate, calcTax } from '../utils/company';
+import { getCompanySettings, getVatRate, getCustomerVatRate, calcTax } from '../utils/company';
 import { injectTenantData, requireTenantId } from '../utils/tenant';
 import { syncCustomerCreditUsed } from '../utils/credit';
 import { InvoiceMaintenanceService } from '../services/invoice-maintenance.service';
 import { BankReconciliationService } from '../services/bank-reconciliation.service';
 import { KraEtimsService } from '../services/kra-etims.service';
 import { Prisma } from '@prisma/client';
+
+const DATE_PERIODS = new Set<PaymentPeriodPreset>([
+  'this_week',
+  'last_week',
+  'this_month',
+  'last_month',
+]);
+
+const INVOICE_TIMING_PERIODS = new Set<PaymentInvoiceTimingPreset>([
+  'same_week_as_invoice',
+  'same_month_as_invoice',
+  'this_week_taken_and_paid',
+  'this_month_taken_and_paid',
+]);
+
+/** Payment IDs where payment date aligns with invoice issue date (MySQL YEARWEEK mode 1 = Monday). */
+async function paymentIdsByInvoiceTiming(
+  companyId: string,
+  timing: PaymentInvoiceTimingPreset
+): Promise<string[]> {
+  let rows: { id: string }[] = [];
+  if (timing === 'same_week_as_invoice') {
+    rows = await prisma.$queryRaw<{ id: string }[]>`
+      SELECT p.id AS id
+      FROM payments p
+      INNER JOIN invoices i ON i.id = p.invoice_id
+      WHERE p.company_id = ${companyId}
+        AND i.company_id = ${companyId}
+        AND p.invoice_id IS NOT NULL
+        AND YEARWEEK(p.payment_date, 1) = YEARWEEK(i.invoice_date, 1)
+    `;
+  } else if (timing === 'same_month_as_invoice') {
+    rows = await prisma.$queryRaw<{ id: string }[]>`
+      SELECT p.id AS id
+      FROM payments p
+      INNER JOIN invoices i ON i.id = p.invoice_id
+      WHERE p.company_id = ${companyId}
+        AND i.company_id = ${companyId}
+        AND p.invoice_id IS NOT NULL
+        AND YEAR(p.payment_date) = YEAR(i.invoice_date)
+        AND MONTH(p.payment_date) = MONTH(i.invoice_date)
+    `;
+  } else if (timing === 'this_week_taken_and_paid') {
+    rows = await prisma.$queryRaw<{ id: string }[]>`
+      SELECT p.id AS id
+      FROM payments p
+      INNER JOIN invoices i ON i.id = p.invoice_id
+      WHERE p.company_id = ${companyId}
+        AND i.company_id = ${companyId}
+        AND p.invoice_id IS NOT NULL
+        AND YEARWEEK(p.payment_date, 1) = YEARWEEK(CURDATE(), 1)
+        AND YEARWEEK(i.invoice_date, 1) = YEARWEEK(CURDATE(), 1)
+    `;
+  } else {
+    rows = await prisma.$queryRaw<{ id: string }[]>`
+      SELECT p.id AS id
+      FROM payments p
+      INNER JOIN invoices i ON i.id = p.invoice_id
+      WHERE p.company_id = ${companyId}
+        AND i.company_id = ${companyId}
+        AND p.invoice_id IS NOT NULL
+        AND YEAR(p.payment_date) = YEAR(CURDATE())
+        AND MONTH(p.payment_date) = MONTH(CURDATE())
+        AND YEAR(i.invoice_date) = YEAR(CURDATE())
+        AND MONTH(i.invoice_date) = MONTH(CURDATE())
+    `;
+  }
+  return rows.map((r) => r.id);
+}
 
 const router = Router();
 router.use(authenticate);
@@ -263,9 +342,27 @@ router.post(
   validate(createInvoiceSchema),
   auditLog('finance', 'create', 'invoice'),
   asyncHandler(async (req: AuthRequest, res: Response) => {
-    const { type, customerId, supplierId, salesOrderId, purchaseOrderId, dueDate, items, notes } =
-      req.body;
-    const vatRate = await getVatRate();
+    const {
+      type,
+      customerId,
+      supplierId,
+      salesOrderId,
+      purchaseOrderId,
+      dueDate,
+      customerPoNumber,
+      items,
+      notes,
+    } = req.body;
+
+    let vatRate = await getVatRate();
+    if (type === 'SALES' && customerId) {
+      const customer = await prisma.customer.findFirst({
+        where: { id: customerId, companyId: requireTenantId(), deletedAt: null },
+        select: { vatStatus: true },
+      });
+      if (!customer) throw new AppError('Customer not found', 404);
+      vatRate = await getCustomerVatRate(customer);
+    }
 
     const subtotal = items.reduce(
       (sum: number, item: { quantity: number; unitPrice: number }) =>
@@ -276,12 +373,16 @@ router.post(
     const totalAmount = subtotal + taxAmount;
 
     const invoice = await prisma.$transaction(async (tx) => {
+      let resolvedCustomerPo = customerPoNumber as string | undefined;
       if (type === 'SALES' && salesOrderId) {
         const order = await tx.salesOrder.findUnique({
           where: { id: salesOrderId },
           include: { items: { include: { product: true } } },
         });
         if (!order) throw new AppError('Sales order not found', 404);
+        if (!resolvedCustomerPo && order.customerPoNumber) {
+          resolvedCustomerPo = order.customerPoNumber;
+        }
         await SalesOrderService.validateOrderLinesForInvoicing(
           tx,
           order.items.map((item) => ({
@@ -301,6 +402,7 @@ router.post(
           supplierId,
           salesOrderId,
           purchaseOrderId,
+          customerPoNumber: type === 'SALES' ? resolvedCustomerPo : undefined,
           dueDate: dueDate ? new Date(dueDate) : undefined,
           fiscalStatus: type === 'SALES' ? 'PENDING' : 'NOT_REQUIRED',
           subtotal,
@@ -410,24 +512,72 @@ router.post(
 router.get(
   '/payments',
   authorize('finance:read'),
-  validate(paginationSchema, 'query'),
+  validate(paymentListQuerySchema, 'query'),
   asyncHandler(async (req: AuthRequest, res: Response) => {
-    const { page, limit, search } = getQuery<{ page: number; limit: number; search?: string }>(
-      req.query
-    );
+    const { page, limit, search, period, from, to, method } = getQuery<{
+      page: number;
+      limit: number;
+      search?: string;
+      period?:
+        | PaymentPeriodPreset
+        | PaymentInvoiceTimingPreset;
+      from?: string;
+      to?: string;
+      method?: string;
+    }>(req.query);
     const skip = (page - 1) * limit;
+    const companyId = requireTenantId();
 
-    const where: Prisma.PaymentWhereInput = search
-      ? {
+    const where: Prisma.PaymentWhereInput = { companyId };
+
+    // Invoice timing filters (paid in the week/month the invoice was taken).
+    if (period && INVOICE_TIMING_PERIODS.has(period as PaymentInvoiceTimingPreset)) {
+      const ids = await paymentIdsByInvoiceTiming(companyId, period as PaymentInvoiceTimingPreset);
+      if (ids.length === 0) {
+        res.json({
+          success: true,
+          data: [],
+          pagination: { page, limit, total: 0, totalPages: 0 },
+          filters: { period, from: from || null, to: to || null, method: method || null },
+        });
+        return;
+      }
+      where.id = { in: ids };
+    } else if (period && DATE_PERIODS.has(period as PaymentPeriodPreset)) {
+      // Filter by payment date only — older invoices paid this week are included.
+      where.paymentDate = paymentPeriodRange(period as PaymentPeriodPreset);
+    } else if (from || to) {
+      const range: Prisma.DateTimeFilter = {};
+      if (from) {
+        const fromRange = dayRangeFromInput(from);
+        if (fromRange) range.gte = fromRange.gte;
+      }
+      if (to) {
+        const toRange = dayRangeFromInput(to);
+        if (toRange) range.lte = toRange.lte;
+      }
+      if (Object.keys(range).length) where.paymentDate = range;
+    }
+
+    if (method) {
+      where.method = method as Prisma.PaymentWhereInput['method'];
+    }
+
+    if (search) {
+      where.AND = [
+        {
           OR: [
             { paymentNumber: { contains: search } },
             { reference: { contains: search } },
+            { bankReference: { contains: search } },
             { invoice: { invoiceNumber: { contains: search } } },
+            { invoice: { customer: { name: { contains: search } } } },
           ],
-        }
-      : {};
+        },
+      ];
+    }
 
-    const [data, total] = await Promise.all([
+    const [rows, total] = await Promise.all([
       prisma.payment.findMany({
         where,
         skip,
@@ -437,8 +587,12 @@ router.get(
             select: {
               id: true,
               invoiceNumber: true,
+              invoiceDate: true,
               customer: { select: { name: true } },
               supplier: { select: { name: true } },
+              salesOrder: {
+                select: { id: true, orderNumber: true, orderDate: true },
+              },
             },
           },
         },
@@ -447,10 +601,23 @@ router.get(
       prisma.payment.count({ where }),
     ]);
 
+    const data = rows.map((p) => {
+      const invoiceDate = p.invoice?.invoiceDate ? new Date(p.invoice.invoiceDate) : null;
+      const paidOn = new Date(p.paymentDate);
+      const paidSameWeekAsInvoice = !!(invoiceDate && isSameLocalWeek(paidOn, invoiceDate));
+      const paidSameMonthAsInvoice = !!(invoiceDate && isSameLocalMonth(paidOn, invoiceDate));
+      return {
+        ...p,
+        paidSameWeekAsInvoice,
+        paidSameMonthAsInvoice,
+      };
+    });
+
     res.json({
       success: true,
       data,
       pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
+      filters: { period: period || null, from: from || null, to: to || null, method: method || null },
     });
   })
 );
@@ -560,6 +727,46 @@ router.get(
       'Content-Disposition',
       'attachment; filename="sales-by-salesperson.xlsx"'
     );
+    res.send(excel);
+  })
+);
+
+router.get(
+  '/reports/products-sold',
+  authorize('reports:read'),
+  validate(productsSoldQuerySchema, 'query'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const query = getQuery<{
+      page: number;
+      limit: number;
+      startDate?: string;
+      endDate?: string;
+      search?: string;
+      productId?: string;
+      needsRestockOnly?: boolean;
+    }>(req.query);
+    const { ProductsSoldReportService } = await import('../services/products-sold-report.service');
+    const data = await ProductsSoldReportService.getReport(query);
+    res.json({ success: true, data, pagination: data.pagination });
+  })
+);
+
+router.get(
+  '/reports/products-sold/excel',
+  authorize('reports:read'),
+  validate(productsSoldQuerySchema.omit({ page: true, limit: true }), 'query'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const query = getQuery<{
+      startDate?: string;
+      endDate?: string;
+      search?: string;
+      productId?: string;
+      needsRestockOnly?: boolean;
+    }>(req.query);
+    const { ExportService } = await import('../services/export.service');
+    const excel = await ExportService.generateProductsSoldExcel(query);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', 'attachment; filename="products-sold-statement.xlsx"');
     res.send(excel);
   })
 );
@@ -690,7 +897,7 @@ router.get(
         }
       : {};
 
-    const [data, total] = await Promise.all([
+    const [rows, total] = await Promise.all([
       prisma.journalEntry.findMany({
         where,
         skip,
@@ -700,6 +907,37 @@ router.get(
       }),
       prisma.journalEntry.count({ where }),
     ]);
+
+    const invoiceIds = [
+      ...new Set(
+        rows
+          .filter((row) => row.sourceType === 'INVOICE' && row.sourceId)
+          .map((row) => row.sourceId as string)
+      ),
+    ];
+    const invoices = invoiceIds.length
+      ? await prisma.invoice.findMany({
+          where: { id: { in: invoiceIds }, companyId: requireTenantId() },
+          select: {
+            id: true,
+            invoiceNumber: true,
+            type: true,
+            totalAmount: true,
+            status: true,
+            customer: { select: { name: true } },
+            supplier: { select: { name: true } },
+          },
+        })
+      : [];
+    const invoiceById = new Map(invoices.map((inv) => [inv.id, inv]));
+
+    const data = rows.map((row) => ({
+      ...row,
+      invoice:
+        row.sourceType === 'INVOICE' && row.sourceId
+          ? invoiceById.get(row.sourceId) || null
+          : null,
+    }));
 
     res.json({
       success: true,
@@ -715,20 +953,42 @@ router.post(
   validate(createJournalEntrySchema),
   auditLog('finance', 'create', 'journal_entry'),
   asyncHandler(async (req: AuthRequest, res: Response) => {
-    const { date, description, reference, lines } = req.body;
+    const { date, description, reference, invoiceId, lines } = req.body;
     const { AccountingService } = await import('../services/accounting.service');
+    const companyId = requireTenantId();
+
+    let sourceType = 'MANUAL';
+    let sourceId: string | undefined;
+    let resolvedReference = reference as string | undefined;
+
+    if (invoiceId) {
+      const invoice = await prisma.invoice.findFirst({
+        where: { id: invoiceId, companyId },
+        select: { id: true, invoiceNumber: true },
+      });
+      if (!invoice) throw new AppError('Invoice not found', 404);
+      sourceType = 'INVOICE';
+      sourceId = invoice.id;
+      if (!resolvedReference?.trim()) {
+        resolvedReference = invoice.invoiceNumber;
+      }
+    }
 
     const entry = await prisma.$transaction(async (tx) =>
       AccountingService.createJournalEntry(tx, {
         date: date ? new Date(date) : new Date(),
         description,
-        reference,
-        sourceType: 'MANUAL',
-        lines: lines.map((line: { accountId: string; debit: number; credit: number }) => ({
-          accountId: line.accountId,
-          debit: line.debit,
-          credit: line.credit,
-        })),
+        reference: resolvedReference,
+        sourceType,
+        sourceId,
+        lines: lines.map(
+          (line: { accountId: string; debit: number; credit: number; description?: string }) => ({
+            accountId: line.accountId,
+            debit: line.debit,
+            credit: line.credit,
+            description: line.description,
+          })
+        ),
       })
     );
 

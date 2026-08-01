@@ -54,6 +54,12 @@ const DeliveryPage = lazy(() =>
 const MySalesPage = lazy(() =>
   import('./pages/MySalesPage').then((m) => ({ default: m.MySalesPage }))
 );
+const AvailableProductsPage = lazy(() =>
+  import('./pages/AvailableProductsPage').then((m) => ({ default: m.AvailableProductsPage }))
+);
+const MyLeavePage = lazy(() =>
+  import('./pages/MyLeavePage').then((m) => ({ default: m.MyLeavePage }))
+);
 const SalesPerformancePage = lazy(() =>
   import('./pages/SalesPerformancePage').then((m) => ({ default: m.SalesPerformancePage }))
 );
@@ -143,6 +149,10 @@ function AppRoutes() {
           <Route path="sales" element={<PermissionRoute><SalesPage /></PermissionRoute>} />
           <Route path="my-sales" element={<PermissionRoute><MySalesPage /></PermissionRoute>} />
           <Route
+            path="available-products"
+            element={<PermissionRoute><AvailableProductsPage /></PermissionRoute>}
+          />
+          <Route
             path="sales-performance"
             element={<PermissionRoute><SalesPerformancePage /></PermissionRoute>}
           />
@@ -150,6 +160,7 @@ function AppRoutes() {
           <Route path="delivery" element={<PermissionRoute><DeliveryPage /></PermissionRoute>} />
           <Route path="finance" element={<PermissionRoute><FinancePage /></PermissionRoute>} />
           <Route path="hr" element={<PermissionRoute><HRPage /></PermissionRoute>} />
+          <Route path="my-leave" element={<PermissionRoute><MyLeavePage /></PermissionRoute>} />
           <Route path="maintenance" element={<PermissionRoute><MaintenancePage /></PermissionRoute>} />
           <Route path="reports" element={<PermissionRoute><ReportsPage /></PermissionRoute>} />
           <Route path="settings" element={<PermissionRoute><SettingsPage /></PermissionRoute>} />
@@ -170,15 +181,15 @@ function AppRoutes() {
 
 export default function App() {
   return (
-    <ErrorBoundary>
-      <QueryClientProvider client={queryClient}>
-        <BrowserRouter>
-          <AuthProvider>
-            <InactivityMonitor />
+    <QueryClientProvider client={queryClient}>
+      <BrowserRouter>
+        <AuthProvider>
+          <InactivityMonitor />
+          <ErrorBoundary>
             <AppRoutes />
-          </AuthProvider>
-        </BrowserRouter>
-      </QueryClientProvider>
-    </ErrorBoundary>
+          </ErrorBoundary>
+        </AuthProvider>
+      </BrowserRouter>
+    </QueryClientProvider>
   );
 }

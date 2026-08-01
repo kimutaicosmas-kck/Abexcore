@@ -9,9 +9,19 @@ import prisma from '../config/database';
 import { getParam, getQuery } from '../utils/request';
 import { Prisma } from '@prisma/client';
 import { normalizeAllowedModules } from '../utils/userPermissions';
+import { LeaveService } from '../services/leave.service';
 
 const router = Router();
 router.use(authenticate);
+
+const employeeLinkSelect = {
+  id: true,
+  employeeNo: true,
+  firstName: true,
+  lastName: true,
+  position: true,
+  isActive: true,
+} as const;
 
 function sanitizeUser<T extends { passwordHash?: string; twoFactorSecret?: string | null }>(user: T) {
   const { passwordHash, twoFactorSecret, ...safeUser } = user;
@@ -97,7 +107,12 @@ router.get(
         where,
         skip,
         take: limit,
-        include: { role: true, department: true, branch: true },
+        include: {
+          role: true,
+          department: true,
+          branch: true,
+          employee: { select: employeeLinkSelect },
+        },
         orderBy: { createdAt: 'desc' },
       }),
       prisma.user.count({ where }),
@@ -207,6 +222,21 @@ router.get(
   })
 );
 
+/** Unlinked employees — for Users screen “link existing employee” picker. */
+router.get(
+  '/linkable-employees',
+  authorize('users:read'),
+  asyncHandler(async (_req: AuthRequest, res: Response) => {
+    const employees = await prisma.employee.findMany({
+      where: { deletedAt: null, isActive: true, userId: null },
+      select: employeeLinkSelect,
+      orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
+      take: 500,
+    });
+    res.json({ success: true, data: employees });
+  })
+);
+
 router.get(
   '/:id',
   authorize('users:read'),
@@ -217,6 +247,7 @@ router.get(
         role: { include: { permissions: { include: { permission: true } } } },
         department: true,
         branch: true,
+        employee: { select: employeeLinkSelect },
         loginHistory: { take: 10, orderBy: { createdAt: 'desc' } },
       },
     });
@@ -234,13 +265,36 @@ router.post(
   validate(createUserSchema),
   auditLog('users', 'create', 'user'),
   asyncHandler(async (req: AuthRequest, res: Response) => {
-    const { password, modules, ...data } = req.body;
+    const { password, modules, createEmployeeProfile, employeeId, ...data } = req.body as {
+      password: string;
+      modules?: string[];
+      createEmployeeProfile?: boolean;
+      employeeId?: string;
+      email: string;
+      firstName: string;
+      lastName: string;
+      phone?: string;
+      roleId: string;
+      departmentId?: string;
+      branchId?: string;
+    };
     const allowedModules = normalizeAllowedModules(modules);
+
+    if (createEmployeeProfile && employeeId) {
+      throw new AppError('Choose either create employee profile or link an existing employee, not both', 400);
+    }
 
     const existing = await prisma.user.findFirst({
       where: { companyId: req.user!.companyId, email: data.email.toLowerCase() },
     });
     if (existing) throw new AppError('Email address is already in use', 409);
+
+    if (employeeId) {
+      const emp = await prisma.employee.findFirst({
+        where: { id: employeeId, deletedAt: null, userId: null },
+      });
+      if (!emp) throw new AppError('Employee not found or already linked to another login', 404);
+    }
 
     const passwordHash = await AuthService.hashPassword(password);
     const user = await prisma.user.create({
@@ -252,9 +306,31 @@ router.post(
         passwordChangedAt: new Date(),
         ...(allowedModules ? { allowedModules } : {}),
       },
-      include: { role: true, department: true, branch: true },
+      include: {
+        role: true,
+        department: true,
+        branch: true,
+        employee: { select: employeeLinkSelect },
+      },
     });
-    res.status(201).json({ success: true, data: sanitizeUser(user) });
+
+    if (employeeId) {
+      await LeaveService.linkEmployeeToUser(employeeId, user.id);
+    } else if (createEmployeeProfile) {
+      await LeaveService.ensureEmployeeForUser(user.id);
+    }
+
+    const refreshed = await prisma.user.findFirst({
+      where: { id: user.id },
+      include: {
+        role: true,
+        department: true,
+        branch: true,
+        employee: { select: employeeLinkSelect },
+      },
+    });
+
+    res.status(201).json({ success: true, data: sanitizeUser(refreshed!) });
   })
 );
 
@@ -265,9 +341,25 @@ router.put(
   auditLog('users', 'update', 'user'),
   asyncHandler(async (req: AuthRequest, res: Response) => {
     const id = getParam(req.params.id);
-    const { password, email, modules, ...data } = req.body;
+    const { password, email, modules, createEmployeeProfile, employeeId, ...data } = req.body as {
+      password?: string;
+      email?: string;
+      modules?: string[];
+      createEmployeeProfile?: boolean;
+      employeeId?: string | null;
+      status?: 'ACTIVE' | 'INACTIVE' | 'SUSPENDED';
+      firstName?: string;
+      lastName?: string;
+      phone?: string;
+      roleId?: string;
+      departmentId?: string;
+      branchId?: string;
+    };
 
-    const existing = await prisma.user.findFirst({ where: { id, deletedAt: null } });
+    const existing = await prisma.user.findFirst({
+      where: { id, deletedAt: null },
+      include: { employee: { select: { id: true } } },
+    });
     if (!existing) throw new AppError('User not found', 404);
 
     if (email && email.toLowerCase() !== existing.email) {
@@ -296,12 +388,29 @@ router.put(
       updateData.deletedAt = null;
     }
 
-    const user = await prisma.user.update({
+    await prisma.user.update({
       where: { id },
       data: updateData,
-      include: { role: true, department: true, branch: true },
     });
-    res.json({ success: true, data: sanitizeUser(user) });
+
+    if (employeeId === null && existing.employee) {
+      await LeaveService.linkEmployeeToUser(existing.employee.id, null);
+    } else if (typeof employeeId === 'string') {
+      await LeaveService.linkEmployeeToUser(employeeId, id);
+    } else if (createEmployeeProfile && !existing.employee) {
+      await LeaveService.ensureEmployeeForUser(id);
+    }
+
+    const refreshed = await prisma.user.findFirst({
+      where: { id },
+      include: {
+        role: true,
+        department: true,
+        branch: true,
+        employee: { select: employeeLinkSelect },
+      },
+    });
+    res.json({ success: true, data: sanitizeUser(refreshed!) });
   })
 );
 

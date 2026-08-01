@@ -77,6 +77,7 @@ export type CreateStopInput = {
   driverId?: string;
   scheduledDate?: Date;
   notes?: string;
+  waybillNo?: string;
   deliveryTripId?: string;
   stopSequence?: number;
   userId: string;
@@ -87,7 +88,7 @@ const STOP_INCLUDE = {
   vehicle: true,
   driver: { select: { id: true, firstName: true, lastName: true, email: true } },
   items: true,
-  deliveryTrip: { select: { id: true, tripNo: true, status: true } },
+  deliveryTrip: { select: { id: true, tripNo: true, status: true, waybillNo: true } },
 } as const;
 
 type DeliveryStopNote = Prisma.DeliveryNoteGetPayload<{ include: typeof STOP_INCLUDE }>;
@@ -107,6 +108,7 @@ export async function createDeliveryStop(
     driverId,
     scheduledDate,
     notes,
+    waybillNo,
     deliveryTripId,
     stopSequence,
     userId,
@@ -149,6 +151,7 @@ export async function createDeliveryStop(
       stopSequence,
       vehicleId,
       driverId,
+      waybillNo: waybillNo?.trim() || null,
       status,
       scheduledDate,
       notes,
@@ -243,6 +246,9 @@ export async function applyDeliveryNoteStatus(
     proofOfDelivery?: string;
     actualItems?: ActualDeliveryItemInput[];
     userId?: string;
+    driverId?: string | null;
+    vehicleId?: string | null;
+    scheduledDate?: Date | null;
     /** When cascading from trip status, skip per-stop trip sync (caller syncs once). */
     skipTripSync?: boolean;
   }
@@ -255,12 +261,22 @@ export async function applyDeliveryNoteStatus(
     await reconcileDeliveryActualQuantities(tx, deliveryId, userId, actualItems);
   }
 
+  const assignment: {
+    driverId?: string | null;
+    vehicleId?: string | null;
+    scheduledDate?: Date | null;
+  } = {};
+  if (options?.driverId !== undefined) assignment.driverId = options.driverId;
+  if (options?.vehicleId !== undefined) assignment.vehicleId = options.vehicleId;
+  if (options?.scheduledDate !== undefined) assignment.scheduledDate = options.scheduledDate;
+
   const updated = await tx.deliveryNote.update({
     where: { id: deliveryId },
     data: {
       status,
       proofOfDelivery,
       deliveredAt: status === 'DELIVERED' ? new Date() : undefined,
+      ...assignment,
     },
     include: STOP_INCLUDE,
   });
@@ -285,6 +301,9 @@ export async function applyDeliveryTripStatus(
     proofOfDelivery?: string;
     actualItems?: { deliveryNoteId: string; items: ActualDeliveryItemInput[] }[];
     userId?: string;
+    driverId?: string | null;
+    vehicleId?: string | null;
+    scheduledDate?: Date | null;
   }
 ) {
   const proofOfDelivery = options?.proofOfDelivery;
@@ -297,11 +316,29 @@ export async function applyDeliveryTripStatus(
   });
   if (!trip) throw new AppError('Delivery trip not found', 404);
 
+  const tripAssignment: {
+    driverId?: string | null;
+    vehicleId?: string | null;
+    scheduledDate?: Date | null;
+  } = {};
+  if (options?.driverId !== undefined) tripAssignment.driverId = options.driverId;
+  if (options?.vehicleId !== undefined) tripAssignment.vehicleId = options.vehicleId;
+  if (options?.scheduledDate !== undefined) tripAssignment.scheduledDate = options.scheduledDate;
+  if (Object.keys(tripAssignment).length > 0) {
+    await tx.deliveryTrip.update({
+      where: { id: tripId },
+      data: tripAssignment,
+    });
+  }
+
   // Stops are the source of truth — update them first, then derive trip status.
   // Completing a trip must complete every open stop so admin and driver always match.
-  for (const stop of trip.stops) {
-    if (stop.status === status) continue;
+  const hasAssignmentUpdate =
+    options?.driverId !== undefined ||
+    options?.vehicleId !== undefined ||
+    options?.scheduledDate !== undefined;
 
+  for (const stop of trip.stops) {
     if (status === 'DELIVERED') {
       if (['DELIVERED', 'FAILED', 'RETURNED'].includes(stop.status)) continue;
     } else if (status === 'IN_TRANSIT') {
@@ -310,10 +347,16 @@ export async function applyDeliveryTripStatus(
       if (!['PENDING', 'ASSIGNED'].includes(stop.status)) continue;
     }
 
+    // Skip only when status already matches and no driver/vehicle reassignment.
+    if (stop.status === status && !hasAssignmentUpdate) continue;
+
     await applyDeliveryNoteStatus(tx, stop.id, status, {
       proofOfDelivery,
       actualItems: actualItemsByStop?.find((entry) => entry.deliveryNoteId === stop.id)?.items,
       userId,
+      driverId: options?.driverId,
+      vehicleId: options?.vehicleId,
+      scheduledDate: options?.scheduledDate,
       skipTripSync: true,
     });
   }
@@ -353,6 +396,7 @@ export async function createMultiOrderDelivery(
     driverId?: string;
     scheduledDate?: Date;
     notes?: string;
+    waybillNo?: string;
     orders: { salesOrderId: string; items: DeliveryItemInput[] }[];
   }
 ) {
@@ -383,6 +427,7 @@ export async function createMultiOrderDelivery(
           tripNo: await nextDeliveryTripNumber(tx, anchorOrder.companyId),
           vehicleId: input.vehicleId,
           driverId: input.driverId,
+          waybillNo: input.waybillNo?.trim() || null,
           status: initialStatus,
           scheduledDate,
           notes: input.notes,
@@ -400,6 +445,7 @@ export async function createMultiOrderDelivery(
         driverId: input.driverId,
         scheduledDate,
         notes: input.notes,
+        waybillNo: input.waybillNo,
         deliveryTripId: trip?.id,
         stopSequence: trip ? i + 1 : undefined,
         userId,

@@ -23,6 +23,7 @@ const salesOrderSchema = z.object({
   customerId: z.string().min(1, 'Customer is required'),
   salesPersonId: z.string().optional(),
   requiredDate: z.string().optional(),
+  customerPoNumber: z.string().max(100).optional(),
   notes: z.string().optional(),
   items: z.array(orderItemSchema).min(1, 'Add at least one item'),
 });
@@ -51,6 +52,7 @@ export function SalesOrderForm({ onSuccess, onCancel }: SalesOrderFormProps) {
     defaultValues: {
       salesPersonId: '',
       customerId: '',
+      customerPoNumber: '',
       items: [{ productId: '', quantity: 1, unitPrice: 0, discount: 0 }],
     },
   });
@@ -96,12 +98,14 @@ export function SalesOrderForm({ onSuccess, onCancel }: SalesOrderFormProps) {
 
   const customerOptions = [
     { value: '', label: customersLoading ? 'Loading customers…' : 'Select customer…' },
-    ...(customersData || []).map((c) => ({
-      value: c.id,
-      label: !c.salesPersonId
-        ? `${c.code} - ${c.name} (unassigned — open to sales)`
-        : `${c.code} - ${c.name}`,
-    })),
+    ...(customersData || []).map((c) => {
+      const vatTag = c.vatStatus === 'NON_VAT' ? 'Non-VAT' : 'VAT';
+      const base = `${c.code} - ${c.name} (${vatTag})`;
+      return {
+        value: c.id,
+        label: !c.salesPersonId ? `${base} (unassigned — open to sales)` : base,
+      };
+    }),
   ];
 
   const salesPersonOptions = [
@@ -141,7 +145,9 @@ export function SalesOrderForm({ onSuccess, onCancel }: SalesOrderFormProps) {
     });
   }, [items, productsData, setValue]);
 
-  const vatRate = useVatRate();
+  const companyVatRate = useVatRate();
+  const selectedCustomer = customersData?.find((c) => c.id === customerId);
+  const vatRate = selectedCustomer?.vatStatus === 'NON_VAT' ? 0 : companyVatRate;
   const vatMultiplier = vatRate / 100;
 
   const lineTotal = items.reduce((sum, item) => {
@@ -150,8 +156,6 @@ export function SalesOrderForm({ onSuccess, onCancel }: SalesOrderFormProps) {
   }, 0);
   const tax = lineTotal * vatMultiplier;
   const total = lineTotal + tax;
-
-  const selectedCustomer = customersData?.find((c) => c.id === customerId);
   const creditLimit = Number(selectedCustomer?.creditLimit ?? 0);
   const creditUsed = Number(selectedCustomer?.creditUsed ?? 0);
   const hasCreditLimit = creditLimit > 0;
@@ -221,6 +225,12 @@ export function SalesOrderForm({ onSuccess, onCancel }: SalesOrderFormProps) {
           />
         )}
         <Input label="Required Date" type="date" {...register('requiredDate')} />
+        <Input
+          label="LPO / Customer PO"
+          placeholder="e.g. customer's purchase order number"
+          {...register('customerPoNumber')}
+          error={errors.customerPoNumber?.message}
+        />
       </div>
 
       {canAssignSalesPerson && (
@@ -228,6 +238,9 @@ export function SalesOrderForm({ onSuccess, onCancel }: SalesOrderFormProps) {
           Choose a sales officer, or leave as Me — the order stays under the account that created it.
         </p>
       )}
+      <p className="-mt-1 text-xs text-slate-500">
+        Enter the customer&apos;s LPO / purchase order number — it is copied onto the sales invoice.
+      </p>
 
       <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-3 space-y-3">
         <p className="text-sm font-medium text-slate-800">Customer</p>
@@ -332,7 +345,13 @@ export function SalesOrderForm({ onSuccess, onCancel }: SalesOrderFormProps) {
 
       <div className="bg-gray-50 rounded-lg p-4 space-y-1 text-sm">
         <div className="flex justify-between"><span>Subtotal</span><span>KES {lineTotal.toLocaleString('en-KE', { minimumFractionDigits: 2 })}</span></div>
-        <div className="flex justify-between"><span>VAT ({vatRate}%)</span><span>KES {tax.toLocaleString('en-KE', { minimumFractionDigits: 2 })}</span></div>
+        <div className="flex justify-between">
+          <span>
+            VAT ({vatRate}%)
+            {selectedCustomer?.vatStatus === 'NON_VAT' ? ' · Non-VAT customer' : ''}
+          </span>
+          <span>KES {tax.toLocaleString('en-KE', { minimumFractionDigits: 2 })}</span>
+        </div>
         <div className="flex justify-between font-bold text-base pt-1 border-t"><span>Total</span><span>KES {total.toLocaleString('en-KE', { minimumFractionDigits: 2 })}</span></div>
       </div>
 

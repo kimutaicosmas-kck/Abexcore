@@ -2,7 +2,7 @@ import { Prisma, OrderStatus } from '@prisma/client';
 import { assertOrderStatusTransition, assertCreditLimit, syncCustomerCreditUsed } from '../utils/credit';
 import { AppError } from '../middleware/errorHandler';
 import { generateNumber } from '../utils/date';
-import { getVatRate, calcTax } from '../utils/company';
+import { getCustomerVatRate, calcTax } from '../utils/company';
 import { StockMovementService } from './inventory.service';
 
 type TxClient = Prisma.TransactionClient;
@@ -364,7 +364,11 @@ export class SalesOrderService {
     }
 
     const updatedItems = await tx.salesOrderItem.findMany({ where: { salesOrderId: orderId } });
-    const vatRate = await getVatRate();
+    const customer = await tx.customer.findUnique({
+      where: { id: order.customerId },
+      select: { vatStatus: true },
+    });
+    const vatRate = await getCustomerVatRate(customer);
     const subtotal = updatedItems.reduce((sum, item) => sum + Number(item.totalPrice), 0);
     const taxAmount = calcTax(subtotal, vatRate);
     const totalAmount = subtotal + taxAmount;

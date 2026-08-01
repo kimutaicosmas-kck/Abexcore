@@ -1,6 +1,6 @@
 import { Prisma } from '@prisma/client';
 import { AppError } from '../middleware/errorHandler';
-import { getVatRate, calcTax } from '../utils/company';
+import { getVatRate, getCustomerVatRate, calcTax } from '../utils/company';
 import { AccountingService } from './accounting.service';
 import { syncCustomerCreditUsed } from '../utils/credit';
 import { nextInvoiceNumber, nextPaymentNumber } from '../utils/numbering';
@@ -108,7 +108,8 @@ export class FinanceInvoiceService {
       return null;
     }
 
-    const vatRate = await getVatRate();
+    // Non-VAT customers still get a company invoice — at 0% VAT.
+    const vatRate = await getCustomerVatRate(order.customer);
     let subtotal = 0;
 
     const invoiceLines = delivery.items.map((deliveryItem) => {
@@ -144,6 +145,7 @@ export class FinanceInvoiceService {
         customerId: order.customerId,
         salesOrderId: order.id,
         deliveryNoteId: delivery.id,
+        customerPoNumber: order.customerPoNumber || undefined,
         subtotal: capped.subtotal,
         taxAmount: capped.taxAmount,
         totalAmount: capped.totalAmount,
@@ -192,7 +194,7 @@ export class FinanceInvoiceService {
     }
 
     const order = delivery.salesOrder;
-    const vatRate = await getVatRate();
+    const vatRate = await getCustomerVatRate(order.customer);
     let subtotal = 0;
     const invoiceLines = delivery.items.map((deliveryItem) => {
       const orderItem = order.items.find((item) => item.productId === deliveryItem.productId);
@@ -220,6 +222,7 @@ export class FinanceInvoiceService {
         subtotal,
         taxAmount,
         totalAmount,
+        customerPoNumber: order.customerPoNumber || undefined,
         items: { create: invoiceLines },
       },
     });

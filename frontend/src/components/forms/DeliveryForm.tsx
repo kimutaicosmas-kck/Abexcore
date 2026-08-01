@@ -1,10 +1,10 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Container, Trash2 } from 'lucide-react';
-import { deliveryApi, operationsApi } from '../../services/api';
+import { deliveryApi } from '../../services/api';
 import { Alert, Button, Input, Select, formatCurrency } from '../ui';
 import { DeliveryNote, DeliveryTrip, SalesOrder, Vehicle, vehicleTypeLabel } from '../../types';
 import { formatProductOptionLabel } from '../../utils/productDisplay';
@@ -15,6 +15,7 @@ const tripSchema = z.object({
   vehicleId: z.string().optional(),
   driverId: z.string().optional(),
   scheduledDate: z.string().optional(),
+  waybillNo: z.string().max(100).optional(),
   notes: z.string().optional(),
 });
 
@@ -30,6 +31,8 @@ type TripOrder = {
 interface DeliveryFormProps {
   onSuccess: () => void;
   onCancel: () => void;
+  /** Pre-select these ready order IDs (e.g. bulk pick from Sales). */
+  initialOrderIds?: string[];
 }
 
 function buildOrderItems(order: SalesOrder): TripOrder['items'] {
@@ -64,24 +67,30 @@ function formatVehicleOption(v: Vehicle) {
   return `${vehicleTypeLabel(v.type)} · ${v.registration}${detail}${hired}`;
 }
 
-export function DeliveryForm({ onSuccess, onCancel }: DeliveryFormProps) {
+export function DeliveryForm({ onSuccess, onCancel, initialOrderIds = [] }: DeliveryFormProps) {
   const queryClient = useQueryClient();
   const [tripOrders, setTripOrders] = useState<TripOrder[]>([]);
   const [orderSearch, setOrderSearch] = useState('');
   const [showHiredLorryForm, setShowHiredLorryForm] = useState(false);
   const [hiredRegistration, setHiredRegistration] = useState('');
   const [hiredCarrier, setHiredCarrier] = useState('');
+  const [preselectedApplied, setPreselectedApplied] = useState(false);
 
   const { data: salesOrdersData, isLoading: ordersLoading } = useQuery({
     queryKey: ['sales-orders-deliverable'],
-    queryFn: async () => {
-      const [ready, partial] = await Promise.all([
-        operationsApi.salesOrders({ limit: 100, status: 'READY' }).then((r) => r.data.data as SalesOrder[]),
-        operationsApi.salesOrders({ limit: 100, status: 'PARTIALLY_DELIVERED' }).then((r) => r.data.data as SalesOrder[]),
-      ]);
-      return [...ready, ...partial].filter((order) => buildOrderItems(order).length > 0);
-    },
+    queryFn: () => deliveryApi.readyOrders().then((r) => r.data.data as SalesOrder[]),
   });
+
+  useEffect(() => {
+    if (preselectedApplied || !salesOrdersData?.length || initialOrderIds.length === 0) return;
+    const wanted = new Set(initialOrderIds);
+    const selected = salesOrdersData
+      .filter((order) => wanted.has(order.id))
+      .map(orderToTripOrder)
+      .filter((order): order is TripOrder => order !== null);
+    if (selected.length > 0) setTripOrders(selected);
+    setPreselectedApplied(true);
+  }, [salesOrdersData, initialOrderIds, preselectedApplied]);
 
   const { data: vehiclesData } = useQuery({
     queryKey: ['vehicles'],
@@ -203,6 +212,7 @@ export function DeliveryForm({ onSuccess, onCancel }: DeliveryFormProps) {
         vehicleId: data.vehicleId || undefined,
         driverId: data.driverId || undefined,
         scheduledDate: data.scheduledDate || undefined,
+        waybillNo: data.waybillNo?.trim() || undefined,
         notes: data.notes || undefined,
         orders: tripOrders.map((order) => ({
           salesOrderId: order.salesOrderId,
@@ -303,19 +313,31 @@ export function DeliveryForm({ onSuccess, onCancel }: DeliveryFormProps) {
         </div>
         <Select label="Driver" options={driverOptions} {...register('driverId')} />
         <Input label="Scheduled Date" type="date" {...register('scheduledDate')} />
+        <Input
+          label="Waybill no. (optional)"
+          placeholder="Carrier / hired truck waybill"
+          {...register('waybillNo')}
+          error={errors.waybillNo?.message}
+        />
       </div>
+      {(selectedVehicleId && hiredVehicles.some((v) => v.id === selectedVehicleId)) ||
+      showHiredLorryForm ? (
+        <p className="text-xs text-slate-500 -mt-2">
+          For hired lorries or other third-party transport, enter the carrier’s waybill number if you have one.
+        </p>
+      ) : null}
 
       <div className="rounded-lg border border-border p-4 space-y-3">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
           <div>
-            <p className="text-sm font-medium text-slate-800">Ready orders — tick to include on this trip</p>
+            <p className="text-sm font-medium text-slate-800">Bulk delivery — select ready orders</p>
             <p className="text-xs text-slate-500 mt-1">
-              Select one or more orders. One motorcycle, truck, or lorry can deliver all checked orders in a single run.
+              Tick several READY orders to create one trip with a delivery note (and invoice) per stop — no need to create them one by one.
             </p>
           </div>
           <div className="flex gap-2 shrink-0">
-            <Button type="button" variant="secondary" size="sm" onClick={selectAllVisible} disabled={allVisibleSelected}>
-              Select all
+            <Button type="button" variant="secondary" size="sm" onClick={selectAllVisible} disabled={allVisibleSelected || ordersLoading}>
+              Select all ({filteredReadyOrders.length})
             </Button>
             <Button type="button" variant="ghost" size="sm" onClick={clearSelection} disabled={tripOrders.length === 0}>
               Clear
@@ -324,12 +346,12 @@ export function DeliveryForm({ onSuccess, onCancel }: DeliveryFormProps) {
         </div>
 
         <Input
-          placeholder="Search ready orders…"
+          placeholder="Search ready orders by number or customer…"
           value={orderSearch}
           onChange={(e) => setOrderSearch(e.target.value)}
         />
 
-        <div className="max-h-56 overflow-y-auto rounded-lg border border-slate-200 divide-y divide-slate-100">
+        <div className="max-h-72 overflow-y-auto rounded-lg border border-slate-200 divide-y divide-slate-100">
           {ordersLoading ? (
             <p className="p-4 text-sm text-slate-500">Loading ready orders…</p>
           ) : filteredReadyOrders.length === 0 ? (
@@ -429,7 +451,9 @@ export function DeliveryForm({ onSuccess, onCancel }: DeliveryFormProps) {
       <div className="flex justify-end gap-3 pt-4 border-t">
         <Button type="button" variant="secondary" onClick={onCancel}>Cancel</Button>
         <Button type="submit" loading={mutation.isPending} disabled={!canSubmit}>
-          {tripOrders.length > 1 ? `Create Trip (${tripOrders.length} orders)` : 'Create Delivery'}
+          {tripOrders.length > 1
+            ? `Create ${tripOrders.length} delivery notes (1 trip)`
+            : 'Create Delivery Note'}
         </Button>
       </div>
     </form>

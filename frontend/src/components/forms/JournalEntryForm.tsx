@@ -4,8 +4,9 @@ import { z } from 'zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, Trash2 } from 'lucide-react';
 import { financeApi } from '../../services/api';
-import { Button, Input, Select } from '../ui';
+import { Button, Input, Select, formatCurrency } from '../ui';
 import { getApiErrorMessage } from '../../utils/apiError';
+import { Invoice } from '../../types';
 
 const lineSchema = z.object({
   accountId: z.string().min(1, 'Account is required'),
@@ -18,6 +19,7 @@ const journalSchema = z.object({
   date: z.string().min(1, 'Date is required'),
   description: z.string().min(1, 'Description is required'),
   reference: z.string().optional(),
+  invoiceId: z.string().optional(),
   lines: z.array(lineSchema).min(2, 'At least two lines are required'),
 }).refine(
   (data) => {
@@ -41,6 +43,11 @@ interface JournalEntryFormProps {
   onCancel: () => void;
 }
 
+function invoiceLabel(inv: Invoice): string {
+  const party = inv.customer?.name || inv.supplier?.name || inv.type;
+  return `${inv.invoiceNumber} · ${party} · ${formatCurrency(Number(inv.totalAmount))} · ${inv.status}`;
+}
+
 export function JournalEntryForm({ onSuccess, onCancel }: JournalEntryFormProps) {
   const queryClient = useQueryClient();
 
@@ -49,19 +56,33 @@ export function JournalEntryForm({ onSuccess, onCancel }: JournalEntryFormProps)
     queryFn: () => financeApi.accounts().then((r) => r.data.data as Account[]),
   });
 
+  const { data: invoices } = useQuery({
+    queryKey: ['invoices-for-journal'],
+    queryFn: () =>
+      financeApi.invoices({ limit: 100, sortBy: 'invoiceDate', sortOrder: 'desc' }).then(
+        (r) => r.data.data as Invoice[]
+      ),
+  });
+
   const accountOptions = [
     { value: '', label: 'Select account...' },
     ...(accounts || []).map((a) => ({ value: a.id, label: `${a.code} - ${a.name}` })),
   ];
 
+  const invoiceOptions = [
+    { value: '', label: 'No invoice (general entry)' },
+    ...(invoices || []).map((inv) => ({ value: inv.id, label: invoiceLabel(inv) })),
+  ];
+
   const today = new Date().toISOString().slice(0, 10);
 
-  const { register, control, handleSubmit, watch, formState: { errors } } = useForm<JournalFormData>({
+  const { register, control, handleSubmit, watch, setValue, formState: { errors } } = useForm<JournalFormData>({
     resolver: zodResolver(journalSchema),
     defaultValues: {
       date: today,
       description: '',
       reference: '',
+      invoiceId: '',
       lines: [
         { accountId: '', debit: 0, credit: 0, description: '' },
         { accountId: '', debit: 0, credit: 0, description: '' },
@@ -71,14 +92,35 @@ export function JournalEntryForm({ onSuccess, onCancel }: JournalEntryFormProps)
 
   const { fields, append, remove } = useFieldArray({ control, name: 'lines' });
   const lines = watch('lines');
+  const selectedInvoiceId = watch('invoiceId');
   const totalDebit = lines.reduce((s, l) => s + Number(l.debit || 0), 0);
   const totalCredit = lines.reduce((s, l) => s + Number(l.credit || 0), 0);
+
+  const selectedInvoice = (invoices || []).find((inv) => inv.id === selectedInvoiceId);
+
+  const onInvoiceChange = (invoiceId: string) => {
+    setValue('invoiceId', invoiceId);
+    if (!invoiceId) return;
+    const inv = (invoices || []).find((row) => row.id === invoiceId);
+    if (!inv) return;
+    const party = inv.customer?.name || inv.supplier?.name || '';
+    setValue('reference', inv.invoiceNumber);
+    const currentDesc = watch('description')?.trim();
+    if (!currentDesc) {
+      setValue(
+        'description',
+        `Journal against ${inv.invoiceNumber}${party ? ` (${party})` : ''}`
+      );
+    }
+  };
 
   const mutation = useMutation({
     mutationFn: (data: JournalFormData) =>
       financeApi.createJournalEntry({
-        ...data,
+        date: data.date,
+        description: data.description,
         reference: data.reference || undefined,
+        invoiceId: data.invoiceId || undefined,
         lines: data.lines.map((l) => ({
           accountId: l.accountId,
           debit: Number(l.debit),
@@ -105,11 +147,28 @@ export function JournalEntryForm({ onSuccess, onCancel }: JournalEntryFormProps)
         <div className="p-3 rounded-lg bg-red-50 text-red-700 text-sm">{errors.lines.message}</div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Input label="Date *" type="date" {...register('date')} error={errors.date?.message} />
-        <Input label="Reference" {...register('reference')} />
+        <Select
+          label="Invoice (optional)"
+          options={invoiceOptions}
+          value={selectedInvoiceId || ''}
+          onChange={(e) => onInvoiceChange(e.target.value)}
+        />
+        <Input label="Reference" {...register('reference')} placeholder="Defaults to invoice # if linked" />
         <Input label="Description *" {...register('description')} error={errors.description?.message} />
       </div>
+
+      {selectedInvoice && (
+        <p className="text-xs text-slate-600 rounded-lg border border-primary-100 bg-primary-50/60 px-3 py-2">
+          Linked to <strong>{selectedInvoice.invoiceNumber}</strong>
+          {selectedInvoice.customer?.name || selectedInvoice.supplier?.name
+            ? ` · ${selectedInvoice.customer?.name || selectedInvoice.supplier?.name}`
+            : ''}
+          {' · '}
+          {formatCurrency(Number(selectedInvoice.totalAmount))} ({selectedInvoice.status})
+        </p>
+      )}
 
       <div className="space-y-3">
         <div className="flex items-center justify-between">

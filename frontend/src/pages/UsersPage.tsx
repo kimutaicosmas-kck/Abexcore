@@ -182,6 +182,17 @@ export function UsersPage() {
         (row.role as { name: string })?.name || '-',
     },
     {
+      key: 'employee',
+      label: 'Employee',
+      render: (_: unknown, row: Record<string, unknown>) => {
+        const emp = (row as { employee?: User['employee'] }).employee;
+        if (emp) {
+          return <Badge variant="success">{emp.employeeNo}</Badge>;
+        }
+        return <Badge variant="warning">Not linked</Badge>;
+      },
+    },
+    {
       key: 'department',
       label: 'Department',
       render: (_: unknown, row: Record<string, unknown>) =>

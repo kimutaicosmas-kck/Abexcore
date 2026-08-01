@@ -20,9 +20,21 @@ const userSchema = z.object({
   branchId: z.string().optional(),
   status: z.enum(['ACTIVE', 'INACTIVE', 'SUSPENDED']).optional(),
   password: z.string().min(8, 'Password must be at least 8 characters').optional().or(z.literal('')),
+  /** Create a matching HR employee for this login. */
+  createEmployeeProfile: z.boolean().optional(),
+  /** Link to an existing unlinked employee (or keep current). */
+  employeeId: z.string().optional(),
 });
 
 type UserFormData = z.infer<typeof userSchema>;
+
+interface LinkableEmployee {
+  id: string;
+  employeeNo: string;
+  firstName: string;
+  lastName: string;
+  position?: string;
+}
 
 interface UserFormProps {
   user?: User | null;
@@ -61,6 +73,11 @@ export function UserForm({ user, onSuccess, onCancel }: UserFormProps) {
     queryFn: () => usersApi.branches().then((r) => r.data.data as { id: string; name: string; code: string }[]),
   });
 
+  const { data: linkableEmployees } = useQuery({
+    queryKey: ['users-linkable-employees'],
+    queryFn: () => usersApi.linkableEmployees().then((r) => r.data.data as LinkableEmployee[]),
+  });
+
   const assignableRoles = (rolesData || []).filter((r) => r.name !== 'Super Admin');
 
   const roleOptions = [
@@ -87,7 +104,26 @@ export function UserForm({ user, onSuccess, onCancel }: UserFormProps) {
     { value: 'SUSPENDED', label: 'Suspended' },
   ];
 
-  const { register, handleSubmit, reset, setError, watch, formState: { errors } } = useForm<UserFormData>({
+  const linkedEmployee = user?.employee;
+  const employeeOptions = [
+    { value: '', label: linkedEmployee ? 'Unlink employee profile' : 'No employee linked' },
+    ...(linkedEmployee
+      ? [
+          {
+            value: linkedEmployee.id,
+            label: `${linkedEmployee.employeeNo} — ${linkedEmployee.firstName} ${linkedEmployee.lastName} (current)`,
+          },
+        ]
+      : []),
+    ...(linkableEmployees || [])
+      .filter((e) => e.id !== linkedEmployee?.id)
+      .map((e) => ({
+        value: e.id,
+        label: `${e.employeeNo} — ${e.firstName} ${e.lastName}${e.position ? ` · ${e.position}` : ''}`,
+      })),
+  ];
+
+  const { register, handleSubmit, reset, setError, setValue, watch, formState: { errors } } = useForm<UserFormData>({
     resolver: zodResolver(userSchema),
     defaultValues: {
       email: '',
@@ -99,10 +135,20 @@ export function UserForm({ user, onSuccess, onCancel }: UserFormProps) {
       departmentId: '',
       branchId: '',
       status: 'ACTIVE',
+      createEmployeeProfile: true,
+      employeeId: '',
     },
   });
 
   const selectedRoleId = watch('roleId');
+  const createEmployeeProfile = watch('createEmployeeProfile');
+  const selectedEmployeeId = watch('employeeId');
+
+  useEffect(() => {
+    if (selectedEmployeeId) {
+      setValue('createEmployeeProfile', false);
+    }
+  }, [selectedEmployeeId, setValue]);
 
   useEffect(() => {
     if (!selectedRoleId || !rolesData?.length) return;
@@ -130,6 +176,8 @@ export function UserForm({ user, onSuccess, onCancel }: UserFormProps) {
         departmentId: user.department?.id || '',
         branchId: user.branch?.id || '',
         status: (user.status as 'ACTIVE' | 'INACTIVE' | 'SUSPENDED') || 'ACTIVE',
+        createEmployeeProfile: false,
+        employeeId: user.employee?.id || '',
       });
       setSelectedModules(modulesFromUser(user));
       setModuleError('');
@@ -144,6 +192,8 @@ export function UserForm({ user, onSuccess, onCancel }: UserFormProps) {
         departmentId: '',
         branchId: '',
         status: 'ACTIVE',
+        createEmployeeProfile: true,
+        employeeId: '',
       });
       setSelectedModules(['dashboard']);
       setModuleError('');
@@ -157,6 +207,9 @@ export function UserForm({ user, onSuccess, onCancel }: UserFormProps) {
       queryClient.invalidateQueries({ queryKey: ['users'] });
       queryClient.invalidateQueries({ queryKey: ['user-stats'] });
       queryClient.invalidateQueries({ queryKey: ['user-roles'] });
+      queryClient.invalidateQueries({ queryKey: ['employees'] });
+      queryClient.invalidateQueries({ queryKey: ['users-linkable-employees'] });
+      queryClient.invalidateQueries({ queryKey: ['hr-linkable-users'] });
       if (isEdit) queryClient.invalidateQueries({ queryKey: ['user-detail', user!.id] });
       onSuccess();
     },
@@ -177,7 +230,8 @@ export function UserForm({ user, onSuccess, onCancel }: UserFormProps) {
     }
     setModuleError('');
 
-    const payload = {
+    const linkingExisting = !!data.employeeId;
+    const payload: Record<string, unknown> = {
       email: data.email,
       firstName: data.firstName,
       lastName: data.lastName,
@@ -189,6 +243,21 @@ export function UserForm({ user, onSuccess, onCancel }: UserFormProps) {
       ...(isEdit ? { status: data.status } : {}),
       ...(data.password ? { password: data.password } : {}),
     };
+
+    if (isEdit) {
+      if (data.employeeId) {
+        payload.employeeId = data.employeeId;
+      } else if (user?.employee) {
+        payload.employeeId = null;
+      } else if (data.createEmployeeProfile) {
+        payload.createEmployeeProfile = true;
+      }
+    } else if (linkingExisting) {
+      payload.employeeId = data.employeeId;
+    } else if (data.createEmployeeProfile) {
+      payload.createEmployeeProfile = true;
+    }
+
     mutation.mutate(payload);
   };
 
@@ -232,6 +301,39 @@ export function UserForm({ user, onSuccess, onCancel }: UserFormProps) {
         <Select label="Branch" options={branchOptions} {...register('branchId')} />
         {isEdit && (
           <Select label="Status" options={statusOptions} {...register('status')} />
+        )}
+      </div>
+
+      <div className="mt-4 space-y-3 rounded-xl border border-primary-100 bg-primary-50/50 p-3">
+        <p className="text-sm font-medium text-primary-950">HR employee link</p>
+        <p className="text-xs text-primary-800/80">
+          One login should map to one employee so leave and payroll stay on the same person.
+        </p>
+        {linkedEmployee && (
+          <p className="text-xs text-emerald-800">
+            Currently linked: {linkedEmployee.employeeNo} — {linkedEmployee.firstName}{' '}
+            {linkedEmployee.lastName}
+          </p>
+        )}
+        {!selectedEmployeeId && !linkedEmployee && (
+          <label className="flex items-start gap-2 text-sm text-slate-800">
+            <input
+              type="checkbox"
+              className="mt-0.5 rounded border-slate-300"
+              {...register('createEmployeeProfile')}
+            />
+            <span>
+              {isEdit
+                ? 'Create HR employee profile for this login'
+                : 'Also create HR employee profile (recommended)'}
+            </span>
+          </label>
+        )}
+        <Select label="Link existing employee" options={employeeOptions} {...register('employeeId')} />
+        {createEmployeeProfile && !selectedEmployeeId && !linkedEmployee && (
+          <p className="text-xs text-slate-600">
+            An employee record will be created and linked using this user’s name and email.
+          </p>
         )}
       </div>
 

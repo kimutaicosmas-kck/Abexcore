@@ -19,6 +19,8 @@ import {
   PanelLeft,
   TrendingUp,
   Target,
+  Boxes,
+  CalendarDays,
 } from 'lucide-react';
 import clsx from 'clsx';
 import { useAuth } from '../../contexts/AuthContext';
@@ -50,6 +52,7 @@ const navigationGroups: NavGroup[] = [
       { name: 'Users', href: '/users', icon: Users, permission: 'users:read' },
       { name: 'CRM', href: '/customers', icon: Building2, permission: 'customers:read' },
       { name: 'Products', href: '/products', icon: Package, permission: 'products:read' },
+      { name: 'Available Products', href: '/available-products', icon: Boxes, permission: 'sales:read' },
     ],
   },
   {
@@ -60,7 +63,7 @@ const navigationGroups: NavGroup[] = [
       { name: 'Production', href: '/production', icon: Factory, permission: 'production:read' },
       { name: 'Quality', href: '/quality', icon: ClipboardCheck, permission: 'quality:read' },
       { name: 'Sales', href: '/sales', icon: TrendingUp, permission: 'sales:read' },
-      { name: 'Delivery', href: '/delivery', icon: Truck, permission: 'delivery:read' },
+      { name: 'Delivery', href: '/delivery', icon: Truck, permissions: ['delivery:read', 'delivery:create'] },
     ],
   },
   {
@@ -69,6 +72,7 @@ const navigationGroups: NavGroup[] = [
       { name: 'Finance', href: '/finance', icon: DollarSign, permission: 'finance:read' },
       { name: 'Sales Performance', href: '/sales-performance', icon: Target, permissions: ['reports:read', 'finance:read', 'settings:read'] },
       { name: 'HR', href: '/hr', icon: UserCircle, permission: 'hr:read' },
+      { name: 'My Leave', href: '/my-leave', icon: CalendarDays },
       { name: 'Maintenance', href: '/maintenance', icon: Wrench, permission: 'maintenance:read' },
       { name: 'Reports', href: '/reports', icon: BarChart3, permission: 'reports:read' },
     ],

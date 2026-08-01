@@ -1,20 +1,24 @@
-import { useCallback } from 'react';
+import { useCallback, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../../contexts/AuthContext';
+import { AuthContext } from '../../contexts/AuthContext';
 import { useInactivityLogout } from '../../hooks/useInactivityLogout';
 import { INACTIVITY_TIMEOUT_MINUTES } from '../../config/session';
 import { Button } from '../ui';
 
 export function InactivityMonitor() {
-  const { isAuthenticated, isLoading, logout } = useAuth();
+  const auth = useContext(AuthContext);
   const navigate = useNavigate();
+  const isAuthenticated = !!auth?.isAuthenticated;
+  const isLoading = !!auth?.isLoading;
+  const logout = auth?.logout;
 
   const handleTimeout = useCallback(async () => {
+    if (!logout) return;
     await logout();
     navigate('/login?reason=inactive', { replace: true });
   }, [logout, navigate]);
 
-  const enabled = isAuthenticated && !isLoading;
+  const enabled = !!auth && isAuthenticated && !isLoading;
   const { showWarning, staySignedIn } = useInactivityLogout({
     enabled,
     onTimeout: () => {
@@ -22,7 +26,7 @@ export function InactivityMonitor() {
     },
   });
 
-  if (!showWarning) return null;
+  if (!auth || !showWarning) return null;
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/45 p-4">

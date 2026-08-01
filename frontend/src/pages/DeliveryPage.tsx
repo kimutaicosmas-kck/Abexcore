@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, Truck, Package, MapPin, Bike, Container, AlertTriangle, ChevronRight, Download } from 'lucide-react';
 import { deliveryApi } from '../services/api';
@@ -21,6 +22,7 @@ import {
   PageToolbar,
   ConfirmDialog,
   PageQueryStatus,
+  Alert,
 } from '../components/ui';
 import { Modal } from '../components/ui/Modal';
 import { DeliveryForm } from '../components/forms/DeliveryForm';
@@ -28,6 +30,8 @@ import { VehicleForm } from '../components/forms/VehicleForm';
 import { useAuth } from '../contexts/AuthContext';
 import { DeliveryNote, DeliveryStats, DeliveryTrip, Vehicle, VEHICLE_TYPE_OPTIONS, vehicleTypeLabel, VehicleType } from '../types';
 import { getApiErrorMessage } from '../utils/apiError';
+
+type DriverOption = { id: string; firstName: string; lastName: string; email: string };
 
 const tabs = ['Overview', 'Deliveries', 'Vehicles'];
 
@@ -98,6 +102,7 @@ function getDeliveryActions(status: string, isDriver: boolean) {
 
 export function DeliveryPage() {
   const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { hasPermission, isDriver } = useAuth();
   const [activeTab, setActiveTab] = useState(0);
   const [page, setPage] = useState(1);
@@ -115,6 +120,7 @@ export function DeliveryPage() {
     return `${y}-${m}-${d}`;
   });
   const [deliveryModalOpen, setDeliveryModalOpen] = useState(false);
+  const [prefillOrderIds, setPrefillOrderIds] = useState<string[]>([]);
   const [vehicleModalOpen, setVehicleModalOpen] = useState(false);
   const [selected, setSelected] = useState<DeliveryNote | null>(null);
   const [selectedTrip, setSelectedTrip] = useState<DeliveryTrip | null>(null);
@@ -125,6 +131,15 @@ export function DeliveryPage() {
     status: string;
     label: string;
     proofOfDelivery?: string;
+  } | null>(null);
+  const [assignDialog, setAssignDialog] = useState<{
+    id: string;
+    kind: 'note' | 'trip';
+    label: string;
+    title: string;
+    driverId: string;
+    vehicleId: string;
+    scheduledDate: string;
   } | null>(null);
   const [deliverConfirm, setDeliverConfirm] = useState<{
     id: string;
@@ -154,6 +169,32 @@ export function DeliveryPage() {
   const showOverview = !isDriver && activeTab === 0;
   const showDeliveries = isDriver ? activeTab === 0 : activeTab === 1;
   const showVehicles = !isDriver && activeTab === 2;
+
+  useEffect(() => {
+    if (!canCreate) return;
+    const createFlag = searchParams.get('create') === '1';
+    const orderIdsFromQuery = (searchParams.get('orders') || '')
+      .split(',')
+      .map((id) => id.trim())
+      .filter(Boolean);
+    if (!createFlag && orderIdsFromQuery.length === 0) return;
+
+    setPrefillOrderIds(orderIdsFromQuery);
+    setDeliveryModalOpen(true);
+    if (!isDriver) setActiveTab(1);
+    // Keep query until modal open is applied; clear on next tick so Strict Mode remount still sees it once.
+  }, [canCreate, isDriver, searchParams]);
+
+  const closeDeliveryModal = () => {
+    setDeliveryModalOpen(false);
+    setPrefillOrderIds([]);
+    if (searchParams.get('create') || searchParams.get('orders')) {
+      const next = new URLSearchParams(searchParams);
+      next.delete('create');
+      next.delete('orders');
+      setSearchParams(next, { replace: true });
+    }
+  };
 
   const { data: stats } = useQuery({
     queryKey: ['delivery-stats'],
@@ -216,6 +257,18 @@ export function DeliveryPage() {
     enabled: !isDriver && (activeTab === 0 || activeTab === 2),
   });
 
+  const { data: assignDrivers } = useQuery({
+    queryKey: ['delivery-drivers'],
+    queryFn: () => deliveryApi.drivers().then((r) => r.data.data as DriverOption[]),
+    enabled: !!assignDialog,
+  });
+
+  const { data: assignVehicles } = useQuery({
+    queryKey: ['vehicles', 'assign'],
+    queryFn: () => deliveryApi.vehicles({ limit: 100 }).then((r) => r.data.data as Vehicle[]),
+    enabled: !!assignDialog,
+  });
+
   const statusMutation = useMutation({
     mutationFn: ({
       id,
@@ -224,6 +277,9 @@ export function DeliveryPage() {
       proofOfDelivery,
       actualItems,
       tripActualItems,
+      driverId,
+      vehicleId,
+      scheduledDate,
     }: {
       id: string;
       kind: 'note' | 'trip';
@@ -231,10 +287,27 @@ export function DeliveryPage() {
       proofOfDelivery?: string;
       actualItems?: { productId: string; quantity: number }[];
       tripActualItems?: { deliveryNoteId: string; items: { productId: string; quantity: number }[] }[];
+      driverId?: string;
+      vehicleId?: string;
+      scheduledDate?: string;
     }) =>
       kind === 'trip'
-        ? deliveryApi.updateTripStatus(id, { status, proofOfDelivery, actualItems: tripActualItems })
-        : deliveryApi.updateStatus(id, { status, proofOfDelivery, actualItems }),
+        ? deliveryApi.updateTripStatus(id, {
+            status,
+            proofOfDelivery,
+            actualItems: tripActualItems,
+            driverId,
+            vehicleId,
+            scheduledDate,
+          })
+        : deliveryApi.updateStatus(id, {
+            status,
+            proofOfDelivery,
+            actualItems,
+            driverId,
+            vehicleId,
+            scheduledDate,
+          }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['deliveries'] });
       queryClient.invalidateQueries({ queryKey: ['delivery-trips'] });
@@ -243,6 +316,7 @@ export function DeliveryPage() {
       setDetailOpen(false);
       setSelected(null);
       setSelectedTrip(null);
+      setAssignDialog(null);
     },
   });
 
@@ -338,6 +412,24 @@ export function DeliveryPage() {
   ) => {
     if (change.status === 'DELIVERED') {
       openDeliverConfirm(change.id, change.kind, change.label, note, trip);
+      return;
+    }
+    if (change.status === 'ASSIGNED' && !isDriver) {
+      const title =
+        change.kind === 'trip'
+          ? trip?.tripNo || 'Delivery trip'
+          : note?.deliveryNo || 'Delivery note';
+      const scheduled =
+        (change.kind === 'trip' ? trip?.scheduledDate : note?.scheduledDate) || '';
+      setAssignDialog({
+        id: change.id,
+        kind: change.kind,
+        label: change.label,
+        title,
+        driverId: (change.kind === 'trip' ? trip?.driver?.id : note?.driverId || note?.driver?.id) || '',
+        vehicleId: (change.kind === 'trip' ? trip?.vehicle?.id : note?.vehicle?.id) || '',
+        scheduledDate: scheduled ? String(scheduled).slice(0, 10) : '',
+      });
       return;
     }
     setPendingStatusChange(change);
@@ -493,9 +585,15 @@ export function DeliveryPage() {
   const toolbarActions =
     canCreate &&
     (showDeliveries ? (
-      <Button size="sm" onClick={() => setDeliveryModalOpen(true)}>
+      <Button
+        size="sm"
+        onClick={() => {
+          setPrefillOrderIds([]);
+          setDeliveryModalOpen(true);
+        }}
+      >
         <Plus className="h-4 w-4 mr-1.5" />
-        Add Delivery Trip
+        Bulk Delivery Trip
       </Button>
     ) : showVehicles ? (
       <Button size="sm" onClick={() => setVehicleModalOpen(true)}>
@@ -744,9 +842,14 @@ export function DeliveryPage() {
                 }
                 action={
                   canCreate ? (
-                    <Button onClick={() => setDeliveryModalOpen(true)}>
+                    <Button
+                      onClick={() => {
+                        setPrefillOrderIds([]);
+                        setDeliveryModalOpen(true);
+                      }}
+                    >
                       <Plus className="h-4 w-4 mr-2" />
-                      Add Delivery Trip
+                      Bulk Delivery Trip
                     </Button>
                   ) : undefined
                 }
@@ -819,8 +922,17 @@ export function DeliveryPage() {
         </DataPanel>
       )}
 
-      <Modal open={deliveryModalOpen} onClose={() => setDeliveryModalOpen(false)} title="Add Delivery Trip" size="xl">
-        <DeliveryForm onSuccess={() => setDeliveryModalOpen(false)} onCancel={() => setDeliveryModalOpen(false)} />
+      <Modal
+        open={deliveryModalOpen}
+        onClose={closeDeliveryModal}
+        title="Create Delivery Notes (bulk trip)"
+        size="xl"
+      >
+        <DeliveryForm
+          initialOrderIds={prefillOrderIds}
+          onSuccess={closeDeliveryModal}
+          onCancel={closeDeliveryModal}
+        />
       </Modal>
 
       <Modal open={vehicleModalOpen} onClose={() => setVehicleModalOpen(false)} title="Add Vehicle" size="md">
@@ -843,6 +955,7 @@ export function DeliveryPage() {
                 </p>
               </div>
               <div><p className="text-slate-500">Scheduled</p><p className="font-semibold">{selectedTrip.scheduledDate ? formatDate(selectedTrip.scheduledDate) : '-'}</p></div>
+              <div><p className="text-slate-500">Waybill #</p><p className="font-semibold">{selectedTrip.waybillNo || '—'}</p></div>
               <div><p className="text-slate-500">Status</p><Badge variant={getStatusBadge(selectedTrip.status)}>{selectedTrip.status.replace(/_/g, ' ')}</Badge></div>
             </div>
 
@@ -953,6 +1066,7 @@ export function DeliveryPage() {
                 </p>
               </div>
               <div><p className="text-slate-500">Scheduled</p><p className="font-semibold">{selected.scheduledDate ? formatDate(selected.scheduledDate) : '-'}</p></div>
+              <div><p className="text-slate-500">Waybill #</p><p className="font-semibold">{selected.waybillNo || selected.deliveryTrip?.waybillNo || '—'}</p></div>
               <div><p className="text-slate-500">Status</p><Badge variant={getStatusBadge(selected.status)}>{selected.status.replace(/_/g, ' ')}</Badge></div>
               {selected.deliveredAt && (
                 <div><p className="text-slate-500">Delivered At</p><p className="font-semibold">{formatDate(selected.deliveredAt)}</p></div>
@@ -1055,6 +1169,85 @@ export function DeliveryPage() {
               </Button>
               <Button type="button" loading={statusMutation.isPending} onClick={submitDeliverConfirm}>
                 {deliverConfirm.label}
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      <Modal
+        open={!!assignDialog}
+        onClose={() => setAssignDialog(null)}
+        title="Assign delivery person"
+        size="md"
+      >
+        {assignDialog && (
+          <div className="space-y-4">
+            <p className="text-sm text-slate-600">
+              Assign a driver (and optional vehicle) to <strong>{assignDialog.title}</strong> so it
+              appears on their Delivery list.
+            </p>
+            {statusMutation.isError && (
+              <Alert variant="error">{getApiErrorMessage(statusMutation.error)}</Alert>
+            )}
+            <Select
+              label="Delivery person *"
+              options={[
+                { value: '', label: 'Select driver…' },
+                ...(assignDrivers || []).map((d) => ({
+                  value: d.id,
+                  label: `${d.firstName} ${d.lastName}`.trim() || d.email,
+                })),
+              ]}
+              value={assignDialog.driverId}
+              onChange={(e) =>
+                setAssignDialog((prev) => (prev ? { ...prev, driverId: e.target.value } : prev))
+              }
+            />
+            <Select
+              label="Vehicle (optional)"
+              options={[
+                { value: '', label: 'Unassigned — set later' },
+                ...(assignVehicles || []).map((v) => ({
+                  value: v.id,
+                  label: `${vehicleTypeLabel(v.type)} · ${v.registration}`,
+                })),
+              ]}
+              value={assignDialog.vehicleId}
+              onChange={(e) =>
+                setAssignDialog((prev) => (prev ? { ...prev, vehicleId: e.target.value } : prev))
+              }
+            />
+            <Input
+              label="Scheduled date (optional)"
+              type="date"
+              value={assignDialog.scheduledDate}
+              onChange={(e) =>
+                setAssignDialog((prev) =>
+                  prev ? { ...prev, scheduledDate: e.target.value } : prev
+                )
+              }
+            />
+            <div className="flex justify-end gap-3 pt-2 border-t">
+              <Button type="button" variant="secondary" onClick={() => setAssignDialog(null)}>
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                loading={statusMutation.isPending}
+                disabled={!assignDialog.driverId}
+                onClick={() =>
+                  statusMutation.mutate({
+                    id: assignDialog.id,
+                    kind: assignDialog.kind,
+                    status: 'ASSIGNED',
+                    driverId: assignDialog.driverId,
+                    vehicleId: assignDialog.vehicleId || undefined,
+                    scheduledDate: assignDialog.scheduledDate || undefined,
+                  })
+                }
+              >
+                Assign to driver
               </Button>
             </div>
           </div>

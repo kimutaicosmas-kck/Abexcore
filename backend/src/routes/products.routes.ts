@@ -12,6 +12,7 @@ import { productImageUpload } from '../middleware/upload';
 import { compressProductImage } from '../utils/image';
 import { AccountingService } from '../services/accounting.service';
 import { injectTenantData } from '../utils/tenant';
+import { StockMovementService } from '../services/inventory.service';
 
 const router = Router();
 router.use(authenticate);
@@ -63,9 +64,9 @@ const listProductCategories = asyncHandler(async (_req: AuthRequest, res: Respon
   res.json({ success: true, data: categories });
 });
 
-router.get('/categories/list', authorize('products:read'), listProductCategories);
+router.get('/categories/list', authorizeProductPicker, listProductCategories);
 /** Compatibility alias — GET /categories (POST remains create). */
-router.get('/categories', authorize('products:read'), listProductCategories);
+router.get('/categories', authorizeProductPicker, listProductCategories);
 
 router.post(
   '/categories',
@@ -197,6 +198,110 @@ router.get(
       orderBy: { name: 'asc' },
     });
     res.json({ success: true, data: warehouses });
+  })
+);
+
+/** Sales-safe catalog: active products with finished-goods availability (no costs/admin). */
+router.get(
+  '/available',
+  authorize('sales:read'),
+  validate(productListQuerySchema, 'query'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const { page, limit, search, category } = getQuery<{
+      page: number;
+      limit: number;
+      search?: string;
+      category?: string;
+    }>(req.query);
+    const skip = (page - 1) * limit;
+
+    let warehouseId: string | null = null;
+    try {
+      warehouseId = await StockMovementService.getFinishedGoodsWarehouseId();
+    } catch {
+      warehouseId = null;
+    }
+
+    const where = {
+      isActive: true,
+      deletedAt: null,
+      ...(category ? { categoryId: category } : {}),
+      ...(search
+        ? {
+            OR: [
+              { name: { contains: search } },
+              { sku: { contains: search } },
+              { barcode: { contains: search } },
+            ],
+          }
+        : {}),
+    };
+
+    const [rows, total] = await Promise.all([
+      prisma.product.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { name: 'asc' },
+        select: {
+          id: true,
+          sku: true,
+          name: true,
+          description: true,
+          imageUrl: true,
+          sellingPrice: true,
+          distributorPrice: true,
+          retailPrice: true,
+          minStockLevel: true,
+          category: { select: { id: true, name: true } },
+          stockLevels: {
+            where: warehouseId ? { warehouseId } : undefined,
+            select: {
+              quantity: true,
+              reservedQty: true,
+              warehouse: { select: { id: true, name: true, code: true } },
+            },
+          },
+        },
+      }),
+      prisma.product.count({ where }),
+    ]);
+
+    const data = rows.map((p) => {
+      const onHand = p.stockLevels.reduce((sum, s) => sum + Number(s.quantity), 0);
+      const reserved = p.stockLevels.reduce((sum, s) => sum + Number(s.reservedQty), 0);
+      const availableQty = Math.max(0, onHand - reserved);
+      return {
+        id: p.id,
+        sku: p.sku,
+        name: p.name,
+        description: p.description,
+        imageUrl: p.imageUrl,
+        sellingPrice: Number(p.sellingPrice),
+        distributorPrice: Number(p.distributorPrice),
+        retailPrice: Number(p.retailPrice),
+        minStockLevel: Number(p.minStockLevel),
+        category: p.category,
+        onHand,
+        reservedQty: reserved,
+        availableQty,
+        inStock: availableQty > 0,
+        warehouses: p.stockLevels.map((s) => ({
+          id: s.warehouse.id,
+          name: s.warehouse.name,
+          code: s.warehouse.code,
+          quantity: Number(s.quantity),
+          reservedQty: Number(s.reservedQty),
+          availableQty: Math.max(0, Number(s.quantity) - Number(s.reservedQty)),
+        })),
+      };
+    });
+
+    res.json({
+      success: true,
+      data,
+      pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
+    });
   })
 );
 

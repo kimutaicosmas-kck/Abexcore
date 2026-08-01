@@ -20,6 +20,7 @@ const invoiceSchema = z.object({
   customerId: z.string().optional(),
   supplierId: z.string().optional(),
   dueDate: z.string().optional(),
+  customerPoNumber: z.string().max(100).optional(),
   notes: z.string().optional(),
   items: z.array(invoiceItemSchema).min(1, 'Add at least one item'),
 });
@@ -53,7 +54,10 @@ export function InvoiceForm({ onSuccess, onCancel }: InvoiceFormProps) {
 
   const customerOptions = [
     { value: '', label: 'Select customer...' },
-    ...(customersData || []).map((c) => ({ value: c.id, label: `${c.code} - ${c.name}` })),
+    ...(customersData || []).map((c) => ({
+      value: c.id,
+      label: `${c.code} - ${c.name} (${c.vatStatus === 'NON_VAT' ? 'Non-VAT' : 'VAT'})`,
+    })),
   ];
 
   const supplierOptions = [
@@ -71,10 +75,14 @@ export function InvoiceForm({ onSuccess, onCancel }: InvoiceFormProps) {
 
   const { fields, append, remove } = useFieldArray({ control, name: 'items' });
   const invoiceType = watch('type');
+  const customerId = watch('customerId');
   const items = watch('items');
   const isCustomerType = invoiceType === 'SALES' || invoiceType === 'CREDIT_NOTE';
 
-  const vatRate = useVatRate();
+  const companyVatRate = useVatRate();
+  const selectedCustomer = customersData?.find((c) => c.id === customerId);
+  const vatRate =
+    isCustomerType && selectedCustomer?.vatStatus === 'NON_VAT' ? 0 : companyVatRate;
   const lineTotal = items.reduce(
     (sum, item) => sum + (item.quantity || 0) * (item.unitPrice || 0),
     0
@@ -121,6 +129,14 @@ export function InvoiceForm({ onSuccess, onCancel }: InvoiceFormProps) {
           <Select label="Supplier" options={supplierOptions} {...register('supplierId')} />
         )}
         <Input label="Due Date" type="date" {...register('dueDate')} />
+        {isCustomerType && (
+          <Input
+            label="LPO / Customer PO"
+            placeholder="e.g. customer's purchase order number"
+            {...register('customerPoNumber')}
+            error={errors.customerPoNumber?.message}
+          />
+        )}
       </div>
 
       <div>
@@ -175,7 +191,10 @@ export function InvoiceForm({ onSuccess, onCancel }: InvoiceFormProps) {
           <span>KES {lineTotal.toLocaleString('en-KE', { minimumFractionDigits: 2 })}</span>
         </div>
         <div className="flex justify-between text-slate-600">
-          <span>VAT ({vatRate}%)</span>
+          <span>
+            VAT ({vatRate}%)
+            {isCustomerType && selectedCustomer?.vatStatus === 'NON_VAT' ? ' · Non-VAT customer' : ''}
+          </span>
           <span>KES {taxAmount.toLocaleString('en-KE', { minimumFractionDigits: 2 })}</span>
         </div>
         <div className="flex justify-between font-bold text-slate-900 pt-2 border-t border-slate-200">

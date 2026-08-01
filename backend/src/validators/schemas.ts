@@ -39,14 +39,26 @@ export const createUserSchema = z.object({
   branchId: z.string().uuid().optional(),
   /** Module keys; when provided, stored as per-user access (can differ from role defaults). */
   modules: z.array(z.string().min(1)).optional(),
+  /** When true, also create a linked HR employee profile for this login. */
+  createEmployeeProfile: z.boolean().optional(),
+  /** Link this new user to an existing unlinked employee instead of creating one. */
+  employeeId: z.preprocess(
+    (v) => (v === '' || v === undefined ? undefined : v),
+    z.string().uuid().optional()
+  ),
 });
 
 export const updateUserSchema = createUserSchema.partial().omit({ password: true }).extend({
   password: z.string().min(8).optional(),
   status: z.enum(['ACTIVE', 'INACTIVE', 'SUSPENDED']).optional(),
+  /** Link / unlink HR employee from Users screen (null clears the link). */
+  employeeId: z.preprocess(
+    (v) => (v === '' ? null : v === undefined ? undefined : v),
+    z.string().uuid().nullable().optional()
+  ),
 });
 
-export const createCustomerSchema = z.object({
+const customerFieldsSchema = z.object({
   code: z.string().min(1),
   name: z.string().min(1),
   type: z.enum(['DEALER', 'RETAIL_SHOP', 'INDUSTRY', 'GOVERNMENT', 'NGO']).optional(),
@@ -55,6 +67,8 @@ export const createCustomerSchema = z.object({
   address: z.string().optional(),
   city: z.string().optional(),
   taxPin: z.string().optional(),
+  /** Mandatory: VAT-registered vs Non-VAT (company still invoices Non-VAT at 0% tax). */
+  vatStatus: z.enum(['VAT', 'NON_VAT']),
   creditLimit: z.number().min(0).optional(),
   paymentTerms: z.number().int().min(0).optional(),
   notes: z.string().optional(),
@@ -65,9 +79,25 @@ export const createCustomerSchema = z.object({
   ),
 });
 
-export const updateCustomerSchema = createCustomerSchema.partial().extend({
-  isActive: z.boolean().optional(),
-});
+function refineCustomerVat(
+  data: { vatStatus?: 'VAT' | 'NON_VAT'; taxPin?: string },
+  ctx: z.RefinementCtx
+) {
+  if (data.vatStatus === 'VAT' && !data.taxPin?.trim()) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Tax PIN is required for VAT customers',
+      path: ['taxPin'],
+    });
+  }
+}
+
+export const createCustomerSchema = customerFieldsSchema.superRefine(refineCustomerVat);
+
+export const updateCustomerSchema = customerFieldsSchema
+  .partial()
+  .extend({ isActive: z.boolean().optional() })
+  .superRefine(refineCustomerVat);
 
 export const createContactSchema = z.object({
   name: z.string().min(1),
@@ -164,6 +194,10 @@ export const customerListQuerySchema = paginationSchema.extend({
     (v) => (v === '' || v === undefined ? undefined : v),
     z.enum(['DEALER', 'RETAIL_SHOP', 'INDUSTRY', 'GOVERNMENT', 'NGO']).optional()
   ),
+  vatStatus: z.preprocess(
+    (v) => (v === '' || v === undefined ? undefined : v),
+    z.enum(['VAT', 'NON_VAT']).optional()
+  ),
   isActive: z.preprocess(
     (v) => (v === '' || v === undefined ? undefined : v === 'true' ? true : v === 'false' ? false : undefined),
     z.boolean().optional()
@@ -177,6 +211,16 @@ export const customerListQuerySchema = paginationSchema.extend({
   includeUnassigned: z.preprocess(
     (v) => (v === '' || v === undefined ? undefined : v === 'true' || v === true),
     z.boolean().optional()
+  ),
+});
+
+export const customerStatementQuerySchema = z.object({
+  from: z.preprocess((v) => (v === '' || v === undefined ? undefined : v), z.string().optional()),
+  to: z.preprocess((v) => (v === '' || v === undefined ? undefined : v), z.string().optional()),
+  /** FULL = ledger with payments; OUTSTANDING = open invoices / amount due */
+  mode: z.preprocess(
+    (v) => (v === '' || v === undefined ? 'FULL' : v),
+    z.enum(['FULL', 'OUTSTANDING']).default('FULL')
   ),
 });
 
@@ -261,6 +305,11 @@ export const createSalesOrderSchema = z.object({
     z.string().uuid().optional()
   ),
   requiredDate: optionalDateString,
+  /** Customer's own PO / LPO number (appears on the sales invoice). */
+  customerPoNumber: z.preprocess(
+    (v) => (typeof v === 'string' && v.trim() === '' ? undefined : v),
+    z.string().trim().max(100).optional()
+  ),
   notes: z.string().optional(),
   items: z.array(z.object({
     productId: z.string().uuid(),
@@ -370,6 +419,11 @@ export const createInvoiceSchema = z.object({
   supplierId: z.string().uuid().optional(),
   salesOrderId: z.string().uuid().optional(),
   dueDate: z.string().optional(),
+  /** Customer's PO / LPO number — included on the sales invoice document. */
+  customerPoNumber: z.preprocess(
+    (v) => (typeof v === 'string' && v.trim() === '' ? undefined : v),
+    z.string().trim().max(100).optional()
+  ),
   notes: z.string().optional(),
   items: z.array(z.object({
     description: z.string(),
@@ -404,6 +458,18 @@ export const createEmployeeSchema = z.object({
   position: z.string().optional(),
   hireDate: z.string(),
   salary: z.number().min(0).optional(),
+  /** System login for this employee (one user ↔ one employee). Empty/null = unlinked. */
+  userId: z.preprocess(
+    (v) => (v === '' ? null : v === undefined ? undefined : v),
+    z.string().uuid().nullable().optional()
+  ),
+});
+
+export const linkEmployeeUserSchema = z.object({
+  userId: z.preprocess(
+    (v) => (v === '' ? null : v),
+    z.string().uuid().nullable()
+  ),
 });
 
 const deliveryItemInputSchema = z.object({
@@ -423,6 +489,11 @@ export const createDeliverySchema = z
     driverId: z.string().uuid().optional(),
     scheduledDate: z.string().optional(),
     notes: z.string().optional(),
+    /** Optional carrier waybill / consignment no. (hired truck or other transport). */
+    waybillNo: z.preprocess(
+      (v) => (typeof v === 'string' && v.trim() === '' ? undefined : v),
+      z.string().max(100).optional()
+    ),
     items: z.array(deliveryItemInputSchema).optional(),
     orders: z.array(deliveryOrderInputSchema).optional(),
   })
@@ -437,6 +508,18 @@ export const createDeliverySchema = z
 export const updateDeliveryTripStatusSchema = z.object({
   status: z.enum(['PENDING', 'ASSIGNED', 'IN_TRANSIT', 'DELIVERED', 'FAILED', 'RETURNED']),
   proofOfDelivery: z.string().optional(),
+  driverId: z.preprocess(
+    (v) => (v === '' || v === null || v === undefined ? undefined : v),
+    z.string().uuid().optional()
+  ),
+  vehicleId: z.preprocess(
+    (v) => (v === '' || v === null || v === undefined ? undefined : v),
+    z.string().uuid().optional()
+  ),
+  scheduledDate: z.preprocess(
+    (v) => (v === '' || v === null || v === undefined ? undefined : v),
+    z.string().optional()
+  ),
   actualItems: z
     .array(
       z.object({
@@ -505,17 +588,35 @@ export const createRequisitionSchema = z.object({
 });
 
 export const createGoodsReceiptSchema = z.object({
-  purchaseOrderId: z.string().uuid().optional(),
+  purchaseOrderId: z.preprocess(
+    (v) => (v === '' || v === undefined || v === null ? undefined : v),
+    z.string().uuid().optional()
+  ),
   supplierId: z.string().uuid(),
   warehouseId: z.string().uuid(),
-  notes: z.string().optional(),
+  notes: z.preprocess(
+    (v) => (v === '' || v === undefined || v === null ? undefined : v),
+    z.string().optional()
+  ),
   items: z.array(z.object({
-    rawMaterialId: z.string().uuid().optional(),
-    batchNumber: z.string().optional(),
+    rawMaterialId: z.preprocess(
+      (v) => (v === '' || v === undefined || v === null ? undefined : v),
+      z.string().uuid().optional()
+    ),
+    batchNumber: z.preprocess(
+      (v) => (v === '' || v === undefined || v === null ? undefined : v),
+      z.string().optional()
+    ),
     quantity: z.number().min(0.001),
-    unit: z.string().optional(),
+    unit: z.preprocess(
+      (v) => (v === '' || v === undefined || v === null ? undefined : v),
+      z.string().optional()
+    ),
     unitCost: z.number().min(0),
-    expiryDate: z.string().optional(),
+    expiryDate: z.preprocess(
+      (v) => (v === '' || v === undefined || v === null ? undefined : v),
+      z.string().optional()
+    ),
   })).min(1),
 });
 
@@ -694,9 +795,45 @@ export const salesByPersonQuerySchema = paginationSchema.extend({
   ),
 });
 
+export const productsSoldQuerySchema = paginationSchema.extend({
+  limit: z.coerce.number().int().min(1).max(200).default(50),
+  startDate: z.preprocess(
+    (v) => (v === '' || v === undefined ? undefined : v),
+    z.string().optional()
+  ),
+  endDate: z.preprocess(
+    (v) => (v === '' || v === undefined ? undefined : v),
+    z.string().optional()
+  ),
+  search: z.preprocess(
+    (v) => (v === '' || v === undefined ? undefined : v),
+    z.string().max(100).optional()
+  ),
+  productId: z.preprocess(
+    (v) => (v === '' || v === undefined ? undefined : v),
+    z.string().uuid().optional()
+  ),
+  needsRestockOnly: z.preprocess(
+    (v) => (v === '' || v === undefined ? undefined : v === 'true' || v === true),
+    z.boolean().optional()
+  ),
+});
+
 export const updateDeliveryStatusSchema = z.object({
   status: z.enum(['PENDING', 'ASSIGNED', 'IN_TRANSIT', 'DELIVERED', 'FAILED', 'RETURNED']),
   proofOfDelivery: z.string().optional(),
+  driverId: z.preprocess(
+    (v) => (v === '' || v === null || v === undefined ? undefined : v),
+    z.string().uuid().optional()
+  ),
+  vehicleId: z.preprocess(
+    (v) => (v === '' || v === null || v === undefined ? undefined : v),
+    z.string().uuid().optional()
+  ),
+  scheduledDate: z.preprocess(
+    (v) => (v === '' || v === null || v === undefined ? undefined : v),
+    z.string().optional()
+  ),
   actualItems: z
     .array(
       z.object({
@@ -734,6 +871,37 @@ export const financeListQuerySchema = paginationSchema.extend({
   ),
 });
 
+/** Payments list: filter by when money was received and/or vs invoice date. */
+export const paymentListQuerySchema = paginationSchema.extend({
+  period: z.preprocess(
+    (v) => (v === '' || v === undefined ? undefined : v),
+    z
+      .enum([
+        'this_week',
+        'last_week',
+        'this_month',
+        'last_month',
+        /** Payment fell in the same week the invoice was issued */
+        'same_week_as_invoice',
+        /** Payment fell in the same month the invoice was issued */
+        'same_month_as_invoice',
+        /** Invoice issued this week and paid this week */
+        'this_week_taken_and_paid',
+        /** Invoice issued this month and paid this month */
+        'this_month_taken_and_paid',
+      ])
+      .optional()
+  ),
+  from: z.preprocess((v) => (v === '' || v === undefined ? undefined : v), z.string().optional()),
+  to: z.preprocess((v) => (v === '' || v === undefined ? undefined : v), z.string().optional()),
+  method: z.preprocess(
+    (v) => (v === '' || v === undefined ? undefined : v),
+    z
+      .enum(['CASH', 'BANK_TRANSFER', 'CHEQUE', 'MPESA', 'COOP_PAYBILL', 'CARD', 'CREDIT'])
+      .optional()
+  ),
+});
+
 export const hrListQuerySchema = paginationSchema.extend({
   status: z.preprocess(
     (v) => (v === '' || v === undefined ? undefined : v),
@@ -765,10 +933,16 @@ export const createJournalEntrySchema = z.object({
   date: z.string().optional(),
   description: z.string().min(1),
   reference: z.string().optional(),
+  /** Optional link to a sales/purchase invoice (stored as sourceType=INVOICE). */
+  invoiceId: z.preprocess(
+    (v) => (v === '' || v === null || v === undefined ? undefined : v),
+    z.string().uuid().optional()
+  ),
   lines: z.array(z.object({
     accountId: z.string().uuid(),
     debit: z.coerce.number().min(0).default(0),
     credit: z.coerce.number().min(0).default(0),
+    description: z.string().optional(),
   })).min(2),
 }).superRefine((data, ctx) => {
   const totalDebit = data.lines.reduce((sum, line) => sum + Number(line.debit || 0), 0);
@@ -782,8 +956,24 @@ export const createJournalEntrySchema = z.object({
   }
 });
 
+export const createLeaveSchema = z.object({
+  employeeId: z.string().uuid(),
+  type: z.string().min(1).max(50),
+  startDate: z.string().min(1),
+  endDate: z.string().min(1),
+  reason: z.string().max(2000).optional(),
+});
+
+export const createMyLeaveSchema = z.object({
+  type: z.string().min(1).max(50),
+  startDate: z.string().min(1),
+  endDate: z.string().min(1),
+  reason: z.string().max(2000).optional(),
+});
+
 export const approveLeaveSchema = z.object({
   status: z.enum(['APPROVED', 'REJECTED', 'CANCELLED']),
+  decisionNote: z.string().max(2000).optional(),
 });
 
 export const searchQuerySchema = z.object({

@@ -1,12 +1,14 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useFieldArray, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plus, Trash2 } from 'lucide-react';
+import { Download, Mail, Plus, Trash2 } from 'lucide-react';
 import { inventoryApi } from '../../services/api';
-import { Button, Input, Select } from '../ui';
-import { RawMaterial, Supplier } from '../../types';
+import { downloadFile } from '../../utils/download';
+import { getApiErrorMessage } from '../../utils/apiError';
+import { Alert, Button, Input, Select } from '../ui';
+import { PurchaseOrder, RawMaterial, Supplier } from '../../types';
 
 const poItemSchema = z.object({
   rawMaterialId: z.string().optional(),
@@ -31,6 +33,9 @@ interface PurchaseOrderFormProps {
 
 export function PurchaseOrderForm({ onSuccess, onCancel }: PurchaseOrderFormProps) {
   const queryClient = useQueryClient();
+  const [createdPo, setCreatedPo] = useState<PurchaseOrder | null>(null);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
+  const [downloading, setDownloading] = useState(false);
 
   const { data: suppliersData } = useQuery({
     queryKey: ['suppliers'],
@@ -81,6 +86,18 @@ export function PurchaseOrderForm({ onSuccess, onCancel }: PurchaseOrderFormProp
     0
   );
 
+  const downloadPoPdf = async (po: PurchaseOrder) => {
+    setDownloadError(null);
+    setDownloading(true);
+    try {
+      await downloadFile(inventoryApi.purchaseOrderPdfPath(po.id), `${po.poNumber}.pdf`);
+    } catch (err) {
+      setDownloadError(err instanceof Error ? err.message : 'Failed to download PDF');
+    } finally {
+      setDownloading(false);
+    }
+  };
+
   const mutation = useMutation({
     mutationFn: (data: PurchaseOrderFormData) => {
       const payload = {
@@ -93,12 +110,87 @@ export function PurchaseOrderForm({ onSuccess, onCancel }: PurchaseOrderFormProp
       };
       return inventoryApi.createPurchaseOrder(payload);
     },
-    onSuccess: () => {
+    onSuccess: async (res) => {
       queryClient.invalidateQueries({ queryKey: ['purchase-orders'] });
       queryClient.invalidateQueries({ queryKey: ['procurement-stats'] });
-      onSuccess();
+      const po = res.data.data as PurchaseOrder;
+      setCreatedPo(po);
+      try {
+        await downloadFile(inventoryApi.purchaseOrderPdfPath(po.id), `${po.poNumber}.pdf`);
+      } catch {
+        // Creation succeeded — user can download from the success panel.
+      }
     },
   });
+
+  const sendMutation = useMutation({
+    mutationFn: (id: string) => inventoryApi.sendPurchaseOrder(id),
+  });
+
+  if (createdPo) {
+    const supplierEmail = createdPo.supplier?.email?.trim();
+    return (
+      <div className="space-y-4">
+        <Alert variant="success">
+          Purchase order <strong>{createdPo.poNumber}</strong> created for{' '}
+          {createdPo.supplier?.name || 'supplier'}. Download the PDF to send to your supplier.
+        </Alert>
+
+        {downloadError && <Alert variant="error">{downloadError}</Alert>}
+        {sendMutation.isError && (
+          <Alert variant="error">{getApiErrorMessage(sendMutation.error)}</Alert>
+        )}
+        {sendMutation.isSuccess && (
+          <Alert variant="success">
+            {(sendMutation.data?.data?.message as string) ||
+              `Purchase order emailed${supplierEmail ? ` to ${supplierEmail}` : ''}`}
+          </Alert>
+        )}
+
+        <div className="rounded-lg border border-border/60 bg-surface-muted/40 p-4 text-sm space-y-1">
+          <p>
+            <span className="text-slate-500">PO Number:</span>{' '}
+            <span className="font-semibold">{createdPo.poNumber}</span>
+          </p>
+          <p>
+            <span className="text-slate-500">Supplier:</span>{' '}
+            <span className="font-semibold">{createdPo.supplier?.name}</span>
+          </p>
+          {supplierEmail && (
+            <p>
+              <span className="text-slate-500">Email:</span> {supplierEmail}
+            </p>
+          )}
+        </div>
+
+        <div className="flex flex-wrap justify-end gap-2 pt-2 border-t">
+          <Button
+            type="button"
+            variant="secondary"
+            loading={downloading}
+            onClick={() => downloadPoPdf(createdPo)}
+          >
+            <Download className="h-4 w-4 mr-1.5" />
+            Download PDF
+          </Button>
+          {supplierEmail && (
+            <Button
+              type="button"
+              variant="secondary"
+              loading={sendMutation.isPending}
+              onClick={() => sendMutation.mutate(createdPo.id)}
+            >
+              <Mail className="h-4 w-4 mr-1.5" />
+              Email to supplier
+            </Button>
+          )}
+          <Button type="button" onClick={onSuccess}>
+            Done
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <form onSubmit={handleSubmit((data) => mutation.mutate(data))} className="space-y-4">

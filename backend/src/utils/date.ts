@@ -33,6 +33,66 @@ export function startOfMonth(date: Date): Date {
   return new Date(date.getFullYear(), date.getMonth(), 1);
 }
 
+export function endOfMonth(date: Date): Date {
+  return endOfDay(new Date(date.getFullYear(), date.getMonth() + 1, 0));
+}
+
+/** Local week start (Monday = 1 by default). */
+export function startOfWeek(date: Date, weekStartsOn = 1): Date {
+  const d = startOfDay(date);
+  const day = d.getDay(); // 0 = Sunday
+  const diff = (day - weekStartsOn + 7) % 7;
+  d.setDate(d.getDate() - diff);
+  return d;
+}
+
+export function endOfWeek(date: Date, weekStartsOn = 1): Date {
+  const start = startOfWeek(date, weekStartsOn);
+  const end = new Date(start);
+  end.setDate(end.getDate() + 6);
+  return endOfDay(end);
+}
+
+export type PaymentPeriodPreset =
+  | 'this_week'
+  | 'last_week'
+  | 'this_month'
+  | 'last_month';
+
+export type PaymentInvoiceTimingPreset =
+  | 'same_week_as_invoice'
+  | 'same_month_as_invoice'
+  | 'this_week_taken_and_paid'
+  | 'this_month_taken_and_paid';
+
+/** Inclusive paymentDate range for a named period (local calendar). */
+export function paymentPeriodRange(
+  period: PaymentPeriodPreset,
+  now = new Date()
+): { gte: Date; lte: Date } {
+  if (period === 'this_week') {
+    return { gte: startOfWeek(now), lte: endOfWeek(now) };
+  }
+  if (period === 'last_week') {
+    const ref = subDays(startOfWeek(now), 1);
+    return { gte: startOfWeek(ref), lte: endOfWeek(ref) };
+  }
+  if (period === 'this_month') {
+    return { gte: startOfMonth(now), lte: endOfMonth(now) };
+  }
+  // last_month
+  const lastMonth = subMonths(startOfMonth(now), 1);
+  return { gte: startOfMonth(lastMonth), lte: endOfMonth(lastMonth) };
+}
+
+export function isSameLocalWeek(a: Date, b: Date): boolean {
+  return startOfWeek(a).getTime() === startOfWeek(b).getTime();
+}
+
+export function isSameLocalMonth(a: Date, b: Date): boolean {
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth();
+}
+
 export function subDays(date: Date, days: number): Date {
   const d = new Date(date);
   d.setDate(d.getDate() - days);

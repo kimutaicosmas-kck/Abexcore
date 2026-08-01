@@ -165,16 +165,21 @@ export class AccountingService {
     const tax = Number(invoice.taxAmount);
     const total = Number(invoice.totalAmount);
 
+    const lines: JournalLineInput[] = [
+      { accountCode: '1200', debit: total, credit: 0, description: 'Accounts receivable' },
+      { accountCode: '4100', debit: 0, credit: subtotal, description: 'Sales revenue' },
+    ];
+    // Non-VAT invoices post with taxAmount = 0 — omit zero VAT line.
+    if (tax > 0.009) {
+      lines.push({ accountCode: '2200', debit: 0, credit: tax, description: 'VAT payable' });
+    }
+
     return this.createJournalEntry(tx, {
       description: `Sales invoice ${invoice.invoiceNumber}`,
       reference: invoice.invoiceNumber,
       sourceType: 'SALES_INVOICE',
       sourceId: invoice.id,
-      lines: [
-        { accountCode: '1200', debit: total, credit: 0, description: 'Accounts receivable' },
-        { accountCode: '4100', debit: 0, credit: subtotal, description: 'Sales revenue' },
-        { accountCode: '2200', debit: 0, credit: tax, description: 'VAT payable' },
-      ],
+      lines,
     });
   }
 

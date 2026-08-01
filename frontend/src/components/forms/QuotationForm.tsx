@@ -44,7 +44,7 @@ export function QuotationForm({ onSuccess, onCancel }: QuotationFormProps) {
 
   const customerOptions = (customersData || []).map((c) => ({
     value: c.id,
-    label: `${c.code} - ${c.name}`,
+    label: `${c.code} - ${c.name} (${c.vatStatus === 'NON_VAT' ? 'Non-VAT' : 'VAT'})`,
   }));
 
   const productOptions = [
@@ -64,6 +64,7 @@ export function QuotationForm({ onSuccess, onCancel }: QuotationFormProps) {
 
   const { fields, append, remove } = useFieldArray({ control, name: 'items' });
   const items = watch('items');
+  const customerId = watch('customerId');
 
   useEffect(() => {
     items.forEach((item, index) => {
@@ -76,7 +77,9 @@ export function QuotationForm({ onSuccess, onCancel }: QuotationFormProps) {
     });
   }, [items, productsData, setValue]);
 
-  const vatRate = useVatRate();
+  const companyVatRate = useVatRate();
+  const selectedCustomer = customersData?.find((c) => c.id === customerId);
+  const vatRate = selectedCustomer?.vatStatus === 'NON_VAT' ? 0 : companyVatRate;
   const vatMultiplier = vatRate / 100;
 
   const lineTotal = items.reduce((sum, item) => {
@@ -174,7 +177,13 @@ export function QuotationForm({ onSuccess, onCancel }: QuotationFormProps) {
 
       <div className="bg-gray-50 rounded-lg p-4 space-y-1 text-sm">
         <div className="flex justify-between"><span>Subtotal</span><span>KES {lineTotal.toLocaleString('en-KE', { minimumFractionDigits: 2 })}</span></div>
-        <div className="flex justify-between"><span>VAT ({vatRate}%)</span><span>KES {tax.toLocaleString('en-KE', { minimumFractionDigits: 2 })}</span></div>
+        <div className="flex justify-between">
+          <span>
+            VAT ({vatRate}%)
+            {selectedCustomer?.vatStatus === 'NON_VAT' ? ' · Non-VAT customer' : ''}
+          </span>
+          <span>KES {tax.toLocaleString('en-KE', { minimumFractionDigits: 2 })}</span>
+        </div>
         <div className="flex justify-between font-bold text-base pt-1 border-t"><span>Total</span><span>KES {total.toLocaleString('en-KE', { minimumFractionDigits: 2 })}</span></div>
       </div>
       </ModalFormBody>

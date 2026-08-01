@@ -130,6 +130,17 @@ export function HRPage() {
     { key: 'name', label: 'Name', render: (_: unknown, row: Record<string, unknown>) => `${row.firstName} ${row.lastName}` },
     { key: 'position', label: 'Position' },
     { key: 'department', label: 'Department', render: (_: unknown, row: Record<string, unknown>) => (row.department as { name: string })?.name || '-' },
+    {
+      key: 'user',
+      label: 'Login',
+      render: (_: unknown, row: Record<string, unknown>) => {
+        const emp = row as unknown as Employee;
+        if (emp.user) {
+          return <Badge variant="success">{emp.user.email}</Badge>;
+        }
+        return <Badge variant="warning">Not linked</Badge>;
+      },
+    },
     { key: 'salary', label: 'Salary', render: (val: unknown) => formatCurrency(val as number) },
     { key: 'isActive', label: 'Status', render: (val: unknown) => <Badge variant={val ? 'success' : 'danger'}>{val ? 'Active' : 'Inactive'}</Badge> },
     {

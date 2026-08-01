@@ -1,5 +1,5 @@
 import { Router, Response } from 'express';
-import { authenticate, authorize, AuthRequest } from '../middleware/auth';
+import { authenticate, authorize, authorizeAny, AuthRequest } from '../middleware/auth';
 import { validate } from '../middleware/validate';
 import { asyncHandler, AppError } from '../middleware/errorHandler';
 import { auditLog } from '../middleware/auditLog';
@@ -7,12 +7,15 @@ import {
   createCustomerSchema,
   updateCustomerSchema,
   customerListQuerySchema,
+  customerStatementQuerySchema,
   createContactSchema,
 } from '../validators/schemas';
 import { createCrudService } from '../utils/crud';
 import { getParam, getQuery } from '../utils/request';
 import prisma from '../config/database';
 import { requireTenantId } from '../utils/tenant';
+import { CustomerStatementService } from '../services/customerStatement.service';
+import { z } from 'zod';
 
 const router = Router();
 router.use(authenticate);
@@ -45,21 +48,33 @@ router.get(
   authorize('customers:read'),
   validate(customerListQuerySchema, 'query'),
   asyncHandler(async (req: AuthRequest, res: Response) => {
-    const { page, limit, search, sortBy, sortOrder, type, isActive, salesPersonId, includeUnassigned } =
-      getQuery<{
-        page: number;
-        limit: number;
-        search?: string;
-        sortBy?: string;
-        sortOrder?: 'asc' | 'desc';
-        type?: string;
-        isActive?: boolean;
-        salesPersonId?: string;
-        includeUnassigned?: boolean;
-      }>(req.query);
+    const {
+      page,
+      limit,
+      search,
+      sortBy,
+      sortOrder,
+      type,
+      vatStatus,
+      isActive,
+      salesPersonId,
+      includeUnassigned,
+    } = getQuery<{
+      page: number;
+      limit: number;
+      search?: string;
+      sortBy?: string;
+      sortOrder?: 'asc' | 'desc';
+      type?: string;
+      vatStatus?: 'VAT' | 'NON_VAT';
+      isActive?: boolean;
+      salesPersonId?: string;
+      includeUnassigned?: boolean;
+    }>(req.query);
 
     const where: Record<string, unknown> = {};
     if (type) where.type = type;
+    if (vatStatus) where.vatStatus = vatStatus;
     if (isActive !== undefined) where.isActive = isActive;
 
     // Sales officers see their own customers plus unassigned (free) accounts.
@@ -75,6 +90,128 @@ router.get(
 
     const result = await customerService.list({ page, limit, search, sortBy, sortOrder, where });
     res.json({ success: true, ...result });
+  })
+);
+
+const vatStatusReportQuery = z.object({
+  vatStatus: z.enum(['VAT', 'NON_VAT', 'ALL']).default('ALL'),
+});
+
+router.get(
+  '/reports/vat-status',
+  authorizeAny('customers:read', 'reports:read', 'finance:read'),
+  validate(vatStatusReportQuery, 'query'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const { vatStatus } = getQuery<{ vatStatus: 'VAT' | 'NON_VAT' | 'ALL' }>(req.query);
+    const data = await CustomerStatementService.getVatCustomerReport(vatStatus);
+    res.json({ success: true, data });
+  })
+);
+
+router.get(
+  '/reports/vat-status/pdf',
+  authorizeAny('customers:read', 'reports:read', 'finance:read'),
+  validate(vatStatusReportQuery, 'query'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const { vatStatus } = getQuery<{ vatStatus: 'VAT' | 'NON_VAT' | 'ALL' }>(req.query);
+    const report = await CustomerStatementService.getVatCustomerReport(vatStatus);
+    const { ExportService } = await import('../services/export.service');
+    const pdf = await ExportService.generateVatCustomerReportPDF(report);
+    const slug =
+      vatStatus === 'ALL' ? 'vat-and-non-vat-customers' : vatStatus === 'VAT' ? 'vat-customers' : 'non-vat-customers';
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${slug}.pdf"`);
+    res.send(pdf);
+  })
+);
+
+router.get(
+  '/reports/vat-status/excel',
+  authorizeAny('customers:read', 'reports:read', 'finance:read'),
+  validate(vatStatusReportQuery, 'query'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const { vatStatus } = getQuery<{ vatStatus: 'VAT' | 'NON_VAT' | 'ALL' }>(req.query);
+    const report = await CustomerStatementService.getVatCustomerReport(vatStatus);
+    const { ExportService } = await import('../services/export.service');
+    const excel = await ExportService.generateVatCustomerReportExcel(report);
+    const slug =
+      vatStatus === 'ALL' ? 'vat-and-non-vat-customers' : vatStatus === 'VAT' ? 'vat-customers' : 'non-vat-customers';
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${slug}.xlsx"`);
+    res.send(excel);
+  })
+);
+
+router.get(
+  '/:id/statement',
+  authorizeAny('customers:read', 'finance:read', 'reports:read'),
+  validate(customerStatementQuerySchema, 'query'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const { from, to, mode } = getQuery<{ from?: string; to?: string; mode?: 'FULL' | 'OUTSTANDING' }>(
+      req.query
+    );
+    const data = await CustomerStatementService.getStatement(
+      getParam(req.params.id),
+      from,
+      to,
+      mode || 'FULL'
+    );
+    res.json({ success: true, data });
+  })
+);
+
+router.get(
+  '/:id/statement/pdf',
+  authorizeAny('customers:read', 'finance:read', 'reports:read'),
+  validate(customerStatementQuerySchema, 'query'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const { from, to, mode } = getQuery<{ from?: string; to?: string; mode?: 'FULL' | 'OUTSTANDING' }>(
+      req.query
+    );
+    const statement = await CustomerStatementService.getStatement(
+      getParam(req.params.id),
+      from,
+      to,
+      mode || 'FULL'
+    );
+    const { ExportService } = await import('../services/export.service');
+    const pdf = await ExportService.generateCustomerStatementPDF(statement);
+    const suffix = statement.mode === 'OUTSTANDING' ? 'outstanding' : 'statement';
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${statement.customer.code}-${suffix}.pdf"`
+    );
+    res.send(pdf);
+  })
+);
+
+router.get(
+  '/:id/statement/excel',
+  authorizeAny('customers:read', 'finance:read', 'reports:read'),
+  validate(customerStatementQuerySchema, 'query'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const { from, to, mode } = getQuery<{ from?: string; to?: string; mode?: 'FULL' | 'OUTSTANDING' }>(
+      req.query
+    );
+    const statement = await CustomerStatementService.getStatement(
+      getParam(req.params.id),
+      from,
+      to,
+      mode || 'FULL'
+    );
+    const { ExportService } = await import('../services/export.service');
+    const excel = await ExportService.generateCustomerStatementExcel(statement);
+    const suffix = statement.mode === 'OUTSTANDING' ? 'outstanding' : 'statement';
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    );
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${statement.customer.code}-${suffix}.xlsx"`
+    );
+    res.send(excel);
   })
 );
 

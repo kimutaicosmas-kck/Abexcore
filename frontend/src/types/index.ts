@@ -16,6 +16,15 @@ export interface User {
   lastLoginAt?: string;
   createdAt?: string;
   loginHistory?: LoginHistoryEntry[];
+  /** Linked HR employee profile (one login ↔ one employee). */
+  employee?: {
+    id: string;
+    employeeNo: string;
+    firstName: string;
+    lastName: string;
+    position?: string;
+    isActive: boolean;
+  } | null;
 }
 
 export interface LoginHistoryEntry {
@@ -114,6 +123,8 @@ export interface SalesPersonRef {
   lastName: string;
 }
 
+export type CustomerVatStatus = 'VAT' | 'NON_VAT';
+
 export interface Customer {
   id: string;
   code: string;
@@ -124,6 +135,8 @@ export interface Customer {
   address?: string;
   city?: string;
   taxPin?: string;
+  /** VAT = taxable invoices; NON_VAT = company invoices at 0% VAT. */
+  vatStatus?: CustomerVatStatus;
   creditLimit: number;
   creditUsed: number;
   paymentTerms?: number;
@@ -330,6 +343,8 @@ export interface SalesOrder {
   status: string;
   orderDate: string;
   totalAmount: number;
+  /** Customer's own PO / LPO number — carried onto the sales invoice. */
+  customerPoNumber?: string | null;
   salesPersonId?: string | null;
   salesPerson?: SalesPersonRef | null;
   createdBy?: SalesPersonRef | null;
@@ -390,11 +405,17 @@ export interface Payment {
   reference?: string;
   paymentDate: string;
   isReconciled?: boolean;
+  /** True when payment date is in the same calendar week as the invoice date. */
+  paidSameWeekAsInvoice?: boolean;
+  /** True when payment date is in the same calendar month as the invoice date. */
+  paidSameMonthAsInvoice?: boolean;
   invoice?: {
     id: string;
     invoiceNumber: string;
+    invoiceDate?: string;
     customer?: { name: string };
     supplier?: { name: string };
+    salesOrder?: { id: string; orderNumber: string; orderDate: string } | null;
   };
 }
 
@@ -411,6 +432,8 @@ export interface Invoice {
   totalAmount: number;
   paidAmount: number;
   status: string;
+  /** Customer's purchase order / LPO number. */
+  customerPoNumber?: string | null;
   fiscalStatus?: string;
   etimsControlCode?: string;
   etimsQrCode?: string;
@@ -420,6 +443,7 @@ export interface Invoice {
   salesOrder?: {
     id: string;
     orderNumber: string;
+    customerPoNumber?: string | null;
     salesPersonId?: string | null;
     salesPerson?: SalesPersonRef | null;
     createdBy?: SalesPersonRef | null;
@@ -432,10 +456,22 @@ export interface Employee {
   firstName: string;
   lastName: string;
   email?: string;
+  phone?: string;
   position?: string;
-  department?: { name: string };
+  hireDate?: string;
+  departmentId?: string;
+  userId?: string | null;
+  department?: { id?: string; name: string };
   salary: number;
   isActive: boolean;
+  /** Linked system login. */
+  user?: {
+    id: string;
+    email: string;
+    firstName: string;
+    lastName: string;
+    status: string;
+  } | null;
 }
 
 export interface Machine {
@@ -548,6 +584,7 @@ export interface DeliveryNote {
   driverId?: string | null;
   deliveryTripId?: string | null;
   stopSequence?: number | null;
+  waybillNo?: string | null;
   scheduledDate?: string;
   deliveredAt?: string;
   createdAt?: string;
@@ -556,7 +593,7 @@ export interface DeliveryNote {
   salesOrder: SalesOrder & { customer: Customer };
   vehicle?: Vehicle;
   driver?: { id: string; firstName: string; lastName: string; email: string };
-  deliveryTrip?: Pick<DeliveryTrip, 'id' | 'tripNo' | 'status'>;
+  deliveryTrip?: Pick<DeliveryTrip, 'id' | 'tripNo' | 'status' | 'waybillNo'>;
   items: { id: string; productId: string; quantity: number }[];
 }
 
@@ -564,6 +601,7 @@ export interface DeliveryTrip {
   id: string;
   tripNo: string;
   status: string;
+  waybillNo?: string | null;
   scheduledDate?: string;
   createdAt?: string;
   notes?: string;
@@ -696,6 +734,31 @@ export interface SalesByPersonReport {
   pagination: Pagination;
 }
 
+export interface ProductsSoldRow {
+  productId: string;
+  sku: string;
+  name: string;
+  category: string;
+  qtySold: number;
+  onHand: number;
+  reservedQty: number;
+  availableQty: number;
+  minStockLevel: number;
+  needsRestock: boolean;
+  suggestedRestockQty: number;
+}
+
+export interface ProductsSoldReport {
+  period: { startDate: string | null; endDate: string | null };
+  summary: {
+    productCount: number;
+    totalQtySold: number;
+    needsRestockCount: number;
+  };
+  rows: ProductsSoldRow[];
+  pagination: Pagination;
+}
+
 export interface SalesPerformerRow {
   rank: number;
   salesPersonId: string;
@@ -798,7 +861,11 @@ export interface LeaveRequest {
   endDate: string;
   reason?: string;
   status: string;
+  decisionNote?: string;
+  approvedAt?: string;
   employee: { firstName: string; lastName: string; employeeNo: string };
+  requestedBy?: { firstName: string; lastName: string } | null;
+  approvedBy?: { firstName: string; lastName: string } | null;
 }
 
 export interface PayrollRecord {

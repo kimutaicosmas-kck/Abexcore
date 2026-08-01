@@ -500,6 +500,21 @@ paths:
           description: Unauthorized
         '403':
           description: Forbidden
+  /delivery/ready-orders:
+    get:
+      tags: [Delivery]
+      summary: GET /delivery/ready-orders
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
   /delivery/stats:
     get:
       tags: [Delivery]

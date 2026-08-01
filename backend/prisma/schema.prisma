@@ -23,6 +23,12 @@ enum CustomerType {
   NGO
 }
 
+/** Whether the customer is VAT-registered (taxable invoices) or Non-VAT (0% tax invoices). */
+enum CustomerVatStatus {
+  VAT
+  NON_VAT
+}
+
 enum ApprovalStatus {
   DRAFT
   PENDING
@@ -349,6 +355,9 @@ model User {
   productionOrders ProductionOrder[]
   assignedDeliveries DeliveryNote[] @relation("DeliveryDriver")
   assignedDeliveryTrips DeliveryTrip[] @relation("DeliveryTripDriver")
+  employee              Employee?
+  leaveRequestsRequested LeaveRequest[] @relation("LeaveRequestedBy")
+  leaveRequestsApproved  LeaveRequest[] @relation("LeaveApprovedBy")
 
   @@unique([companyId, email])
   @@map("users")
@@ -430,6 +439,8 @@ model Customer {
   city         String?
   country      String       @default("Kenya")
   taxPin       String?      @map("tax_pin")
+  /** VAT = charge company VAT on invoices; NON_VAT = company still invoices at 0% VAT. */
+  vatStatus    CustomerVatStatus @default(NON_VAT) @map("vat_status")
   creditLimit  Decimal      @default(0) @map("credit_limit") @db.Decimal(15, 2)
   creditUsed   Decimal      @default(0) @map("credit_used") @db.Decimal(15, 2)
   paymentTerms Int          @default(30) @map("payment_terms")
@@ -454,6 +465,7 @@ model Customer {
   @@index([deletedAt, isActive])
   @@index([name])
   @@index([salesPersonId])
+  @@index([vatStatus])
   @@map("customers")
 }
 
@@ -1120,6 +1132,8 @@ model SalesOrder {
   subtotal     Decimal     @default(0) @db.Decimal(15, 2)
   taxAmount    Decimal     @default(0) @map("tax_amount") @db.Decimal(15, 2)
   totalAmount  Decimal     @default(0) @map("total_amount") @db.Decimal(15, 2)
+  /** Customer's own purchase order / LPO number — shown on sales invoices. */
+  customerPoNumber String? @map("customer_po_number")
   notes        String?     @db.Text
   createdAt    DateTime    @default(now()) @map("created_at")
   updatedAt    DateTime    @updatedAt @map("updated_at")
@@ -1200,6 +1214,8 @@ model DeliveryTrip {
   tripNo        String         @map("trip_no")
   vehicleId     String?        @map("vehicle_id")
   driverId      String?        @map("driver_id")
+  /** Optional carrier / hired-transport waybill reference. */
+  waybillNo     String?        @map("waybill_no")
   status        DeliveryStatus @default(PENDING)
   scheduledDate DateTime?      @map("scheduled_date")
   notes         String?        @db.Text
@@ -1223,6 +1239,8 @@ model DeliveryNote {
   stopSequence Int?           @map("stop_sequence")
   vehicleId    String?        @map("vehicle_id")
   driverId     String?        @map("driver_id")
+  /** Optional waybill / consignment note (common for hired trucks). */
+  waybillNo    String?        @map("waybill_no")
   status       DeliveryStatus @default(PENDING)
   scheduledDate DateTime?     @map("scheduled_date")
   deliveredAt  DateTime?      @map("delivered_at")
@@ -1331,6 +1349,8 @@ model Invoice {
   totalAmount     Decimal       @default(0) @map("total_amount") @db.Decimal(15, 2)
   paidAmount      Decimal       @default(0) @map("paid_amount") @db.Decimal(15, 2)
   status          PaymentStatus @default(UNPAID)
+  /** Customer's purchase order / LPO number for this sales invoice. */
+  customerPoNumber String?      @map("customer_po_number")
   notes           String?       @db.Text
   fiscalStatus    FiscalStatus  @default(NOT_REQUIRED) @map("fiscal_status")
   etimsQrCode     String?       @map("etims_qr_code") @db.Text
@@ -1417,6 +1437,7 @@ model PaymentAllocation {
 model Employee {
   id           String   @id @default(uuid())
   companyId    String   @map("company_id")
+  userId       String?  @unique @map("user_id")
   employeeNo   String   @map("employee_no")
   firstName    String   @map("first_name")
   lastName     String   @map("last_name")
@@ -1435,6 +1456,7 @@ model Employee {
   updatedAt    DateTime @updatedAt @map("updated_at")
   deletedAt    DateTime? @map("deleted_at")
 
+  user       User?       @relation(fields: [userId], references: [id])
   department Department? @relation(fields: [departmentId], references: [id])
   branch     Branch?     @relation(fields: [branchId], references: [id])
   attendance Attendance[]
@@ -1461,17 +1483,25 @@ model Attendance {
 }
 
 model LeaveRequest {
-  id         String      @id @default(uuid())
-  employeeId String      @map("employee_id")
-  type       String
-  startDate  DateTime    @map("start_date")
-  endDate    DateTime    @map("end_date")
-  reason     String?     @db.Text
-  status     LeaveStatus @default(PENDING)
-  createdAt  DateTime    @default(now()) @map("created_at")
+  id                String      @id @default(uuid())
+  employeeId        String      @map("employee_id")
+  requestedByUserId String?     @map("requested_by_user_id")
+  approvedById      String?     @map("approved_by_id")
+  approvedAt        DateTime?   @map("approved_at")
+  decisionNote      String?     @map("decision_note") @db.Text
+  type              String
+  startDate         DateTime    @map("start_date")
+  endDate           DateTime    @map("end_date")
+  reason            String?     @db.Text
+  status            LeaveStatus @default(PENDING)
+  createdAt         DateTime    @default(now()) @map("created_at")
 
-  employee Employee @relation(fields: [employeeId], references: [id])
+  employee    Employee @relation(fields: [employeeId], references: [id])
+  requestedBy User?    @relation("LeaveRequestedBy", fields: [requestedByUserId], references: [id])
+  approvedBy  User?    @relation("LeaveApprovedBy", fields: [approvedById], references: [id])
 
+  @@index([employeeId, status])
+  @@index([requestedByUserId])
   @@map("leave_requests")
 }
 

@@ -28,7 +28,12 @@ export class EmailService {
     return !!(config.smtp.user && config.smtp.pass);
   }
 
-  static async send(to: string, subject: string, html: string): Promise<boolean> {
+  static async send(
+    to: string,
+    subject: string,
+    html: string,
+    attachments?: { filename: string; content: Buffer; contentType?: string }[]
+  ): Promise<boolean> {
     const transport = getTransporter();
     if (!transport) {
       logger.debug(`Email skipped (SMTP not configured): ${subject} -> ${to}`);
@@ -41,6 +46,11 @@ export class EmailService {
         to,
         subject,
         html,
+        attachments: attachments?.map((file) => ({
+          filename: file.filename,
+          content: file.content,
+          contentType: file.contentType,
+        })),
       });
       return true;
     } catch (error) {

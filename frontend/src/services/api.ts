@@ -109,6 +109,7 @@ export const usersApi = {
   roles: () => api.get('/users/roles'),
   departments: () => api.get('/users/departments'),
   branches: () => api.get('/users/branches'),
+  linkableEmployees: () => api.get('/users/linkable-employees'),
   auditLogs: (params?: object) => api.get('/users/audit-logs', { params }),
 };
 
@@ -119,6 +120,9 @@ export const customersApi = {
   update: (id: string, data: object) => api.put(`/customers/${id}`, data),
   delete: (id: string) => api.delete(`/customers/${id}`),
   orders: (id: string) => api.get(`/customers/${id}/orders`),
+  statement: (id: string, params?: object) => api.get(`/customers/${id}/statement`, { params }),
+  vatReport: (vatStatus: 'VAT' | 'NON_VAT' | 'ALL' = 'ALL') =>
+    api.get('/customers/reports/vat-status', { params: { vatStatus } }),
   addContact: (customerId: string, data: object) => api.post(`/customers/${customerId}/contacts`, data),
   deleteContact: (customerId: string, contactId: string) =>
     api.delete(`/customers/${customerId}/contacts/${contactId}`),
@@ -142,6 +146,7 @@ export const crmApi = {
 export const productsApi = {
   stats: () => api.get('/products/stats'),
   list: (params?: object) => api.get('/products', { params }),
+  available: (params?: object) => api.get('/products/available', { params }),
   get: (id: string) => api.get(`/products/${id}`),
   create: (data: object) => api.post('/products', data),
   update: (id: string, data: object) => api.put(`/products/${id}`, data),
@@ -178,6 +183,8 @@ export const inventoryApi = {
   suppliers: (params?: object) => api.get('/inventory/suppliers', { params }),
   createSupplier: (data: object) => api.post('/inventory/suppliers', data),
   updateSupplier: (id: string, data: object) => api.put(`/inventory/suppliers/${id}`, data),
+  vendorStatement: (id: string, params?: object) =>
+    api.get(`/inventory/suppliers/${id}/statement`, { params }),
   warehouses: () => api.get('/inventory/warehouses'),
   stockLevels: (params?: object) => api.get('/inventory/stock-levels', { params }),
   adjustStock: (data: object) => api.post('/inventory/adjust', data),
@@ -186,6 +193,8 @@ export const inventoryApi = {
   transferStock: (data: object) => api.post('/inventory/transfers', data),
   purchaseOrders: (params?: object) => api.get('/inventory/purchase-orders', { params }),
   createPurchaseOrder: (data: object) => api.post('/inventory/purchase-orders', data),
+  purchaseOrderPdfPath: (id: string) => `/inventory/purchase-orders/${id}/pdf`,
+  sendPurchaseOrder: (id: string) => api.post(`/inventory/purchase-orders/${id}/send`),
   requisitions: (params?: object) => api.get('/inventory/requisitions', { params }),
   createRequisition: (data: object) => api.post('/inventory/requisitions', data),
   approveRequisition: (id: string, status?: string) =>
@@ -236,6 +245,7 @@ export const deliveryApi = {
   trips: (params?: object) => api.get('/delivery/trips', { params }),
   getTrip: (id: string) => api.get(`/delivery/trips/${id}`),
   get: (id: string) => api.get(`/delivery/${id}`),
+  readyOrders: (params?: object) => api.get('/delivery/ready-orders', { params }),
   create: (data: object) => api.post('/delivery', data),
   updateStatus: (id: string, data: object) => api.patch(`/delivery/${id}/status`, data),
   updateTripStatus: (id: string, data: object) => api.patch(`/delivery/trips/${id}/status`, data),
@@ -251,11 +261,17 @@ export const hrApi = {
   getEmployee: (id: string) => api.get(`/hr/employees/${id}`),
   createEmployee: (data: object) => api.post('/hr/employees', data),
   updateEmployee: (id: string, data: object) => api.put(`/hr/employees/${id}`, data),
+  linkableUsers: () => api.get('/hr/linkable-users'),
+  linkEmployeeUser: (id: string, userId: string | null) =>
+    api.patch(`/hr/employees/${id}/link-user`, { userId }),
   attendance: (params?: object) => api.get('/hr/attendance', { params }),
   recordAttendance: (data: object) => api.post('/hr/attendance', data),
   leave: (params?: object) => api.get('/hr/leave', { params }),
+  myLeave: (params?: object) => api.get('/hr/leave/mine', { params }),
+  requestMyLeave: (data: object) => api.post('/hr/leave/me', data),
   createLeave: (data: object) => api.post('/hr/leave', data),
-  approveLeave: (id: string, status: string) => api.patch(`/hr/leave/${id}/approve`, { status }),
+  approveLeave: (id: string, status: string, decisionNote?: string) =>
+    api.patch(`/hr/leave/${id}/approve`, { status, decisionNote }),
   payroll: (params?: object) => api.get('/hr/payroll', { params }),
   createPayroll: (data: object) => api.post('/hr/payroll', data),
   payPayroll: (id: string) => api.patch(`/hr/payroll/${id}/pay`),
@@ -319,6 +335,7 @@ export const reportsApi = {
   vatReport: (params?: object) => api.get('/finance/reports/vat', { params }),
   salesOfficers: () => api.get('/finance/reports/sales-by-person/sales-officers'),
   salesByPerson: (params?: object) => api.get('/finance/reports/sales-by-person', { params }),
+  productsSold: (params?: object) => api.get('/finance/reports/products-sold', { params }),
 };
 
 export const settingsApi = {

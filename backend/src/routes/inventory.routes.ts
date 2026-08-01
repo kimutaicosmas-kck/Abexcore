@@ -1,13 +1,14 @@
 import { Router, Response } from 'express';
-import { authenticate, authorize, AuthRequest } from '../middleware/auth';
+import { authenticate, authorize, authorizeAny, AuthRequest } from '../middleware/auth';
 import { validate } from '../middleware/validate';
 import { asyncHandler, AppError } from '../middleware/errorHandler';
 import { mutationAudit } from '../middleware/mutationAudit';
 import { auditLog } from '../middleware/auditLog';
-import { createRawMaterialSchema, createSupplierSchema, createRequisitionSchema, createGoodsReceiptSchema, createPurchaseOrderSchema, stockAdjustSchema, stockTransferSchema, cycleCountSchema, updateSupplierQuotationSchema, paginationSchema, materialListQuerySchema, procurementListQuerySchema, createMaterialTypeSchema, updateCatalogItemSchema, reorderCatalogSchema } from '../validators/schemas';
+import { createRawMaterialSchema, createSupplierSchema, createRequisitionSchema, createGoodsReceiptSchema, createPurchaseOrderSchema, stockAdjustSchema, stockTransferSchema, cycleCountSchema, updateSupplierQuotationSchema, paginationSchema, materialListQuerySchema, procurementListQuerySchema, createMaterialTypeSchema, updateCatalogItemSchema, reorderCatalogSchema, customerStatementQuerySchema } from '../validators/schemas';
+import { VendorStatementService } from '../services/vendorStatement.service';
 import { createCrudService } from '../utils/crud';
 import prisma from '../config/database';
-import { generateNumber } from '../utils/date';
+import { generateNumber, parseLocalDateInput } from '../utils/date';
 import { getParam, getQuery } from '../utils/request';
 import { mergeTenantWarehouseWhere, injectTenantData, requireTenantId } from '../utils/tenant';
 import { NotificationService } from '../services/notification.service';
@@ -245,6 +246,79 @@ router.put('/suppliers/:id', authorize('procurement:update'), validate(createSup
   const data = await supplierService.update(getParam(req.params.id), req.body);
   res.json({ success: true, data });
 }));
+
+router.get(
+  '/suppliers/:id/statement',
+  authorizeAny('procurement:read', 'finance:read', 'reports:read'),
+  validate(customerStatementQuerySchema, 'query'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const { from, to, mode } = getQuery<{ from?: string; to?: string; mode?: 'FULL' | 'OUTSTANDING' }>(
+      req.query
+    );
+    const data = await VendorStatementService.getStatement(
+      getParam(req.params.id),
+      from,
+      to,
+      mode || 'FULL'
+    );
+    res.json({ success: true, data });
+  })
+);
+
+router.get(
+  '/suppliers/:id/statement/pdf',
+  authorizeAny('procurement:read', 'finance:read', 'reports:read'),
+  validate(customerStatementQuerySchema, 'query'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const { from, to, mode } = getQuery<{ from?: string; to?: string; mode?: 'FULL' | 'OUTSTANDING' }>(
+      req.query
+    );
+    const statement = await VendorStatementService.getStatement(
+      getParam(req.params.id),
+      from,
+      to,
+      mode || 'FULL'
+    );
+    const { ExportService } = await import('../services/export.service');
+    const pdf = await ExportService.generateVendorStatementPDF(statement);
+    const suffix = statement.mode === 'OUTSTANDING' ? 'outstanding' : 'statement';
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${statement.supplier.code}-${suffix}.pdf"`
+    );
+    res.send(pdf);
+  })
+);
+
+router.get(
+  '/suppliers/:id/statement/excel',
+  authorizeAny('procurement:read', 'finance:read', 'reports:read'),
+  validate(customerStatementQuerySchema, 'query'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const { from, to, mode } = getQuery<{ from?: string; to?: string; mode?: 'FULL' | 'OUTSTANDING' }>(
+      req.query
+    );
+    const statement = await VendorStatementService.getStatement(
+      getParam(req.params.id),
+      from,
+      to,
+      mode || 'FULL'
+    );
+    const { ExportService } = await import('../services/export.service');
+    const excel = await ExportService.generateVendorStatementExcel(statement);
+    const suffix = statement.mode === 'OUTSTANDING' ? 'outstanding' : 'statement';
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    );
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${statement.supplier.code}-${suffix}.xlsx"`
+    );
+    res.send(excel);
+  })
+);
 
 // Warehouses
 router.get('/warehouses', authorize('inventory:read'), asyncHandler(async (_req: AuthRequest, res: Response) => {
@@ -604,6 +678,70 @@ router.post('/purchase-orders', authorize('procurement:create'), validate(create
   res.status(201).json({ success: true, data: po });
 }));
 
+router.get(
+  '/purchase-orders/:id/pdf',
+  authorize('procurement:read'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const { ExportService } = await import('../services/export.service');
+    const po = await ExportService.getPurchaseOrder(getParam(req.params.id));
+    const pdf = await ExportService.generatePurchaseOrderPDF(po);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${po.poNumber}.pdf"`);
+    res.send(pdf);
+  })
+);
+
+router.post(
+  '/purchase-orders/:id/send',
+  authorizeAny('procurement:create', 'procurement:update'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const { ExportService } = await import('../services/export.service');
+    const { EmailService } = await import('../services/email.service');
+    const { getCompanySettings } = await import('../utils/company');
+
+    const po = await ExportService.getPurchaseOrder(getParam(req.params.id));
+    const to = (po.supplier.email || '').trim();
+    if (!to) {
+      throw new AppError('Supplier has no email address on file', 400);
+    }
+    if (!EmailService.isConfigured()) {
+      throw new AppError('Email is not configured. Download the PDF and send it manually.', 400);
+    }
+
+    const pdf = await ExportService.generatePurchaseOrderPDF(po);
+    const company = await getCompanySettings();
+    const companyName = company?.name || 'ApexCore ERP';
+    const html = `
+      <div style="font-family:Arial,sans-serif;max-width:640px;margin:0 auto">
+        <p>Dear ${po.supplier.name},</p>
+        <p>Please find attached purchase order <strong>${po.poNumber}</strong> from ${companyName}.</p>
+        <p>
+          Order date: ${po.orderDate.toLocaleDateString('en-KE')}<br/>
+          ${po.expectedDate ? `Expected delivery: ${po.expectedDate.toLocaleDateString('en-KE')}<br/>` : ''}
+          Total: KES ${Number(po.totalAmount).toLocaleString('en-KE', { minimumFractionDigits: 2 })}
+        </p>
+        <p>Kindly confirm receipt and advise your delivery schedule.</p>
+        <p>Regards,<br/>${companyName}</p>
+      </div>`;
+
+    const sent = await EmailService.send(
+      to,
+      `Purchase Order ${po.poNumber} — ${companyName}`,
+      html,
+      [{ filename: `${po.poNumber}.pdf`, content: pdf, contentType: 'application/pdf' }]
+    );
+    if (!sent) {
+      throw new AppError('Failed to send purchase order email', 502);
+    }
+
+    res.json({
+      success: true,
+      data: { sent: true, to, poNumber: po.poNumber },
+      message: `Purchase order emailed to ${to}`,
+    });
+  })
+);
+
 // Purchase Requisitions
 router.get('/requisitions', authorize('procurement:read'), validate(procurementListQuerySchema, 'query'), asyncHandler(async (req: AuthRequest, res: Response) => {
   const { page, limit, search, status } = getQuery<{ page: number; limit: number; search?: string; status?: string }>(req.query);
@@ -892,17 +1030,44 @@ router.post('/goods-receipts', authorize('procurement:create'), validate(createG
   const count = await prisma.goodsReceipt.count();
   const grnNumber = generateNumber('GRN', count + 1);
 
+  const normalizedItems = (
+    items as Array<{
+      rawMaterialId?: string;
+      batchNumber?: string;
+      quantity: number;
+      unit?: string;
+      unitCost: number;
+      expiryDate?: string;
+    }>
+  ).map((item) => {
+    const expiryRaw = item.expiryDate?.trim();
+    const expiryDate = expiryRaw
+      ? parseLocalDateInput(expiryRaw) || new Date(expiryRaw)
+      : undefined;
+    if (expiryRaw && (!expiryDate || Number.isNaN(expiryDate.getTime()))) {
+      throw new AppError('Invalid expiry date on receipt item', 400);
+    }
+    return {
+      rawMaterialId: item.rawMaterialId || undefined,
+      batchNumber: item.batchNumber?.trim() || undefined,
+      quantity: item.quantity,
+      unit: item.unit?.trim() || 'pcs',
+      unitCost: item.unitCost,
+      expiryDate,
+    };
+  });
+
   const receipt = await prisma.$transaction(async (tx) => {
     const gr = await tx.goodsReceipt.create({
       data: injectTenantData({
         grnNumber,
-        purchaseOrderId,
+        purchaseOrderId: purchaseOrderId || undefined,
         supplierId,
         warehouseId,
-        notes,
+        notes: typeof notes === 'string' && notes.trim() ? notes.trim() : undefined,
         status: 'PENDING',
         inspectionStatus: 'PENDING',
-        items: { create: items },
+        items: { create: normalizedItems },
       }),
       include: { items: true, supplier: true },
     });
