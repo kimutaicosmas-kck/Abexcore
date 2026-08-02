@@ -27,7 +27,7 @@ export default defineConfig({
         theme_color: '#2563eb',
         background_color: '#f1f5f9',
         display: 'standalone',
-        orientation: 'any',
+        orientation: 'portrait',
         scope: '/',
         start_url: '/login?tenant=owner',
         id: '/',
