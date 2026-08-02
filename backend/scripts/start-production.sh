@@ -20,5 +20,5 @@ if [ "$SEED_ON_START" = "true" ]; then
   fi
 fi
 
-echo "Starting ApexCore ERP API..."
+echo "Starting AbexCore ERP API..."
 exec node dist/index.js

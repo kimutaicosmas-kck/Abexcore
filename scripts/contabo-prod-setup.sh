@@ -49,6 +49,12 @@ grep -q '^FRONTEND_HOST_BIND=' .env || echo 'FRONTEND_HOST_BIND=127.0.0.1:8080' 
 sed -i 's|^FRONTEND_HOST_BIND=.*|FRONTEND_HOST_BIND=127.0.0.1:8080|' .env
 sed -i 's|^PUBLIC_URL=.*|PUBLIC_URL=https://abexcore.co.ke|' .env
 sed -i 's|^FRONTEND_URL=.*|FRONTEND_URL=https://abexcore.co.ke|' .env
+# Migrations in this repo are incremental (no full baseline) — use db push on fresh servers
+grep -q '^USE_DB_PUSH=' .env || echo 'USE_DB_PUSH=true' >> .env
+sed -i 's|^USE_DB_PUSH=.*|USE_DB_PUSH=true|' .env
+# Ensure seed runs on first boot of a wiped DB
+grep -q '^SEED_ON_START=' .env || echo 'SEED_ON_START=true' >> .env
+sed -i 's|^SEED_ON_START=.*|SEED_ON_START=true|' .env
 
 echo "==> Installing Docker (if needed)..."
 if ! command -v docker >/dev/null 2>&1; then
