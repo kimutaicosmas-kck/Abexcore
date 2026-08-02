@@ -12,7 +12,7 @@ import bcrypt from 'bcrypt';
 // Prefer PLATFORM_OWNER_* / SEED_ADMIN_* env vars set by contabo-prod-setup.sh.
 const PLATFORM_OWNER_SLUG = process.env.PLATFORM_COMPANY_SLUG?.trim() || 'owner';
 const PLATFORM_OWNER_EMAIL =
-  process.env.PLATFORM_OWNER_EMAIL?.trim().toLowerCase() || 'admin@abexcore.co.ke';
+  process.env.PLATFORM_OWNER_EMAIL?.trim().toLowerCase() || 'kimutaicosmas547@gmail.com';
 const PLATFORM_OWNER_DEFAULT_PASSWORD = process.env.PLATFORM_OWNER_PASSWORD || 'ChangeMeNow1!';
 
 const prisma = new PrismaClient();
