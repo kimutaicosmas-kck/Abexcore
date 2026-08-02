@@ -96,11 +96,13 @@ async function main() {
     },
   });
 
+  const companyId = company.id;
+
   const branch = await prisma.branch.upsert({
-    where: { code: 'HQ' },
+    where: { companyId_code: { companyId, code: 'HQ' } },
     update: {},
     create: {
-      companyId: company.id,
+      companyId,
       code: 'HQ',
       name: 'Head Office',
       address: 'Nairobi, Kenya',
@@ -108,9 +110,10 @@ async function main() {
   });
 
   await prisma.warehouse.upsert({
-    where: { code: 'WH-FG' },
+    where: { companyId_code: { companyId, code: 'WH-FG' } },
     update: {},
     create: {
+      companyId,
       branchId: branch.id,
       code: 'WH-FG',
       name: 'Finished Goods Warehouse',
@@ -118,25 +121,30 @@ async function main() {
     },
   });
 
-  await prisma.department.upsert({
-    where: { name: 'Administration' },
+  const dept = await prisma.department.upsert({
+    where: { companyId_name: { companyId, name: 'Administration' } },
     update: {},
-    create: { name: 'Administration', description: 'System administration' },
+    create: {
+      companyId,
+      name: 'Administration',
+      description: 'System administration',
+    },
   });
 
-  const dept = await prisma.department.findUnique({ where: { name: 'Administration' } });
   const passwordHash = await bcrypt.hash(adminPassword, 12);
+  const email = adminEmail.toLowerCase();
 
   await prisma.user.upsert({
-    where: { email: adminEmail.toLowerCase() },
-    update: { mustChangePassword: true },
+    where: { companyId_email: { companyId, email } },
+    update: { mustChangePassword: true, passwordHash },
     create: {
-      email: adminEmail.toLowerCase(),
+      companyId,
+      email,
       passwordHash,
       firstName: 'System',
       lastName: 'Administrator',
       roleId: superAdmin!.id,
-      departmentId: dept!.id,
+      departmentId: dept.id,
       branchId: branch.id,
       mustChangePassword: true,
     },
@@ -154,7 +162,11 @@ async function main() {
   ];
 
   for (const acc of accounts) {
-    await prisma.account.upsert({ where: { code: acc.code }, update: {}, create: acc });
+    await prisma.account.upsert({
+      where: { companyId_code: { companyId, code: acc.code } },
+      update: {},
+      create: { companyId, ...acc },
+    });
   }
 
   console.log('Production seed completed.');
