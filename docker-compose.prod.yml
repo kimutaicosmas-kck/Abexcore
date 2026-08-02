@@ -2,6 +2,11 @@
 # Usage:
 #   docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env up -d --build
 services:
+  backend:
+    environment:
+      # Fresh MySQL has no baseline migrations — always push schema in prod
+      USE_DB_PUSH: "true"
+
   caddy:
     image: caddy:2-alpine
     container_name: erp-caddy
