@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
 import { TopNav } from './TopNav';
-import { PwaShell } from '../pwa/PwaShell';
 import { RealtimeSync } from './RealtimeSync';
 
 const SIDEBAR_WIDTH = '16rem';
@@ -64,8 +63,6 @@ export function AppLayout() {
         sidebarOffset={sidebarOffset}
         mobileOpen={mobileOpen}
       />
-
-      <PwaShell />
 
       <main
         className="pt-14 pb-[max(1rem,env(safe-area-inset-bottom))] transition-all duration-300 min-w-0 overflow-x-hidden lg:ml-[var(--sidebar-w)]"

@@ -7,6 +7,7 @@ import { PermissionRoute } from './components/auth/PermissionRoute';
 import { InactivityMonitor } from './components/auth/InactivityMonitor';
 import { LoadingSpinner, ErrorBoundary } from './components/ui';
 import { LIVE_STALE_MS } from './config/realtime';
+import { PwaShell } from './components/pwa/PwaShell';
 
 const LoginPage = lazy(() => import('./pages/LoginPage').then((m) => ({ default: m.LoginPage })));
 const RegisterCompanyPage = lazy(() =>
@@ -186,6 +187,7 @@ export default function App() {
         <AuthProvider>
           <InactivityMonitor />
           <ErrorBoundary>
+            <PwaShell />
             <AppRoutes />
           </ErrorBoundary>
         </AuthProvider>

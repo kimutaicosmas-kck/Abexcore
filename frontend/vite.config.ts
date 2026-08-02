@@ -10,7 +10,7 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.svg', 'apexcore-logo.png', 'pwa-192.png', 'pwa-512.png'],
+      includeAssets: ['favicon.svg', 'abexcore-logo.png', 'apple-touch-icon.png', 'pwa-192.png', 'pwa-512.png'],
       manifest: {
         name: 'AbexCore ERP',
         short_name: 'AbexCore',
@@ -19,17 +19,12 @@ export default defineConfig({
         theme_color: '#2563eb',
         background_color: '#f1f5f9',
         display: 'standalone',
-        orientation: 'portrait-primary',
+        orientation: 'any',
         scope: '/',
-        start_url: '/',
+        start_url: '/login?tenant=owner',
+        id: '/',
         categories: ['business', 'productivity'],
         icons: [
-          {
-            src: 'apexcore-logo.png',
-            sizes: '512x512',
-            type: 'image/png',
-            purpose: 'any',
-          },
           {
             src: 'pwa-192.png',
             sizes: '192x192',
@@ -47,12 +42,6 @@ export default defineConfig({
             sizes: '512x512',
             type: 'image/png',
             purpose: 'maskable',
-          },
-          {
-            src: 'favicon.svg',
-            sizes: 'any',
-            type: 'image/svg+xml',
-            purpose: 'any',
           },
         ],
       },
