@@ -249,21 +249,21 @@ interface StatCardProps {
 
 export function StatCard({ title, value, icon, trend, color = 'bg-primary-600' }: StatCardProps) {
   return (
-    <div className="stat-card flex flex-col gap-2 snap-start">
+    <div className="stat-card flex flex-col gap-2.5 snap-start">
       <div className="flex items-start justify-between gap-2">
         <p className="min-w-0 flex-1 text-[11px] sm:text-xs font-medium text-primary-700/70 uppercase tracking-wide leading-snug line-clamp-2">
           {title}
         </p>
         <div
           className={clsx(
-            'h-9 w-9 sm:h-10 sm:w-10 shrink-0 flex items-center justify-center rounded-lg text-white shadow-sm [&_svg]:h-4 [&_svg]:w-4 sm:[&_svg]:h-5 sm:[&_svg]:w-5',
+            'h-10 w-10 sm:h-10 sm:w-10 shrink-0 flex items-center justify-center rounded-2xl text-white shadow-sm [&_svg]:h-4 [&_svg]:w-4 sm:[&_svg]:h-5 sm:[&_svg]:w-5',
             color.includes('from-') ? `bg-gradient-to-br ${color}` : color
           )}
         >
           {icon}
         </div>
       </div>
-      <p className="text-lg sm:text-xl font-bold tabular-nums text-primary-950 leading-none tracking-tight">
+      <p className="text-[1.35rem] sm:text-xl font-bold tabular-nums text-primary-950 leading-none tracking-tight">
         {value}
       </p>
       {trend && (
@@ -626,27 +626,31 @@ export function QuickActionCard({
       disabled={disabled}
       title={disabled ? 'View only on dashboard — open from your assigned menu' : undefined}
       className={clsx(
-        'flex items-center gap-4 p-4 rounded-xl border border-primary-100 bg-white text-left transition-all w-full',
+        'quick-action-card flex flex-col items-start gap-3 p-3.5 sm:flex-row sm:items-center sm:gap-4 sm:p-4 rounded-2xl border border-primary-100/90 bg-white text-left transition-all w-full active:scale-[0.98]',
         color,
         disabled
           ? 'opacity-60 cursor-not-allowed'
           : 'hover:border-primary-300 hover:bg-primary-50/60 hover:shadow-sm'
       )}
     >
-      <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary-50 text-primary-600">
+      <div className="flex h-12 w-12 sm:h-11 sm:w-11 items-center justify-center rounded-2xl bg-primary-50 text-primary-600 shadow-sm">
         <Icon className="h-5 w-5" />
       </div>
-      <div className="flex-1 min-w-0">
-        <p className="font-semibold text-slate-900">{label}</p>
-        <p className="text-xs text-slate-500 mt-0.5">{desc}</p>
+      <div className="flex-1 min-w-0 w-full">
+        <p className="font-semibold text-slate-900 text-[13px] sm:text-sm leading-snug">{label}</p>
+        <p className="text-[11px] sm:text-xs text-slate-500 mt-0.5 line-clamp-2">{desc}</p>
       </div>
-      <ChevronRight className="h-4 w-4 text-slate-400 shrink-0" />
+      <ChevronRight className="hidden sm:block h-4 w-4 text-slate-400 shrink-0" />
     </button>
   );
 }
 
 export function QuickActionGrid({ children }: { children: React.ReactNode }) {
-  return <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 min-w-0">{children}</div>;
+  return (
+    <div className="grid grid-cols-2 sm:grid-cols-2 xl:grid-cols-4 gap-2.5 sm:gap-3 min-w-0">
+      {children}
+    </div>
+  );
 }
 
 
@@ -661,7 +665,7 @@ export function StatGrid({
   return (
     <div
       className={clsx(
-        'grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-2 sm:gap-3 w-full mb-4 min-w-0',
+        'grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-2.5 sm:gap-3 w-full mb-4 min-w-0',
         className
       )}
     >

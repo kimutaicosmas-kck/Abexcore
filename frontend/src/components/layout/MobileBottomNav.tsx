@@ -8,7 +8,7 @@ import {
   Truck,
   Package,
   Building2,
-  Menu,
+  UserCircle,
   type LucideIcon,
 } from 'lucide-react';
 import clsx from 'clsx';
@@ -18,9 +18,8 @@ import { isSidebarNavActive } from '../../config/routeAccess';
 type TabItem = {
   id: string;
   name: string;
-  href?: string;
+  href: string;
   icon: LucideIcon;
-  onClick?: () => void;
 };
 
 const CANDIDATE_TABS: Array<{
@@ -84,12 +83,13 @@ const CANDIDATE_TABS: Array<{
   },
 ];
 
-interface MobileBottomNavProps {
-  onMoreClick: () => void;
+function isAccountRoute(pathname: string) {
+  const path = pathname.split('?')[0] ?? '';
+  return path === '/settings' || path.startsWith('/settings/') || path === '/change-password';
 }
 
-export function MobileBottomNav({ onMoreClick }: MobileBottomNavProps) {
-  const { hasPermission, isSalesOfficer } = useAuth();
+export function MobileBottomNav() {
+  const { hasPermission, isSalesOfficer, canAccessRoute } = useAuth();
   const location = useLocation();
 
   const middleTabs: TabItem[] = CANDIDATE_TABS.filter((tab) =>
@@ -103,46 +103,45 @@ export function MobileBottomNav({ onMoreClick }: MobileBottomNavProps) {
       icon: tab.icon,
     }));
 
+  const accountHref = canAccessRoute('/settings') ? '/settings' : '/change-password';
+
   const tabs: TabItem[] = [
     { id: 'home', name: 'Home', href: '/', icon: LayoutDashboard },
     ...middleTabs,
-    { id: 'more', name: 'More', icon: Menu, onClick: onMoreClick },
+    { id: 'account', name: 'Account', href: accountHref, icon: UserCircle },
   ];
 
   return (
     <nav
       aria-label="Primary"
-      className="lg:hidden fixed bottom-0 inset-x-0 z-30 border-t border-slate-200/90 bg-white/95 backdrop-blur-md pb-[env(safe-area-inset-bottom)] shadow-[0_-4px_24px_rgba(15,23,42,0.06)]"
+      className="mobile-tab-bar lg:hidden fixed bottom-0 inset-x-0 z-30"
     >
       <ul
         className={clsx(
-          'grid h-16',
+          'grid h-[3.75rem]',
           tabs.length >= 5 ? 'grid-cols-5' : tabs.length === 4 ? 'grid-cols-4' : 'grid-cols-3'
         )}
       >
         {tabs.map((tab) => {
-          const active = tab.href ? isSidebarNavActive(location.pathname, tab.href) : false;
+          const active =
+            tab.id === 'account'
+              ? isAccountRoute(location.pathname)
+              : isSidebarNavActive(location.pathname, tab.href);
           const Icon = tab.icon;
-          const className = clsx(
-            'flex h-full w-full flex-col items-center justify-center gap-0.5 px-1 text-[10px] font-medium transition-colors',
-            active ? 'text-primary-600' : 'text-slate-500 active:text-slate-800'
-          );
-
-          if (tab.onClick || !tab.href) {
-            return (
-              <li key={tab.id} className="min-w-0">
-                <button type="button" onClick={tab.onClick} className={className} aria-label={tab.name}>
-                  <Icon className="h-5 w-5" />
-                  <span className="truncate max-w-full">{tab.name}</span>
-                </button>
-              </li>
-            );
-          }
 
           return (
             <li key={tab.id} className="min-w-0">
-              <Link to={tab.href} className={className} aria-current={active ? 'page' : undefined}>
-                <Icon className={clsx('h-5 w-5', active && 'stroke-[2.25]')} />
+              <Link
+                to={tab.href}
+                className={clsx(
+                  'mobile-tab-item',
+                  active ? 'mobile-tab-item-active' : 'mobile-tab-item-idle'
+                )}
+                aria-current={active ? 'page' : undefined}
+              >
+                <span className={clsx('mobile-tab-icon', active && 'mobile-tab-icon-active')}>
+                  <Icon className="h-[1.35rem] w-[1.35rem]" strokeWidth={active ? 2.35 : 1.9} />
+                </span>
                 <span className="truncate max-w-full">{tab.name}</span>
               </Link>
             </li>

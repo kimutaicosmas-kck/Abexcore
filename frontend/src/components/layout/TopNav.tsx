@@ -90,23 +90,25 @@ export function TopNav({ onMenuClick, sidebarOffset }: TopNavProps) {
   return (
     <>
       <header
-        className="fixed top-0 right-0 z-40 h-14 bg-white border-b border-primary-100 shadow-sm shadow-primary-900/5 transition-all duration-300 lg:left-[var(--sidebar-w)] left-0"
+        className="mobile-top-bar fixed top-0 right-0 z-40 transition-all duration-300 lg:left-[var(--sidebar-w)] left-0"
         style={{ '--sidebar-w': sidebarOffset } as React.CSSProperties}
       >
-        <div className="flex h-full items-center justify-between gap-3 px-4">
-          <div className="flex items-center gap-3 min-w-0 flex-1">
+        <div className="flex h-14 items-center justify-between gap-3 px-3 sm:px-4">
+          <div className="flex items-center gap-2.5 min-w-0 flex-1">
             <button
               onClick={onMenuClick}
-              className="lg:hidden p-2 rounded-xl hover:bg-primary-50 text-slate-600 transition-colors"
+              className="lg:hidden p-2.5 rounded-2xl bg-primary-50/80 hover:bg-primary-100 text-primary-800 transition-colors active:scale-95"
               aria-label="Open menu"
             >
               <Menu className="h-5 w-5" />
             </button>
-            <div className="min-w-0 shrink-0 max-w-[40vw] sm:max-w-none">
-              <p className="text-xs font-semibold uppercase tracking-wider text-primary-600/80 hidden sm:block">
+            <div className="min-w-0 shrink-0 max-w-[46vw] sm:max-w-none">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-primary-600/80 hidden sm:block">
                 {APP_NAME}
               </p>
-              <h1 className="text-sm font-semibold text-primary-950 truncate">{pageTitle}</h1>
+              <h1 className="text-[15px] sm:text-sm font-semibold text-primary-950 truncate tracking-tight">
+                {pageTitle}
+              </h1>
             </div>
             <div className="hidden md:block flex-1 max-w-md min-w-0 ml-auto sm:ml-0">
               <GlobalSearch />
@@ -187,7 +189,7 @@ export function TopNav({ onMenuClick, sidebarOffset }: TopNavProps) {
       </header>
 
       {searchOpen && (
-        <div className="md:hidden fixed top-14 left-0 right-0 z-40 border-b border-primary-100 bg-white px-4 py-3 shadow-sm lg:left-[var(--sidebar-w)]">
+        <div className="md:hidden fixed top-[calc(3.5rem+env(safe-area-inset-top))] left-0 right-0 z-40 border-b border-primary-100 bg-white/95 backdrop-blur-md px-3 py-3 shadow-sm lg:left-[var(--sidebar-w)]">
           <GlobalSearch />
         </div>
       )}
