@@ -61,11 +61,13 @@ export function RealtimeSync() {
             refreshLive();
           }
         });
+        // Stream closed cleanly (proxy idle / HTTP/2 ping) — reconnect soon
         if (!controller.signal.aborted) {
-          retryMs = 3000;
+          retryMs = 2000;
           retryTimer = window.setTimeout(connect, retryMs);
         }
       } catch {
+        // Polling in this component already keeps data fresh; SSE is best-effort.
         if (!controller.signal.aborted) {
           retryTimer = window.setTimeout(connect, retryMs);
           retryMs = Math.min(retryMs * 2, 60_000);

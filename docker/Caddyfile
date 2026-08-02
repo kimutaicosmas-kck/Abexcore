@@ -1,4 +1,19 @@
 abexcore.co.ke, www.abexcore.co.ke {
-	encode gzip
-	reverse_proxy frontend:80
+	# Long-lived SSE must not be gzip-buffered; flush immediately.
+	@sse path /api/v1/realtime/events
+	handle @sse {
+		reverse_proxy frontend:80 {
+			flush_interval -1
+			transport http {
+				read_timeout 24h
+				write_timeout 24h
+				dial_timeout 10s
+			}
+		}
+	}
+
+	handle {
+		encode gzip
+		reverse_proxy frontend:80
+	}
 }
