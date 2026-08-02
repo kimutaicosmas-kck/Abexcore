@@ -104,6 +104,10 @@ export function assertOrderStatusTransition(
     if (current === 'PARTIALLY_DELIVERED' && next === 'DELIVERED') return;
     if (current === 'DISPATCHED' && next === 'DELIVERED') return;
     if (current === 'READY' && next === 'DELIVERED') return;
+    // Physical delivery completion may race ahead of order status bookkeeping.
+    if (next === 'DELIVERED' && !['DELIVERED', 'COMPLETED', 'CANCELLED'].includes(current)) {
+      return;
+    }
   }
 
   const allowed = ORDER_TRANSITIONS[current];

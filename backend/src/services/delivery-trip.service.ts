@@ -30,6 +30,8 @@ async function reconcileDeliveryActualQuantities(
   });
   if (!delivery) throw new AppError('Delivery not found', 404);
 
+  let adjusted = false;
+
   for (const item of delivery.items) {
     const actualEntry = actualItems.find((a) => a.productId === item.productId);
     const actualQty = actualEntry?.quantity ?? item.quantity;
@@ -65,9 +67,14 @@ async function reconcileDeliveryActualQuantities(
       userId,
       notes: `${shortfall} unit(s) not accepted on ${delivery.deliveryNo} — returned to stock`,
     });
+    adjusted = true;
   }
 
-  await FinanceInvoiceService.recalculateDeliveryInvoice(tx, deliveryId);
+  // Confirm-delivered always sends actualItems; only rewrite the invoice when qty changed.
+  // Recalculating on a paid invoice was incorrectly returning 400 for full deliveries.
+  if (adjusted) {
+    await FinanceInvoiceService.recalculateDeliveryInvoice(tx, deliveryId);
+  }
 }
 
 export type CreateStopInput = {

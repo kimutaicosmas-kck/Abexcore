@@ -70,11 +70,35 @@ async function assertActiveDriver(driverId: string) {
       id: driverId,
       deletedAt: null,
       status: 'ACTIVE',
-      role: { name: 'Driver' },
     },
-    select: { id: true },
+    select: {
+      id: true,
+      allowedModules: true,
+      role: {
+        select: {
+          name: true,
+          permissions: { select: { permission: { select: { module: true } } } },
+        },
+      },
+    },
   });
-  if (!driver) throw new AppError('Selected driver is not active', 400);
+  if (!driver) throw new AppError('Selected delivery person was not found or is inactive', 400);
+
+  const modules = Array.isArray(driver.allowedModules)
+    ? (driver.allowedModules as string[])
+    : [];
+  const roleModules = driver.role.permissions.map((p) => p.permission.module);
+  const canDeliver =
+    driver.role.name === 'Driver' ||
+    modules.includes('delivery') ||
+    roleModules.includes('delivery');
+
+  if (!canDeliver) {
+    throw new AppError(
+      'Selected delivery person must be a Driver or have delivery module access',
+      400
+    );
+  }
 }
 
 router.get(
@@ -90,12 +114,42 @@ router.get(
   '/drivers/list',
   authorize('delivery:read'),
   asyncHandler(async (_req: AuthRequest, res: Response) => {
-    const drivers = await prisma.user.findMany({
-      where: { deletedAt: null, status: 'ACTIVE', role: { name: 'Driver' } },
-      select: { id: true, firstName: true, lastName: true, email: true },
+    const candidates = await prisma.user.findMany({
+      where: { deletedAt: null, status: 'ACTIVE' },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+        allowedModules: true,
+        role: {
+          select: {
+            name: true,
+            permissions: { select: { permission: { select: { module: true } } } },
+          },
+        },
+      },
       orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
     });
-    res.json({ success: true, data: drivers });
+    const drivers = candidates.filter((user) => {
+      const modules = Array.isArray(user.allowedModules)
+        ? (user.allowedModules as string[])
+        : [];
+      return (
+        user.role.name === 'Driver' ||
+        modules.includes('delivery') ||
+        user.role.permissions.some((p) => p.permission.module === 'delivery')
+      );
+    });
+    res.json({
+      success: true,
+      data: drivers.map(({ id, firstName, lastName, email }) => ({
+        id,
+        firstName,
+        lastName,
+        email,
+      })),
+    });
   })
 );
 

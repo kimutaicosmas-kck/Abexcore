@@ -32,6 +32,7 @@ const ROLES = [
   'Sales Representative',
   'Storekeeper',
   'Machine Operator',
+  'Driver',
 ];
 
 const MODULES = [
