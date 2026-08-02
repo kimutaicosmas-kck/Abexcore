@@ -1,5 +1,5 @@
 import prisma from '../config/database';
-import { PERMISSION_MODULES } from '../config/rolePermissions';
+import { modulesForRoleName, PERMISSION_MODULES } from '../config/rolePermissions';
 
 const VALID_MODULES = new Set<string>(PERMISSION_MODULES);
 
@@ -20,6 +20,14 @@ type RolePermissionRow = {
   permission: { module: string; action: string };
 };
 
+async function permissionStringsForModules(modules: string[]): Promise<string[]> {
+  const permissions = await prisma.permission.findMany({
+    where: { module: { in: modules } },
+    select: { module: true, action: true },
+  });
+  return permissions.map((p) => `${p.module}:${p.action}`);
+}
+
 export async function resolveUserPermissionStrings(user: {
   role: { name: string; permissions: RolePermissionRow[] };
   allowedModules?: unknown;
@@ -29,14 +37,13 @@ export async function resolveUserPermissionStrings(user: {
   }
 
   const modules = normalizeAllowedModules(user.allowedModules);
-  if (!modules?.length) {
-    return user.role.permissions.map((rp) => `${rp.permission.module}:${rp.permission.action}`);
+  if (modules?.length) {
+    return permissionStringsForModules(modules);
   }
 
-  const permissions = await prisma.permission.findMany({
-    where: { module: { in: modules } },
-    select: { module: true, action: true },
-  });
+  const rolePerms = user.role.permissions.map((rp) => `${rp.permission.module}:${rp.permission.action}`);
+  if (rolePerms.length) return rolePerms;
 
-  return permissions.map((p) => `${p.module}:${p.action}`);
+  // Production seed may create roles without role_permissions — fall back to role matrix.
+  return permissionStringsForModules(modulesForRoleName(user.role.name));
 }

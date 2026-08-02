@@ -159,12 +159,20 @@ router.post(
     const { password, modules, ...data } = req.body;
     const email = data.email.toLowerCase();
     const { normalizeAllowedModules } = await import('../utils/userPermissions');
-    const allowedModules = normalizeAllowedModules(modules);
+    const { modulesForRoleName } = await import('../config/rolePermissions');
 
     const existing = await prisma.user.findFirst({
       where: { companyId, email },
     });
     if (existing) throw new AppError('A user with this email already exists in your company', 409);
+
+    const role = await prisma.role.findUnique({ where: { id: data.roleId }, select: { name: true } });
+    if (!role) throw new AppError('Role not found', 400);
+
+    let allowedModules = normalizeAllowedModules(modules);
+    if (!allowedModules?.length) {
+      allowedModules = normalizeAllowedModules(modulesForRoleName(role.name));
+    }
 
     const company = await prisma.company.findUnique({
       where: { id: companyId },
@@ -180,7 +188,7 @@ router.post(
         passwordHash,
         passwordChangedAt: new Date(),
         mustChangePassword: true,
-        ...(allowedModules ? { allowedModules } : {}),
+        allowedModules: allowedModules ?? modulesForRoleName(role.name),
       },
       include: { role: true, department: true, branch: true },
     });

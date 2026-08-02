@@ -9,6 +9,7 @@ import prisma from '../config/database';
 import { getParam, getQuery } from '../utils/request';
 import { Prisma } from '@prisma/client';
 import { normalizeAllowedModules } from '../utils/userPermissions';
+import { modulesForRoleName } from '../config/rolePermissions';
 import { LeaveService } from '../services/leave.service';
 
 const router = Router();
@@ -278,8 +279,6 @@ router.post(
       departmentId?: string;
       branchId?: string;
     };
-    const allowedModules = normalizeAllowedModules(modules);
-
     if (createEmployeeProfile && employeeId) {
       throw new AppError('Choose either create employee profile or link an existing employee, not both', 400);
     }
@@ -288,6 +287,14 @@ router.post(
       where: { companyId: req.user!.companyId, email: data.email.toLowerCase() },
     });
     if (existing) throw new AppError('Email address is already in use', 409);
+
+    const role = await prisma.role.findUnique({ where: { id: data.roleId }, select: { name: true } });
+    if (!role) throw new AppError('Role not found', 400);
+
+    let allowedModules = normalizeAllowedModules(modules);
+    if (!allowedModules?.length) {
+      allowedModules = normalizeAllowedModules(modulesForRoleName(role.name));
+    }
 
     if (employeeId) {
       const emp = await prisma.employee.findFirst({
@@ -304,7 +311,7 @@ router.post(
         email: data.email.toLowerCase(),
         passwordHash,
         passwordChangedAt: new Date(),
-        ...(allowedModules ? { allowedModules } : {}),
+        allowedModules: allowedModules ?? modulesForRoleName(role.name),
       },
       include: {
         role: true,

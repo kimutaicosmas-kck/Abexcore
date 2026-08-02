@@ -71,7 +71,12 @@ export function TopNav({ onMenuClick, sidebarOffset }: TopNavProps) {
 
   useEffect(() => {
     setSearchOpen(false);
+    setNotifOpen(false);
   }, [location.pathname]);
+
+  useEffect(() => {
+    if (searchOpen) setNotifOpen(false);
+  }, [searchOpen]);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -128,8 +133,13 @@ export function TopNav({ onMenuClick, sidebarOffset }: TopNavProps) {
 
             <div ref={notifRef} className="relative">
               <button
-                onClick={() => setNotifOpen(!notifOpen)}
+                onClick={() => {
+                  setSearchOpen(false);
+                  setNotifOpen((v) => !v);
+                }}
                 className="relative p-2 rounded-xl hover:bg-primary-50 text-primary-700 transition-colors"
+                aria-label="Notifications"
+                aria-expanded={notifOpen}
               >
                 <Bell className="h-[18px] w-[18px]" />
                 {unreadCount > 0 && (
@@ -140,32 +150,47 @@ export function TopNav({ onMenuClick, sidebarOffset }: TopNavProps) {
               </button>
 
               {notifOpen && (
-                <div className="absolute right-0 mt-2 w-80 bg-white border border-primary-100 rounded-2xl shadow-float z-50 max-h-80 overflow-hidden">
-                  <div className="px-4 py-2.5 border-b border-primary-100 bg-primary-50/90 text-xs font-semibold text-primary-900">
-                    Notifications
+                <>
+                  <button
+                    type="button"
+                    aria-label="Close notifications"
+                    className="fixed inset-0 z-40 bg-slate-900/20 backdrop-blur-[1px] md:hidden"
+                    onClick={() => setNotifOpen(false)}
+                  />
+                  <div className="fixed left-3 right-3 top-[calc(3.5rem+env(safe-area-inset-top)+0.35rem)] z-50 max-h-[min(70dvh,22rem)] overflow-hidden rounded-2xl border border-primary-100 bg-white shadow-float md:absolute md:left-auto md:right-0 md:inset-x-auto md:top-full md:mt-2 md:w-80 md:max-h-80">
+                    <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-primary-100 bg-primary-50/90">
+                      <p className="text-xs font-semibold text-primary-900">Notifications</p>
+                      <button
+                        type="button"
+                        className="md:hidden text-xs font-medium text-primary-700 px-2 py-1 rounded-lg hover:bg-primary-100"
+                        onClick={() => setNotifOpen(false)}
+                      >
+                        Close
+                      </button>
+                    </div>
+                    <div className="max-h-[min(58dvh,18rem)] md:max-h-64 overflow-y-auto overscroll-contain">
+                      {!unreadNotifications.length ? (
+                        <p className="px-4 py-10 text-xs text-slate-500 text-center">No new notifications</p>
+                      ) : (
+                        unreadNotifications.map((n: { id: string; title: string; message: string; isRead: boolean; link?: string }) => (
+                          <button
+                            key={n.id}
+                            type="button"
+                            onClick={() => {
+                              markRead.mutate(n.id);
+                              if (n.link) navigate(n.link);
+                              setNotifOpen(false);
+                            }}
+                            className="w-full text-left px-4 py-3 hover:bg-primary-50/80 border-b border-primary-50 text-sm transition-colors"
+                          >
+                            <p className="font-medium text-slate-900 text-xs">{n.title}</p>
+                            <p className="text-[11px] text-slate-500 mt-0.5 line-clamp-2">{n.message}</p>
+                          </button>
+                        ))
+                      )}
+                    </div>
                   </div>
-                  <div className="max-h-64 overflow-y-auto">
-                    {!unreadNotifications.length ? (
-                      <p className="px-4 py-8 text-xs text-slate-500 text-center">No new notifications</p>
-                    ) : (
-                      unreadNotifications.map((n: { id: string; title: string; message: string; isRead: boolean; link?: string }) => (
-                        <button
-                          key={n.id}
-                          type="button"
-                          onClick={() => {
-                            markRead.mutate(n.id);
-                            if (n.link) navigate(n.link);
-                            setNotifOpen(false);
-                          }}
-                          className="w-full text-left px-4 py-2.5 hover:bg-primary-50/80 border-b border-primary-50 text-sm transition-colors"
-                        >
-                          <p className="font-medium text-slate-900 text-xs">{n.title}</p>
-                          <p className="text-[11px] text-slate-500 mt-0.5 line-clamp-2">{n.message}</p>
-                        </button>
-                      ))
-                    )}
-                  </div>
-                </div>
+                </>
               )}
             </div>
 

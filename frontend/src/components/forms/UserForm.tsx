@@ -8,7 +8,7 @@ import { Input, Select, FormActions, ModalFormBody } from '../ui';
 import { getApiErrorMessage } from '../../utils/apiError';
 import { User } from '../../types';
 import { ModuleAccessPicker } from './ModuleAccessPicker';
-import { modulesForRoleName } from '../../utils/roleModules';
+import { mergeRoleAndExtraModules, modulesForRoleName } from '../../utils/roleModules';
 
 const userSchema = z.object({
   email: z.string().email('Invalid email address'),
@@ -143,6 +143,8 @@ export function UserForm({ user, onSuccess, onCancel }: UserFormProps) {
   const selectedRoleId = watch('roleId');
   const createEmployeeProfile = watch('createEmployeeProfile');
   const selectedEmployeeId = watch('employeeId');
+  const selectedRoleName = rolesData?.find((r) => r.id === selectedRoleId)?.name || '';
+  const roleBaseline = selectedRoleName ? modulesForRoleName(selectedRoleName) : ['dashboard'];
 
   useEffect(() => {
     if (selectedEmployeeId) {
@@ -158,6 +160,7 @@ export function UserForm({ user, onSuccess, onCancel }: UserFormProps) {
     }
     const role = rolesData.find((r) => r.id === selectedRoleId);
     if (role) {
+      // Strict RBAC: role change resets to that role's defaults (extras cleared).
       setSelectedModules(modulesForRoleName(role.name));
       setModuleError('');
     }
@@ -221,11 +224,13 @@ export function UserForm({ user, onSuccess, onCancel }: UserFormProps) {
       return;
     }
 
-    const modules = selectedModules.includes('dashboard')
-      ? selectedModules
-      : ['dashboard', ...selectedModules];
-    if (modules.length < 2) {
-      setModuleError('Select at least one module in addition to Dashboard.');
+    if (!selectedRoleName) {
+      setError('roleId', { message: 'Role is required' });
+      return;
+    }
+    const modules = mergeRoleAndExtraModules(selectedRoleName, selectedModules);
+    if (modules.length < 1) {
+      setModuleError('Select a role to apply module access.');
       return;
     }
     setModuleError('');
@@ -339,8 +344,9 @@ export function UserForm({ user, onSuccess, onCancel }: UserFormProps) {
 
       <ModuleAccessPicker
         value={selectedModules}
+        roleBaseline={roleBaseline}
         onChange={(next) => {
-          setSelectedModules(next);
+          setSelectedModules(mergeRoleAndExtraModules(selectedRoleName || 'Sales Representative', next));
           setModuleError('');
         }}
         error={moduleError}

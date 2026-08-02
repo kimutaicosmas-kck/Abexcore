@@ -22,11 +22,21 @@ export const PERMISSION_ACTIONS = ['create', 'read', 'update', 'delete', 'approv
 export const SYSTEM_ROLES = [
   'Super Admin',
   'Managing Director',
+  'General Manager',
   'Operations Manager',
   'Production Manager',
+  'Sales Manager',
+  'Procurement Manager',
+  'Warehouse Manager',
+  'Quality Manager',
+  'Finance Manager',
+  'HR Manager',
   'Procurement Officer',
   'Warehouse Officer',
   'Sales Officer',
+  'Sales Representative',
+  'Storekeeper',
+  'Machine Operator',
   'Finance Officer',
   'Accountant',
   'HR',
@@ -35,14 +45,27 @@ export const SYSTEM_ROLES = [
   'Auditor',
 ] as const;
 
-/** Module access per role (Super Admin gets all permissions separately). */
+/**
+ * Default module access per role.
+ * Includes both demo seed names and production seed names (aliases).
+ */
 export const ROLE_MODULE_ACCESS: Record<string, readonly string[]> = {
   'Managing Director': PERMISSION_MODULES,
-  'Operations Manager': ['dashboard', 'production', 'inventory', 'procurement', 'quality'],
+  'General Manager': PERMISSION_MODULES,
+  'Operations Manager': ['dashboard', 'production', 'inventory', 'procurement', 'quality', 'delivery'],
   'Production Manager': ['dashboard', 'production', 'inventory', 'quality'],
+  'Sales Manager': ['dashboard', 'customers', 'sales', 'delivery', 'reports'],
+  'Procurement Manager': ['dashboard', 'procurement', 'inventory', 'reports'],
+  'Warehouse Manager': ['dashboard', 'inventory', 'delivery'],
+  'Quality Manager': ['dashboard', 'quality', 'production'],
+  'Finance Manager': ['dashboard', 'finance', 'reports', 'sales'],
+  'HR Manager': ['dashboard', 'hr'],
   'Procurement Officer': ['dashboard', 'procurement', 'inventory'],
   'Warehouse Officer': ['dashboard', 'inventory'],
+  Storekeeper: ['dashboard', 'inventory'],
   'Sales Officer': ['dashboard', 'customers', 'sales'],
+  'Sales Representative': ['dashboard', 'customers', 'sales'],
+  'Machine Operator': ['dashboard', 'production'],
   'Finance Officer': ['dashboard', 'finance', 'reports'],
   Accountant: ['dashboard', 'finance', 'reports'],
   HR: ['dashboard', 'hr'],
@@ -51,6 +74,11 @@ export const ROLE_MODULE_ACCESS: Record<string, readonly string[]> = {
   Auditor: ['dashboard', 'reports', 'finance'],
 };
 
+export function modulesForRoleName(roleName: string): string[] {
+  if (roleName === 'Super Admin') return [...PERMISSION_MODULES];
+  return [...(ROLE_MODULE_ACCESS[roleName] || ['dashboard'])];
+}
+
 type PermissionRecord = { id: string; module: string; action: string };
 
 export function permissionsForRole(roleName: string, allPermissions: PermissionRecord[]): PermissionRecord[] {
@@ -58,6 +86,6 @@ export function permissionsForRole(roleName: string, allPermissions: PermissionR
     return allPermissions;
   }
 
-  const modules = ROLE_MODULE_ACCESS[roleName] || ['dashboard'];
+  const modules = modulesForRoleName(roleName);
   return allPermissions.filter((p) => modules.includes(p.module));
 }

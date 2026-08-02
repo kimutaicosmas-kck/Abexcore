@@ -4,18 +4,28 @@ import { ASSIGNABLE_MODULES, MODULE_LABELS } from '../../utils/roleModules';
 interface ModuleAccessPickerProps {
   value: string[];
   onChange: (modules: string[]) => void;
+  /** Modules that come with the selected role — always on and locked. */
+  roleBaseline?: string[];
   disabled?: boolean;
   error?: string;
 }
 
-export function ModuleAccessPicker({ value, onChange, disabled, error }: ModuleAccessPickerProps) {
+export function ModuleAccessPicker({
+  value,
+  onChange,
+  roleBaseline = ['dashboard'],
+  disabled,
+  error,
+}: ModuleAccessPickerProps) {
+  const baseline = new Set(roleBaseline.includes('dashboard') ? roleBaseline : ['dashboard', ...roleBaseline]);
+
   const toggle = (module: string) => {
     if (disabled) return;
-    if (module === 'dashboard') return;
+    if (baseline.has(module)) return;
     if (value.includes(module)) {
       onChange(value.filter((m) => m !== module));
     } else {
-      onChange([...value, module]);
+      onChange([...new Set([...roleBaseline, ...value, module])]);
     }
   };
 
@@ -23,31 +33,40 @@ export function ModuleAccessPicker({ value, onChange, disabled, error }: ModuleA
     <div className="space-y-2">
       <p className="text-sm font-medium text-slate-700">Module access *</p>
       <p className="text-xs text-slate-500">
-        {disabled
-          ? 'Preview of modules included for the selected role. Change the role above to update access.'
-          : 'Choose modules for this user. Role sets the default; you can add or remove modules anytime after creation. Dashboard is always included.'}
+        Role defaults are locked on. Tick extra boxes only if this user needs modules beyond their role.
       </p>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 rounded-xl border border-slate-200 p-3 bg-slate-50/50">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 rounded-2xl border border-slate-200 p-3 bg-slate-50/70">
         {ASSIGNABLE_MODULES.map((module) => {
-          const checked = module === 'dashboard' || value.includes(module);
-          const isLocked = module === 'dashboard';
+          const isRoleDefault = baseline.has(module);
+          const checked = isRoleDefault || value.includes(module);
           return (
             <label
               key={module}
               className={clsx(
-                'flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm cursor-pointer',
+                'flex items-center gap-2.5 rounded-xl px-2.5 py-2 text-sm border transition-colors',
                 disabled && 'opacity-60 cursor-not-allowed',
-                checked && 'bg-white border border-primary-100'
+                !disabled && !isRoleDefault && 'cursor-pointer hover:bg-white',
+                checked ? 'bg-white border-primary-100 shadow-sm' : 'border-transparent',
+                isRoleDefault && 'bg-primary-50/70 border-primary-100'
               )}
             >
               <input
                 type="checkbox"
-                className="rounded border-border"
+                className="rounded border-slate-300 text-primary-600 focus:ring-primary-500"
                 checked={checked}
-                disabled={disabled || isLocked}
+                disabled={disabled || isRoleDefault}
                 onChange={() => toggle(module)}
               />
-              <span className="text-slate-800">{MODULE_LABELS[module] || module}</span>
+              <span className="min-w-0">
+                <span className="block text-slate-800 font-medium leading-tight">
+                  {MODULE_LABELS[module] || module}
+                </span>
+                {isRoleDefault && (
+                  <span className="block text-[10px] font-semibold uppercase tracking-wide text-primary-600/80 mt-0.5">
+                    Role default
+                  </span>
+                )}
+              </span>
             </label>
           );
         })}

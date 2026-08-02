@@ -13,7 +13,11 @@ import { buildTenantLoginPath, buildTenantLoginUrl } from '../utils/tenant';
 import { PLATFORM_COMPANY_SLUG } from '../constants/platform';
 import { CatalogListManager } from '../components/settings/CatalogListManager';
 import { ModuleAccessPicker } from '../components/forms/ModuleAccessPicker';
-import { resolveDepartmentIdFromModules, resolveRoleIdFromModules } from '../utils/roleModules';
+import {
+  mergeRoleAndExtraModules,
+  modulesForRoleName,
+  resolveDepartmentIdFromModules,
+} from '../utils/roleModules';
 import { getApiErrorMessage } from '../utils/apiError';
 
 const baseTabs = ['Company Profile', 'Workspace', 'Team', 'Catalog', 'Branches & Tax', 'Security'];
@@ -35,6 +39,7 @@ interface InviteFormData {
   firstName: string;
   lastName: string;
   password: string;
+  roleId: string;
 }
 
 export function SettingsPage() {
@@ -53,7 +58,7 @@ export function SettingsPage() {
   const [deletingCompanyId, setDeletingCompanyId] = useState<string | null>(null);
   const [resettingDemo, setResettingDemo] = useState(false);
   const [seedingDemo, setSeedingDemo] = useState(false);
-  const [inviteModules, setInviteModules] = useState<string[]>(['dashboard', 'sales']);
+  const [inviteModules, setInviteModules] = useState<string[]>(['dashboard']);
   const [inviteModuleError, setInviteModuleError] = useState('');
 
   const tabs = isPlatformOwner ? ['Company Profile', 'Workspace', 'Companies', ...baseTabs.slice(2)] : baseTabs;
@@ -119,8 +124,21 @@ export function SettingsPage() {
     register: registerInvite,
     handleSubmit: handleInviteSubmit,
     reset: resetInvite,
+    watch: watchInvite,
     formState: { errors: inviteErrors },
-  } = useForm<InviteFormData>();
+  } = useForm<InviteFormData>({
+    defaultValues: { email: '', firstName: '', lastName: '', password: '', roleId: '' },
+  });
+
+  const inviteRoleId = watchInvite('roleId');
+  const inviteRoleName = (rolesData || []).find((r) => r.id === inviteRoleId)?.name || '';
+  const inviteRoleBaseline = inviteRoleName ? modulesForRoleName(inviteRoleName) : ['dashboard'];
+
+  useEffect(() => {
+    if (!inviteRoleName) return;
+    setInviteModules(modulesForRoleName(inviteRoleName));
+    setInviteModuleError('');
+  }, [inviteRoleName]);
 
   useEffect(() => {
     if (company) {
@@ -292,21 +310,21 @@ export function SettingsPage() {
   const displayLogo = authCompany?.logo ?? company?.logo;
 
   const submitInvite = (data: InviteFormData) => {
-    const roles = (rolesData || []).filter((r) => r.name !== 'Super Admin');
-    const roleId = resolveRoleIdFromModules(inviteModules, roles);
-    if (!roleId) {
-      setInviteModuleError('Select at least one module.');
+    if (!data.roleId || !inviteRoleName) {
+      setInviteModuleError('Select a role for this user.');
       return;
     }
+    const modules = mergeRoleAndExtraModules(inviteRoleName, inviteModules);
     setInviteModuleError('');
-    const departmentId = resolveDepartmentIdFromModules(inviteModules, departmentsData || []);
+    const departmentId = resolveDepartmentIdFromModules(modules, departmentsData || []);
     inviteMutation.mutate({
-      ...data,
-      roleId,
+      email: data.email,
+      firstName: data.firstName,
+      lastName: data.lastName,
+      password: data.password,
+      roleId: data.roleId,
       departmentId,
-      modules: inviteModules.includes('dashboard')
-        ? inviteModules
-        : ['dashboard', ...inviteModules],
+      modules,
     });
   };
 
@@ -653,9 +671,23 @@ export function SettingsPage() {
                     error={inviteErrors.lastName?.message}
                   />
                 </div>
+                <Select
+                  label="Role *"
+                  options={[
+                    { value: '', label: 'Select role…' },
+                    ...(rolesData || [])
+                      .filter((r) => r.name !== 'Super Admin')
+                      .map((r) => ({ value: r.id, label: r.name })),
+                  ]}
+                  {...registerInvite('roleId', { required: 'Role is required' })}
+                  error={inviteErrors.roleId?.message}
+                />
                 <ModuleAccessPicker
                   value={inviteModules}
-                  onChange={setInviteModules}
+                  roleBaseline={inviteRoleBaseline}
+                  onChange={(next) =>
+                    setInviteModules(mergeRoleAndExtraModules(inviteRoleName || 'Sales Representative', next))
+                  }
                   error={inviteModuleError}
                 />
                 <Input
