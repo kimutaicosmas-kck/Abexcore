@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" fill="none">
+  <rect width="512" height="512" fill="#ffffff"/>
+  <g transform="translate(176 72)">
+    <path d="M80 8L164 56V152L80 200L-4 152V56L80 8Z" stroke="#111827" stroke-width="10" fill="none"/>
+    <path d="M80 56L122 104L80 152L38 104L80 56Z" fill="#111827"/>
+    <circle cx="80" cy="104" r="14" fill="#ffffff"/>
+    <circle cx="80" cy="104" r="6" fill="#111827"/>
+  </g>
+  <text
+    x="256"
+    y="340"
+    text-anchor="middle"
+    font-family="Arial Black, Arial, Helvetica, sans-serif"
+    font-size="54"
+    font-weight="800"
+    letter-spacing="6"
+    fill="#111827"
+  >ABEXCORE</text>
+  <text
+    x="256"
+    y="390"
+    text-anchor="middle"
+    font-family="Georgia, 'Times New Roman', serif"
+    font-size="18"
+    font-style="italic"
+    fill="#64748b"
+  >Where Technology Meets Control</text>
+</svg>
