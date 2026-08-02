@@ -827,8 +827,9 @@ router.get(
       return;
     }
 
-    if (req.user!.roleName !== 'Sales Officer') {
-      throw new AppError('Sales targets are only available for Sales Officers', 403);
+    const { isSalesPersonRole } = await import('../config/rolePermissions');
+    if (!isSalesPersonRole(req.user!.roleName)) {
+      throw new AppError('Sales targets are only available for sales roles', 403);
     }
 
     const now = new Date();

@@ -79,6 +79,17 @@ export function modulesForRoleName(roleName: string): string[] {
   return [...(ROLE_MODULE_ACCESS[roleName] || ['dashboard'])];
 }
 
+/** Roles that own a personal sales book (My Sales, targets, customer assignment). */
+export const SALES_PERSON_ROLE_NAMES = [
+  'Sales Officer',
+  'Sales Representative',
+  'Sales Manager',
+] as const;
+
+export function isSalesPersonRole(roleName: string | null | undefined): boolean {
+  return !!roleName && (SALES_PERSON_ROLE_NAMES as readonly string[]).includes(roleName);
+}
+
 type PermissionRecord = { id: string; module: string; action: string };
 
 export function permissionsForRole(roleName: string, allPermissions: PermissionRecord[]): PermissionRecord[] {

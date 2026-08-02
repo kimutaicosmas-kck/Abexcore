@@ -1,4 +1,5 @@
 import prisma from '../config/database';
+import { SALES_PERSON_ROLE_NAMES } from '../config/rolePermissions';
 import { endOfDay, startOfDay } from '../utils/date';
 import { salesPersonOrderFilter, MySalesService } from './my-sales.service';
 
@@ -22,7 +23,11 @@ export class SalesPerformanceService {
     const targetMonth = period.to.getMonth() + 1;
 
     const officers = await prisma.user.findMany({
-      where: { deletedAt: null, status: 'ACTIVE', role: { name: 'Sales Officer' } },
+      where: {
+        deletedAt: null,
+        status: 'ACTIVE',
+        role: { name: { in: [...SALES_PERSON_ROLE_NAMES] } },
+      },
       select: { id: true, firstName: true, lastName: true, email: true },
       orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
     });

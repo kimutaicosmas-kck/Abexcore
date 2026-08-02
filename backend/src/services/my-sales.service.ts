@@ -1,4 +1,5 @@
 import prisma from '../config/database';
+import { isSalesPersonRole, SALES_PERSON_ROLE_NAMES } from '../config/rolePermissions';
 import { AppError } from '../middleware/errorHandler';
 import { endOfDay, startOfDay } from '../utils/date';
 import { injectTenantData } from '../utils/tenant';
@@ -30,8 +31,8 @@ export class MySalesService {
       select: { id: true, firstName: true, lastName: true, email: true, role: { select: { name: true } } },
     });
     if (!user) throw new AppError('Sales person not found', 404);
-    if (user.role.name !== 'Sales Officer') {
-      throw new AppError('My Sales is only available for Sales Officers', 400);
+    if (!isSalesPersonRole(user.role.name)) {
+      throw new AppError('My Sales is only available for sales roles', 400);
     }
     return user;
   }
@@ -184,7 +185,11 @@ export class MySalesService {
     const m = month ?? now.getMonth() + 1;
 
     const officers = await prisma.user.findMany({
-      where: { deletedAt: null, status: 'ACTIVE', role: { name: 'Sales Officer' } },
+      where: {
+        deletedAt: null,
+        status: 'ACTIVE',
+        role: { name: { in: [...SALES_PERSON_ROLE_NAMES] } },
+      },
       select: {
         id: true,
         firstName: true,

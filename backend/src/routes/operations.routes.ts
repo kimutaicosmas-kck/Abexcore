@@ -25,6 +25,7 @@ import { AccountingService } from '../services/accounting.service';
 import { salesPersonOrderFilter } from '../services/my-sales.service';
 import { NotificationService } from '../services/notification.service';
 import { injectTenantData, requireTenantId } from '../utils/tenant';
+import { isSalesPersonRole, SALES_PERSON_ROLE_NAMES } from '../config/rolePermissions';
 import { Prisma } from '@prisma/client';
 
 const router = Router();
@@ -45,7 +46,7 @@ router.get(
   '/stats',
   authorize('sales:read'),
   asyncHandler(async (req: AuthRequest, res: Response) => {
-    const scopedId = req.user!.roleName === 'Sales Officer' ? req.user!.id : undefined;
+    const scopedId = isSalesPersonRole(req.user!.roleName) ? req.user!.id : undefined;
     const data = await SalesService.getStats(scopedId);
     res.json({ success: true, data });
   })
@@ -79,7 +80,7 @@ router.get(
     const where: Prisma.SalesOrderWhereInput = {};
     if (status) where.status = status as Prisma.EnumOrderStatusFilter['equals'];
 
-    if (req.user!.roleName === 'Sales Officer') {
+    if (isSalesPersonRole(req.user!.roleName)) {
       Object.assign(where, salesPersonOrderFilter(req.user!.id));
     } else if (salesPersonId) {
       Object.assign(where, salesPersonOrderFilter(salesPersonId));
@@ -137,7 +138,7 @@ router.get(
         companyId: requireTenantId(),
         deletedAt: null,
         status: 'ACTIVE',
-        role: { name: 'Sales Officer' },
+        role: { name: { in: [...SALES_PERSON_ROLE_NAMES] } },
       },
       select: {
         id: true,
@@ -190,10 +191,10 @@ router.post(
       req.body;
     const count = await prisma.salesOrder.count();
     const orderNumber = generateNumber('SO', count + 1);
-    const isSalesOfficer = req.user!.roleName === 'Sales Officer';
+    const isSalesOfficer = isSalesPersonRole(req.user!.roleName);
 
-    // Sales Officers always own their orders.
-    // Admins may assign an officer, or leave blank to record the sale under themselves (accountability).
+    // Sales roles always own their orders.
+    // Admins may assign a sales person, or leave blank to record the sale under themselves (accountability).
     let assignedSalesPersonId: string;
     let attributingToCreator = false;
 
@@ -206,12 +207,12 @@ router.post(
           companyId: requireTenantId(),
           deletedAt: null,
           status: 'ACTIVE',
-          role: { name: 'Sales Officer' },
+          role: { name: { in: [...SALES_PERSON_ROLE_NAMES] } },
         },
         select: { id: true },
       });
       if (!officer) {
-        throw new AppError('Selected sales person is not a valid Sales Officer', 400);
+        throw new AppError('Selected sales person is not a valid sales role', 400);
       }
       assignedSalesPersonId = officer.id;
     } else {
@@ -310,7 +311,7 @@ router.patch(
     });
     if (!existing) throw new AppError('Sales order not found', 404);
 
-    const isSalesOfficer = req.user!.roleName === 'Sales Officer';
+    const isSalesOfficer = isSalesPersonRole(req.user!.roleName);
     if (isSalesOfficer && existing.status !== 'PENDING') {
       throw new AppError(
         'Only administrators can adjust confirmed orders. Contact your manager to revise quantities.',
@@ -387,7 +388,7 @@ router.patch(
       );
     }
 
-    if (req.user!.roleName === 'Sales Officer' && status === 'READY') {
+    if (isSalesPersonRole(req.user!.roleName) && status === 'READY') {
       throw new AppError(
         'Only an administrator can mark orders ready for invoicing and delivery.',
         403
@@ -395,7 +396,7 @@ router.patch(
     }
 
     if (status === 'CANCELLED') {
-      if (req.user!.roleName === 'Sales Officer' && !['PENDING', 'CONFIRMED'].includes(existing.status)) {
+      if (isSalesPersonRole(req.user!.roleName) && !['PENDING', 'CONFIRMED'].includes(existing.status)) {
         throw new AppError(
           'Only administrators can cancel orders after they are marked ready for delivery.',
           403
