@@ -18,6 +18,7 @@ export const ROUTE_PERMISSIONS: Record<string, string | string[] | undefined> = 
   '/maintenance': 'maintenance:read',
   '/reports': 'reports:read',
   '/settings': 'settings:read',
+  '/account': undefined,
 };
 
 export function normalizeRoutePath(pathname: string): string {

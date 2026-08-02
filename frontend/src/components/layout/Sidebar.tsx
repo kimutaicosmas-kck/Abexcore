@@ -21,6 +21,7 @@ import {
   Target,
   Boxes,
   CalendarDays,
+  CircleUser,
 } from 'lucide-react';
 import clsx from 'clsx';
 import { useAuth } from '../../contexts/AuthContext';
@@ -79,7 +80,10 @@ const navigationGroups: NavGroup[] = [
   },
   {
     label: 'System',
-    items: [{ name: 'Settings', href: '/settings', icon: Settings, permission: 'settings:read' }],
+    items: [
+      { name: 'Account', href: '/account', icon: CircleUser },
+      { name: 'Settings', href: '/settings', icon: Settings, permission: 'settings:read' },
+    ],
   },
 ];
 

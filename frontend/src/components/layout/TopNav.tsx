@@ -35,6 +35,7 @@ const routeTitles: Record<string, string> = {
   '/maintenance': 'Maintenance',
   '/reports': 'Reports',
   '/settings': 'Settings',
+  '/account': 'Account',
 };
 
 export function TopNav({ onMenuClick, sidebarOffset }: TopNavProps) {

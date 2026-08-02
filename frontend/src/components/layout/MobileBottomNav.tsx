@@ -85,11 +85,11 @@ const CANDIDATE_TABS: Array<{
 
 function isAccountRoute(pathname: string) {
   const path = pathname.split('?')[0] ?? '';
-  return path === '/settings' || path.startsWith('/settings/') || path === '/change-password';
+  return path === '/account' || path.startsWith('/account/');
 }
 
 export function MobileBottomNav() {
-  const { hasPermission, isSalesOfficer, canAccessRoute } = useAuth();
+  const { hasPermission, isSalesOfficer } = useAuth();
   const location = useLocation();
 
   const middleTabs: TabItem[] = CANDIDATE_TABS.filter((tab) =>
@@ -103,12 +103,10 @@ export function MobileBottomNav() {
       icon: tab.icon,
     }));
 
-  const accountHref = canAccessRoute('/settings') ? '/settings' : '/change-password';
-
   const tabs: TabItem[] = [
     { id: 'home', name: 'Home', href: '/', icon: LayoutDashboard },
     ...middleTabs,
-    { id: 'account', name: 'Account', href: accountHref, icon: UserCircle },
+    { id: 'account', name: 'Account', href: '/account', icon: UserCircle },
   ];
 
   return (

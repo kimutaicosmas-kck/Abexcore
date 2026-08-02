@@ -67,6 +67,9 @@ const SalesPerformancePage = lazy(() =>
 const ChangePasswordPage = lazy(() =>
   import('./pages/ChangePasswordPage').then((m) => ({ default: m.ChangePasswordPage }))
 );
+const AccountPage = lazy(() =>
+  import('./pages/AccountPage').then((m) => ({ default: m.AccountPage }))
+);
 const NotFoundPage = lazy(() =>
   import('./pages/NotFoundPage').then((m) => ({ default: m.NotFoundPage }))
 );
@@ -165,6 +168,7 @@ function AppRoutes() {
           <Route path="maintenance" element={<PermissionRoute><MaintenancePage /></PermissionRoute>} />
           <Route path="reports" element={<PermissionRoute><ReportsPage /></PermissionRoute>} />
           <Route path="settings" element={<PermissionRoute><SettingsPage /></PermissionRoute>} />
+          <Route path="account" element={<AccountPage />} />
           <Route
             path="admin/register-company"
             element={
