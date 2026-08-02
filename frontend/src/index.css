@@ -120,6 +120,36 @@ body {
   overflow: visible;
 }
 
+/*
+ * Force portrait UX on phones when the browser still enters landscape.
+ * (Manifest/API locks are ignored by many mobile browsers.)
+ */
+@media screen and (max-width: 1180px) and (orientation: landscape) {
+  html.force-mobile-portrait,
+  html.force-mobile-portrait body {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    position: fixed;
+    inset: 0;
+    overscroll-behavior: none;
+  }
+
+  html.force-mobile-portrait #root {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    width: 100dvh;
+    height: 100dvw;
+    max-width: 100dvh;
+    max-height: 100dvw;
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
+    transform: rotate(-90deg);
+    transform-origin: left top;
+  }
+}
+
 /* Native-feel mobile shell (phones / installed PWA) */
 @media (max-width: 1023px) {
   .mobile-app-shell {
