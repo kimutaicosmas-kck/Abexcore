@@ -103,7 +103,7 @@ export function PwaShell() {
       )}
 
       {updateReady && (
-        <div className="fixed bottom-4 inset-x-0 z-50 px-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+        <div className="fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom))] lg:bottom-4 inset-x-0 z-50 px-4 pb-[max(0.5rem,env(safe-area-inset-bottom))] lg:pb-[max(1rem,env(safe-area-inset-bottom))]">
           <div className="mx-auto max-w-lg flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-xl border border-primary-200 bg-white px-4 py-3 shadow-float">
             <div className="flex items-start gap-2 text-sm text-slate-700">
               <RefreshCw className="h-4 w-4 mt-0.5 text-primary-600 shrink-0" />
@@ -117,7 +117,7 @@ export function PwaShell() {
       )}
 
       {installPrompt && !installDismissed && (
-        <div className="fixed bottom-4 inset-x-0 z-50 px-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+        <div className="fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom))] lg:bottom-4 inset-x-0 z-50 px-4 pb-[max(0.5rem,env(safe-area-inset-bottom))] lg:pb-[max(1rem,env(safe-area-inset-bottom))]">
           <div className="mx-auto max-w-lg flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-float">
             <div className="flex items-start gap-2 text-sm text-slate-700">
               <Download className="h-4 w-4 mt-0.5 text-primary-600 shrink-0" />
@@ -136,7 +136,7 @@ export function PwaShell() {
       )}
 
       {showManualInstall && (
-        <div className="fixed bottom-4 inset-x-0 z-50 px-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+        <div className="fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom))] lg:bottom-4 inset-x-0 z-50 px-4 pb-[max(0.5rem,env(safe-area-inset-bottom))] lg:pb-[max(1rem,env(safe-area-inset-bottom))]">
           <div className="mx-auto max-w-lg rounded-xl border border-primary-200 bg-white px-4 py-3 shadow-float">
             <div className="flex items-start gap-2 text-sm text-slate-700">
               {platform === 'ios' ? (

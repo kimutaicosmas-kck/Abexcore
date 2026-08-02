@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
 import { TopNav } from './TopNav';
+import { MobileBottomNav } from './MobileBottomNav';
 import { RealtimeSync } from './RealtimeSync';
 
 const SIDEBAR_WIDTH = '16rem';
@@ -40,6 +41,11 @@ export function AppLayout() {
     }
   };
 
+  const openMobileMenu = () => {
+    setMobileOpen(true);
+    setSidebarCollapsed(false);
+  };
+
   return (
     <div className="min-h-screen overflow-x-hidden">
       <RealtimeSync />
@@ -65,7 +71,7 @@ export function AppLayout() {
       />
 
       <main
-        className="pt-14 pb-[max(1rem,env(safe-area-inset-bottom))] transition-all duration-300 min-w-0 overflow-x-hidden lg:ml-[var(--sidebar-w)]"
+        className="pt-14 pb-[calc(4.5rem+env(safe-area-inset-bottom)+0.75rem)] lg:pb-[max(1rem,env(safe-area-inset-bottom))] transition-all duration-300 min-w-0 overflow-x-hidden lg:ml-[var(--sidebar-w)]"
         style={{ '--sidebar-w': sidebarOffset } as React.CSSProperties}
       >
         <div className="px-4 py-4 sm:px-5 max-w-[1600px] mx-auto min-w-0 app-content">
@@ -74,6 +80,8 @@ export function AppLayout() {
           </div>
         </div>
       </main>
+
+      <MobileBottomNav onMoreClick={openMobileMenu} />
     </div>
   );
 }
