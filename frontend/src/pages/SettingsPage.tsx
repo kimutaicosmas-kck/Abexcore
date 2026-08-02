@@ -8,7 +8,7 @@ import { Card, Button, Input, Alert, PageToolbar, EmptyState, Select, formatDate
 import { useAuth } from '../contexts/AuthContext';
 import { CatalogManageItem, CompanySettings, RegisteredCompany, TenantTeamMember, WorkspaceSettings } from '../types';
 import { CompanyLogoMark } from '../components/brand/CompanyBrand';
-import { ApexCoreLogo } from '../components/brand/ApexCoreLogo';
+import { AbexCoreLogo } from '../components/brand/AbexCoreLogo';
 import { buildTenantLoginPath, buildTenantLoginUrl } from '../utils/tenant';
 import { PLATFORM_COMPANY_SLUG } from '../constants/platform';
 import { CatalogListManager } from '../components/settings/CatalogListManager';
@@ -249,7 +249,7 @@ export function SettingsPage() {
   const resetDemoWorkspace = () => {
     if (!workspace) return;
     const typed = window.prompt(
-      `This removes ALL demo data from your ApexCore workspace (products, customers, orders, invoices, inventory, demo users, etc.).\n\nYour login, company profile, branches, and warehouses are kept.\n\nType "${workspace.slug}" to confirm:`
+      `This removes ALL demo data from your AbexCore workspace (products, customers, orders, invoices, inventory, demo users, etc.).\n\nYour login, company profile, branches, and warehouses are kept.\n\nType "${workspace.slug}" to confirm:`
     );
     if (typed === null) return;
     if (typed.trim().toLowerCase() !== workspace.slug.toLowerCase()) {
@@ -335,7 +335,7 @@ export function SettingsPage() {
                 </label>
                 <div className="flex items-center gap-4">
                   {isPlatformOwner ? (
-                    <ApexCoreLogo variant="mark" size="lg" />
+                    <AbexCoreLogo variant="mark" size="lg" />
                   ) : (
                     <CompanyLogoMark logo={displayLogo} name={company?.name || authCompany?.name} size="lg" />
                   )}
@@ -361,7 +361,7 @@ export function SettingsPage() {
                 </div>
                 <p className="text-xs text-slate-500 mt-1">
                   {isPlatformOwner
-                    ? 'The platform owner workspace always uses the ApexCore brand logo.'
+                    ? 'The platform owner workspace always uses the AbexCore brand logo.'
                     : 'Logos are normalized to a standard square format for sidebar and login.'}
                 </p>
               </div>
@@ -419,7 +419,7 @@ export function SettingsPage() {
           {isPlatformOwner && (
             <Card title="Reset demo workspace" className="lg:col-span-2 border-amber-200 bg-amber-50/40">
               <p className="text-sm text-slate-600 mb-3">
-                Use this between client demos to wipe all transactional data from your ApexCore workspace — products,
+                Use this between client demos to wipe all transactional data from your AbexCore workspace — products,
                 customers, orders, invoices, inventory, and any demo users you invited. Your login, company profile,
                 branches, and empty warehouses are preserved.
               </p>

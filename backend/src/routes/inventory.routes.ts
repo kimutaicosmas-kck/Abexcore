@@ -710,7 +710,7 @@ router.post(
 
     const pdf = await ExportService.generatePurchaseOrderPDF(po);
     const company = await getCompanySettings();
-    const companyName = company?.name || 'ApexCore ERP';
+    const companyName = company?.name || 'AbexCore ERP';
     const html = `
       <div style="font-family:Arial,sans-serif;max-width:640px;margin:0 auto">
         <p>Dear ${po.supplier.name},</p>

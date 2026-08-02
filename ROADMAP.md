@@ -1,4 +1,4 @@
-# ApexCore ERP — Full Delivery Roadmap
+# AbexCore ERP — Full Delivery Roadmap
 
 This document tracks completion of production-grade delivery items.
 

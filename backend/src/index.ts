@@ -19,7 +19,7 @@ async function start() {
 
   const app = createApp();
   const server: Server = app.listen(config.port, () => {
-    logger.info(`ApexCore ERP v2.1.0 running on port ${config.port} [${config.nodeEnv}] TZ=${config.timezone}`);
+    logger.info(`AbexCore ERP v2.1.0 running on port ${config.port} [${config.nodeEnv}] TZ=${config.timezone}`);
     if (config.swaggerEnabled) {
       logger.info(`API docs: http://localhost:${config.port}/api/docs`);
     }

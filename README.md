@@ -1,4 +1,4 @@
-# ApexCore ERP v2.1 — Designed by ApexCore Technologies
+# AbexCore ERP v2.1 — Designed by AbexCore Technologies
 
 Enterprise-grade ERP for manufacturing and distribution. Manages the complete business lifecycle from raw material procurement through production, inventory, sales, finance, distribution, CRM, HR, and maintenance.
 
@@ -170,4 +170,4 @@ erp-system/
 
 ## License
 
-Proprietary — ApexCore Technologies
+Proprietary — AbexCore Technologies

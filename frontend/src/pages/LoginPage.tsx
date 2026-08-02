@@ -15,7 +15,7 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import { authApi } from '../services/api';
 import { Alert, Button, Input } from '../components/ui';
-import { ApexCoreLogo } from '../components/brand/ApexCoreLogo';
+import { AbexCoreLogo } from '../components/brand/AbexCoreLogo';
 import { PoweredBy } from '../components/brand/PoweredBy';
 import { APP_NAME, APP_TAGLINE } from '../constants/brand';
 import { getApiErrorMessage } from '../utils/apiError';
@@ -153,7 +153,7 @@ export function LoginPage() {
         <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-primary-400/50 to-transparent" />
         <div className="relative text-white max-w-lg w-full flex flex-col min-h-[min(640px,80vh)] items-center text-center">
           <div className="flex-1 w-full flex flex-col items-center">
-            <ApexCoreLogo inverted size="lg" className="mb-8" />
+            <AbexCoreLogo inverted size="lg" className="mb-8" />
             <p className="text-primary-100 text-lg leading-relaxed mb-8 max-w-md">{APP_TAGLINE}</p>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full">
@@ -185,7 +185,7 @@ export function LoginPage() {
 
       <div className="flex-1 flex flex-col items-center justify-center p-6 sm:p-10 bg-transparent">
         <div className="lg:hidden text-center mb-6 w-full flex flex-col items-center">
-          <ApexCoreLogo size="md" className="mb-2" />
+          <AbexCoreLogo size="md" className="mb-2" />
         </div>
 
         <div className="w-full max-w-md">

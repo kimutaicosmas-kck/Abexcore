@@ -92,12 +92,19 @@ async function main() {
   // Company first (tenant root)
   const company = await prisma.company.upsert({
     where: { id: '00000000-0000-0000-0000-000000000001' },
-    update: { slug: PLATFORM_OWNER_SLUG, isActive: true, name: 'ApexCore Platform' },
+    update: {
+      slug: PLATFORM_OWNER_SLUG,
+      isActive: true,
+      name: 'AbexCore Platform',
+      legalName: 'AbexCore Platform',
+      website: 'https://abexcore.co.ke',
+      email: PLATFORM_OWNER_EMAIL,
+    },
     create: {
       id: '00000000-0000-0000-0000-000000000001',
       slug: PLATFORM_OWNER_SLUG,
-      name: 'ApexCore Platform',
-      legalName: 'ApexCore Platform',
+      name: 'AbexCore Platform',
+      legalName: 'AbexCore Platform',
       registrationNo: 'C.123456',
       taxPin: 'P051234567X',
       address: 'Industrial Area, Nairobi',
@@ -105,7 +112,7 @@ async function main() {
       country: 'Kenya',
       phone: '+254 700 123 456',
       email: PLATFORM_OWNER_EMAIL,
-      website: 'https://apexcore.co.ke',
+      website: 'https://abexcore.co.ke',
       currency: 'KES',
       vatRate: 16,
       isActive: true,

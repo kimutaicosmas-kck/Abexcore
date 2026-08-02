@@ -1,5 +1,5 @@
 import clsx from 'clsx';
-import { ApexCoreLogo } from './ApexCoreLogo';
+import { AbexCoreLogo } from './AbexCoreLogo';
 import { resolveUploadUrl } from '../../utils/uploads';
 import { isPlatformCompanySlug } from '../../constants/platform';
 
@@ -11,7 +11,7 @@ interface CompanyBrandProps {
   inverted?: boolean;
   className?: string;
   showPlatformFallback?: boolean;
-  /** Force ApexCore branding (platform owner workspace). Ignores uploaded company logo. */
+  /** Force AbexCore branding (platform owner workspace). Ignores uploaded company logo. */
   platformBrand?: boolean;
 }
 
@@ -50,9 +50,9 @@ export function CompanyBrand({
 
   if (usePlatformBrand) {
     return collapsed ? (
-      <ApexCoreLogo variant="mark" size="sm" inverted={inverted} className={className} />
+      <AbexCoreLogo variant="mark" size="sm" inverted={inverted} className={className} />
     ) : (
-      <ApexCoreLogo variant="sidebar" inverted={inverted} className={className} />
+      <AbexCoreLogo variant="sidebar" inverted={inverted} className={className} />
     );
   }
 
@@ -61,9 +61,9 @@ export function CompanyBrand({
 
   if (!displayName && !logoUrl && showPlatformFallback) {
     return collapsed ? (
-      <ApexCoreLogo variant="mark" size="sm" inverted={inverted} className={className} />
+      <AbexCoreLogo variant="mark" size="sm" inverted={inverted} className={className} />
     ) : (
-      <ApexCoreLogo variant="sidebar" inverted={inverted} className={className} />
+      <AbexCoreLogo variant="sidebar" inverted={inverted} className={className} />
     );
   }
 
@@ -130,7 +130,7 @@ export function CompanyLogoMark({
 
   if (usePlatformBrand) {
     const markSize = size === 'lg' ? 'lg' : size === 'sm' ? 'sm' : 'md';
-    return <ApexCoreLogo variant="mark" size={markSize} className={className} />;
+    return <AbexCoreLogo variant="mark" size={markSize} className={className} />;
   }
 
   const logoUrl = resolveUploadUrl(logo);

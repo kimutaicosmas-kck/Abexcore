@@ -114,16 +114,16 @@ export class EmailService {
     const html = `
       <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
         <div style="background:#2563eb;color:white;padding:20px;border-radius:8px 8px 0 0">
-          <h2 style="margin:0">ApexCore ERP</h2>
+          <h2 style="margin:0">AbexCore ERP</h2>
         </div>
         <div style="border:1px solid #e5e7eb;padding:24px;border-radius:0 0 8px 8px">
           <h3 style="margin-top:0">${title}</h3>
           <p style="color:#374151">${message}</p>
           ${link ? `<p><a href="${config.frontendUrl}${link}" style="color:#2563eb">View in ERP</a></p>` : ''}
           <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0"/>
-          <p style="color:#9ca3af;font-size:12px">Designed by ApexCore Technologies</p>
+          <p style="color:#9ca3af;font-size:12px">Designed by AbexCore Technologies</p>
         </div>
       </div>`;
-    return this.send(to, `[ApexCore ERP] ${title}`, html);
+    return this.send(to, `[AbexCore ERP] ${title}`, html);
   }
 }

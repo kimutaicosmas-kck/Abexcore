@@ -1,4 +1,4 @@
-# ApexCore ERP — User Guide
+# AbexCore ERP — User Guide
 
 Quick reference for daily users by module.
 

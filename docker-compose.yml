@@ -49,7 +49,7 @@ services:
       SMTP_PORT: ${SMTP_PORT:-587}
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASS: ${SMTP_PASS:-}
-      SMTP_FROM: ${SMTP_FROM:-ApexCore ERP <noreply@apexcore.co.ke>}
+      SMTP_FROM: ${SMTP_FROM:-AbexCore ERP <noreply@abexcore.co.ke>}
       MPESA_ENV: ${MPESA_ENV:-stub}
       SWAGGER_ENABLED: ${SWAGGER_ENABLED:-false}
       SEED_ON_START: ${SEED_ON_START:-false}
@@ -77,8 +77,9 @@ services:
       dockerfile: docker/Dockerfile.frontend
     container_name: erp-frontend
     restart: unless-stopped
+    # Default publishes :80. Production (Caddy) sets FRONTEND_HOST_BIND=127.0.0.1:8080
     ports:
-      - '80:80'
+      - '${FRONTEND_HOST_BIND:-80}:80'
     depends_on:
       backend:
         condition: service_healthy

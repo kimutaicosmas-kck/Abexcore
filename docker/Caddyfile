@@ -1,0 +1,4 @@
+abexcore.co.ke, www.abexcore.co.ke {
+	encode gzip
+	reverse_proxy frontend:80
+}

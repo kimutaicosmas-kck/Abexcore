@@ -17,7 +17,7 @@ import { testCtx, itWithDb } from './setup';
 
 describe('Finance schema validation', () => {
   it('validates company settings', () => {
-    expect(companySettingsSchema.safeParse({ name: 'ApexCore Ltd', vatRate: 16 }).success).toBe(true);
+    expect(companySettingsSchema.safeParse({ name: 'AbexCore Ltd', vatRate: 16 }).success).toBe(true);
   });
   it('validates invoice list query', () => {
     expect(financeListQuerySchema.safeParse({ page: 1, limit: 15, type: 'SALES' }).success).toBe(true);

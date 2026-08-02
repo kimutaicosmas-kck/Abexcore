@@ -12,10 +12,10 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg', 'apexcore-logo.png', 'pwa-192.png', 'pwa-512.png'],
       manifest: {
-        name: 'ApexCore ERP',
-        short_name: 'ApexCore',
+        name: 'AbexCore ERP',
+        short_name: 'AbexCore',
         description:
-          'Enterprise resource planning by ApexCore Technologies.',
+          'Enterprise resource planning by AbexCore Technologies.',
         theme_color: '#2563eb',
         background_color: '#f1f5f9',
         display: 'standalone',

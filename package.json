@@ -1,7 +1,7 @@
 {
-  "name": "apexcore-erp",
+  "name": "abexcore-erp",
   "version": "2.1.0",
-  "description": "ApexCore ERP — enterprise manufacturing and distribution ERP",
+  "description": "AbexCore ERP — enterprise manufacturing and distribution ERP",
   "private": true,
   "scripts": {
     "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",

@@ -27,8 +27,8 @@ async function main() {
     where: { id: company.id },
     data: {
       slug: PLATFORM_OWNER_SLUG,
-      name: 'ApexCore Platform',
-      legalName: 'ApexCore Platform',
+      name: 'AbexCore Platform',
+      legalName: 'AbexCore Platform',
       email: PLATFORM_OWNER_EMAIL,
       isActive: true,
     },

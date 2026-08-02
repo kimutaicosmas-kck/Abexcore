@@ -107,7 +107,7 @@ export function PwaShell() {
           <div className="mx-auto max-w-lg flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-xl border border-primary-200 bg-white px-4 py-3 shadow-float">
             <div className="flex items-start gap-2 text-sm text-slate-700">
               <RefreshCw className="h-4 w-4 mt-0.5 text-primary-600 shrink-0" />
-              <span>A new version of ApexCore ERP is ready.</span>
+              <span>A new version of AbexCore ERP is ready.</span>
             </div>
             <Button size="sm" onClick={() => window.location.reload()}>
               Update now
@@ -121,7 +121,7 @@ export function PwaShell() {
           <div className="mx-auto max-w-lg flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-float">
             <div className="flex items-start gap-2 text-sm text-slate-700">
               <Download className="h-4 w-4 mt-0.5 text-primary-600 shrink-0" />
-              <span>Install ApexCore ERP on this device for quick access from your home screen.</span>
+              <span>Install AbexCore ERP on this device for quick access from your home screen.</span>
             </div>
             <div className="flex items-center gap-2 shrink-0">
               <Button variant="secondary" size="sm" onClick={() => setInstallDismissed(true)}>
@@ -145,7 +145,7 @@ export function PwaShell() {
                 <Download className="h-4 w-4 mt-0.5 text-primary-600 shrink-0" />
               )}
               <div>
-                <p className="font-medium text-slate-900">Add ApexCore to your home screen</p>
+                <p className="font-medium text-slate-900">Add AbexCore to your home screen</p>
                 <p className="mt-1">{manualInstallText}</p>
                 {!isSecure && platform === 'android' && (
                   <p className="mt-2 text-xs text-amber-700">

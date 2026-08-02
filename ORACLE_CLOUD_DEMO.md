@@ -1,4 +1,4 @@
-# ApexCore ERP — Oracle Cloud Always Free Client Demo
+# AbexCore ERP — Oracle Cloud Always Free Client Demo
 
 Deploy the same Docker stack you use locally on an **Oracle Cloud Always Free** VM, then share one public link with your client for testing.
 
@@ -37,7 +37,7 @@ Use **Ampere ARM** free tier:
 
 1. Sign in: [https://cloud.oracle.com](https://cloud.oracle.com)
 2. **Compute → Instances → Create instance**
-3. Name: `apexcore-demo`
+3. Name: `AbexCore-demo`
 4. Image: **Ubuntu 22.04** (aarch64 for A1.Flex)
 5. Shape: **VM.Standard.A1.Flex** → 2 OCPU / 12 GB
 6. Networking: use default VCN; ensure **Assign a public IPv4 address**
@@ -108,10 +108,10 @@ sudo docker compose --env-file .env up -d --build
 ## Part C — What to send the client
 
 ```
-ApexCore ERP — preview
+AbexCore ERP — preview
 URL:     http://YOUR_PUBLIC_IP
 Company: owner
-Email:   demo@apexcore.co.ke
+Email:   demo@AbexCore.co.ke
 Password: DemoClient@2026!     (or whatever you set in .env)
 ```
 
@@ -142,7 +142,7 @@ sudo docker compose --env-file .env up -d --build
 
 # Backup MySQL
 sudo docker compose exec -T mysql mysqldump -u erp_user -p"$MYSQL_PASSWORD" filter_erp \
-  | gzip > ~/apexcore-backup-$(date +%F).sql.gz
+  | gzip > ~/AbexCore-backup-$(date +%F).sql.gz
 ```
 
 After the first successful seed, `.env` should have `SEED_ON_START=false` so restarts do not wipe/reseed.

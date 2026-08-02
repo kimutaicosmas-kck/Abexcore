@@ -7,6 +7,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { GlobalSearch } from './GlobalSearch';
 import { NOTIFICATION_POLL_MS } from '../../config/realtime';
 import { normalizeRoutePath } from '../../config/routeAccess';
+import { APP_NAME } from '../../constants/brand';
 
 interface TopNavProps {
   onMenuClick: () => void;
@@ -103,7 +104,7 @@ export function TopNav({ onMenuClick, sidebarOffset }: TopNavProps) {
             </button>
             <div className="min-w-0 shrink-0 max-w-[40vw] sm:max-w-none">
               <p className="text-xs font-semibold uppercase tracking-wider text-primary-600/80 hidden sm:block">
-                ApexCore ERP
+                {APP_NAME}
               </p>
               <h1 className="text-sm font-semibold text-primary-950 truncate">{pageTitle}</h1>
             </div>

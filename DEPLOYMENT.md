@@ -1,6 +1,6 @@
-# ApexCore ERP — Production Go-Live Runbook
+# AbexCore ERP — Production Go-Live Runbook
 
-Use this checklist when deploying ApexCore ERP v2.1 to staging or production.
+Use this checklist when deploying AbexCore ERP v2.1 to staging or production.
 
 ---
 
@@ -27,7 +27,7 @@ SMTP_HOST=smtp.yourprovider.com
 SMTP_PORT=587
 SMTP_USER=notifications@yourcompany.co.ke
 SMTP_PASS=<app-password>
-SMTP_FROM="ApexCore ERP <notifications@yourcompany.co.ke>"
+SMTP_FROM="AbexCore ERP <notifications@abexcore.com>"
 ```
 
 **Never use default Docker Compose JWT placeholders in production.**
@@ -228,7 +228,7 @@ Rollback: redeploy previous image tag / git tag and restore DB backup if schema 
 | Role | Contact |
 |------|---------|
 | System admin | _your IT contact_ |
-| ApexCore support | _your vendor contact_ |
+| AbexCore support | _your vendor contact_ |
 
 ---
 
@@ -312,4 +312,4 @@ Use this for a short UAT/staging window without paying for a VPS.
 
 ---
 
-**Document version:** 1.1 — ApexCore ERP v2.1.0
+**Document version:** 1.1 — AbexCore ERP v2.1.0

@@ -1,7 +1,7 @@
 {
-  "name": "apexcore-erp-backend",
+  "name": "abexcore-erp-backend",
   "version": "2.1.0",
-  "description": "ApexCore ERP Backend API — Designed by ApexCore Technologies",
+  "description": "AbexCore ERP Backend API — Designed by AbexCore Technologies",
   "main": "dist/index.js",
   "scripts": {
     "dev": "tsx watch src/index.ts",

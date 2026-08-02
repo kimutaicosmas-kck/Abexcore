@@ -74,12 +74,19 @@ async function main() {
 
   const company = await prisma.company.upsert({
     where: { id: '00000000-0000-0000-0000-000000000001' },
-    update: { slug: PLATFORM_OWNER_SLUG, isActive: true },
+    update: {
+      slug: PLATFORM_OWNER_SLUG,
+      isActive: true,
+      name: process.env.SEED_COMPANY_NAME || 'AbexCore Platform',
+      legalName: process.env.SEED_COMPANY_NAME || 'AbexCore Platform',
+      website: process.env.SEED_COMPANY_WEBSITE || 'https://abexcore.co.ke',
+    },
     create: {
       id: '00000000-0000-0000-0000-000000000001',
       slug: PLATFORM_OWNER_SLUG,
-      name: process.env.SEED_COMPANY_NAME || 'ApexCore Platform',
-      legalName: process.env.SEED_COMPANY_NAME || 'ApexCore Platform',
+      name: process.env.SEED_COMPANY_NAME || 'AbexCore Platform',
+      legalName: process.env.SEED_COMPANY_NAME || 'AbexCore Platform',
+      website: process.env.SEED_COMPANY_WEBSITE || 'https://abexcore.co.ke',
       currency: 'KES',
       country: 'Kenya',
       vatRate: 16,

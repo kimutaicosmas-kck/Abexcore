@@ -1,14 +1,14 @@
-# APEXCORE ERP — Compliance & Data Governance
+# ABEXCORE ERP — Compliance & Data Governance
 
 **Version:** 1.0  
-**Product:** APEXCORE ERP v2.1  
-**Owner:** ApexCore Technologies  
+**Product:** ABEXCORE ERP v2.1  
+**Owner:** AbexCore Technologies  
 
 ---
 
 ## 1. Privacy & Personal Data
 
-APEXCORE ERP processes business and employee data for tenant companies. Each tenant’s data is isolated by `companyId` at the database layer.
+ABEXCORE ERP processes business and employee data for tenant companies. Each tenant’s data is isolated by `companyId` at the database layer.
 
 | Data category | Examples | Purpose | Retention |
 |---------------|----------|---------|-----------|
@@ -87,5 +87,5 @@ Formal ISO 27001 / SOC 2 certification is **not** claimed; this document describ
 
 ## 7. Contact
 
-Data protection inquiries: **privacy@apexcore.co.ke**  
-Security incidents: **security@apexcore.co.ke**
+Data protection inquiries: **privacy@abexcore.com**  
+Security incidents: **security@abexcore.com**

@@ -1,4 +1,4 @@
-# ApexCore ERP — Administrator Guide
+# AbexCore ERP — Administrator Guide
 
 ## Roles & permissions
 

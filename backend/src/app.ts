@@ -102,8 +102,8 @@ export function createApp() {
     definition: {
       openapi: '3.0.0',
       info: {
-        title: 'ApexCore ERP API',
-        description: 'Enterprise ERP API — Designed by ApexCore Technologies',
+        title: 'AbexCore ERP API',
+        description: 'Enterprise ERP API — Designed by AbexCore Technologies',
         version: '2.1.0',
       },
       servers: [{ url: `/api/v1` }],

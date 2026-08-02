@@ -3,7 +3,7 @@ import { test, expect } from '@playwright/test';
 const adminEmail = process.env.E2E_ADMIN_EMAIL || 'kimutaicosmas547@gmail.com';
 const adminPassword = process.env.E2E_ADMIN_PASSWORD || 'Kimutai@44!';
 
-test.describe('ApexCore ERP smoke', () => {
+test.describe('AbexCore ERP smoke', () => {
   test('login page loads', async ({ page }) => {
     await page.goto('/login');
     await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible();
