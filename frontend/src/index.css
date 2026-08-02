@@ -92,11 +92,11 @@ input[type='number']::-webkit-outer-spin-button {
   border-radius: 9999px;
 }
 
-html,
-body,
-#root {
-  overflow-x: hidden;
+html {
   max-width: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
@@ -106,8 +106,18 @@ body {
   padding-right: env(safe-area-inset-right);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  overscroll-behavior-y: none;
   -webkit-tap-highlight-color: transparent;
+  max-width: 100%;
+  min-height: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+#root {
+  max-width: 100%;
+  min-height: 100%;
+  overflow: visible;
 }
 
 /* Native-feel mobile shell (phones / installed PWA) */
@@ -116,6 +126,8 @@ body {
     background:
       radial-gradient(ellipse 120% 60% at 50% -10%, rgba(37, 99, 235, 0.08), transparent 55%),
       #eef2f7;
+    min-height: 100dvh;
+    overflow: visible;
   }
 
   .mobile-top-bar {

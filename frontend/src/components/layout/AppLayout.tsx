@@ -42,7 +42,7 @@ export function AppLayout() {
   };
 
   return (
-    <div className="mobile-app-shell min-h-screen overflow-x-hidden">
+    <div className="mobile-app-shell min-h-dvh">
       <RealtimeSync />
       {isMobileOverlay && (
         <button
@@ -66,7 +66,7 @@ export function AppLayout() {
       />
 
       <main
-        className="pt-[calc(3.5rem+env(safe-area-inset-top))] pb-[calc(4.75rem+env(safe-area-inset-bottom))] lg:pt-14 lg:pb-[max(1rem,env(safe-area-inset-bottom))] transition-all duration-300 min-w-0 overflow-x-hidden lg:ml-[var(--sidebar-w)]"
+        className="pt-[calc(3.5rem+env(safe-area-inset-top))] pb-[calc(4.75rem+env(safe-area-inset-bottom))] lg:pt-14 lg:pb-[max(1rem,env(safe-area-inset-bottom))] transition-all duration-300 min-w-0 lg:ml-[var(--sidebar-w)]"
         style={{ '--sidebar-w': sidebarOffset } as React.CSSProperties}
       >
         <div className="px-3 py-3 sm:px-5 sm:py-4 max-w-[1600px] mx-auto min-w-0 app-content">
