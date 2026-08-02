@@ -1,0 +1,29 @@
+# AbexCore ERP — public login may be indexed; authenticated app routes stay private.
+User-agent: *
+Allow: /login
+Allow: /login?
+Disallow: /api/
+Disallow: /uploads/
+Disallow: /users
+Disallow: /customers
+Disallow: /products
+Disallow: /inventory
+Disallow: /procurement
+Disallow: /production
+Disallow: /sales
+Disallow: /finance
+Disallow: /hr
+Disallow: /maintenance
+Disallow: /quality
+Disallow: /reports
+Disallow: /settings
+Disallow: /delivery
+Disallow: /my-sales
+Disallow: /available-products
+Disallow: /my-leave
+Disallow: /sales-performance
+Disallow: /change-password
+Disallow: /admin/
+Disallow: /crm
+
+Sitemap: https://abexcore.co.ke/sitemap.xml

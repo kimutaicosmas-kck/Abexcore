@@ -10,7 +10,15 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.svg', 'abexcore-logo.png', 'apple-touch-icon.png', 'pwa-192.png', 'pwa-512.png'],
+      includeAssets: [
+        'favicon.svg',
+        'abexcore-logo.png',
+        'apple-touch-icon.png',
+        'pwa-192.png',
+        'pwa-512.png',
+        'robots.txt',
+        'sitemap.xml',
+      ],
       manifest: {
         name: 'AbexCore ERP',
         short_name: 'AbexCore',
