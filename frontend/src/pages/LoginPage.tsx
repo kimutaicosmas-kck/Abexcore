@@ -72,8 +72,9 @@ export function LoginPage() {
   const [tenantLoading, setTenantLoading] = useState(false);
   const [tenantError, setTenantError] = useState('');
 
+  // Explicit ?tenant= wins over host parsing (important for multi-part TLDs like .co.ke).
   const hostSlug = useMemo(
-    () => resolveTenantSlugFromHost() || resolveTenantSlugFromQuery(window.location.search),
+    () => resolveTenantSlugFromQuery(window.location.search) || resolveTenantSlugFromHost(),
     [searchParams]
   );
   const tenantLocked = !!hostSlug;
