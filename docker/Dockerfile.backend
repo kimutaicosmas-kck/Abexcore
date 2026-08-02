@@ -15,7 +15,8 @@ COPY --from=builder /app/package*.json ./
 COPY --from=builder /app/prisma ./prisma
 # Needed when seed/scripts import TypeScript under src/ (tsx)
 COPY --from=builder /app/src ./src
-COPY scripts/start-production.sh ./scripts/start-production.sh
+# Ops scripts (db:refresh-roles, seed helpers) — needed after first deploy
+COPY --from=builder /app/scripts ./scripts
 RUN chmod +x ./scripts/start-production.sh
 RUN mkdir -p uploads/products reports
 ENV NODE_ENV=production
