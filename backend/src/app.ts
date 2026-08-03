@@ -35,8 +35,8 @@ export function createApp() {
   const app = express();
 
   if (config.nodeEnv === 'production') {
-    // Caddy → nginx → backend. Trust forwarded client IP so rate limits are not shared by the whole office.
-    app.set('trust proxy', true);
+    // Exactly 2 hops: Caddy → nginx → backend. Do not use `true` (ERR_ERL_PERMISSIVE_TRUST_PROXY).
+    app.set('trust proxy', 2);
   }
 
   app.use(helmet({
@@ -72,6 +72,7 @@ export function createApp() {
         max: config.nodeEnv === 'production' ? 3000 : 5000,
         standardHeaders: true,
         legacyHeaders: false,
+        validate: false,
         message: { success: false, message: 'Too many requests' },
         skip: (req) => {
           const p = req.path || '';
