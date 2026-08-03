@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Download, RefreshCw, Share, WifiOff, X } from 'lucide-react';
+import { Download, Share, WifiOff, X } from 'lucide-react';
 import { Button } from '../ui';
 
 interface BeforeInstallPromptEvent extends Event {
@@ -34,7 +34,6 @@ export function PwaShell() {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [installDismissed, setInstallDismissed] = useState(false);
-  const [updateReady, setUpdateReady] = useState(false);
   const [offlineDismissed, setOfflineDismissed] = useState(false);
   const [isStandalone] = useState(isStandaloneMode);
   const [isPhone] = useState(isPhoneDevice);
@@ -60,18 +59,15 @@ export function PwaShell() {
       event.preventDefault();
       setInstallPrompt(event as BeforeInstallPromptEvent);
     };
-    const onUpdateReady = () => setUpdateReady(true);
 
     window.addEventListener('online', onOnline);
     window.addEventListener('offline', onOffline);
     window.addEventListener('beforeinstallprompt', onInstallPrompt);
-    window.addEventListener('pwa-update-ready', onUpdateReady);
 
     return () => {
       window.removeEventListener('online', onOnline);
       window.removeEventListener('offline', onOffline);
       window.removeEventListener('beforeinstallprompt', onInstallPrompt);
-      window.removeEventListener('pwa-update-ready', onUpdateReady);
     };
   }, []);
 
@@ -111,20 +107,6 @@ export function PwaShell() {
             >
               <X className="h-4 w-4" />
             </button>
-          </div>
-        </div>
-      )}
-
-      {updateReady && (
-        <div className="fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom))] lg:bottom-4 inset-x-0 z-50 px-4 pb-[max(0.5rem,env(safe-area-inset-bottom))] lg:pb-[max(1rem,env(safe-area-inset-bottom))]">
-          <div className="mx-auto max-w-lg flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-xl border border-primary-200 bg-white px-4 py-3 shadow-float">
-            <div className="flex items-start gap-2 text-sm text-slate-700">
-              <RefreshCw className="h-4 w-4 mt-0.5 text-primary-600 shrink-0" />
-              <span>A new version of AbexCore ERP is ready.</span>
-            </div>
-            <Button size="sm" onClick={() => window.location.reload()}>
-              Update now
-            </Button>
           </div>
         </div>
       )}

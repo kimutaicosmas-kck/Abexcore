@@ -31,10 +31,24 @@ document.addEventListener(
   { passive: true, capture: true }
 );
 
-registerSW({
+// autoUpdate in vite.config — apply new SW quietly; reload only when the tab is hidden
+// so users are never interrupted mid-work by an "Update now" prompt.
+const updateSW = registerSW({
   immediate: true,
   onNeedRefresh() {
-    window.dispatchEvent(new Event('pwa-update-ready'));
+    const applyQuietly = () => {
+      void updateSW(true);
+    };
+    if (document.visibilityState === 'hidden') {
+      applyQuietly();
+      return;
+    }
+    const onHide = () => {
+      if (document.visibilityState !== 'hidden') return;
+      document.removeEventListener('visibilitychange', onHide);
+      applyQuietly();
+    };
+    document.addEventListener('visibilitychange', onHide);
   },
 });
 

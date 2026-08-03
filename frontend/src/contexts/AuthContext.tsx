@@ -130,6 +130,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  // Quietly renew access tokens in the background so users are not kicked mid-work.
+  useEffect(() => {
+    if (!user) return;
+
+    const renewIfNeeded = () => {
+      if (isInactivityExpired()) return;
+      const accessToken = localStorage.getItem('accessToken');
+      const refreshToken = localStorage.getItem('refreshToken');
+      if (!refreshToken) return;
+      if (!accessToken || isAccessTokenExpired(accessToken)) {
+        void refreshAccessToken();
+      }
+    };
+
+    renewIfNeeded();
+    const id = window.setInterval(renewIfNeeded, 5 * 60 * 1000);
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') renewIfNeeded();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+
+    return () => {
+      window.clearInterval(id);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [user]);
+
   const login = async (companySlug: string, email: string, password: string, totpCode?: string) => {
     const { data } = await authApi.login(companySlug, email, password, totpCode);
     localStorage.setItem('accessToken', data.data.accessToken);
