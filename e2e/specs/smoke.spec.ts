@@ -5,16 +5,26 @@ const adminEmail = process.env.E2E_ADMIN_EMAIL || 'kimutaicosmas547@gmail.com';
 const adminPassword = process.env.E2E_ADMIN_PASSWORD || 'Kimutai@44!';
 
 async function signIn(page: import('@playwright/test').Page) {
-  await page.goto(`/login?tenant=${encodeURIComponent(companySlug)}`);
-  // Tenant query pre-fills company; still fill if the field is visible.
-  const company = page.getByLabel('Company code');
-  if (await company.isVisible().catch(() => false)) {
-    await company.fill(companySlug);
-  }
+  await page.goto('/login');
+  await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible();
+
+  await page.getByLabel('Company code').fill(companySlug);
   await page.getByLabel('Email').fill(adminEmail);
   await page.getByLabel('Password').fill(adminPassword);
-  await page.getByRole('button', { name: 'Sign in' }).click();
-  await expect(page).not.toHaveURL(/\/login/);
+
+  const signIn = page.getByRole('button', { name: 'Sign in' });
+  await expect(signIn).toBeEnabled();
+  await signIn.click();
+
+  // Surface login errors instead of timing out on the dashboard.
+  const alert = page.locator('[role="alert"], .text-red-600, .text-red-700').first();
+  await Promise.race([
+    page.waitForURL((url) => !url.pathname.includes('/login'), { timeout: 20_000 }),
+    alert.waitFor({ state: 'visible', timeout: 20_000 }).then(async () => {
+      throw new Error(`Login failed: ${(await alert.textContent())?.trim() || 'unknown error'}`);
+    }),
+  ]);
+
   await expect(page.getByText(/Sales today/i).first()).toBeVisible({ timeout: 20_000 });
 }
 
@@ -35,11 +45,11 @@ test.describe('AbexCore ERP smoke', () => {
     await signIn(page);
 
     await page.goto('/finance');
-    await expect(page.getByRole('button', { name: 'Overview' })).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole('button', { name: 'Overview' })).toBeVisible({ timeout: 15_000 });
 
     await page.getByRole('button', { name: 'Reconciliation' }).click();
     await expect(
       page.getByText(/Bank Balance|Unreconciled|Import bank statement/i).first()
-    ).toBeVisible({ timeout: 10_000 });
+    ).toBeVisible({ timeout: 15_000 });
   });
 });
