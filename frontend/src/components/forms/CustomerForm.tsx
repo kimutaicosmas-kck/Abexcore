@@ -176,7 +176,7 @@ export function CustomerForm({ customer, onSuccess, onCancel }: CustomerFormProp
           placeholder={vatStatus === 'VAT' ? 'Required for VAT customers' : 'Optional'}
         />
         <div>
-          <Input label="Credit Limit (KES)" type="number" min={0} step="0.01" {...register('creditLimit')} />
+          <Input label="Credit Limit (KES) — optional" type="number" min={0} step="0.01" {...register('creditLimit')} />
           <p className="text-xs text-slate-500 mt-1">
             Maximum unpaid balance allowed for this customer. Set to 0 for no credit limit check.
           </p>

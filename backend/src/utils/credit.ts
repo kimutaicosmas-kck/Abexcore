@@ -53,26 +53,17 @@ export async function syncCustomerCreditUsed(
   return exposure;
 }
 
+/**
+ * Credit limit is optional and advisory only — never blocks a sale.
+ * Kept as a no-op so existing call sites stay valid; exposure is still tracked via creditUsed.
+ */
 export async function assertCreditLimit(
   customerId: string,
-  orderAmount: number,
+  _orderAmount: number,
   tx: TxClient = prisma
 ): Promise<void> {
   const customer = await tx.customer.findUnique({ where: { id: customerId } });
   if (!customer) throw new AppError('Customer not found', 404);
-
-  const creditLimit = Number(customer.creditLimit);
-  if (creditLimit <= 0) return;
-
-  const exposure = await computeCustomerCreditExposure(customerId, tx, orderAmount);
-
-  if (exposure > creditLimit) {
-    throw new AppError(
-      `Credit limit exceeded. Limit: KES ${creditLimit.toLocaleString()}, exposure after order: KES ${exposure.toLocaleString()}`,
-      400,
-      'CREDIT_LIMIT_EXCEEDED'
-    );
-  }
 }
 
 const ORDER_TRANSITIONS: Record<string, string[]> = {

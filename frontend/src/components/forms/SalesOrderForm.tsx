@@ -196,12 +196,7 @@ export function SalesOrderForm({ onSuccess, onCancel }: SalesOrderFormProps) {
         footer={
           <div className="flex justify-end gap-3">
             <Button type="button" variant="secondary" onClick={onCancel}>Cancel</Button>
-            <Button
-              type="submit"
-              loading={isPending}
-              disabled={exceedsCreditLimit}
-              title={exceedsCreditLimit ? 'Order total exceeds customer credit limit' : undefined}
-            >
+            <Button type="submit" loading={isPending}>
               Create Sales Order
             </Button>
           </div>
@@ -276,20 +271,23 @@ export function SalesOrderForm({ onSuccess, onCancel }: SalesOrderFormProps) {
             <span>Used: {formatCurrency(creditUsed)}</span>
             <span>Available: {formatCurrency(availableCredit)}</span>
           </div>
-          <p className={exceedsCreditLimit ? 'text-red-700 font-medium' : 'text-slate-600'}>
+          <p className={exceedsCreditLimit ? 'text-amber-800 font-medium' : 'text-slate-600'}>
             After this order: {formatCurrency(projectedExposure)}
-            {exceedsCreditLimit && ' — exceeds credit limit'}
+            {exceedsCreditLimit && ' — above credit limit (sale still allowed)'}
           </p>
         </div>
       )}
 
-      {(exceedsCreditLimit || isCreditLimitError) && (
+      {exceedsCreditLimit && (
+        <Alert variant="warning">
+          This order is above the customer&apos;s credit limit (available{' '}
+          {formatCurrency(availableCredit)}, order {formatCurrency(total)}, limit{' '}
+          {formatCurrency(creditLimit)}). Credit limit is optional — you can still create the order.
+        </Alert>
+      )}
+      {isCreditLimitError && errorMessage && (
         <div ref={errorRef}>
-          <Alert variant="error">
-            {isCreditLimitError && errorMessage
-              ? errorMessage
-              : `This order exceeds the customer's credit limit. Available credit is ${formatCurrency(availableCredit)}, but this order totals ${formatCurrency(total)} (limit ${formatCurrency(creditLimit)}).`}
-          </Alert>
+          <Alert variant="error">{errorMessage}</Alert>
         </div>
       )}
 
