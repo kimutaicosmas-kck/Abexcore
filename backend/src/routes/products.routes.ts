@@ -496,7 +496,7 @@ router.put(
 
       const existing = await tx.stockLevel.findFirst({
         where: { warehouseId: targetWarehouseId, productId: id },
-        orderBy: { createdAt: 'asc' },
+        orderBy: { updatedAt: 'asc' },
       });
       const currentQty = Number(existing?.quantity || 0);
       const diff = desiredQty - currentQty;
