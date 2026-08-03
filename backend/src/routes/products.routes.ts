@@ -314,6 +314,13 @@ router.get(
   })
 );
 
+/** Empty barcode must be NULL — MySQL unique (company_id, barcode) rejects multiple "". */
+function normalizeProductBarcode(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return trimmed === '' ? null : trimmed;
+}
+
 router.post(
   '/',
   authorize('products:create'),
@@ -321,8 +328,14 @@ router.post(
   auditLog('products', 'create', 'product'),
   asyncHandler(async (req: AuthRequest, res: Response) => {
     const { initialQuantity, warehouseId, ...productData } = req.body;
+    const barcode = normalizeProductBarcode(productData.barcode);
     const existing = await prisma.product.findFirst({ where: { sku: productData.sku } });
     if (existing) throw new AppError('Part number already exists', 409);
+
+    if (barcode) {
+      const barcodeTaken = await prisma.product.findFirst({ where: { barcode } });
+      if (barcodeTaken) throw new AppError('Barcode already exists on another product', 409);
+    }
 
     const category = await prisma.productCategory.findFirst({
       where: { id: productData.categoryId, isActive: true },
@@ -332,7 +345,9 @@ router.post(
     const openingQty = Number(initialQuantity || 0);
 
     const data = await prisma.$transaction(async (tx) => {
-      const product = await tx.product.create({ data: productData });
+      const product = await tx.product.create({
+        data: { ...productData, barcode },
+      });
 
       if (openingQty > 0) {
         let targetWarehouseId = warehouseId as string | undefined;
@@ -417,7 +432,21 @@ router.put(
       });
       if (!category) throw new AppError('Invalid product category', 400);
     }
-    const data = await productService.update(getParam(req.params.id), req.body);
+
+    const id = getParam(req.params.id);
+    const patch = { ...req.body } as Record<string, unknown>;
+    if ('barcode' in patch) {
+      const barcode = normalizeProductBarcode(patch.barcode);
+      patch.barcode = barcode;
+      if (barcode) {
+        const barcodeTaken = await prisma.product.findFirst({
+          where: { barcode, id: { not: id } },
+        });
+        if (barcodeTaken) throw new AppError('Barcode already exists on another product', 409);
+      }
+    }
+
+    const data = await productService.update(id, patch);
     res.json({ success: true, data });
   })
 );

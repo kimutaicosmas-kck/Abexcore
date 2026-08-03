@@ -16,24 +16,41 @@ export class AppError extends Error {
   }
 }
 
+function mapPrismaError(err: Error): AppError | null {
+  const anyErr = err as Error & { code?: string; meta?: { target?: string | string[] } };
+  if (anyErr.code !== 'P2002') return null;
+  const target = Array.isArray(anyErr.meta?.target)
+    ? anyErr.meta.target.join(',')
+    : String(anyErr.meta?.target || '');
+  if (target.includes('barcode')) {
+    return new AppError('Barcode already exists on another product', 409);
+  }
+  if (target.includes('sku')) {
+    return new AppError('Part number already exists', 409);
+  }
+  return new AppError('A record with those unique values already exists', 409);
+}
+
 export const errorHandler = (
   err: Error | AppError,
   req: Request,
   res: Response,
   _next: NextFunction
 ) => {
-  const statusCode = err instanceof AppError ? err.statusCode : 500;
-  const message = err.message || 'Internal server error';
+  const mapped = err instanceof AppError ? err : mapPrismaError(err);
+  const finalErr = mapped || err;
+  const statusCode = finalErr instanceof AppError ? finalErr.statusCode : 500;
+  const message = finalErr.message || 'Internal server error';
   const meta = {
     statusCode,
     path: req.path,
     method: req.method,
-    ...(err instanceof AppError && err.code ? { code: err.code } : {}),
+    ...(finalErr instanceof AppError && finalErr.code ? { code: finalErr.code } : {}),
   };
 
   if (statusCode >= 500) {
-    logger.error(message, { ...meta, stack: err.stack });
-    captureException(err, meta);
+    logger.error(message, { ...meta, stack: finalErr.stack });
+    captureException(finalErr, meta);
   } else if (statusCode >= 400) {
     logger.warn(message, meta);
   }
@@ -47,8 +64,8 @@ export const errorHandler = (
     message: statusCode >= 500 && process.env.NODE_ENV === 'production'
       ? 'Internal server error'
       : message,
-    ...(err instanceof AppError && err.code ? { code: err.code } : {}),
-    ...(exposeStack && err.stack ? { stack: err.stack } : {}),
+    ...(finalErr instanceof AppError && finalErr.code ? { code: finalErr.code } : {}),
+    ...(exposeStack && finalErr.stack ? { stack: finalErr.stack } : {}),
   });
 };
 
