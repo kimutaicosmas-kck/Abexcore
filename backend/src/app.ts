@@ -35,7 +35,8 @@ export function createApp() {
   const app = express();
 
   if (config.nodeEnv === 'production') {
-    app.set('trust proxy', 1);
+    // Caddy (TLS) → nginx (frontend) → backend — trust both hops so rate limits use the real client IP.
+    app.set('trust proxy', 2);
   }
 
   app.use(helmet({

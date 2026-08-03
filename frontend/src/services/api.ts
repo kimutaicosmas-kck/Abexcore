@@ -33,6 +33,11 @@ api.interceptors.response.use(
     const isSessionProbe = url.includes('/auth/me');
     const onLoginPage = window.location.pathname === '/login';
 
+    // Never hammer login/refresh when rate-limited.
+    if (error.response?.status === 429) {
+      return Promise.reject(error);
+    }
+
     if (error.response?.status === 401 && originalRequest && !originalRequest._retry && !isAuthEndpoint) {
       originalRequest._retry = true;
       const refreshed = await refreshAccessToken();
@@ -40,6 +45,7 @@ api.interceptors.response.use(
         originalRequest.headers.Authorization = `Bearer ${localStorage.getItem('accessToken')}`;
         return api(originalRequest);
       }
+      clearStoredSession();
       if (!isSessionProbe && !onLoginPage) {
         window.location.href = '/login';
       }

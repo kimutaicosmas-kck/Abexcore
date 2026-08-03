@@ -20,6 +20,14 @@ export function getApiErrorMessage(err: unknown): string {
     return axiosErr.response.data.message;
   }
 
+  if (axiosErr.response?.status === 429) {
+    return 'Too many requests. Wait a minute and try again, or refresh the page.';
+  }
+
+  if (axiosErr.response?.status === 401) {
+    return 'Your session expired. Please sign in again.';
+  }
+
   if (!axiosErr.response) {
     if (axiosErr.code === 'ECONNABORTED') {
       return 'Request timed out. Check your connection and try again.';
