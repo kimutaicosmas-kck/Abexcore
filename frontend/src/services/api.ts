@@ -56,21 +56,40 @@ api.interceptors.response.use(
 
 export default api;
 
-/** Refresh tokens using the stored refresh token. Returns false if refresh fails. */
-export async function refreshAccessToken(): Promise<boolean> {
-  const refreshToken = localStorage.getItem('refreshToken');
-  if (!refreshToken) return false;
+/** Only one refresh in flight — concurrent callers share the same promise. */
+let refreshInFlight: Promise<boolean> | null = null;
 
-  try {
-    const { data } = await axios.post(`${API_BASE_URL}/auth/refresh`, { refreshToken });
-    localStorage.setItem('accessToken', data.data.accessToken);
-    localStorage.setItem('refreshToken', data.data.refreshToken);
-    return true;
-  } catch {
-    localStorage.removeItem('accessToken');
-    localStorage.removeItem('refreshToken');
-    return false;
-  }
+/**
+ * Refresh tokens using the stored refresh token.
+ * Safe under concurrent calls (page reload + API 401 retry) so a losing race
+ * does not wipe a token that another call just rotated successfully.
+ */
+export async function refreshAccessToken(): Promise<boolean> {
+  if (refreshInFlight) return refreshInFlight;
+
+  refreshInFlight = (async () => {
+    const refreshToken = localStorage.getItem('refreshToken');
+    if (!refreshToken) return false;
+
+    try {
+      const { data } = await axios.post(`${API_BASE_URL}/auth/refresh`, { refreshToken });
+      localStorage.setItem('accessToken', data.data.accessToken);
+      localStorage.setItem('refreshToken', data.data.refreshToken);
+      return true;
+    } catch {
+      // Another concurrent refresh may have already rotated tokens — keep those.
+      const stillSame = localStorage.getItem('refreshToken') === refreshToken;
+      if (stillSame) {
+        localStorage.removeItem('accessToken');
+        localStorage.removeItem('refreshToken');
+      }
+      return !stillSame && !!localStorage.getItem('accessToken');
+    } finally {
+      refreshInFlight = null;
+    }
+  })();
+
+  return refreshInFlight;
 }
 
 export function isAccessTokenExpired(token: string): boolean {

@@ -73,7 +73,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      try {
+      const restoreUser = async () => {
         if (!accessToken || isAccessTokenExpired(accessToken)) {
           if (!refreshToken) throw new Error('Session expired');
           const refreshed = await refreshAccessToken();
@@ -81,18 +81,44 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
 
         const { data } = await authApi.me();
-        if (cancelled) return;
+        if (cancelled) return false;
         setUser(data.data);
         setCompany(parseCompany(data.data.company));
-        if (getLastActivityAt() == null) {
-          markUserActivity();
-        }
-      } catch {
+        setMustChangePassword(!!data.data.mustChangePassword);
+        markUserActivity();
+        return true;
+      };
+
+      try {
+        await restoreUser();
+      } catch (err: unknown) {
         if (cancelled) return;
-        clearStoredSession();
-        clearUserActivity();
-        setUser(null);
-        setCompany(null);
+        const status = (err as { response?: { status?: number } })?.response?.status;
+        const sessionGone =
+          status === 401 ||
+          status === 403 ||
+          String((err as Error)?.message || '').includes('Session expired');
+
+        if (sessionGone) {
+          clearStoredSession();
+          clearUserActivity();
+          setUser(null);
+          setCompany(null);
+        } else {
+          // Transient network/5xx on F5 — one retry after token refresh, do not wipe session.
+          try {
+            await refreshAccessToken();
+            await restoreUser();
+          } catch (retryErr: unknown) {
+            const retryStatus = (retryErr as { response?: { status?: number } })?.response?.status;
+            if (retryStatus === 401 || retryStatus === 403) {
+              clearStoredSession();
+              clearUserActivity();
+              setUser(null);
+              setCompany(null);
+            }
+          }
+        }
       } finally {
         if (!cancelled) setIsLoading(false);
       }

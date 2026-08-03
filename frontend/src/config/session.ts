@@ -14,15 +14,17 @@ export const INACTIVITY_TIMEOUT_MS = INACTIVITY_TIMEOUT_MINUTES * 60 * 1000;
 export const INACTIVITY_WARNING_MS = INACTIVITY_WARNING_MINUTES * 60 * 1000;
 
 export function markUserActivity() {
-  sessionStorage.setItem(LAST_ACTIVITY_KEY, String(Date.now()));
+  // localStorage so activity survives full page refresh (sessionStorage was wiping UX on F5).
+  localStorage.setItem(LAST_ACTIVITY_KEY, String(Date.now()));
 }
 
 export function clearUserActivity() {
+  localStorage.removeItem(LAST_ACTIVITY_KEY);
   sessionStorage.removeItem(LAST_ACTIVITY_KEY);
 }
 
 export function getLastActivityAt(): number | null {
-  const raw = sessionStorage.getItem(LAST_ACTIVITY_KEY);
+  const raw = localStorage.getItem(LAST_ACTIVITY_KEY) ?? sessionStorage.getItem(LAST_ACTIVITY_KEY);
   if (!raw) return null;
   const value = Number(raw);
   return Number.isFinite(value) ? value : null;
