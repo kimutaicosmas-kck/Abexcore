@@ -21,4 +21,15 @@ describe('resolveTenantSlugFromHost', () => {
     expect(resolveTenantSlugFromHost('acme.example.com')).toBe('acme');
     expect(getAppBaseHost('acme.example.com')).toBe('example.com');
   });
+
+  it('does not treat IPv4/IPv6 as a tenant slug (CI uses 127.0.0.1)', () => {
+    expect(resolveTenantSlugFromHost('127.0.0.1')).toBeNull();
+    expect(resolveTenantSlugFromHost('192.168.1.10')).toBeNull();
+    expect(resolveTenantSlugFromHost('::1')).toBeNull();
+    expect(getAppBaseHost('127.0.0.1')).toBe('127.0.0.1');
+  });
+
+  it('treats bare localhost as non-tenant', () => {
+    expect(resolveTenantSlugFromHost('localhost')).toBeNull();
+  });
 });

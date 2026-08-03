@@ -19,8 +19,16 @@ const MULTI_PART_PUBLIC_SUFFIXES = [
   'org.za',
 ].sort((a, b) => b.length - a.length);
 
+/** IPv4 / IPv6 hosts must never be treated as tenant.base.tld (e.g. 127.0.0.1 → "127"). */
+function isIpHostname(host: string): boolean {
+  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(host)) return true;
+  if (host.includes(':')) return true; // IPv6 or [ipv6]
+  return false;
+}
+
 function splitRegistrable(hostname: string): { tenant: string | null; baseHost: string } {
   const host = hostname.toLowerCase();
+  if (isIpHostname(host)) return { tenant: null, baseHost: host };
 
   for (const suffix of MULTI_PART_PUBLIC_SUFFIXES) {
     if (host === suffix) return { tenant: null, baseHost: host };
@@ -66,6 +74,7 @@ export function getAppBaseHost(hostname = window.location.hostname): string {
 /** Resolve tenant slug from subdomain, e.g. `acme.localhost` → `acme`. */
 export function resolveTenantSlugFromHost(hostname = window.location.hostname): string | null {
   const host = hostname.toLowerCase();
+  if (isIpHostname(host) || host === 'localhost') return null;
 
   if (host.endsWith('.localhost')) {
     const slug = host.slice(0, -'.localhost'.length);
