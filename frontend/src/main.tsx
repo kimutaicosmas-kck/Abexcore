@@ -4,17 +4,13 @@ import { registerSW } from 'virtual:pwa-register';
 import App from './App';
 import './index.css';
 
-const PORTRAIT_CLASS = 'force-mobile-portrait';
-
-function isPhoneLikeDevice() {
-  const shortest = Math.min(window.screen.width, window.screen.height);
-  const coarse = window.matchMedia('(pointer: coarse)').matches;
-  const noHover = window.matchMedia('(hover: none)').matches;
-  return shortest <= 926 || (coarse && noHover && shortest <= 1180);
-}
-
-/** Lock API when allowed (installed PWA / Android Chrome). */
+/** Portrait lock only for installed PWA / standalone — never rotate desktop CSS. */
 function lockPortraitOrientation() {
+  const standalone =
+    window.matchMedia('(display-mode: standalone)').matches ||
+    (navigator as Navigator & { standalone?: boolean }).standalone === true;
+  if (!standalone) return;
+
   const orientation = screen.orientation as ScreenOrientation & {
     lock?: (orientation: OrientationLockType) => Promise<void>;
   };
@@ -22,41 +18,18 @@ function lockPortraitOrientation() {
   orientation.lock('portrait').catch(() => undefined);
 }
 
-/** Keep phone UI upright even if the browser still flips to landscape. */
-function syncForcedPortraitClass() {
-  if (!isPhoneLikeDevice()) {
-    document.documentElement.classList.remove(PORTRAIT_CLASS);
-    return;
-  }
-  document.documentElement.classList.add(PORTRAIT_CLASS);
-  lockPortraitOrientation();
-}
-
-syncForcedPortraitClass();
 lockPortraitOrientation();
-
-window.addEventListener('orientationchange', () => {
-  syncForcedPortraitClass();
-  lockPortraitOrientation();
-});
-window.addEventListener('resize', syncForcedPortraitClass);
+window.addEventListener('orientationchange', lockPortraitOrientation);
 document.addEventListener('visibilitychange', () => {
-  if (!document.hidden) {
-    syncForcedPortraitClass();
+  if (!document.hidden) lockPortraitOrientation();
+});
+document.addEventListener(
+  'pointerdown',
+  () => {
     lockPortraitOrientation();
-  }
-});
-
-// Many browsers only honor orientation.lock after a user gesture.
-['pointerdown', 'touchstart', 'click'].forEach((eventName) => {
-  document.addEventListener(
-    eventName,
-    () => {
-      lockPortraitOrientation();
-    },
-    { passive: true, capture: true }
-  );
-});
+  },
+  { passive: true, capture: true }
+);
 
 registerSW({
   immediate: true,
