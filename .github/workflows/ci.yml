@@ -154,6 +154,9 @@ jobs:
           DATABASE_URL: mysql://erp_user:erp_password@127.0.0.1:3306/filter_erp_test
           MPESA_ENV: stub
           DATA_ENCRYPTION_KEY: ci-test-encryption-key-32-characters-min
+          PLATFORM_COMPANY_SLUG: owner
+          PLATFORM_OWNER_EMAIL: kimutaicosmas547@gmail.com
+          PLATFORM_OWNER_PASSWORD: Kimutai@44!
         run: |
           npx prisma generate
           npx prisma db push --skip-generate
@@ -193,8 +196,12 @@ jobs:
       - name: Run Playwright smoke tests
         env:
           PLAYWRIGHT_BASE_URL: http://127.0.0.1:5173
+          E2E_COMPANY_SLUG: owner
           E2E_ADMIN_EMAIL: kimutaicosmas547@gmail.com
           E2E_ADMIN_PASSWORD: Kimutai@44!
+          PLATFORM_OWNER_EMAIL: kimutaicosmas547@gmail.com
+          PLATFORM_OWNER_PASSWORD: Kimutai@44!
+          PLATFORM_COMPANY_SLUG: owner
         run: npm run test:e2e
 
   backup-restore:
