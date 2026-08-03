@@ -9,7 +9,7 @@ import prisma from '../config/database';
 import { getParam, getQuery } from '../utils/request';
 import { Prisma } from '@prisma/client';
 import { normalizeAllowedModules } from '../utils/userPermissions';
-import { modulesForRoleName } from '../config/rolePermissions';
+import { canAssignCompanySuperAdmin, modulesForRoleName } from '../config/rolePermissions';
 import { LeaveService } from '../services/leave.service';
 import { assertCanAssignSuperAdmin, getSuperAdminQuota } from '../utils/superAdminQuota';
 
@@ -293,8 +293,11 @@ router.post(
     const role = await prisma.role.findUnique({ where: { id: data.roleId }, select: { name: true } });
     if (!role) throw new AppError('Role not found', 400);
     if (role.name === 'Super Admin') {
-      if (req.user!.roleName !== 'Super Admin') {
-        throw new AppError('Only Super Admin can assign the Super Admin role', 403);
+      if (!canAssignCompanySuperAdmin(req.user!.roleName)) {
+        throw new AppError(
+          'Only company Super Admin, Managing Director, or General Manager can assign Super Admin',
+          403
+        );
       }
       await assertCanAssignSuperAdmin(req.user!.companyId);
     }
@@ -391,8 +394,11 @@ router.put(
       });
       if (!nextRole) throw new AppError('Role not found', 400);
       if (nextRole.name === 'Super Admin') {
-        if (req.user!.roleName !== 'Super Admin') {
-          throw new AppError('Only Super Admin can assign the Super Admin role', 403);
+        if (!canAssignCompanySuperAdmin(req.user!.roleName)) {
+          throw new AppError(
+            'Only company Super Admin, Managing Director, or General Manager can assign Super Admin',
+            403
+          );
         }
         const alreadySuperAdmin = existing.roleId === data.roleId;
         if (!alreadySuperAdmin) {

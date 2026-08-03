@@ -13,6 +13,7 @@ import { buildTenantLoginPath, buildTenantLoginUrl } from '../utils/tenant';
 import { PLATFORM_COMPANY_SLUG } from '../constants/platform';
 import { CatalogListManager } from '../components/settings/CatalogListManager';
 import { ModuleAccessPicker } from '../components/forms/ModuleAccessPicker';
+import { canAssignCompanySuperAdmin } from '../utils/superAdmin';
 import {
   mergeRoleAndExtraModules,
   modulesForRoleName,
@@ -45,6 +46,7 @@ interface InviteFormData {
 export function SettingsPage() {
   const queryClient = useQueryClient();
   const { hasPermission, user, isPlatformOwner, isSuperAdmin, company: authCompany, setCompany } = useAuth();
+  const canAssignSuperAdmin = canAssignCompanySuperAdmin(user?.role?.name);
   const [activeTab, setActiveTab] = useState(0);
   const [successMessage, setSuccessMessage] = useState('');
   const [twoFaQr, setTwoFaQr] = useState<string | null>(null);
@@ -684,32 +686,31 @@ export function SettingsPage() {
                     ...(rolesData || [])
                       .filter((r) => {
                         if (r.name !== 'Super Admin') return true;
-                        if (!isSuperAdmin) return false;
-                        // Show unless we know seats are full (API still enforces max 2).
+                        if (!canAssignSuperAdmin) return false;
                         return !superAdminQuota || superAdminQuota.remaining > 0;
                       })
                       .map((r) => ({
                         value: r.id,
                         label:
                           r.name === 'Super Admin'
-                            ? `Super Admin (full access${
+                            ? `Super Admin — this company${
                                 superAdminQuota
-                                  ? ` · ${superAdminQuota.used}/${superAdminQuota.max}`
-                                  : ''
-                              })`
+                                  ? ` (${superAdminQuota.used}/${superAdminQuota.max})`
+                                  : ' (max 2)'
+                              }`
                             : r.name,
                       })),
                   ]}
                   {...registerInvite('roleId', { required: 'Role is required' })}
                   error={inviteErrors.roleId?.message}
                 />
-                {isSuperAdmin && (
+                {canAssignSuperAdmin && (
                   <p className="text-xs text-slate-500 -mt-1">
                     {superAdminQuota
-                      ? `Super Admin seats: ${superAdminQuota.used} of ${superAdminQuota.max} used${
-                          superAdminQuota.remaining === 0 ? ' · limit reached' : ''
+                      ? `This company Super Admin seats: ${superAdminQuota.used} of ${superAdminQuota.max}${
+                          superAdminQuota.remaining === 0 ? ' · limit reached for this company' : ''
                         }`
-                      : 'Up to 2 Super Admin users allowed per company.'}
+                      : 'Each company may have up to 2 Super Admins (not shared across tenants).'}
                   </p>
                 )}
                 <ModuleAccessPicker

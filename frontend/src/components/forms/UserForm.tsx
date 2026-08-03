@@ -10,6 +10,7 @@ import { User } from '../../types';
 import { useAuth } from '../../contexts/AuthContext';
 import { ModuleAccessPicker } from './ModuleAccessPicker';
 import { mergeRoleAndExtraModules, modulesForRoleName } from '../../utils/roleModules';
+import { canAssignCompanySuperAdmin } from '../../utils/superAdmin';
 
 const userSchema = z.object({
   email: z.string().email('Invalid email address'),
@@ -87,15 +88,14 @@ export function UserForm({ user, onSuccess, onCancel }: UserFormProps) {
     queryFn: () => usersApi.linkableEmployees().then((r) => r.data.data as LinkableEmployee[]),
   });
 
-  const { isSuperAdmin } = useAuth();
+  const { user: authUser } = useAuth();
+  const canAssignSuperAdmin = canAssignCompanySuperAdmin(authUser?.role?.name);
   const editingIsSuperAdmin = user?.role?.name === 'Super Admin';
-  // Hide Super Admin only when we know the company is at the 2-seat limit.
-  // If quota has not loaded yet, still show it for Super Admins (API enforces the cap).
+  // Per-company seats (Amazon ≠ Company X). Hide only when this tenant is full.
   const atSuperAdminCapacity =
     !!superAdminQuota && superAdminQuota.remaining <= 0 && !editingIsSuperAdmin;
-  const canOfferSuperAdmin = isSuperAdmin && !atSuperAdminCapacity;
+  const canOfferSuperAdmin = canAssignSuperAdmin && !atSuperAdminCapacity;
 
-  // Only Super Admins may assign Super Admin; max 2 per company by default.
   const assignableRoles = (rolesData || []).filter(
     (r) => r.name !== 'Super Admin' || canOfferSuperAdmin
   );
@@ -106,9 +106,9 @@ export function UserForm({ user, onSuccess, onCancel }: UserFormProps) {
       value: r.id,
       label:
         r.name === 'Super Admin'
-          ? `Super Admin (full access${
-              superAdminQuota ? ` · ${superAdminQuota.used}/${superAdminQuota.max}` : ''
-            })`
+          ? `Super Admin — this company${
+              superAdminQuota ? ` (${superAdminQuota.used}/${superAdminQuota.max})` : ' (max 2)'
+            }`
           : r.name,
     })),
   ];
@@ -330,12 +330,15 @@ export function UserForm({ user, onSuccess, onCancel }: UserFormProps) {
         <Input label="Last Name *" autoComplete="off" {...register('lastName')} error={errors.lastName?.message} />
         <Input label="Phone" autoComplete="off" {...register('phone')} />
         <Select label="Role *" options={roleOptions} {...register('roleId')} error={errors.roleId?.message} />
-        {isSuperAdmin && superAdminQuota && (
+        {canAssignSuperAdmin && (
           <p className="text-xs text-slate-500 -mt-1">
-            Super Admin seats: {superAdminQuota.used} of {superAdminQuota.max} used
-            {superAdminQuota.remaining === 0 && !editingIsSuperAdmin
-              ? ' · limit reached'
-              : ''}
+            {superAdminQuota
+              ? `This company Super Admin seats: ${superAdminQuota.used} of ${superAdminQuota.max}${
+                  superAdminQuota.remaining === 0 && !editingIsSuperAdmin
+                    ? ' · limit reached for this company'
+                    : ''
+                }`
+              : 'Each company may have up to 2 Super Admins (not shared across tenants).'}
           </p>
         )}
         <Select label="Department" options={departmentOptions} {...register('departmentId')} />

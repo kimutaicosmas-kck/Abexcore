@@ -169,8 +169,12 @@ router.post(
     const role = await prisma.role.findUnique({ where: { id: data.roleId }, select: { name: true } });
     if (!role) throw new AppError('Role not found', 400);
     if (role.name === 'Super Admin') {
-      if (req.user!.roleName !== 'Super Admin') {
-        throw new AppError('Only Super Admin can assign the Super Admin role', 403);
+      const { canAssignCompanySuperAdmin } = await import('../config/rolePermissions');
+      if (!canAssignCompanySuperAdmin(req.user!.roleName)) {
+        throw new AppError(
+          'Only company Super Admin, Managing Director, or General Manager can assign Super Admin',
+          403
+        );
       }
       const { assertCanAssignSuperAdmin } = await import('../utils/superAdminQuota');
       await assertCanAssignSuperAdmin(companyId);

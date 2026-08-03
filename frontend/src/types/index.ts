@@ -82,7 +82,13 @@ export interface ApiResponse<T> {
   message?: string;
   pagination?: Pagination;
   meta?: {
-    superAdminQuota?: { used: number; max: number; remaining: number };
+    superAdminQuota?: {
+      scope?: 'company';
+      companyId?: string;
+      used: number;
+      max: number;
+      remaining: number;
+    };
   };
 }
 

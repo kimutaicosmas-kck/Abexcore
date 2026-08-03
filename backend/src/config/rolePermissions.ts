@@ -90,6 +90,41 @@ export function isSalesPersonRole(roleName: string | null | undefined): boolean 
   return !!roleName && (SALES_PERSON_ROLE_NAMES as readonly string[]).includes(roleName);
 }
 
+/** Roles that may assign monthly sales targets for sales persons. */
+export const SALES_TARGET_MANAGER_ROLES = [
+  'Super Admin',
+  'Managing Director',
+  'General Manager',
+  'Sales Manager',
+] as const;
+
+export function canManageSalesTargets(
+  roleName: string | null | undefined,
+  permissions: string[] = []
+): boolean {
+  if (roleName && (SALES_TARGET_MANAGER_ROLES as readonly string[]).includes(roleName)) {
+    return true;
+  }
+  return permissions.includes('settings:update');
+}
+
+/**
+ * Company leadership that may promote users to Super Admin within that tenant only.
+ * Limit is per company (e.g. Amazon and Company X each get up to 2), not system-wide.
+ */
+export const COMPANY_SUPER_ADMIN_ASSIGNER_ROLES = [
+  'Super Admin',
+  'Managing Director',
+  'General Manager',
+] as const;
+
+export function canAssignCompanySuperAdmin(roleName: string | null | undefined): boolean {
+  return (
+    !!roleName &&
+    (COMPANY_SUPER_ADMIN_ASSIGNER_ROLES as readonly string[]).includes(roleName)
+  );
+}
+
 type PermissionRecord = { id: string; module: string; action: string };
 
 export function permissionsForRole(roleName: string, allPermissions: PermissionRecord[]): PermissionRecord[] {
