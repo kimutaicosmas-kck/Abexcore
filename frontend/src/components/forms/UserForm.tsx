@@ -7,6 +7,7 @@ import { usersApi } from '../../services/api';
 import { Input, Select, FormActions, ModalFormBody } from '../ui';
 import { getApiErrorMessage } from '../../utils/apiError';
 import { User } from '../../types';
+import { useAuth } from '../../contexts/AuthContext';
 import { ModuleAccessPicker } from './ModuleAccessPicker';
 import { mergeRoleAndExtraModules, modulesForRoleName } from '../../utils/roleModules';
 
@@ -58,10 +59,18 @@ export function UserForm({ user, onSuccess, onCancel }: UserFormProps) {
   const [moduleError, setModuleError] = useState('');
   const skipNextRoleModuleSync = useRef(false);
 
-  const { data: rolesData } = useQuery({
+  type SuperAdminQuota = { used: number; max: number; remaining: number };
+
+  const { data: rolesResponse } = useQuery({
     queryKey: ['user-roles'],
-    queryFn: () => usersApi.roles().then((r) => r.data.data as { id: string; name: string }[]),
+    queryFn: () =>
+      usersApi.roles().then((r) => ({
+        roles: r.data.data as { id: string; name: string }[],
+        superAdminQuota: (r.data.meta?.superAdminQuota || null) as SuperAdminQuota | null,
+      })),
   });
+  const rolesData = rolesResponse?.roles;
+  const superAdminQuota = rolesResponse?.superAdminQuota;
 
   const { data: departmentsData } = useQuery({
     queryKey: ['user-departments'],
@@ -78,11 +87,27 @@ export function UserForm({ user, onSuccess, onCancel }: UserFormProps) {
     queryFn: () => usersApi.linkableEmployees().then((r) => r.data.data as LinkableEmployee[]),
   });
 
-  const assignableRoles = (rolesData || []).filter((r) => r.name !== 'Super Admin');
+  const { isSuperAdmin } = useAuth();
+  const editingIsSuperAdmin = user?.role?.name === 'Super Admin';
+  const canOfferSuperAdmin =
+    isSuperAdmin && (editingIsSuperAdmin || (superAdminQuota?.remaining ?? 0) > 0);
+
+  // Only Super Admins may assign Super Admin; max 2 per company by default.
+  const assignableRoles = (rolesData || []).filter(
+    (r) => r.name !== 'Super Admin' || canOfferSuperAdmin
+  );
 
   const roleOptions = [
     { value: '', label: 'Select role…' },
-    ...assignableRoles.map((r) => ({ value: r.id, label: r.name })),
+    ...assignableRoles.map((r) => ({
+      value: r.id,
+      label:
+        r.name === 'Super Admin'
+          ? `Super Admin (full access${
+              superAdminQuota ? ` · ${superAdminQuota.used}/${superAdminQuota.max}` : ''
+            })`
+          : r.name,
+    })),
   ];
 
   const departmentOptions = [
@@ -302,6 +327,14 @@ export function UserForm({ user, onSuccess, onCancel }: UserFormProps) {
         <Input label="Last Name *" autoComplete="off" {...register('lastName')} error={errors.lastName?.message} />
         <Input label="Phone" autoComplete="off" {...register('phone')} />
         <Select label="Role *" options={roleOptions} {...register('roleId')} error={errors.roleId?.message} />
+        {isSuperAdmin && superAdminQuota && (
+          <p className="text-xs text-slate-500 -mt-1">
+            Super Admin seats: {superAdminQuota.used} of {superAdminQuota.max} used
+            {superAdminQuota.remaining === 0 && !editingIsSuperAdmin
+              ? ' · limit reached'
+              : ''}
+          </p>
+        )}
         <Select label="Department" options={departmentOptions} {...register('departmentId')} />
         <Select label="Branch" options={branchOptions} {...register('branchId')} />
         {isEdit && (

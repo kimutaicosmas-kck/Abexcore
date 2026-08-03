@@ -79,11 +79,16 @@ export function UsersPage() {
     queryFn: () => usersApi.stats().then((r) => r.data.data as UserStats),
   });
 
-  const { data: rolesData } = useQuery({
+  const { data: rolesResponse } = useQuery({
     queryKey: ['user-roles'],
-    queryFn: () => usersApi.roles().then((r) => r.data.data as RoleWithPermissions[]),
+    queryFn: () =>
+      usersApi.roles().then((r) => ({
+        roles: r.data.data as RoleWithPermissions[],
+        superAdminQuota: r.data.meta?.superAdminQuota ?? null,
+      })),
     enabled: activeTab === 0 || activeTab <= 2,
   });
+  const rolesData = rolesResponse?.roles;
 
   const roleFilterOptions = [
     { value: '', label: 'All roles' },

@@ -81,6 +81,9 @@ export interface ApiResponse<T> {
   data: T;
   message?: string;
   pagination?: Pagination;
+  meta?: {
+    superAdminQuota?: { used: number; max: number; remaining: number };
+  };
 }
 
 export interface DashboardKPIs {

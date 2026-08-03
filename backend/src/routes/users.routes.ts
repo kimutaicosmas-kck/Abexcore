@@ -11,6 +11,7 @@ import { Prisma } from '@prisma/client';
 import { normalizeAllowedModules } from '../utils/userPermissions';
 import { modulesForRoleName } from '../config/rolePermissions';
 import { LeaveService } from '../services/leave.service';
+import { assertCanAssignSuperAdmin, getSuperAdminQuota } from '../utils/superAdminQuota';
 
 const router = Router();
 router.use(authenticate);
@@ -130,7 +131,7 @@ router.get(
 router.get(
   '/roles',
   authorize('users:read'),
-  asyncHandler(async (_req: AuthRequest, res: Response) => {
+  asyncHandler(async (req: AuthRequest, res: Response) => {
     const roles = await prisma.role.findMany({
       include: {
         permissions: { include: { permission: true } },
@@ -138,7 +139,8 @@ router.get(
       },
       orderBy: { name: 'asc' },
     });
-    res.json({ success: true, data: roles });
+    const superAdminQuota = await getSuperAdminQuota(req.user!.companyId);
+    res.json({ success: true, data: roles, meta: { superAdminQuota } });
   })
 );
 
@@ -290,6 +292,12 @@ router.post(
 
     const role = await prisma.role.findUnique({ where: { id: data.roleId }, select: { name: true } });
     if (!role) throw new AppError('Role not found', 400);
+    if (role.name === 'Super Admin') {
+      if (req.user!.roleName !== 'Super Admin') {
+        throw new AppError('Only Super Admin can assign the Super Admin role', 403);
+      }
+      await assertCanAssignSuperAdmin(req.user!.companyId);
+    }
 
     let allowedModules = normalizeAllowedModules(modules);
     if (!allowedModules?.length) {
@@ -374,6 +382,23 @@ router.put(
         where: { email: email.toLowerCase(), deletedAt: null },
       });
       if (duplicate) throw new AppError('Email address is already in use', 409);
+    }
+
+    if (data.roleId) {
+      const nextRole = await prisma.role.findUnique({
+        where: { id: data.roleId },
+        select: { name: true },
+      });
+      if (!nextRole) throw new AppError('Role not found', 400);
+      if (nextRole.name === 'Super Admin') {
+        if (req.user!.roleName !== 'Super Admin') {
+          throw new AppError('Only Super Admin can assign the Super Admin role', 403);
+        }
+        const alreadySuperAdmin = existing.roleId === data.roleId;
+        if (!alreadySuperAdmin) {
+          await assertCanAssignSuperAdmin(req.user!.companyId, id);
+        }
+      }
     }
 
     const updateData: Prisma.UserUpdateInput = {

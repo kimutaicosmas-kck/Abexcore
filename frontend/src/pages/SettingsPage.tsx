@@ -95,11 +95,17 @@ export function SettingsPage() {
     enabled: activeTabName === 'Companies' && isPlatformOwner,
   });
 
-  const { data: rolesData } = useQuery({
+  const { data: rolesResponse } = useQuery({
     queryKey: ['user-roles'],
-    queryFn: () => usersApi.roles().then((r) => r.data.data as { id: string; name: string }[]),
+    queryFn: () =>
+      usersApi.roles().then((r) => ({
+        roles: r.data.data as { id: string; name: string }[],
+        superAdminQuota: r.data.meta?.superAdminQuota ?? null,
+      })),
     enabled: activeTabName === 'Team' && canInvite,
   });
+  const rolesData = rolesResponse?.roles;
+  const superAdminQuota = rolesResponse?.superAdminQuota;
 
   const { data: departmentsData } = useQuery({
     queryKey: ['user-departments'],
@@ -676,12 +682,32 @@ export function SettingsPage() {
                   options={[
                     { value: '', label: 'Select role…' },
                     ...(rolesData || [])
-                      .filter((r) => r.name !== 'Super Admin')
-                      .map((r) => ({ value: r.id, label: r.name })),
+                      .filter(
+                        (r) =>
+                          r.name !== 'Super Admin' ||
+                          (isSuperAdmin && (superAdminQuota?.remaining ?? 0) > 0)
+                      )
+                      .map((r) => ({
+                        value: r.id,
+                        label:
+                          r.name === 'Super Admin'
+                            ? `Super Admin (full access${
+                                superAdminQuota
+                                  ? ` · ${superAdminQuota.used}/${superAdminQuota.max}`
+                                  : ''
+                              })`
+                            : r.name,
+                      })),
                   ]}
                   {...registerInvite('roleId', { required: 'Role is required' })}
                   error={inviteErrors.roleId?.message}
                 />
+                {isSuperAdmin && superAdminQuota && (
+                  <p className="text-xs text-slate-500 -mt-1">
+                    Super Admin seats: {superAdminQuota.used} of {superAdminQuota.max} used
+                    {superAdminQuota.remaining === 0 ? ' · limit reached' : ''}
+                  </p>
+                )}
                 <ModuleAccessPicker
                   value={inviteModules}
                   roleBaseline={inviteRoleBaseline}
