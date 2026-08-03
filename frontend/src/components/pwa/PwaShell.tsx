@@ -14,9 +14,18 @@ function isStandaloneMode() {
   );
 }
 
+/** Phones only — never suggest install on laptop/desktop (or iPad). */
+function isPhoneDevice(): boolean {
+  const ua = navigator.userAgent || '';
+  if (/iPhone|iPod/i.test(ua)) return true;
+  if (/Android/i.test(ua) && /Mobile/i.test(ua)) return true;
+  if (/Windows Phone/i.test(ua)) return true;
+  return false;
+}
+
 function detectPlatform(): 'ios' | 'android' | 'other' {
   const ua = navigator.userAgent;
-  if (/iphone|ipad|ipod/i.test(ua)) return 'ios';
+  if (/iphone|ipod/i.test(ua)) return 'ios';
   if (/android/i.test(ua)) return 'android';
   return 'other';
 }
@@ -28,10 +37,12 @@ export function PwaShell() {
   const [updateReady, setUpdateReady] = useState(false);
   const [offlineDismissed, setOfflineDismissed] = useState(false);
   const [isStandalone] = useState(isStandaloneMode);
+  const [isPhone] = useState(isPhoneDevice);
   const [platform] = useState(detectPlatform);
   const isSecure = window.isSecureContext;
 
   const showManualInstall =
+    isPhone &&
     !isStandalone &&
     !installDismissed &&
     !installPrompt &&
@@ -44,6 +55,8 @@ export function PwaShell() {
     };
     const onOffline = () => setIsOnline(false);
     const onInstallPrompt = (event: Event) => {
+      // Desktop Chrome also fires this — ignore unless on a phone.
+      if (!isPhoneDevice()) return;
       event.preventDefault();
       setInstallPrompt(event as BeforeInstallPromptEvent);
     };
@@ -116,7 +129,7 @@ export function PwaShell() {
         </div>
       )}
 
-      {installPrompt && !installDismissed && (
+      {isPhone && installPrompt && !installDismissed && (
         <div className="fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom))] lg:bottom-4 inset-x-0 z-50 px-4 pb-[max(0.5rem,env(safe-area-inset-bottom))] lg:pb-[max(1rem,env(safe-area-inset-bottom))]">
           <div className="mx-auto max-w-lg flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-float">
             <div className="flex items-start gap-2 text-sm text-slate-700">

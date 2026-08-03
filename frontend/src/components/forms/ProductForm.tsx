@@ -7,6 +7,7 @@ import { AxiosError } from 'axios';
 import { productsApi } from '../../services/api';
 import { Button, Input, Select, NumberInput } from '../ui';
 import { Product, ProductCategoryOption } from '../../types';
+import { getApiErrorMessage } from '../../utils/apiError';
 
 const productSchema = z.object({
   sku: z.string().min(1, 'Part number is required'),
@@ -118,10 +119,12 @@ export function ProductForm({ product, onSuccess, onCancel }: ProductFormProps) 
 
   const mutation = useMutation({
     mutationFn: (data: ProductFormData) => {
+      const { isActive, warehouseId, barcode, ...rest } = data;
       const payload = {
-        ...data,
-        barcode: data.barcode?.trim() || undefined,
-        warehouseId: data.warehouseId || undefined,
+        ...rest,
+        barcode: barcode?.trim() || undefined,
+        warehouseId: warehouseId?.trim() || undefined,
+        ...(isEdit ? { isActive } : {}),
       };
       return isEdit ? productsApi.update(product!.id, payload) : productsApi.create(payload);
     },
@@ -135,8 +138,7 @@ export function ProductForm({ product, onSuccess, onCancel }: ProductFormProps) 
     },
   });
 
-  const getError = (err: unknown) =>
-    (err as AxiosError<{ message?: string }>).response?.data?.message || 'Failed to save product.';
+  const getError = (err: unknown) => getApiErrorMessage(err);
 
   return (
     <form onSubmit={handleSubmit((data) => mutation.mutate(data))} className="space-y-4">
