@@ -35,8 +35,8 @@ export function createApp() {
   const app = express();
 
   if (config.nodeEnv === 'production') {
-    // Caddy (TLS) → nginx (frontend) → backend — trust both hops so rate limits use the real client IP.
-    app.set('trust proxy', 2);
+    // Caddy → nginx → backend. Trust forwarded client IP so rate limits are not shared by the whole office.
+    app.set('trust proxy', true);
   }
 
   app.use(helmet({
@@ -78,9 +78,8 @@ export function createApp() {
           return (
             p.startsWith('/api/health') ||
             p.includes('/realtime/events') ||
-            p === '/api/v1/auth/login' ||
-            p.startsWith('/api/v1/auth/resolve-tenant') ||
-            p === '/api/v1/auth/refresh'
+            // Auth has its own limiters; never block sign-in via the global bucket.
+            p.startsWith('/api/v1/auth/')
           );
         },
       })
