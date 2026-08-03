@@ -11,7 +11,6 @@ import { getApiErrorMessage } from '../../utils/apiError';
 
 const productSchema = z.object({
   sku: z.string().min(1, 'Part number is required'),
-  barcode: z.string().optional(),
   name: z.string().min(1, 'Name is required'),
   categoryId: z.string().uuid('Select a category'),
   description: z.string().optional(),
@@ -75,7 +74,6 @@ export function ProductForm({ product, onSuccess, onCancel }: ProductFormProps) 
     defaultValues: product
       ? {
           sku: product.sku,
-          barcode: product.barcode || '',
           name: product.name,
           categoryId: defaultCategoryId,
           sellingPrice: Number(product.sellingPrice),
@@ -119,12 +117,12 @@ export function ProductForm({ product, onSuccess, onCancel }: ProductFormProps) 
 
   const mutation = useMutation({
     mutationFn: (data: ProductFormData) => {
-      const { isActive, warehouseId, barcode, ...rest } = data;
+      const { isActive, warehouseId, ...rest } = data;
+      // Never send barcode — empty values collide on the unique DB constraint.
       const payload = {
         ...rest,
-        barcode: barcode?.trim() || undefined,
         warehouseId: warehouseId?.trim() || undefined,
-        ...(isEdit ? { isActive } : {}),
+        ...(isEdit ? { isActive } : { barcode: null }),
       };
       return isEdit ? productsApi.update(product!.id, payload) : productsApi.create(payload);
     },
@@ -147,8 +145,7 @@ export function ProductForm({ product, onSuccess, onCancel }: ProductFormProps) 
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <Input label="Part number *" {...register('sku')} error={errors.sku?.message} disabled={isEdit} />
-        <Input label="Barcode" {...register('barcode')} />
+        <Input label="Part number *" {...register('sku')} error={errors.sku?.message} disabled={isEdit} className="md:col-span-2" />
         <Input label="Product Name *" {...register('name')} error={errors.name?.message} className="md:col-span-2" />
         <div className="md:col-span-2 space-y-2">
           <Select
