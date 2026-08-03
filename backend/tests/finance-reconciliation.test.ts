@@ -30,11 +30,12 @@ describe('Bank reconciliation API (integration)', () => {
     });
     expect(invoiceRes.status).toBe(201);
     const invoiceId = invoiceRes.body.data.id;
+    const invoiceTotal = Number(invoiceRes.body.data.totalAmount);
 
     const payDate = new Date().toISOString().slice(0, 10);
     const paymentRes = await authReq(testCtx.app, testCtx.authToken).post('/api/v1/finance/payments').send({
       invoiceId,
-      amount: 1160,
+      amount: invoiceTotal,
       method: 'BANK_TRANSFER',
       reference: 'BNK-RECON-001',
     });
@@ -42,13 +43,13 @@ describe('Bank reconciliation API (integration)', () => {
     const paymentId = paymentRes.body.data.id;
 
     const csv = `date,description,reference,amount
-${payDate},Bank deposit,BNK-RECON-001,1160`;
+${payDate},Bank deposit,BNK-RECON-001,${invoiceTotal}`;
 
     const importRes = await authReq(testCtx.app, testCtx.authToken).post('/api/v1/finance/bank-statements/import').send({
       csvText: csv,
       periodStart: '2026-07-01',
       periodEnd: '2026-07-31',
-      closingBalance: 1160,
+      closingBalance: invoiceTotal,
     });
     expect(importRes.status).toBe(201);
     const statementId = importRes.body.data.id;
@@ -111,6 +112,7 @@ describe('M-Pesa API (integration)', () => {
       items: [{ description: 'M-Pesa test', quantity: 1, unitPrice: 200 }],
     });
     expect(invoiceRes.status).toBe(201);
+    const invoiceTotal = Number(invoiceRes.body.data.totalAmount);
 
     const statusRes = await authReq(testCtx.app, testCtx.authToken).get('/api/v1/finance/mpesa/status');
     expect(statusRes.status).toBe(200);
@@ -120,7 +122,7 @@ describe('M-Pesa API (integration)', () => {
     const stkRes = await authReq(testCtx.app, testCtx.authToken).post('/api/v1/finance/mpesa/stk-push').send({
       invoiceId: invoiceRes.body.data.id,
       phone: '0712345678',
-      amount: 232,
+      amount: invoiceTotal,
     });
     expect(stkRes.status).toBe(201);
     expect(stkRes.body.data.checkoutRequestId).toBeTruthy();

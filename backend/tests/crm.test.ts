@@ -13,7 +13,11 @@ import { testCtx, itWithDb } from './setup';
 
 describe('CRM schema validation', () => {
   it('validates customer creation', () => {
-    const result = createCustomerSchema.safeParse({ code: 'CUST-999', name: 'Test Customer' });
+    const result = createCustomerSchema.safeParse({
+      code: 'CUST-999',
+      name: 'Test Customer',
+      vatStatus: 'NON_VAT',
+    });
     expect(result.success).toBe(true);
   });
 
