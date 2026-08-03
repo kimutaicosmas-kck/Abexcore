@@ -89,8 +89,11 @@ export function UserForm({ user, onSuccess, onCancel }: UserFormProps) {
 
   const { isSuperAdmin } = useAuth();
   const editingIsSuperAdmin = user?.role?.name === 'Super Admin';
-  const canOfferSuperAdmin =
-    isSuperAdmin && (editingIsSuperAdmin || (superAdminQuota?.remaining ?? 0) > 0);
+  // Hide Super Admin only when we know the company is at the 2-seat limit.
+  // If quota has not loaded yet, still show it for Super Admins (API enforces the cap).
+  const atSuperAdminCapacity =
+    !!superAdminQuota && superAdminQuota.remaining <= 0 && !editingIsSuperAdmin;
+  const canOfferSuperAdmin = isSuperAdmin && !atSuperAdminCapacity;
 
   // Only Super Admins may assign Super Admin; max 2 per company by default.
   const assignableRoles = (rolesData || []).filter(

@@ -682,11 +682,12 @@ export function SettingsPage() {
                   options={[
                     { value: '', label: 'Select role…' },
                     ...(rolesData || [])
-                      .filter(
-                        (r) =>
-                          r.name !== 'Super Admin' ||
-                          (isSuperAdmin && (superAdminQuota?.remaining ?? 0) > 0)
-                      )
+                      .filter((r) => {
+                        if (r.name !== 'Super Admin') return true;
+                        if (!isSuperAdmin) return false;
+                        // Show unless we know seats are full (API still enforces max 2).
+                        return !superAdminQuota || superAdminQuota.remaining > 0;
+                      })
                       .map((r) => ({
                         value: r.id,
                         label:
@@ -702,10 +703,13 @@ export function SettingsPage() {
                   {...registerInvite('roleId', { required: 'Role is required' })}
                   error={inviteErrors.roleId?.message}
                 />
-                {isSuperAdmin && superAdminQuota && (
+                {isSuperAdmin && (
                   <p className="text-xs text-slate-500 -mt-1">
-                    Super Admin seats: {superAdminQuota.used} of {superAdminQuota.max} used
-                    {superAdminQuota.remaining === 0 ? ' · limit reached' : ''}
+                    {superAdminQuota
+                      ? `Super Admin seats: ${superAdminQuota.used} of ${superAdminQuota.max} used${
+                          superAdminQuota.remaining === 0 ? ' · limit reached' : ''
+                        }`
+                      : 'Up to 2 Super Admin users allowed per company.'}
                   </p>
                 )}
                 <ModuleAccessPicker
