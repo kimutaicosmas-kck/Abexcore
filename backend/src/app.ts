@@ -62,15 +62,26 @@ export function createApp() {
   app.use(express.urlencoded({ extended: true }));
   app.use(cookieParser());
 
-  // Global limiter: production always; non-test envs get a higher ceiling so RateLimit headers are present in staging/demo.
+  // Global limiter (per client IP). Auth login has its own stricter limiter.
+  // Skip long-lived SSE + health so polling/reconnects do not lock users out of login.
   if (config.nodeEnv !== 'test') {
     app.use(
       rateLimit({
         windowMs: 15 * 60 * 1000,
-        max: config.nodeEnv === 'production' ? 500 : 2000,
+        max: config.nodeEnv === 'production' ? 3000 : 5000,
         standardHeaders: true,
         legacyHeaders: false,
         message: { success: false, message: 'Too many requests' },
+        skip: (req) => {
+          const p = req.path || '';
+          return (
+            p.startsWith('/api/health') ||
+            p.includes('/realtime/events') ||
+            p === '/api/v1/auth/login' ||
+            p.startsWith('/api/v1/auth/resolve-tenant') ||
+            p === '/api/v1/auth/refresh'
+          );
+        },
       })
     );
   }

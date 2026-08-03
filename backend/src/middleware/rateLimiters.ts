@@ -10,7 +10,7 @@ export const authRateLimiter = rateLimit({
 
 export const loginRateLimiter = rateLimit({
   windowMs: 2 * 60 * 1000,
-  max: 10,
+  max: 20,
   standardHeaders: true,
   legacyHeaders: false,
   skipSuccessfulRequests: true,
