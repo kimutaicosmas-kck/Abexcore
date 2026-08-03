@@ -13,6 +13,8 @@
     "db:seed": "tsx prisma/seed.ts",
     "db:seed:demo": "tsx scripts/seed-demo-data.ts",
     "db:refresh-roles": "tsx scripts/refresh-role-permissions.ts",
+    "db:import-amazon-filters": "tsx scripts/import-amazon-small-car-filters.ts",
+
     "db:seed:production": "tsx prisma/seed.production.ts",
     "db:purge-legacy": "tsx scripts/purge-legacy-tenants.ts",
     "db:studio": "prisma studio",
