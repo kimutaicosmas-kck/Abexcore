@@ -122,7 +122,7 @@ export function ProductForm({ product, onSuccess, onCancel }: ProductFormProps) 
       const payload = {
         ...rest,
         warehouseId: warehouseId?.trim() || undefined,
-        ...(isEdit ? { isActive } : { barcode: null }),
+        ...(isEdit ? { isActive } : {}),
       };
       return isEdit ? productsApi.update(product!.id, payload) : productsApi.create(payload);
     },
