@@ -16,8 +16,8 @@ export const authRateLimiter = rateLimit({
   max: 120,
   standardHeaders: true,
   legacyHeaders: false,
-  // Docker/Caddy/nginx forward headers; avoid ERL validation crashes in prod.
-  validate: { xForwardedForHeader: false },
+  // Docker/Caddy/nginx forward headers; custom keys — skip ERL proxy validations.
+  validate: false,
   message: { success: false, message: 'Too many authentication requests. Try again later.' },
 });
 
@@ -30,7 +30,7 @@ export const loginRateLimiter = rateLimit({
   skipSuccessfulRequests: true,
   skip: () => loginMax === 0,
   keyGenerator: loginKey,
-  validate: { xForwardedForHeader: false, keyGeneratorIpFallback: false },
+  validate: false,
   message: {
     success: false,
     message: 'Too many login attempts for this account. Wait a few minutes, then try again.',
