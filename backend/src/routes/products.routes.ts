@@ -434,7 +434,12 @@ router.put(
     }
 
     const id = getParam(req.params.id);
-    const patch = { ...req.body } as Record<string, unknown>;
+    const {
+      initialQuantity,
+      warehouseId,
+      ...productFields
+    } = req.body as Record<string, unknown>;
+    const patch = { ...productFields };
     if ('barcode' in patch) {
       const barcode = normalizeProductBarcode(patch.barcode);
       patch.barcode = barcode;
@@ -446,7 +451,119 @@ router.put(
       }
     }
 
-    const data = await productService.update(id, patch);
+    const setStock = initialQuantity !== undefined && initialQuantity !== null && initialQuantity !== '';
+    const desiredQty = setStock ? Math.max(0, Number(initialQuantity)) : null;
+
+    const data = await prisma.$transaction(async (tx) => {
+      await productService.getById(id);
+      const updated = await tx.product.update({
+        where: { id },
+        data: patch,
+        include: {
+          category: { select: { id: true, name: true } },
+          stockLevels: { include: { warehouse: { select: { id: true, name: true, code: true } } } },
+        },
+      });
+
+      if (desiredQty == null || Number.isNaN(desiredQty)) {
+        return updated;
+      }
+
+      let targetWarehouseId = typeof warehouseId === 'string' && warehouseId ? warehouseId : undefined;
+      if (!targetWarehouseId) {
+        const existingLevel = await tx.stockLevel.findFirst({
+          where: { productId: id },
+          orderBy: { quantity: 'desc' },
+        });
+        if (existingLevel) {
+          targetWarehouseId = existingLevel.warehouseId;
+        } else {
+          const defaultWarehouse = await tx.warehouse.findFirst({
+            where: { isActive: true, deletedAt: null, type: 'finished_goods' },
+            orderBy: { createdAt: 'asc' },
+          });
+          if (!defaultWarehouse) {
+            throw new AppError('No finished goods warehouse configured for opening stock', 400);
+          }
+          targetWarehouseId = defaultWarehouse.id;
+        }
+      } else {
+        const warehouse = await tx.warehouse.findFirst({
+          where: { id: targetWarehouseId, isActive: true, deletedAt: null, type: 'finished_goods' },
+        });
+        if (!warehouse) throw new AppError('Invalid finished goods warehouse', 400);
+      }
+
+      const existing = await tx.stockLevel.findFirst({
+        where: { warehouseId: targetWarehouseId, productId: id },
+        orderBy: { createdAt: 'asc' },
+      });
+      const currentQty = Number(existing?.quantity || 0);
+      const diff = desiredQty - currentQty;
+      if (diff === 0) {
+        return tx.product.findUniqueOrThrow({
+          where: { id },
+          include: {
+            category: { select: { id: true, name: true } },
+            stockLevels: { include: { warehouse: { select: { id: true, name: true, code: true } } } },
+          },
+        });
+      }
+
+      const unitCost = Number(existing?.unitCost || updated.sellingPrice || updated.distributorPrice || 0);
+      if (existing) {
+        await tx.stockLevel.update({
+          where: { id: existing.id },
+          data: { quantity: desiredQty, unitCost },
+        });
+      } else {
+        await tx.stockLevel.create({
+          data: {
+            warehouseId: targetWarehouseId,
+            productId: id,
+            quantity: desiredQty,
+            unitCost,
+          },
+        });
+      }
+
+      const invTx = await tx.inventoryTransaction.create({
+        data: {
+          warehouseId: targetWarehouseId,
+          type: diff > 0 ? 'RECEIPT' : 'ISSUE',
+          productId: id,
+          quantity: Math.abs(diff),
+          unitCost,
+          notes: 'Opening / on-hand stock set from product edit',
+          createdById: req.user!.id,
+        },
+      });
+
+      const glAmount = Math.abs(diff) * unitCost;
+      if (glAmount > 0) {
+        try {
+          await AccountingService.postInventoryAdjustment(tx, {
+            reference: invTx.id,
+            amount: glAmount,
+            direction: diff > 0 ? 'increase' : 'decrease',
+            reason: `Stock set on product edit — ${updated.sku}`,
+          });
+        } catch (err) {
+          if (!(err instanceof AppError) || !String(err.message).includes('not found')) {
+            throw err;
+          }
+        }
+      }
+
+      return tx.product.findUniqueOrThrow({
+        where: { id },
+        include: {
+          category: { select: { id: true, name: true } },
+          stockLevels: { include: { warehouse: { select: { id: true, name: true, code: true } } } },
+        },
+      });
+    });
+
     res.json({ success: true, data });
   })
 );

@@ -31,6 +31,19 @@ interface StockWarehouse {
   name: string;
 }
 
+type ProductWithStock = Product & {
+  onHand?: number;
+  warehouses?: { id: string; quantity: number }[];
+};
+
+function resolveOnHand(product: ProductWithStock): number {
+  if (typeof product.onHand === 'number') return product.onHand;
+  if (product.warehouses?.length) {
+    return product.warehouses.reduce((sum, w) => sum + Number(w.quantity || 0), 0);
+  }
+  return (product.stockLevels || []).reduce((sum, sl) => sum + Number(sl.quantity || 0), 0);
+}
+
 interface ProductFormProps {
   product?: Product | null;
   onSuccess: () => void;
@@ -51,7 +64,6 @@ export function ProductForm({ product, onSuccess, onCancel }: ProductFormProps) 
   const { data: warehousesData } = useQuery({
     queryKey: ['product-stock-warehouses'],
     queryFn: () => productsApi.stockWarehouses().then((r) => r.data.data as StockWarehouse[]),
-    enabled: !isEdit,
   });
 
   const categoryOptions = (categoriesData || []).map((c) => ({
@@ -68,6 +80,7 @@ export function ProductForm({ product, onSuccess, onCancel }: ProductFormProps) 
   ];
 
   const defaultCategoryId = product?.categoryId || product?.category?.id || categoriesData?.[0]?.id || '';
+  const currentOnHand = product ? resolveOnHand(product as ProductWithStock) : 0;
 
   const { register, handleSubmit, watch, setValue, formState: { errors } } = useForm<ProductFormData>({
     resolver: zodResolver(productSchema),
@@ -82,6 +95,8 @@ export function ProductForm({ product, onSuccess, onCancel }: ProductFormProps) 
           minStockLevel: product.minStockLevel,
           description: product.description || '',
           isActive: product.isActive,
+          initialQuantity: currentOnHand,
+          warehouseId: '',
         }
       : {
           categoryId: defaultCategoryId,
@@ -118,7 +133,6 @@ export function ProductForm({ product, onSuccess, onCancel }: ProductFormProps) 
   const mutation = useMutation({
     mutationFn: (data: ProductFormData) => {
       const { isActive, warehouseId, ...rest } = data;
-      // Never send barcode — empty values collide on the unique DB constraint.
       const payload = {
         ...rest,
         warehouseId: warehouseId?.trim() || undefined,
@@ -186,24 +200,20 @@ export function ProductForm({ product, onSuccess, onCancel }: ProductFormProps) 
         <Input label="Selling Price (KES)" type="number" step="0.01" {...register('sellingPrice')} />
         <Input label="Distributor Price (KES)" type="number" step="0.01" {...register('distributorPrice')} />
         <Input label="Retail Price (KES)" type="number" step="0.01" {...register('retailPrice')} />
-        {!isEdit && (
-          <>
-            <NumberInput
-              label="Opening stock quantity"
-              min={0}
-              step={1}
-              value={watch('initialQuantity') ?? 0}
-              onChange={(v) => setValue('initialQuantity', v, { shouldValidate: true })}
-              error={errors.initialQuantity?.message}
-            />
-            <Select
-              label="Stock warehouse"
-              options={warehouseOptions}
-              {...register('warehouseId')}
-              disabled={initialQuantity <= 0}
-            />
-          </>
-        )}
+        <NumberInput
+          label={isEdit ? 'Opening / on-hand quantity' : 'Opening stock quantity'}
+          min={0}
+          step={1}
+          value={watch('initialQuantity') ?? 0}
+          onChange={(v) => setValue('initialQuantity', v, { shouldValidate: true })}
+          error={errors.initialQuantity?.message}
+        />
+        <Select
+          label="Stock warehouse"
+          options={warehouseOptions}
+          {...register('warehouseId')}
+          disabled={!isEdit && initialQuantity <= 0}
+        />
         {isEdit && (
           <Select
             label="Status"
@@ -215,12 +225,11 @@ export function ProductForm({ product, onSuccess, onCancel }: ProductFormProps) 
           />
         )}
       </div>
-      {!isEdit && (
-        <p className="text-xs text-slate-500">
-          Enter how many units you have on hand (e.g. 5000). Stock is recorded when the product is created.
-          Use Inventory to adjust stock later.
-        </p>
-      )}
+      <p className="text-xs text-slate-500">
+        {isEdit
+          ? 'Set the real quantity on hand. Saving updates stock to this number (opening balance / count).'
+          : 'Enter how many units you have on hand (e.g. 5000). Stock is recorded when the product is created.'}
+      </p>
       <Input label="Description" {...register('description')} />
 
       <div className="flex justify-end gap-3 pt-4 border-t">

@@ -130,7 +130,6 @@ export const createProductSchema = z.object({
 });
 
 export const updateProductSchema = createProductSchema
-  .omit({ initialQuantity: true, warehouseId: true })
   .partial()
   .extend({
     isActive: z.boolean().optional(),
