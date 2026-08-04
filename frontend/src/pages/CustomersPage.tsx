@@ -361,20 +361,10 @@ export function CustomersPage() {
 
   const customerColumns = [
     { key: 'name', label: 'Name' },
-    { key: 'code', label: 'Code' },
     {
       key: 'type',
       label: 'Type',
       render: (val: unknown) => <Badge variant="info">{(val as string).replace(/_/g, ' ')}</Badge>,
-    },
-    {
-      key: 'vatStatus',
-      label: 'VAT',
-      render: (val: unknown) => (
-        <Badge variant={val === 'VAT' ? 'success' : 'default'}>
-          {val === 'NON_VAT' ? 'Non-VAT' : 'VAT'}
-        </Badge>
-      ),
     },
     {
       key: 'salesPerson',
@@ -384,6 +374,16 @@ export function CustomersPage() {
         if (!person) return <span className="text-slate-400">—</span>;
         return `${person.firstName} ${person.lastName}`.trim();
       },
+    },
+    { key: 'code', label: 'Code' },
+    {
+      key: 'vatStatus',
+      label: 'VAT',
+      render: (val: unknown) => (
+        <Badge variant={val === 'VAT' ? 'success' : 'default'}>
+          {val === 'NON_VAT' ? 'Non-VAT' : 'VAT'}
+        </Badge>
+      ),
     },
     { key: 'city', label: 'City' },
     { key: 'phone', label: 'Phone' },

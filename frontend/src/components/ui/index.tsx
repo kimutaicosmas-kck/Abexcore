@@ -1,4 +1,4 @@
-import { useId } from 'react';
+import { useId, useState } from 'react';
 import clsx from 'clsx';
 import { ChevronRight } from 'lucide-react';
 
@@ -275,8 +275,14 @@ export function StatCard({ title, value, icon, trend, color = 'bg-primary-600' }
   );
 }
 
+type TableColumn = {
+  key: string;
+  label: string;
+  render?: (value: unknown, row: Record<string, unknown>) => React.ReactNode;
+};
+
 interface TableProps {
-  columns: { key: string; label: string; render?: (value: unknown, row: Record<string, unknown>) => React.ReactNode }[];
+  columns: TableColumn[];
   data: Record<string, unknown>[] | object[];
   loading?: boolean;
   onRowClick?: (row: Record<string, unknown>) => void;
@@ -286,12 +292,115 @@ interface TableProps {
    * Default on so all list pages match that mobile layout.
    */
   responsive?: boolean;
+  /** How many detail fields to show before “View details” (default 2). */
+  mobileSummaryCount?: number;
 }
 
 const STATUS_KEYS = new Set(['status', 'isActive']);
 const META_COLUMN_KEYS = new Set(['actions', 'select', 'checkbox']);
 
-export function Table({ columns, data, loading, onRowClick, embedded = false, responsive = true }: TableProps) {
+function renderCell(col: TableColumn, record: Record<string, unknown>) {
+  return col.render ? col.render(record[col.key], record) : String(record[col.key] ?? '');
+}
+
+function MobileTableCard({
+  record,
+  columns,
+  onRowClick,
+  summaryCount,
+}: {
+  record: Record<string, unknown>;
+  columns: TableColumn[];
+  onRowClick?: (row: Record<string, unknown>) => void;
+  summaryCount: number;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const actionCol = columns.find((col) => col.key === 'actions');
+  const selectCol = columns.find((col) => col.key === 'select' || col.key === 'checkbox');
+  const dataCols = columns.filter((col) => !META_COLUMN_KEYS.has(col.key));
+  const primary = dataCols[0];
+  const statusCol = dataCols.find((col) => STATUS_KEYS.has(col.key));
+  const detailCols = dataCols
+    .filter((col) => col.key !== primary?.key)
+    .filter((col) => !STATUS_KEYS.has(col.key));
+  const summaryCols = detailCols.slice(0, summaryCount);
+  const hiddenCols = detailCols.slice(summaryCount);
+  const showHidden = expanded && hiddenCols.length > 0;
+  const visibleDetailCols = showHidden ? detailCols : summaryCols;
+
+  return (
+    <div className="px-4 py-3 space-y-2">
+      {primary && (
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 flex-1 flex items-start gap-2">
+            {selectCol?.render && (
+              <div className="pt-0.5 shrink-0">{selectCol.render(record[selectCol.key], record)}</div>
+            )}
+            <div className="min-w-0 flex-1 font-semibold text-slate-900 [&_p]:leading-snug">
+              {renderCell(primary, record)}
+            </div>
+          </div>
+          {statusCol && <div className="shrink-0">{renderCell(statusCol, record)}</div>}
+        </div>
+      )}
+
+      {visibleDetailCols.length > 0 && (
+        <div className="grid grid-cols-1 gap-1">
+          {visibleDetailCols.map((col) => (
+            <div key={col.key} className="flex items-center justify-between gap-3 text-sm">
+              <span className="text-slate-500 shrink-0">{col.label}</span>
+              <div className="text-slate-800 text-right min-w-0 max-w-[65%] break-words">
+                {renderCell(col, record)}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="flex items-center justify-between gap-2 pt-0.5">
+        <div className="flex items-center gap-1.5 min-w-0">
+          {onRowClick && (
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={(e) => {
+                e.stopPropagation();
+                onRowClick(record);
+              }}
+            >
+              View details
+            </Button>
+          )}
+          {!onRowClick && hiddenCols.length > 0 && (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={(e) => {
+                e.stopPropagation();
+                setExpanded((v) => !v);
+              }}
+            >
+              {expanded ? 'Show less' : `Show more (${hiddenCols.length})`}
+            </Button>
+          )}
+        </div>
+        {actionCol?.render && (
+          <div className="flex items-center gap-1 shrink-0">{actionCol.render(record[actionCol.key], record)}</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export function Table({
+  columns,
+  data,
+  loading,
+  onRowClick,
+  embedded = false,
+  responsive = true,
+  mobileSummaryCount = 2,
+}: TableProps) {
   const content = (() => {
     if (loading) {
       return (
@@ -317,67 +426,15 @@ export function Table({ columns, data, loading, onRowClick, embedded = false, re
       <>
         {responsive && (
           <div className="md:hidden divide-y divide-border/70">
-            {data.map((row, i) => {
-              const record = row as Record<string, unknown>;
-              const actionCol = columns.find((col) => col.key === 'actions');
-              const selectCol = columns.find((col) => col.key === 'select' || col.key === 'checkbox');
-              const dataCols = columns.filter((col) => !META_COLUMN_KEYS.has(col.key));
-              const primary = dataCols[0];
-              const statusCol = dataCols.find((col) => STATUS_KEYS.has(col.key));
-              const detailCols = dataCols
-                .filter((col) => col.key !== primary?.key)
-                .filter((col) => !STATUS_KEYS.has(col.key));
-
-              return (
-                <div
-                  key={i}
-                  className={clsx(
-                    'px-4 py-3.5 space-y-2.5',
-                    onRowClick && 'cursor-pointer active:bg-primary-50/40'
-                  )}
-                  onClick={() => onRowClick?.(record)}
-                >
-                  {primary && (
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0 flex-1 flex items-start gap-2">
-                        {selectCol?.render && (
-                          <div className="pt-0.5 shrink-0" onClick={(e) => e.stopPropagation()}>
-                            {selectCol.render(record[selectCol.key], record)}
-                          </div>
-                        )}
-                        <div className="min-w-0 flex-1 font-semibold text-slate-900 [&_p]:leading-snug">
-                          {primary.render
-                            ? primary.render(record[primary.key], record)
-                            : String(record[primary.key] ?? '')}
-                        </div>
-                      </div>
-                      {statusCol && (
-                        <div className="shrink-0">
-                          {statusCol.render
-                            ? statusCol.render(record[statusCol.key], record)
-                            : String(record[statusCol.key] ?? '')}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                  <div className="grid grid-cols-1 gap-1.5">
-                    {detailCols.map((col) => (
-                      <div key={col.key} className="flex items-center justify-between gap-3 text-sm">
-                        <span className="text-slate-500 shrink-0">{col.label}</span>
-                        <div className="text-slate-800 text-right min-w-0 max-w-[65%] break-words">
-                          {col.render ? col.render(record[col.key], record) : String(record[col.key] ?? '')}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  {actionCol?.render && (
-                    <div className="pt-0.5 flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                      {actionCol.render(record[actionCol.key], record)}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+            {data.map((row, i) => (
+              <MobileTableCard
+                key={i}
+                record={row as Record<string, unknown>}
+                columns={columns}
+                onRowClick={onRowClick}
+                summaryCount={Math.max(0, mobileSummaryCount)}
+              />
+            ))}
           </div>
         )}
 
