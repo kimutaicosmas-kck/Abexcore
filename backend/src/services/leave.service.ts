@@ -225,8 +225,6 @@ export class LeaveService {
         update: {},
       });
     }
-
-    return this.getBalances(employeeId, year);
   }
 
   static async getBalances(employeeId: string, year = this.currentLeaveYear()) {

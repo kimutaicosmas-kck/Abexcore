@@ -6,7 +6,6 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { hrApi } from '../services/api';
 import {
-  PageHeader,
   Table,
   Badge,
   Button,
@@ -42,6 +41,8 @@ const leaveTypeOptions = [
   { value: 'UNPAID', label: 'Unpaid Leave' },
 ];
 
+const BALANCE_CARD_ORDER = ['ANNUAL', 'SICK', 'COMPASSIONATE', 'PATERNITY', 'MATERNITY'] as const;
+
 function leaveLabel(type: string) {
   return type.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
@@ -52,7 +53,13 @@ export function MyLeavePage() {
   const [open, setOpen] = useState(false);
   const year = new Date().getFullYear();
 
-  const { data: balancesRes, isLoading: balancesLoading } = useQuery({
+  const {
+    data: balancesRes,
+    isLoading: balancesLoading,
+    isError: balancesError,
+    error: balancesErr,
+    refetch: refetchBalances,
+  } = useQuery({
     queryKey: ['my-leave-balances', year],
     queryFn: () =>
       hrApi.myLeaveBalances({ year }).then((r) => r.data.data as LeaveBalancesPayload),
@@ -122,28 +129,23 @@ export function MyLeavePage() {
   ];
 
   const balances = balancesRes?.balances || [];
+  const cardTypes =
+    balances.length > 0 ? balances.map((b) => b.type) : [...BALANCE_CARD_ORDER];
 
   return (
     <div className="space-y-4">
-      <PageHeader
-        subtitle={`Your ${year} leave balances reset each January. Request leave below — HR will review it.`}
-      />
-
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-        {(balancesLoading
-          ? ['ANNUAL', 'SICK', 'COMPASSIONATE', 'PATERNITY', 'MATERNITY']
-          : balances.map((b) => b.type)
-        ).map((typeOrKey, idx) => {
-          const row = balances.find((b) => b.type === typeOrKey);
+        {cardTypes.map((type) => {
+          const row = balances.find((b) => b.type === type);
           return (
             <div
-              key={String(typeOrKey) + idx}
+              key={type}
               className="rounded-2xl border border-primary-100 bg-white px-3 py-3 shadow-sm"
             >
               <div className="flex items-center gap-2 text-primary-700/80 mb-1.5">
                 <Calendar className="h-3.5 w-3.5" />
                 <p className="text-[11px] font-semibold uppercase tracking-wide">
-                  {leaveLabel(String(typeOrKey))}
+                  {leaveLabel(type)}
                 </p>
               </div>
               <p className="text-xl font-bold text-primary-950 tabular-nums">
@@ -151,12 +153,18 @@ export function MyLeavePage() {
                 <span className="text-xs font-medium text-slate-500 ml-1">days left</span>
               </p>
               <p className="text-xs text-slate-500 mt-0.5">
-                {balancesLoading ? 'Loading…' : `${row?.usedDays ?? 0} used · ${row?.entitledDays ?? 0} entitled`}
+                {balancesLoading
+                  ? '…'
+                  : `${row?.usedDays ?? 0} used · ${row?.entitledDays ?? 0} entitled`}
               </p>
             </div>
           );
         })}
       </div>
+
+      {balancesError && (
+        <QueryErrorAlert error={balancesErr} onRetry={() => refetchBalances()} />
+      )}
 
       <div className="flex justify-end">
         <Button size="sm" onClick={() => setOpen(true)}>
@@ -171,7 +179,6 @@ export function MyLeavePage() {
         {(data?.data?.length || 0) === 0 && !isLoading ? (
           <EmptyState
             title="No leave requests yet"
-            description="Request annual, sick, or other leave — HR will review it."
             action={
               <Button onClick={() => setOpen(true)}>
                 <CalendarPlus className="mr-1.5 h-4 w-4" />
