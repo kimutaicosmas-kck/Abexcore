@@ -13,17 +13,53 @@ const api = axios.create({
 export const SESSION_EXPIRED_EVENT = 'abexcore:session-expired';
 
 let redirectingToLogin = false;
+/** Blocks further API calls after logout / failed refresh (stops 401 spam). */
+let sessionDead = false;
+
+export function resetSessionGuards() {
+  sessionDead = false;
+  redirectingToLogin = false;
+}
+
+export function hasStoredAccessToken(): boolean {
+  return !!localStorage.getItem('accessToken');
+}
 
 export function redirectToLogin(reason: 'session' | 'inactive' = 'session') {
   if (redirectingToLogin) return;
   const path = window.location.pathname;
   if (path === '/login' || path.endsWith('/login')) return;
   redirectingToLogin = true;
+  sessionDead = true;
   window.dispatchEvent(new CustomEvent(SESSION_EXPIRED_EVENT, { detail: { reason } }));
   window.location.replace(`/login?reason=${reason}`);
 }
 
-api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
+function endSession(reason: 'session' | 'inactive' = 'session') {
+  clearStoredSession();
+  redirectToLogin(reason);
+}
+
+api.interceptors.request.use(async (config: InternalAxiosRequestConfig) => {
+  const url = config.url || '';
+  const isAuthEndpoint = url.includes('/auth/login') || url.includes('/auth/refresh');
+
+  if (sessionDead && !isAuthEndpoint) {
+    return Promise.reject(new AxiosError('Session expired', 'ERR_SESSION', config));
+  }
+
+  // Renew access token before the request when it is about to expire.
+  if (!isAuthEndpoint && localStorage.getItem('refreshToken')) {
+    const access = localStorage.getItem('accessToken');
+    if (!access || isAccessTokenExpired(access)) {
+      const refreshed = await refreshAccessToken();
+      if (!refreshed && !localStorage.getItem('accessToken')) {
+        endSession('session');
+        return Promise.reject(new AxiosError('Session expired', 'ERR_SESSION', config));
+      }
+    }
+  }
+
   const token = localStorage.getItem('accessToken');
   if (token) config.headers.Authorization = `Bearer ${token}`;
   if (config.data instanceof FormData) {
@@ -57,8 +93,7 @@ api.interceptors.response.use(
         originalRequest.headers.Authorization = `Bearer ${localStorage.getItem('accessToken')}`;
         return api(originalRequest);
       }
-      clearStoredSession();
-      redirectToLogin('session');
+      endSession('session');
     }
     return Promise.reject(error);
   }

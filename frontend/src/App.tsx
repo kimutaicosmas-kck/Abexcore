@@ -77,7 +77,11 @@ const NotFoundPage = lazy(() =>
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      retry: 1,
+      retry: (count, error) => {
+        const status = (error as { response?: { status?: number } })?.response?.status;
+        if (status === 401 || status === 403) return false;
+        return count < 1;
+      },
       refetchOnWindowFocus: true,
       refetchOnReconnect: true,
       staleTime: LIVE_STALE_MS,
@@ -85,6 +89,14 @@ const queryClient = new QueryClient({
     },
   },
 });
+
+// Drop cached queries immediately when the session dies (stops 401 refetch loops).
+if (typeof window !== 'undefined') {
+  window.addEventListener('abexcore:session-expired', () => {
+    queryClient.cancelQueries();
+    queryClient.clear();
+  });
+}
 
 function PageFallback() {
   return <LoadingSpinner className="min-h-[40vh]" size="lg" />;

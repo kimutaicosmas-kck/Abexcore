@@ -4,6 +4,7 @@ import { Calendar, CalendarPlus } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import { useAuth } from '../contexts/AuthContext';
 import { hrApi } from '../services/api';
 import {
   Table,
@@ -48,6 +49,7 @@ function leaveLabel(type: string) {
 }
 
 export function MyLeavePage() {
+  const { isAuthenticated } = useAuth();
   const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
   const [open, setOpen] = useState(false);
@@ -63,11 +65,13 @@ export function MyLeavePage() {
     queryKey: ['my-leave-balances', year],
     queryFn: () =>
       hrApi.myLeaveBalances({ year }).then((r) => r.data.data as LeaveBalancesPayload),
+    enabled: isAuthenticated,
   });
 
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['my-leave', page],
     queryFn: () => hrApi.myLeave({ page, limit: 15 }).then((r) => r.data),
+    enabled: isAuthenticated,
   });
 
   const {

@@ -55,7 +55,8 @@ export function PwaShell() {
     const onOffline = () => setIsOnline(false);
     const onInstallPrompt = (event: Event) => {
       // Desktop Chrome also fires this — ignore unless on a phone.
-      if (!isPhoneDevice()) return;
+      // Only preventDefault when we will show our own Install button (avoids console noise).
+      if (!isPhoneDevice() || isStandaloneMode()) return;
       event.preventDefault();
       setInstallPrompt(event as BeforeInstallPromptEvent);
     };

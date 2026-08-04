@@ -51,6 +51,7 @@ export function TopNav({ onMenuClick, sidebarOffset }: TopNavProps) {
     queryKey: ['notifications'],
     queryFn: () => financeApi.notifications().then((r) => r.data.data),
     refetchInterval: NOTIFICATION_POLL_MS,
+    enabled: !!user,
   });
 
   const markRead = useMutation({

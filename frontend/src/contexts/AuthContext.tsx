@@ -6,6 +6,7 @@ import {
   clearStoredSession,
   isAccessTokenExpired,
   redirectToLogin,
+  resetSessionGuards,
   SESSION_EXPIRED_EVENT,
 } from '../services/api';
 import { canAccessRoute as checkRouteAccess } from '../config/routeAccess';
@@ -179,6 +180,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (companySlug: string, email: string, password: string, totpCode?: string) => {
     const { data } = await authApi.login(companySlug, email, password, totpCode);
+    resetSessionGuards();
     localStorage.setItem('accessToken', data.data.accessToken);
     localStorage.setItem('refreshToken', data.data.refreshToken);
     if (data.data.company?.slug) {
