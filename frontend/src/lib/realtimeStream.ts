@@ -1,4 +1,5 @@
 import { apiUrl } from '../config/api';
+import { clearStoredSession, redirectToLogin, refreshAccessToken } from '../services/api';
 
 export type RealtimeEvent = { type: string; at?: string };
 
@@ -9,25 +10,42 @@ function isAbortError(err: unknown): boolean {
   );
 }
 
+async function openRealtimeStream(signal: AbortSignal): Promise<Response | null> {
+  const token = localStorage.getItem('accessToken');
+  if (!token || signal.aborted) return null;
+
+  return fetch(apiUrl('/realtime/events'), {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: 'text/event-stream',
+      'Cache-Control': 'no-cache',
+    },
+    cache: 'no-store',
+    signal,
+  });
+}
+
 /** Long-lived SSE; network/proxy drops (e.g. HTTP/2 ping) are normal — caller should reconnect. */
 export async function subscribeRealtimeEvents(
   signal: AbortSignal,
   onEvent: (event: RealtimeEvent) => void
 ): Promise<void> {
-  const token = localStorage.getItem('accessToken');
-  if (!token || signal.aborted) return;
-
-  let response: Response;
+  let response: Response | null;
   try {
-    response = await fetch(apiUrl('/realtime/events'), {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        Accept: 'text/event-stream',
-        'Cache-Control': 'no-cache',
-      },
-      cache: 'no-store',
-      signal,
-    });
+    response = await openRealtimeStream(signal);
+    if (!response) return;
+
+    // Access token often expires while the tab stays open — refresh once and retry.
+    if (response.status === 401) {
+      const refreshed = await refreshAccessToken();
+      if (!refreshed) {
+        clearStoredSession();
+        redirectToLogin('session');
+        return;
+      }
+      response = await openRealtimeStream(signal);
+      if (!response) return;
+    }
   } catch (err) {
     if (isAbortError(err) || signal.aborted) return;
     throw err;

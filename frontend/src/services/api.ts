@@ -9,6 +9,20 @@ const api = axios.create({
   headers: { 'Content-Type': 'application/json' },
 });
 
+/** Fired when refresh fails so AuthContext can drop in-memory user state immediately. */
+export const SESSION_EXPIRED_EVENT = 'abexcore:session-expired';
+
+let redirectingToLogin = false;
+
+export function redirectToLogin(reason: 'session' | 'inactive' = 'session') {
+  if (redirectingToLogin) return;
+  const path = window.location.pathname;
+  if (path === '/login' || path.endsWith('/login')) return;
+  redirectingToLogin = true;
+  window.dispatchEvent(new CustomEvent(SESSION_EXPIRED_EVENT, { detail: { reason } }));
+  window.location.replace(`/login?reason=${reason}`);
+}
+
 api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   const token = localStorage.getItem('accessToken');
   if (token) config.headers.Authorization = `Bearer ${token}`;
@@ -30,8 +44,6 @@ api.interceptors.response.use(
     const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
     const url = originalRequest?.url || '';
     const isAuthEndpoint = url.includes('/auth/login') || url.includes('/auth/refresh');
-    const isSessionProbe = url.includes('/auth/me');
-    const onLoginPage = window.location.pathname === '/login';
 
     // Never hammer login/refresh when rate-limited.
     if (error.response?.status === 429) {
@@ -46,9 +58,7 @@ api.interceptors.response.use(
         return api(originalRequest);
       }
       clearStoredSession();
-      if (!isSessionProbe && !onLoginPage) {
-        window.location.href = '/login';
-      }
+      redirectToLogin('session');
     }
     return Promise.reject(error);
   }
@@ -105,6 +115,12 @@ export function isAccessTokenExpired(token: string): boolean {
 export function clearStoredSession() {
   localStorage.removeItem('accessToken');
   localStorage.removeItem('refreshToken');
+}
+
+/** Access token missing, malformed, or past exp (with skew buffer). */
+export function accessTokenNeedsRefresh(token: string | null = localStorage.getItem('accessToken')): boolean {
+  if (!token) return true;
+  return isAccessTokenExpired(token);
 }
 
 export const authApi = {

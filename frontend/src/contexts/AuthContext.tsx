@@ -1,8 +1,15 @@
 import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { User } from '../types';
-import { authApi, refreshAccessToken, clearStoredSession, isAccessTokenExpired } from '../services/api';
+import {
+  authApi,
+  refreshAccessToken,
+  clearStoredSession,
+  isAccessTokenExpired,
+  redirectToLogin,
+  SESSION_EXPIRED_EVENT,
+} from '../services/api';
 import { canAccessRoute as checkRouteAccess } from '../config/routeAccess';
-import { clearUserActivity, getLastActivityAt, isInactivityExpired, markUserActivity } from '../config/session';
+import { clearUserActivity, isInactivityExpired, markUserActivity } from '../config/session';
 import { PLATFORM_COMPANY_SLUG } from '../constants/platform';
 
 function parseCompany(data: unknown): CompanyConfig | null {
@@ -55,7 +62,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
+    const onSessionExpired = () => {
+      setUser(null);
+      setCompany(null);
+      setMustChangePassword(false);
+      clearUserActivity();
+    };
+    window.addEventListener(SESSION_EXPIRED_EVENT, onSessionExpired);
+    return () => window.removeEventListener(SESSION_EXPIRED_EVENT, onSessionExpired);
+  }, []);
+
+  useEffect(() => {
     let cancelled = false;
+
+    const dropSession = (reason: 'session' | 'inactive' = 'session') => {
+      clearStoredSession();
+      clearUserActivity();
+      setUser(null);
+      setCompany(null);
+      if (!cancelled) redirectToLogin(reason);
+    };
 
     const loadSession = async () => {
       const accessToken = localStorage.getItem('accessToken');
@@ -67,15 +93,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       if (isInactivityExpired()) {
-        clearStoredSession();
-        clearUserActivity();
+        dropSession('inactive');
         setIsLoading(false);
         return;
       }
 
       const restoreUser = async () => {
-        if (!accessToken || isAccessTokenExpired(accessToken)) {
-          if (!refreshToken) throw new Error('Session expired');
+        const token = localStorage.getItem('accessToken');
+        if (!token || isAccessTokenExpired(token)) {
+          if (!localStorage.getItem('refreshToken')) throw new Error('Session expired');
           const refreshed = await refreshAccessToken();
           if (!refreshed) throw new Error('Session expired');
         }
@@ -100,10 +126,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           String((err as Error)?.message || '').includes('Session expired');
 
         if (sessionGone) {
-          clearStoredSession();
-          clearUserActivity();
-          setUser(null);
-          setCompany(null);
+          dropSession('session');
         } else {
           // Transient network/5xx on F5 — one retry after token refresh, do not wipe session.
           try {
@@ -112,10 +135,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           } catch (retryErr: unknown) {
             const retryStatus = (retryErr as { response?: { status?: number } })?.response?.status;
             if (retryStatus === 401 || retryStatus === 403) {
-              clearStoredSession();
-              clearUserActivity();
-              setUser(null);
-              setCompany(null);
+              dropSession('session');
             }
           }
         }

@@ -63,7 +63,8 @@ export function LoginPage() {
   const { login } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const sessionExpired = searchParams.get('reason') === 'inactive';
+  const sessionReason = searchParams.get('reason');
+  const sessionExpired = sessionReason === 'inactive' || sessionReason === 'session';
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [needs2FA, setNeeds2FA] = useState(false);
@@ -226,7 +227,9 @@ export function LoginPage() {
                 <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
                   {sessionExpired && (
                     <Alert variant="warning">
-                      Your session expired due to inactivity. Please sign in again.
+                      {sessionReason === 'inactive'
+                        ? 'Your session expired due to inactivity. Please sign in again.'
+                        : 'Your session expired. Please sign in again to continue.'}
                     </Alert>
                   )}
                   {tenantError && <Alert variant="error">{tenantError}</Alert>}
