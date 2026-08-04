@@ -208,12 +208,12 @@ export function Card({ children, className, title, action, padding = true }: Car
   return (
     <div className={clsx('panel-surface min-w-0', className)}>
       {(title || action) && (
-        <div className="panel-header flex items-center justify-between gap-2 px-4 py-3 min-w-0">
-          {title && <h3 className="text-sm font-semibold text-primary-900 min-w-0 flex-1 truncate">{title}</h3>}
+        <div className="panel-header flex items-center justify-between gap-2 px-3 py-2 sm:px-4 sm:py-3 min-w-0">
+          {title && <h3 className="text-xs sm:text-sm font-semibold text-primary-900 min-w-0 flex-1 truncate">{title}</h3>}
           {action && <div className="shrink-0">{action}</div>}
         </div>
       )}
-      <div className={padding ? 'p-4 min-w-0' : undefined}>{children}</div>
+      <div className={padding ? 'p-3 sm:p-4 min-w-0' : undefined}>{children}</div>
     </div>
   );
 }
@@ -226,13 +226,16 @@ interface BadgeProps {
 export function Badge({ children, variant = 'default' }: BadgeProps) {
   return (
     <span
-      className={clsx('inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ring-1 ring-inset', {
-        'bg-primary-50 text-primary-800 ring-primary-200/80': variant === 'default',
-        'bg-emerald-50 text-emerald-800 ring-emerald-200/80': variant === 'success',
-        'bg-amber-50 text-amber-800 ring-amber-200/80': variant === 'warning',
-        'bg-red-50 text-red-800 ring-red-200/80': variant === 'danger',
-        'bg-primary-100 text-primary-800 ring-primary-200/80': variant === 'info',
-      })}
+      className={clsx(
+        'inline-flex items-center px-1.5 py-0.5 sm:px-2 rounded-md sm:rounded-full text-[10px] sm:text-xs font-semibold ring-1 ring-inset leading-tight',
+        {
+          'bg-primary-50 text-primary-800 ring-primary-200/80': variant === 'default',
+          'bg-emerald-50 text-emerald-800 ring-emerald-200/80': variant === 'success',
+          'bg-amber-50 text-amber-800 ring-amber-200/80': variant === 'warning',
+          'bg-red-50 text-red-800 ring-red-200/80': variant === 'danger',
+          'bg-primary-100 text-primary-800 ring-primary-200/80': variant === 'info',
+        }
+      )}
     >
       {children}
     </span>
@@ -249,25 +252,25 @@ interface StatCardProps {
 
 export function StatCard({ title, value, icon, trend, color = 'bg-primary-600' }: StatCardProps) {
   return (
-    <div className="stat-card flex flex-col gap-2.5 snap-start">
-      <div className="flex items-start justify-between gap-2">
-        <p className="min-w-0 flex-1 text-[11px] sm:text-xs font-medium text-primary-700/70 uppercase tracking-wide leading-snug line-clamp-2">
+    <div className="stat-card flex flex-col gap-1.5 sm:gap-2.5 snap-start">
+      <div className="flex items-start justify-between gap-1.5 sm:gap-2">
+        <p className="stat-card-title min-w-0 flex-1 text-[10px] sm:text-xs font-medium text-primary-700/70 uppercase tracking-wide leading-snug line-clamp-2">
           {title}
         </p>
         <div
           className={clsx(
-            'h-10 w-10 sm:h-10 sm:w-10 shrink-0 flex items-center justify-center rounded-2xl text-white shadow-sm [&_svg]:h-4 [&_svg]:w-4 sm:[&_svg]:h-5 sm:[&_svg]:w-5',
+            'stat-card-icon h-8 w-8 sm:h-10 sm:w-10 shrink-0 flex items-center justify-center rounded-xl sm:rounded-2xl text-white shadow-sm [&_svg]:h-3.5 [&_svg]:w-3.5 sm:[&_svg]:h-5 sm:[&_svg]:w-5',
             color.includes('from-') ? `bg-gradient-to-br ${color}` : color
           )}
         >
           {icon}
         </div>
       </div>
-      <p className="text-[1.35rem] sm:text-xl font-bold tabular-nums text-primary-950 leading-none tracking-tight">
+      <p className="stat-card-value text-base sm:text-xl font-bold tabular-nums text-primary-950 leading-none tracking-tight">
         {value}
       </p>
       {trend && (
-        <p className={clsx('text-[11px] sm:text-xs font-medium whitespace-nowrap', trend.value >= 0 ? 'text-emerald-600' : 'text-red-600')}>
+        <p className={clsx('text-[10px] sm:text-xs font-medium whitespace-nowrap', trend.value >= 0 ? 'text-emerald-600' : 'text-red-600')}>
           {trend.value >= 0 ? '+' : ''}{trend.value}% {trend.label}
         </p>
       )}
@@ -329,27 +332,27 @@ function MobileTableCard({
   const visibleDetailCols = showHidden ? detailCols : summaryCols;
 
   return (
-    <div className="px-4 py-3 space-y-2">
+    <div className="mobile-list-row flex flex-col">
       {primary && (
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0 flex-1 flex items-start gap-2">
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0 flex-1 flex items-start gap-1.5">
             {selectCol?.render && (
               <div className="pt-0.5 shrink-0">{selectCol.render(record[selectCol.key], record)}</div>
             )}
-            <div className="min-w-0 flex-1 font-semibold text-slate-900 [&_p]:leading-snug">
+            <div className="mobile-list-title min-w-0 flex-1 text-slate-900 [&_p]:leading-snug [&_p]:text-[inherit]">
               {renderCell(primary, record)}
             </div>
           </div>
-          {statusCol && <div className="shrink-0">{renderCell(statusCol, record)}</div>}
+          {statusCol && <div className="shrink-0 scale-95 origin-top-right">{renderCell(statusCol, record)}</div>}
         </div>
       )}
 
       {visibleDetailCols.length > 0 && (
-        <div className="grid grid-cols-1 gap-1">
+        <div className="grid grid-cols-1 gap-0.5">
           {visibleDetailCols.map((col) => (
-            <div key={col.key} className="flex items-center justify-between gap-3 text-sm">
-              <span className="text-slate-500 shrink-0">{col.label}</span>
-              <div className="text-slate-800 text-right min-w-0 max-w-[65%] break-words">
+            <div key={col.key} className="mobile-list-detail flex items-center justify-between gap-2">
+              <span className="mobile-list-label shrink-0">{col.label}</span>
+              <div className="text-slate-800 text-right min-w-0 max-w-[68%] break-words">
                 {renderCell(col, record)}
               </div>
             </div>
@@ -357,35 +360,39 @@ function MobileTableCard({
         </div>
       )}
 
-      <div className="flex items-center justify-between gap-2 pt-0.5">
-        <div className="flex items-center gap-1.5 min-w-0">
+      <div className="flex items-center justify-between gap-1.5">
+        <div className="flex items-center gap-1 min-w-0">
           {onRowClick && (
             <Button
               size="sm"
               variant="secondary"
+              className="!px-2 !py-1 !text-[10px] !rounded-lg"
               onClick={(e) => {
                 e.stopPropagation();
                 onRowClick(record);
               }}
             >
-              View details
+              Details
             </Button>
           )}
           {!onRowClick && hiddenCols.length > 0 && (
             <Button
               size="sm"
               variant="ghost"
+              className="!px-2 !py-1 !text-[10px]"
               onClick={(e) => {
                 e.stopPropagation();
                 setExpanded((v) => !v);
               }}
             >
-              {expanded ? 'Show less' : `Show more (${hiddenCols.length})`}
+              {expanded ? 'Less' : `More (${hiddenCols.length})`}
             </Button>
           )}
         </div>
         {actionCol?.render && (
-          <div className="flex items-center gap-1 shrink-0">{actionCol.render(record[actionCol.key], record)}</div>
+          <div className="flex items-center gap-0.5 shrink-0 scale-90 origin-right">
+            {actionCol.render(record[actionCol.key], record)}
+          </div>
         )}
       </div>
     </div>
@@ -625,11 +632,11 @@ interface EmptyStateProps {
 
 export function EmptyState({ title, description, action }: EmptyStateProps) {
   return (
-    <div className="flex flex-col items-center justify-center py-14 px-4 text-center rounded-xl border border-dashed border-primary-200 bg-primary-50/50">
-      <div className="h-12 w-12 rounded-xl bg-primary-100 flex items-center justify-center mb-4 text-primary-600 text-xl font-light">∅</div>
-      <p className="text-sm font-semibold text-primary-900">{title}</p>
-      {description && <p className="text-xs text-primary-700/70 mt-1 max-w-sm">{description}</p>}
-      {action && <div className="mt-5">{action}</div>}
+    <div className="flex flex-col items-center justify-center py-8 sm:py-14 px-3 sm:px-4 text-center rounded-xl border border-dashed border-primary-200 bg-primary-50/50">
+      <div className="h-9 w-9 sm:h-12 sm:w-12 rounded-lg sm:rounded-xl bg-primary-100 flex items-center justify-center mb-2.5 sm:mb-4 text-primary-600 text-base sm:text-xl font-light">∅</div>
+      <p className="text-xs sm:text-sm font-semibold text-primary-900">{title}</p>
+      {description && <p className="text-[11px] sm:text-xs text-primary-700/70 mt-1 max-w-sm">{description}</p>}
+      {action && <div className="mt-3 sm:mt-5">{action}</div>}
     </div>
   );
 }
@@ -690,19 +697,19 @@ export function QuickActionCard({
       disabled={disabled}
       title={disabled ? 'View only on dashboard — open from your assigned menu' : undefined}
       className={clsx(
-        'quick-action-card flex flex-col items-start gap-3 p-3.5 sm:flex-row sm:items-center sm:gap-4 sm:p-4 rounded-2xl border border-primary-100/90 bg-white text-left transition-all w-full active:scale-[0.98]',
+        'quick-action-card flex flex-col items-start gap-2 p-2.5 sm:flex-row sm:items-center sm:gap-4 sm:p-4 rounded-xl sm:rounded-2xl border border-primary-100/90 bg-white text-left transition-all w-full active:scale-[0.98]',
         color,
         disabled
           ? 'opacity-60 cursor-not-allowed'
           : 'hover:border-primary-300 hover:bg-primary-50/60 hover:shadow-sm'
       )}
     >
-      <div className="flex h-12 w-12 sm:h-11 sm:w-11 items-center justify-center rounded-2xl bg-primary-50 text-primary-600 shadow-sm">
-        <Icon className="h-5 w-5" />
+      <div className="flex h-9 w-9 sm:h-11 sm:w-11 items-center justify-center rounded-xl sm:rounded-2xl bg-primary-50 text-primary-600 shadow-sm">
+        <Icon className="h-4 w-4 sm:h-5 sm:w-5" />
       </div>
       <div className="flex-1 min-w-0 w-full">
-        <p className="font-semibold text-slate-900 text-[13px] sm:text-sm leading-snug">{label}</p>
-        <p className="text-[11px] sm:text-xs text-slate-500 mt-0.5 line-clamp-2">{desc}</p>
+        <p className="font-semibold text-slate-900 text-xs sm:text-sm leading-snug">{label}</p>
+        <p className="text-[10px] sm:text-xs text-slate-500 mt-0.5 line-clamp-2">{desc}</p>
       </div>
       <ChevronRight className="hidden sm:block h-4 w-4 text-slate-400 shrink-0" />
     </button>
@@ -711,7 +718,7 @@ export function QuickActionCard({
 
 export function QuickActionGrid({ children }: { children: React.ReactNode }) {
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-2 xl:grid-cols-4 gap-2.5 sm:gap-3 min-w-0">
+    <div className="grid grid-cols-2 sm:grid-cols-2 xl:grid-cols-4 gap-2 sm:gap-3 min-w-0">
       {children}
     </div>
   );
@@ -729,7 +736,7 @@ export function StatGrid({
   return (
     <div
       className={clsx(
-        'grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-2.5 sm:gap-3 w-full mb-4 min-w-0',
+        'grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-2 sm:gap-3 w-full mb-3 sm:mb-4 min-w-0',
         className
       )}
     >

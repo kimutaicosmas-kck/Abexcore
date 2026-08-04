@@ -138,28 +138,28 @@ export function MyLeavePage() {
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-3">
         {cardTypes.map((type) => {
           const row = balances.find((b) => b.type === type);
           return (
             <div
               key={type}
-              className="rounded-2xl border border-primary-100 bg-white px-3 py-3 shadow-sm"
+              className="metric-tile rounded-xl sm:rounded-2xl border border-primary-100 bg-white px-2.5 py-2 sm:px-3 sm:py-3 shadow-sm"
             >
-              <div className="flex items-center gap-2 text-primary-700/80 mb-1.5">
-                <Calendar className="h-3.5 w-3.5" />
-                <p className="text-[11px] font-semibold uppercase tracking-wide">
+              <div className="metric-tile-label flex items-center gap-1 sm:gap-2 text-primary-700/80 mb-0.5 sm:mb-1.5">
+                <Calendar className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+                <p className="text-[9px] sm:text-[11px] font-semibold uppercase tracking-wide truncate">
                   {leaveLabel(type)}
                 </p>
               </div>
-              <p className="text-xl font-bold text-primary-950 tabular-nums">
+              <p className="metric-tile-value text-base sm:text-xl font-bold text-primary-950 tabular-nums">
                 {balancesLoading ? '…' : `${row?.remainingDays ?? 0}`}
-                <span className="text-xs font-medium text-slate-500 ml-1">days left</span>
+                <span className="text-[10px] sm:text-xs font-medium text-slate-500 ml-1">left</span>
               </p>
-              <p className="text-xs text-slate-500 mt-0.5">
+              <p className="metric-tile-meta text-[10px] sm:text-xs text-slate-500 mt-0.5">
                 {balancesLoading
                   ? '…'
-                  : `${row?.usedDays ?? 0} used · ${row?.entitledDays ?? 0} entitled`}
+                  : `${row?.usedDays ?? 0} used · ${row?.entitledDays ?? 0} tot`}
               </p>
             </div>
           );
