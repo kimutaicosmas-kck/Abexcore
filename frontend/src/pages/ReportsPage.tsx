@@ -12,6 +12,7 @@ import {
   formatCurrency,
   Badge,
   Button,
+  Table,
 } from '../components/ui';
 import { BarChart3, Users, Factory, Truck, FileSpreadsheet, ClipboardCheck, TrendingUp, AlertCircle, Receipt, Package, Download, FileText } from 'lucide-react';
 import { downloadFile } from '../utils/download';
@@ -365,49 +366,72 @@ export function ReportsPage() {
                     description="Customers appear here once classified on the Customers page."
                   />
                 ) : (
-                  <div className="overflow-x-auto max-h-[55vh] border border-border/60 rounded-xl">
-                    <table className="min-w-full text-sm">
-                      <thead className="bg-surface-muted/80 sticky top-0">
-                        <tr className="text-left text-xs text-slate-500">
-                          <th className="px-3 py-2 font-medium">Code</th>
-                          <th className="px-3 py-2 font-medium">Name</th>
-                          <th className="px-3 py-2 font-medium">Type</th>
-                          {(detailModal === 'vat-customers' || detailModal === 'vat-combined') && (
-                            <th className="px-3 py-2 font-medium">Status</th>
-                          )}
-                          {(detailModal === 'vat-customers' || detailModal === 'vat-combined') && (
-                            <th className="px-3 py-2 font-medium">Tax PIN</th>
-                          )}
-                          <th className="px-3 py-2 font-medium text-right">Invoices</th>
-                          <th className="px-3 py-2 font-medium text-right">Invoiced</th>
-                          <th className="px-3 py-2 font-medium text-right">VAT</th>
-                          <th className="px-3 py-2 font-medium text-right">Outstanding</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {vatReport.customers.map((c) => (
-                          <tr key={c.id}>
-                            <td className="px-3 py-2 font-medium">{c.code}</td>
-                            <td className="px-3 py-2">{c.name}</td>
-                            <td className="px-3 py-2"><Badge variant="info">{c.type.replace(/_/g, ' ')}</Badge></td>
-                            {(detailModal === 'vat-customers' || detailModal === 'vat-combined') && (
-                              <td className="px-3 py-2">
-                                <Badge variant={c.vatStatus === 'NON_VAT' ? 'default' : 'success'}>
-                                  {c.vatStatus === 'NON_VAT' ? 'Non-VAT' : 'VAT'}
-                                </Badge>
-                              </td>
-                            )}
-                            {(detailModal === 'vat-customers' || detailModal === 'vat-combined') && (
-                              <td className="px-3 py-2 text-slate-600">{c.taxPin || '—'}</td>
-                            )}
-                            <td className="px-3 py-2 text-right tabular-nums">{c.invoiceCount}</td>
-                            <td className="px-3 py-2 text-right tabular-nums">{formatCurrency(c.invoicedTotal)}</td>
-                            <td className="px-3 py-2 text-right tabular-nums">{formatCurrency(c.vatTotal)}</td>
-                            <td className="px-3 py-2 text-right tabular-nums font-medium">{formatCurrency(c.outstanding)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                  <div className="max-h-[55vh] overflow-y-auto border border-border/60 rounded-xl">
+                    <Table
+                      embedded
+                      data={vatReport.customers}
+                      columns={[
+                        { key: 'name', label: 'Name' },
+                        { key: 'code', label: 'Code' },
+                        {
+                          key: 'type',
+                          label: 'Type',
+                          render: (val: unknown) => (
+                            <Badge variant="info">{String(val).replace(/_/g, ' ')}</Badge>
+                          ),
+                        },
+                        ...((detailModal === 'vat-customers' || detailModal === 'vat-combined')
+                          ? [
+                              {
+                                key: 'status',
+                                label: 'Status',
+                                render: (_: unknown, row: Record<string, unknown>) => (
+                                  <Badge variant={row.vatStatus === 'NON_VAT' ? 'default' : 'success'}>
+                                    {row.vatStatus === 'NON_VAT' ? 'Non-VAT' : 'VAT'}
+                                  </Badge>
+                                ),
+                              },
+                              {
+                                key: 'taxPin',
+                                label: 'Tax PIN',
+                                render: (val: unknown) => (
+                                  <span className="text-slate-600">{(val as string) || '—'}</span>
+                                ),
+                              },
+                            ]
+                          : []),
+                        {
+                          key: 'invoiceCount',
+                          label: 'Invoices',
+                          render: (val: unknown) => (
+                            <span className="tabular-nums">{val as number}</span>
+                          ),
+                        },
+                        {
+                          key: 'invoicedTotal',
+                          label: 'Invoiced',
+                          render: (val: unknown) => (
+                            <span className="tabular-nums">{formatCurrency(val as number)}</span>
+                          ),
+                        },
+                        {
+                          key: 'vatTotal',
+                          label: 'VAT',
+                          render: (val: unknown) => (
+                            <span className="tabular-nums">{formatCurrency(val as number)}</span>
+                          ),
+                        },
+                        {
+                          key: 'outstanding',
+                          label: 'Outstanding',
+                          render: (val: unknown) => (
+                            <span className="tabular-nums font-medium">
+                              {formatCurrency(val as number)}
+                            </span>
+                          ),
+                        },
+                      ]}
+                    />
                   </div>
                 )}
               </>

@@ -360,8 +360,8 @@ export function CustomersPage() {
   ];
 
   const customerColumns = [
-    { key: 'code', label: 'Code' },
     { key: 'name', label: 'Name' },
+    { key: 'code', label: 'Code' },
     {
       key: 'type',
       label: 'Type',

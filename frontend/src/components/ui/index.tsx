@@ -281,11 +281,17 @@ interface TableProps {
   loading?: boolean;
   onRowClick?: (row: Record<string, unknown>) => void;
   embedded?: boolean;
-  /** Stack rows as cards on small screens instead of a wide table. */
+  /**
+   * Stack rows as mobile cards (Customers/Users style) under `md`.
+   * Default on so all list pages match that mobile layout.
+   */
   responsive?: boolean;
 }
 
-export function Table({ columns, data, loading, onRowClick, embedded = false, responsive = false }: TableProps) {
+const STATUS_KEYS = new Set(['status', 'isActive']);
+const META_COLUMN_KEYS = new Set(['actions', 'select', 'checkbox']);
+
+export function Table({ columns, data, loading, onRowClick, embedded = false, responsive = true }: TableProps) {
   const content = (() => {
     if (loading) {
       return (
@@ -314,57 +320,58 @@ export function Table({ columns, data, loading, onRowClick, embedded = false, re
             {data.map((row, i) => {
               const record = row as Record<string, unknown>;
               const actionCol = columns.find((col) => col.key === 'actions');
-              const dataCols = columns.filter((col) => col.key !== 'actions');
+              const selectCol = columns.find((col) => col.key === 'select' || col.key === 'checkbox');
+              const dataCols = columns.filter((col) => !META_COLUMN_KEYS.has(col.key));
               const primary = dataCols[0];
+              const statusCol = dataCols.find((col) => STATUS_KEYS.has(col.key));
+              const detailCols = dataCols
+                .filter((col) => col.key !== primary?.key)
+                .filter((col) => !STATUS_KEYS.has(col.key));
 
               return (
                 <div
                   key={i}
                   className={clsx(
-                    'px-4 py-3 space-y-2',
+                    'px-4 py-3.5 space-y-2.5',
                     onRowClick && 'cursor-pointer active:bg-primary-50/40'
                   )}
                   onClick={() => onRowClick?.(record)}
                 >
                   {primary && (
                     <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0 flex-1">
-                        <div className="font-semibold text-slate-900 min-w-0">
+                      <div className="min-w-0 flex-1 flex items-start gap-2">
+                        {selectCol?.render && (
+                          <div className="pt-0.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+                            {selectCol.render(record[selectCol.key], record)}
+                          </div>
+                        )}
+                        <div className="min-w-0 flex-1 font-semibold text-slate-900 [&_p]:leading-snug">
                           {primary.render
                             ? primary.render(record[primary.key], record)
                             : String(record[primary.key] ?? '')}
                         </div>
                       </div>
-                      {dataCols.length > 1 && dataCols[dataCols.length - 1]?.key === 'status' && (
+                      {statusCol && (
                         <div className="shrink-0">
-                          {dataCols[dataCols.length - 1].render
-                            ? dataCols[dataCols.length - 1].render!(
-                                record[dataCols[dataCols.length - 1].key],
-                                record
-                              )
-                            : String(record[dataCols[dataCols.length - 1].key] ?? '')}
+                          {statusCol.render
+                            ? statusCol.render(record[statusCol.key], record)
+                            : String(record[statusCol.key] ?? '')}
                         </div>
                       )}
                     </div>
                   )}
                   <div className="grid grid-cols-1 gap-1.5">
-                    {dataCols.slice(1).map((col) => {
-                      if (col.key === 'status' && dataCols[dataCols.length - 1]?.key === 'status') return null;
-                      return (
-                        <div key={col.key} className="flex items-center justify-between gap-3 text-sm">
-                          <span className="text-slate-500 shrink-0">{col.label}</span>
-                          <div className="text-slate-800 text-right min-w-0 max-w-[60%]">
-                            {col.render ? col.render(record[col.key], record) : String(record[col.key] ?? '')}
-                          </div>
+                    {detailCols.map((col) => (
+                      <div key={col.key} className="flex items-center justify-between gap-3 text-sm">
+                        <span className="text-slate-500 shrink-0">{col.label}</span>
+                        <div className="text-slate-800 text-right min-w-0 max-w-[65%] break-words">
+                          {col.render ? col.render(record[col.key], record) : String(record[col.key] ?? '')}
                         </div>
-                      );
-                    })}
+                      </div>
+                    ))}
                   </div>
                   {actionCol?.render && (
-                    <div
-                      className="pt-1"
-                      onClick={(e) => e.stopPropagation()}
-                    >
+                    <div className="pt-0.5 flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
                       {actionCol.render(record[actionCol.key], record)}
                     </div>
                   )}
