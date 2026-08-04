@@ -1,11 +1,11 @@
-import { useForm } from 'react-hook-form';
+import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { inventoryApi, productsApi } from '../../services/api';
+import { inventoryApi } from '../../services/api';
 import { Button, Input, Select } from '../ui';
-import { Product, RawMaterial } from '../../types';
-import { formatProductOptionLabel } from '../../utils/productDisplay';
+import { RawMaterial } from '../../types';
+import { ProductSearchSelect } from './ProductSearchSelect';
 
 const transferSchema = z.object({
   fromWarehouseId: z.string().min(1, 'Source warehouse required'),
@@ -43,16 +43,11 @@ export function StockTransferForm({ onSuccess, onCancel }: StockTransferFormProp
     queryFn: () => inventoryApi.materials({ limit: 100 }).then((r) => r.data.data as RawMaterial[]),
   });
 
-  const { data: products } = useQuery({
-    queryKey: ['products'],
-    queryFn: () => productsApi.list({ limit: 100 }).then((r) => r.data.data as Product[]),
-  });
-
   const whOpts = [{ value: '', label: 'Select...' }, ...(warehouses || []).map((w) => ({ value: w.id, label: `${w.code} - ${w.name}` }))];
 
-  const { register, handleSubmit, formState: { errors } } = useForm<TransferFormData>({
+  const { register, control, handleSubmit, formState: { errors } } = useForm<TransferFormData>({
     resolver: zodResolver(transferSchema),
-    defaultValues: { quantity: 1 },
+    defaultValues: { quantity: 1, productId: '', rawMaterialId: '' },
   });
 
   const mutation = useMutation({
@@ -81,10 +76,16 @@ export function StockTransferForm({ onSuccess, onCancel }: StockTransferFormProp
         {...register('rawMaterialId')}
         error={errors.rawMaterialId?.message}
       />
-      <Select
-        label="Product"
-        options={[{ value: '', label: 'None' }, ...(products || []).map((p) => ({ value: p.id, label: formatProductOptionLabel(p) }))]}
-        {...register('productId')}
+      <Controller
+        name="productId"
+        control={control}
+        render={({ field }) => (
+          <ProductSearchSelect
+            label="Product"
+            value={field.value || ''}
+            onChange={field.onChange}
+          />
+        )}
       />
       <Input label="Quantity *" type="number" step="0.001" min={0.001} {...register('quantity')} error={errors.quantity?.message} />
       <Input label="Batch Number" {...register('batchNumber')} />

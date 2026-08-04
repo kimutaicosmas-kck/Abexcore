@@ -1,15 +1,13 @@
-import { useEffect } from 'react';
-import { useFieldArray, useForm } from 'react-hook-form';
+import { Controller, useFieldArray, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, Trash2 } from 'lucide-react';
 import { operationsApi, customersApi } from '../../services/api';
-import { useProductPicker } from '../../hooks/useProductPicker';
 import { Button, Input, Select, FormActions, ModalFormBody } from '../ui';
 import { Customer } from '../../types';
 import { useVatRate } from '../../contexts/AuthContext';
-import { formatProductOptionLabel } from '../../utils/productDisplay';
+import { ProductSearchSelect } from './ProductSearchSelect';
 
 const quotationItemSchema = z.object({
   productId: z.string().min(1, 'Product required'),
@@ -40,20 +38,10 @@ export function QuotationForm({ onSuccess, onCancel }: QuotationFormProps) {
     queryFn: () => customersApi.list({ limit: 100 }).then((r) => r.data.data as Customer[]),
   });
 
-  const { data: productsData } = useProductPicker();
-
   const customerOptions = (customersData || []).map((c) => ({
     value: c.id,
     label: `${c.code} - ${c.name} (${c.vatStatus === 'NON_VAT' ? 'Non-VAT' : 'VAT'})`,
   }));
-
-  const productOptions = [
-    { value: '', label: 'Select product...' },
-    ...(productsData || []).map((p) => ({
-      value: p.id,
-      label: formatProductOptionLabel(p),
-    })),
-  ];
 
   const { register, control, handleSubmit, watch, setValue, formState: { errors } } = useForm<QuotationFormData>({
     resolver: zodResolver(quotationSchema),
@@ -65,17 +53,6 @@ export function QuotationForm({ onSuccess, onCancel }: QuotationFormProps) {
   const { fields, append, remove } = useFieldArray({ control, name: 'items' });
   const items = watch('items');
   const customerId = watch('customerId');
-
-  useEffect(() => {
-    items.forEach((item, index) => {
-      if (item.productId) {
-        const product = productsData?.find((p) => p.id === item.productId);
-        if (product && item.unitPrice === 0) {
-          setValue(`items.${index}.unitPrice`, Number(product.sellingPrice));
-        }
-      }
-    });
-  }, [items, productsData, setValue]);
 
   const companyVatRate = useVatRate();
   const selectedCustomer = customersData?.find((c) => c.id === customerId);
@@ -146,10 +123,22 @@ export function QuotationForm({ onSuccess, onCancel }: QuotationFormProps) {
           {fields.map((field, index) => (
             <div key={field.id} className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-end p-3 bg-gray-50 rounded-lg">
               <div className="col-span-12 sm:col-span-5">
-                <Select
-                  label={index === 0 ? 'Product' : undefined}
-                  options={productOptions}
-                  {...register(`items.${index}.productId`)}
+                <Controller
+                  name={`items.${index}.productId`}
+                  control={control}
+                  render={({ field: productField }) => (
+                    <ProductSearchSelect
+                      label={index === 0 ? 'Product' : undefined}
+                      value={productField.value}
+                      onChange={productField.onChange}
+                      onProductSelect={(product) => {
+                        if (product && (!items[index]?.unitPrice || items[index].unitPrice === 0)) {
+                          setValue(`items.${index}.unitPrice`, Number(product.sellingPrice));
+                        }
+                      }}
+                      error={errors.items?.[index]?.productId?.message}
+                    />
+                  )}
                 />
               </div>
               <div className="col-span-12 sm:col-span-2">

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useFieldArray, useForm } from 'react-hook-form';
+import { Controller, useFieldArray, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -8,9 +8,8 @@ import { operationsApi, customersApi } from '../../services/api';
 import { Alert, Button, Input, Select, formatCurrency, ModalFormBody } from '../ui';
 import { Customer } from '../../types';
 import { useAuth, useVatRate } from '../../contexts/AuthContext';
-import { formatProductOptionLabel } from '../../utils/productDisplay';
-import { useProductPicker } from '../../hooks/useProductPicker';
 import { getApiErrorCode, getApiErrorMessage } from '../../utils/apiError';
+import { ProductSearchSelect } from './ProductSearchSelect';
 
 const orderItemSchema = z.object({
   productId: z.string().min(1, 'Product required'),
@@ -109,8 +108,6 @@ export function SalesOrderForm({ onSuccess, onCancel }: SalesOrderFormProps) {
         .then((r) => r.data.data as Customer[]),
   });
 
-  const { data: productsData, isError: productsError, refetch: refetchProducts } = useProductPicker();
-
   const customerOptions = [
     { value: '', label: customersLoading ? 'Loading customers…' : 'Select customer…' },
     ...(customersData || []).map((c) => {
@@ -131,14 +128,6 @@ export function SalesOrderForm({ onSuccess, onCancel }: SalesOrderFormProps) {
     })),
   ];
 
-  const productOptions = [
-    { value: '', label: 'Select product...' },
-    ...(productsData || []).map((p) => ({
-      value: p.id,
-      label: formatProductOptionLabel(p),
-    })),
-  ];
-
   const { fields, append, remove } = useFieldArray({ control, name: 'items' });
   const errorRef = useRef<HTMLDivElement>(null);
 
@@ -148,17 +137,6 @@ export function SalesOrderForm({ onSuccess, onCancel }: SalesOrderFormProps) {
     setValue('customerId', '');
     setCustomerSearch('');
   }, [salesPersonId, canAssignSalesPerson, setValue]);
-
-  useEffect(() => {
-    items.forEach((item, index) => {
-      if (item.productId) {
-        const product = productsData?.find((p) => p.id === item.productId);
-        if (product && item.unitPrice === 0) {
-          setValue(`items.${index}.unitPrice`, Number(product.sellingPrice));
-        }
-      }
-    });
-  }, [items, productsData, setValue]);
 
   const companyVatRate = useVatRate();
   const selectedCustomer = customersData?.find((c) => c.id === customerId);
@@ -217,15 +195,6 @@ export function SalesOrderForm({ onSuccess, onCancel }: SalesOrderFormProps) {
           </div>
         }
       >
-      {productsError && (
-        <div className="p-3 rounded-lg bg-red-50 text-red-700 text-sm">
-          Could not load products.{' '}
-          <button type="button" className="underline font-medium" onClick={() => refetchProducts()}>
-            Retry
-          </button>
-        </div>
-      )}
-
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {canAssignSalesPerson && (
           <Select
@@ -338,10 +307,22 @@ export function SalesOrderForm({ onSuccess, onCancel }: SalesOrderFormProps) {
           {fields.map((field, index) => (
             <div key={field.id} className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-end p-3 bg-gray-50 rounded-lg">
               <div className="col-span-12 sm:col-span-5">
-                <Select
-                  label={index === 0 ? 'Product' : undefined}
-                  options={productOptions}
-                  {...register(`items.${index}.productId`)}
+                <Controller
+                  name={`items.${index}.productId`}
+                  control={control}
+                  render={({ field }) => (
+                    <ProductSearchSelect
+                      label={index === 0 ? 'Product' : undefined}
+                      value={field.value}
+                      onChange={field.onChange}
+                      onProductSelect={(product) => {
+                        if (product && (!items[index]?.unitPrice || items[index].unitPrice === 0)) {
+                          setValue(`items.${index}.unitPrice`, Number(product.sellingPrice));
+                        }
+                      }}
+                      error={errors.items?.[index]?.productId?.message}
+                    />
+                  )}
                 />
               </div>
               <div className="col-span-12 sm:col-span-2">

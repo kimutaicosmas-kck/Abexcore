@@ -1,11 +1,11 @@
-import { useForm } from 'react-hook-form';
+import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { inventoryApi, productsApi } from '../../services/api';
+import { inventoryApi } from '../../services/api';
 import { Button, Input, Select } from '../ui';
-import { Product, RawMaterial } from '../../types';
-import { formatProductOptionLabel } from '../../utils/productDisplay';
+import { RawMaterial } from '../../types';
+import { ProductSearchSelect } from './ProductSearchSelect';
 
 const stockAdjustSchema = z.object({
   warehouseId: z.string().min(1, 'Warehouse is required'),
@@ -50,11 +50,6 @@ export function StockAdjustForm({ onSuccess, onCancel }: StockAdjustFormProps) {
     queryFn: () => inventoryApi.materials({ limit: 100 }).then((r) => r.data.data as RawMaterial[]),
   });
 
-  const { data: productsData } = useQuery({
-    queryKey: ['products'],
-    queryFn: () => productsApi.list({ limit: 100 }).then((r) => r.data.data as Product[]),
-  });
-
   const warehouseOptions = [
     { value: '', label: 'Select warehouse...' },
     ...(warehousesData || []).map((w) => ({ value: w.id, label: `${w.code} - ${w.name}` })),
@@ -65,12 +60,7 @@ export function StockAdjustForm({ onSuccess, onCancel }: StockAdjustFormProps) {
     ...(materialsData || []).map((m) => ({ value: m.id, label: `${m.code} - ${m.name}` })),
   ];
 
-  const productOptions = [
-    { value: '', label: 'None' },
-    ...(productsData || []).map((p) => ({ value: p.id, label: formatProductOptionLabel(p) })),
-  ];
-
-  const { register, handleSubmit, formState: { errors } } = useForm<StockAdjustFormData>({
+  const { register, control, handleSubmit, formState: { errors } } = useForm<StockAdjustFormData>({
     resolver: zodResolver(stockAdjustSchema),
     defaultValues: {
       warehouseId: '',
@@ -121,7 +111,17 @@ export function StockAdjustForm({ onSuccess, onCancel }: StockAdjustFormProps) {
           {...register('rawMaterialId')}
           error={errors.rawMaterialId?.message}
         />
-        <Select label="Product" options={productOptions} {...register('productId')} />
+        <Controller
+          name="productId"
+          control={control}
+          render={({ field }) => (
+            <ProductSearchSelect
+              label="Product"
+              value={field.value || ''}
+              onChange={field.onChange}
+            />
+          )}
+        />
         <Input
           label="Quantity *"
           type="number"

@@ -1,12 +1,11 @@
-import { useForm } from 'react-hook-form';
+import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { qualityApi, inventoryApi, operationsApi } from '../../services/api';
-import { useProductPicker } from '../../hooks/useProductPicker';
 import { Button, Input, Select } from '../ui';
 import { ProductionOrder } from '../../types';
-import { formatProductOptionLabel } from '../../utils/productDisplay';
+import { ProductSearchSelect } from './ProductSearchSelect';
 
 const qualityTypeOptions = [
   { value: 'incoming', label: 'Incoming (procurement)' },
@@ -67,8 +66,6 @@ export function QualityForm({ onSuccess, onCancel }: QualityFormProps) {
     queryFn: () => operationsApi.production({ limit: 100 }).then((r) => r.data.data as ProductionOrder[]),
   });
 
-  const { data: productsData } = useProductPicker();
-
   const goodsReceiptOptions = [
     { value: '', label: 'None' },
     ...(goodsReceiptsData || [])
@@ -81,12 +78,7 @@ export function QualityForm({ onSuccess, onCancel }: QualityFormProps) {
     ...(productionData || []).map((po) => ({ value: po.id, label: po.orderNumber })),
   ];
 
-  const productOptions = [
-    { value: '', label: 'Select product…' },
-    ...(productsData || []).map((p) => ({ value: p.id, label: formatProductOptionLabel(p) })),
-  ];
-
-  const { register, handleSubmit, watch, formState: { errors } } = useForm<QualityFormData>({
+  const { register, control, handleSubmit, watch, formState: { errors } } = useForm<QualityFormData>({
     resolver: zodResolver(qualitySchema),
     defaultValues: {
       type: 'production',
@@ -139,11 +131,17 @@ export function QualityForm({ onSuccess, onCancel }: QualityFormProps) {
         )}
         {isProductionOutput && (
           <>
-            <Select
-              label="Product"
-              options={productOptions}
-              {...register('productId')}
-              error={errors.productId?.message}
+            <Controller
+              name="productId"
+              control={control}
+              render={({ field }) => (
+                <ProductSearchSelect
+                  label="Product"
+                  value={field.value || ''}
+                  onChange={field.onChange}
+                  error={errors.productId?.message}
+                />
+              )}
             />
             <Select label="Production Order (optional)" options={productionOptions} {...register('productionOrderId')} />
           </>

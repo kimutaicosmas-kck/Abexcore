@@ -1,11 +1,11 @@
-import { useForm } from 'react-hook-form';
+import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { crmApi, customersApi, productsApi } from '../../services/api';
+import { crmApi, customersApi } from '../../services/api';
 import { Button, Input, Select, Textarea } from '../ui';
-import { Customer, Product } from '../../types';
-import { formatProductOptionLabel } from '../../utils/productDisplay';
+import { Customer } from '../../types';
+import { ProductSearchSelect } from './ProductSearchSelect';
 
 const warrantySchema = z.object({
   customerId: z.string().min(1, 'Customer is required'),
@@ -31,22 +31,12 @@ export function WarrantyForm({ onSuccess, onCancel }: WarrantyFormProps) {
     queryFn: () => customersApi.list({ limit: 100 }).then((r) => r.data.data as Customer[]),
   });
 
-  const { data: productsData } = useQuery({
-    queryKey: ['products'],
-    queryFn: () => productsApi.list({ limit: 100 }).then((r) => r.data.data as Product[]),
-  });
-
   const customerOptions = [
     { value: '', label: 'Select customer...' },
     ...(customersData || []).map((c) => ({ value: c.id, label: `${c.code} - ${c.name}` })),
   ];
 
-  const productOptions = [
-    { value: '', label: 'Select product...' },
-    ...(productsData || []).map((p) => ({ value: p.id, label: formatProductOptionLabel(p) })),
-  ];
-
-  const { register, handleSubmit, formState: { errors } } = useForm<WarrantyFormData>({
+  const { register, control, handleSubmit, formState: { errors } } = useForm<WarrantyFormData>({
     resolver: zodResolver(warrantySchema),
     defaultValues: {
       customerId: '',
@@ -81,7 +71,18 @@ export function WarrantyForm({ onSuccess, onCancel }: WarrantyFormProps) {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Select label="Customer *" options={customerOptions} {...register('customerId')} error={errors.customerId?.message} />
-        <Select label="Product *" options={productOptions} {...register('productId')} error={errors.productId?.message} />
+        <Controller
+          name="productId"
+          control={control}
+          render={({ field }) => (
+            <ProductSearchSelect
+              label="Product *"
+              value={field.value}
+              onChange={field.onChange}
+              error={errors.productId?.message}
+            />
+          )}
+        />
         <Input label="Serial Number" {...register('serialNumber')} />
         <Input label="Start Date *" type="date" {...register('startDate')} error={errors.startDate?.message} />
         <Input label="End Date *" type="date" {...register('endDate')} error={errors.endDate?.message} />

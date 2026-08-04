@@ -1,12 +1,11 @@
-import { useForm } from 'react-hook-form';
+import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { operationsApi } from '../../services/api';
-import { useProductPicker } from '../../hooks/useProductPicker';
 import { Button, Input, Select } from '../ui';
-import { Machine, Product } from '../../types';
-import { formatProductOptionLabel } from '../../utils/productDisplay';
+import { Machine } from '../../types';
+import { ProductSearchSelect } from './ProductSearchSelect';
 
 const priorityOptions = [
   { value: 'LOW', label: 'Low' },
@@ -34,24 +33,17 @@ interface ProductionOrderFormProps {
 export function ProductionOrderForm({ onSuccess, onCancel }: ProductionOrderFormProps) {
   const queryClient = useQueryClient();
 
-  const { data: productsData } = useProductPicker();
-
   const { data: machinesData } = useQuery({
     queryKey: ['machines'],
     queryFn: () => operationsApi.machines().then((r) => r.data.data as Machine[]),
   });
-
-  const productOptions = [
-    { value: '', label: 'Select product...' },
-    ...(productsData || []).map((p) => ({ value: p.id, label: formatProductOptionLabel(p) })),
-  ];
 
   const machineOptions = [
     { value: '', label: 'None' },
     ...(machinesData || []).map((m) => ({ value: m.id, label: `${m.code} - ${m.name}` })),
   ];
 
-  const { register, handleSubmit, formState: { errors } } = useForm<ProductionOrderFormData>({
+  const { register, control, handleSubmit, formState: { errors } } = useForm<ProductionOrderFormData>({
     resolver: zodResolver(productionOrderSchema),
     defaultValues: { quantity: 1, priority: 'NORMAL', productId: '', machineId: '' },
   });
@@ -80,11 +72,17 @@ export function ProductionOrderForm({ onSuccess, onCancel }: ProductionOrderForm
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <Select
-          label="Product *"
-          options={productOptions}
-          {...register('productId')}
-          error={errors.productId?.message}
+        <Controller
+          name="productId"
+          control={control}
+          render={({ field }) => (
+            <ProductSearchSelect
+              label="Product *"
+              value={field.value}
+              onChange={field.onChange}
+              error={errors.productId?.message}
+            />
+          )}
         />
         <Select label="Machine" options={machineOptions} {...register('machineId')} />
         <Input label="Quantity *" type="number" min={1} {...register('quantity')} error={errors.quantity?.message} />
