@@ -20,10 +20,11 @@ jobs:
         ports:
           - 3306:3306
         options: >-
-          --health-cmd="mysqladmin ping -h localhost"
-          --health-interval=10s
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -prootpassword --silent"
+          --health-interval=5s
           --health-timeout=5s
-          --health-retries=5
+          --health-retries=30
+          --health-start-period=30s
 
     steps:
       - uses: actions/checkout@v4
@@ -130,10 +131,11 @@ jobs:
         ports:
           - 3306:3306
         options: >-
-          --health-cmd="mysqladmin ping -h localhost"
-          --health-interval=10s
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -prootpassword --silent"
+          --health-interval=5s
           --health-timeout=5s
-          --health-retries=5
+          --health-retries=30
+          --health-start-period=30s
 
     steps:
       - uses: actions/checkout@v4
@@ -219,10 +221,11 @@ jobs:
         ports:
           - 3306:3306
         options: >-
-          --health-cmd="mysqladmin ping -h localhost"
-          --health-interval=10s
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -prootpassword --silent"
+          --health-interval=5s
           --health-timeout=5s
-          --health-retries=5
+          --health-retries=30
+          --health-start-period=30s
 
     steps:
       - uses: actions/checkout@v4
