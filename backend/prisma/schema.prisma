@@ -136,6 +136,12 @@ enum LeaveStatus {
   CANCELLED
 }
 
+enum Gender {
+  MALE
+  FEMALE
+  UNSPECIFIED
+}
+
 enum MaintenanceStatus {
   SCHEDULED
   IN_PROGRESS
@@ -358,6 +364,7 @@ model User {
   employee              Employee?
   leaveRequestsRequested LeaveRequest[] @relation("LeaveRequestedBy")
   leaveRequestsApproved  LeaveRequest[] @relation("LeaveApprovedBy")
+  leaveBalancesUpdated   LeaveBalance[] @relation("LeaveBalanceUpdatedBy")
 
   @@unique([companyId, email])
   @@map("users")
@@ -1443,6 +1450,7 @@ model Employee {
   lastName     String   @map("last_name")
   email        String?
   phone        String?
+  gender       Gender   @default(UNSPECIFIED)
   departmentId String?  @map("department_id")
   branchId     String?  @map("branch_id")
   position     String?
@@ -1461,6 +1469,7 @@ model Employee {
   branch     Branch?     @relation(fields: [branchId], references: [id])
   attendance Attendance[]
   leaveRequests LeaveRequest[]
+  leaveBalances LeaveBalance[]
   payrollRecords PayrollRecord[]
 
   @@unique([companyId, employeeNo])
@@ -1503,6 +1512,28 @@ model LeaveRequest {
   @@index([employeeId, status])
   @@index([requestedByUserId])
   @@map("leave_requests")
+}
+
+/** Per-employee leave entitlement for a calendar year (resets each Jan 1 via new year rows). */
+model LeaveBalance {
+  id           String   @id @default(uuid())
+  companyId    String   @map("company_id")
+  employeeId   String   @map("employee_id")
+  year         Int
+  type         String
+  entitledDays Decimal  @map("entitled_days") @db.Decimal(8, 1)
+  usedDays     Decimal  @default(0) @map("used_days") @db.Decimal(8, 1)
+  notes        String?  @db.Text
+  updatedById  String?  @map("updated_by_id")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  employee  Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  updatedBy User?    @relation("LeaveBalanceUpdatedBy", fields: [updatedById], references: [id])
+
+  @@unique([employeeId, year, type])
+  @@index([companyId, year])
+  @@map("leave_balances")
 }
 
 model PayrollRecord {

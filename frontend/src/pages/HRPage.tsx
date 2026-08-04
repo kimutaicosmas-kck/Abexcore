@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plus, Pencil, Users, Calendar, DollarSign, UserCheck, ChevronRight, Clock } from 'lucide-react';
+import { Plus, Pencil, Users, Calendar, DollarSign, UserCheck, ChevronRight, Clock, Download, FileText } from 'lucide-react';
 import { hrApi } from '../services/api';
 import {
   PageHeader,
@@ -21,6 +21,7 @@ import {
   PageToolbar,
   ConfirmDialog,
   QueryErrorAlert,
+  Alert,
 } from '../components/ui';
 import { Modal } from '../components/ui/Modal';
 import { EmployeeForm } from '../components/forms/EmployeeForm';
@@ -28,7 +29,16 @@ import { AttendanceForm } from '../components/forms/AttendanceForm';
 import { LeaveForm } from '../components/forms/LeaveForm';
 import { PayrollForm } from '../components/forms/PayrollForm';
 import { useAuth } from '../contexts/AuthContext';
-import { Employee, HrStats, LeaveRequest, PayrollRecord } from '../types';
+import {
+  Employee,
+  HrStats,
+  LeaveBalancesPayload,
+  LeaveRequest,
+  PayrollRecord,
+  StaffOnLeaveRow,
+} from '../types';
+import { downloadFile } from '../utils/download';
+import { getApiErrorMessage } from '../utils/apiError';
 
 const tabs = ['Overview', 'Employees', 'Attendance', 'Leave', 'Payroll'];
 
@@ -61,6 +71,15 @@ export function HRPage() {
     | { type: 'payroll'; id: string }
     | null
   >(null);
+  const [balanceEmployeeId, setBalanceEmployeeId] = useState('');
+  const [balanceEdit, setBalanceEdit] = useState<{
+    type: string;
+    entitledDays: string;
+    usedDays: string;
+    notes: string;
+  } | null>(null);
+  const [exportError, setExportError] = useState('');
+  const leaveYear = new Date().getFullYear();
 
   const canCreate = hasPermission('hr:create');
   const canUpdate = hasPermission('hr:update');
@@ -88,6 +107,27 @@ export function HRPage() {
     enabled: activeTab === 0 || activeTab === 3,
   });
 
+  const { data: onLeaveToday } = useQuery({
+    queryKey: ['leave-on-leave'],
+    queryFn: () => hrApi.onLeave().then((r) => r.data.data as StaffOnLeaveRow[]),
+    enabled: activeTab === 3,
+  });
+
+  const { data: balanceEmployees } = useQuery({
+    queryKey: ['employees-for-leave-balances'],
+    queryFn: () => hrApi.employees({ page: 1, limit: 100, isActive: true }).then((r) => r.data.data as Employee[]),
+    enabled: activeTab === 3,
+  });
+
+  const { data: selectedBalances } = useQuery({
+    queryKey: ['leave-balances', balanceEmployeeId, leaveYear],
+    queryFn: () =>
+      hrApi
+        .leaveBalances({ employeeId: balanceEmployeeId, year: leaveYear })
+        .then((r) => r.data.data as LeaveBalancesPayload),
+    enabled: activeTab === 3 && !!balanceEmployeeId,
+  });
+
   const { data: payroll, isLoading: payrollLoading } = useQuery({
     queryKey: ['payroll', payPage, paySearch],
     queryFn: () => hrApi.payroll({ page: payPage, limit: 15, search: paySearch || undefined }).then((r) => r.data),
@@ -98,7 +138,26 @@ export function HRPage() {
     mutationFn: ({ id, status }: { id: string; status: string }) => hrApi.approveLeave(id, status),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['leave'] });
+      queryClient.invalidateQueries({ queryKey: ['leave-on-leave'] });
+      queryClient.invalidateQueries({ queryKey: ['leave-balances'] });
       queryClient.invalidateQueries({ queryKey: ['hr-stats'] });
+    },
+  });
+
+  const updateBalanceMutation = useMutation({
+    mutationFn: () =>
+      hrApi.updateLeaveBalance({
+        employeeId: balanceEmployeeId,
+        type: balanceEdit!.type,
+        year: leaveYear,
+        entitledDays: Number(balanceEdit!.entitledDays),
+        usedDays: Number(balanceEdit!.usedDays),
+        notes: balanceEdit!.notes || undefined,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['leave-balances'] });
+      queryClient.invalidateQueries({ queryKey: ['my-leave-balances'] });
+      setBalanceEdit(null);
     },
   });
 
@@ -387,43 +446,209 @@ export function HRPage() {
       )}
 
       {activeTab === 3 && (
-        <DataPanel>
-          <div className="p-4 pb-0 flex flex-col sm:flex-row gap-3">
-            <Input
-              placeholder="Search leave…"
-              className="sm:max-w-md"
-              value={leaveSearch}
-              onChange={(e) => { setLeaveSearch(e.target.value); setLeavePage(1); }}
-            />
-            <Select
-              options={LEAVE_STATUS}
-              value={leaveStatus}
-              onChange={(e) => { setLeaveStatus(e.target.value); setLeavePage(1); }}
-              className="sm:w-40"
-            />
-          </div>
-          {(leave?.data?.length || 0) === 0 && !leaveLoading ? (
-            <div className="p-6">
-              <EmptyState
-                title="No leave requests found"
-                description="Employees can submit leave requests for approval."
-                action={
-                  canCreate ? (
-                    <Button onClick={() => setModal('leave')}>
-                      <Plus className="h-4 w-4 mr-2" />
-                      Request Leave
-                    </Button>
-                  ) : undefined
-                }
+        <div className="space-y-4">
+          <Card title={`Staff on leave today (${onLeaveToday?.length || 0})`} padding={false}>
+            {!onLeaveToday?.length ? (
+              <div className="p-6">
+                <EmptyState title="No one on leave today" description="Approved leave covering today appears here." />
+              </div>
+            ) : (
+              <ul className="divide-y divide-slate-100">
+                {onLeaveToday.map((row) => (
+                  <li key={row.id} className="flex items-center gap-3 px-4 py-3">
+                    <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700">
+                      <Calendar className="h-4 w-4" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-slate-900 truncate">{row.employee.name}</p>
+                      <p className="text-xs text-slate-500">
+                        {row.type.replace(/_/g, ' ')} · {formatDate(row.startDate)} – {formatDate(row.endDate)}
+                        {row.employee.department ? ` · ${row.employee.department}` : ''}
+                      </p>
+                    </div>
+                    <Badge variant="success">{row.days}d</Badge>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Card>
+
+          <Card title={`Amend leave balances (${leaveYear})`}>
+            <div className="space-y-3">
+              <p className="text-xs text-slate-500">
+                Defaults: Annual 21, Sick 7, Compassionate 5, Paternity 14 (male), Maternity 90 (female). Balances reset each January.
+              </p>
+              <div className="flex flex-col sm:flex-row gap-3">
+                <Select
+                  label="Employee"
+                  options={[
+                    { value: '', label: 'Select employee…' },
+                    ...(balanceEmployees || []).map((e) => ({
+                      value: e.id,
+                      label: `${e.firstName} ${e.lastName} (${e.employeeNo})`,
+                    })),
+                  ]}
+                  value={balanceEmployeeId}
+                  onChange={(e) => setBalanceEmployeeId(e.target.value)}
+                />
+                <div className="flex flex-wrap items-end gap-2">
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={async () => {
+                      try {
+                        setExportError('');
+                        await downloadFile(hrApi.leaveReportExcelPath(leaveYear), `leave-balances-${leaveYear}.xlsx`);
+                      } catch (err) {
+                        setExportError(getApiErrorMessage(err));
+                      }
+                    }}
+                  >
+                    <Download className="h-4 w-4 mr-1.5" />
+                    Excel
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={async () => {
+                      try {
+                        setExportError('');
+                        await downloadFile(hrApi.leaveReportPdfPath(leaveYear), `leave-balances-${leaveYear}.pdf`);
+                      } catch (err) {
+                        setExportError(getApiErrorMessage(err));
+                      }
+                    }}
+                  >
+                    <FileText className="h-4 w-4 mr-1.5" />
+                    PDF
+                  </Button>
+                </div>
+              </div>
+              {exportError && <Alert variant="error">{exportError}</Alert>}
+              {updateBalanceMutation.isError && (
+                <Alert variant="error">{getApiErrorMessage(updateBalanceMutation.error)}</Alert>
+              )}
+              {selectedBalances && (
+                <div className="overflow-x-auto rounded-xl border border-slate-200">
+                  <table className="min-w-full text-sm">
+                    <thead className="bg-slate-50 text-left text-xs text-slate-500">
+                      <tr>
+                        <th className="px-3 py-2">Type</th>
+                        <th className="px-3 py-2">Entitled</th>
+                        <th className="px-3 py-2">Used</th>
+                        <th className="px-3 py-2">Remaining</th>
+                        {canUpdate && <th className="px-3 py-2" />}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {selectedBalances.balances.map((b) => (
+                        <tr key={b.id}>
+                          <td className="px-3 py-2 font-medium">{b.type.replace(/_/g, ' ')}</td>
+                          <td className="px-3 py-2 tabular-nums">{b.entitledDays}</td>
+                          <td className="px-3 py-2 tabular-nums">{b.usedDays}</td>
+                          <td className="px-3 py-2 tabular-nums font-semibold">{b.remainingDays}</td>
+                          {canUpdate && (
+                            <td className="px-3 py-2 text-right">
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() =>
+                                  setBalanceEdit({
+                                    type: b.type,
+                                    entitledDays: String(b.entitledDays),
+                                    usedDays: String(b.usedDays),
+                                    notes: b.notes || '',
+                                  })
+                                }
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                            </td>
+                          )}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </Card>
+
+          <DataPanel>
+            <div className="p-4 pb-0 flex flex-col sm:flex-row gap-3">
+              <Input
+                placeholder="Search leave…"
+                className="sm:max-w-md"
+                value={leaveSearch}
+                onChange={(e) => { setLeaveSearch(e.target.value); setLeavePage(1); }}
+              />
+              <Select
+                options={LEAVE_STATUS}
+                value={leaveStatus}
+                onChange={(e) => { setLeaveStatus(e.target.value); setLeavePage(1); }}
+                className="sm:w-40"
               />
             </div>
-          ) : (
-            <Table columns={leaveColumns} data={(leave?.data as LeaveRequest[]) || []} loading={leaveLoading} embedded />
-          )}
-          <div className="px-4 pb-4">
-            <TablePagination pagination={leave?.pagination} page={leavePage} onPageChange={setLeavePage} label="requests" />
-          </div>
-        </DataPanel>
+            {(leave?.data?.length || 0) === 0 && !leaveLoading ? (
+              <div className="p-6">
+                <EmptyState
+                  title="No leave requests found"
+                  description="Employees can submit leave requests for approval."
+                  action={
+                    canCreate ? (
+                      <Button onClick={() => setModal('leave')}>
+                        <Plus className="h-4 w-4 mr-2" />
+                        Request Leave
+                      </Button>
+                    ) : undefined
+                  }
+                />
+              </div>
+            ) : (
+              <Table columns={leaveColumns} data={(leave?.data as LeaveRequest[]) || []} loading={leaveLoading} embedded />
+            )}
+            <div className="px-4 pb-4">
+              <TablePagination pagination={leave?.pagination} page={leavePage} onPageChange={setLeavePage} label="requests" />
+            </div>
+          </DataPanel>
+
+          <Modal
+            open={!!balanceEdit}
+            onClose={() => setBalanceEdit(null)}
+            title={`Edit ${balanceEdit?.type.replace(/_/g, ' ') || 'leave'} balance`}
+            size="md"
+          >
+            {balanceEdit && (
+              <div className="space-y-4">
+                <Input
+                  label="Entitled days"
+                  type="number"
+                  min={0}
+                  value={balanceEdit.entitledDays}
+                  onChange={(e) => setBalanceEdit({ ...balanceEdit, entitledDays: e.target.value })}
+                />
+                <Input
+                  label="Used days"
+                  type="number"
+                  min={0}
+                  value={balanceEdit.usedDays}
+                  onChange={(e) => setBalanceEdit({ ...balanceEdit, usedDays: e.target.value })}
+                />
+                <Input
+                  label="Notes"
+                  value={balanceEdit.notes}
+                  onChange={(e) => setBalanceEdit({ ...balanceEdit, notes: e.target.value })}
+                />
+                <div className="flex justify-end gap-2">
+                  <Button variant="secondary" onClick={() => setBalanceEdit(null)}>Cancel</Button>
+                  <Button loading={updateBalanceMutation.isPending} onClick={() => updateBalanceMutation.mutate()}>
+                    Save balance
+                  </Button>
+                </div>
+              </div>
+            )}
+          </Modal>
+        </div>
       )}
 
       {activeTab === 4 && (

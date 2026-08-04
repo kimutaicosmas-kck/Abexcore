@@ -13,6 +13,7 @@ const employeeSchema = z.object({
   lastName: z.string().min(1, 'Last name is required'),
   email: z.string().email().optional().or(z.literal('')),
   phone: z.string().optional(),
+  gender: z.enum(['MALE', 'FEMALE', 'UNSPECIFIED']).optional(),
   position: z.string().optional(),
   hireDate: z.string().min(1, 'Hire date is required'),
   salary: z.coerce.number().min(0).optional(),
@@ -88,6 +89,7 @@ export function EmployeeForm({ employee, onSuccess, onCancel }: EmployeeFormProp
           lastName: employee.lastName,
           email: employee.email || '',
           phone: employee.phone || '',
+          gender: employee.gender || 'UNSPECIFIED',
           position: employee.position || '',
           hireDate: employee.hireDate
             ? String(employee.hireDate).slice(0, 10)
@@ -96,7 +98,7 @@ export function EmployeeForm({ employee, onSuccess, onCancel }: EmployeeFormProp
           departmentId: employee.departmentId || employee.department?.id || '',
           userId: employee.userId || employee.user?.id || '',
         }
-      : { salary: 0, departmentId: '', userId: '' },
+      : { salary: 0, departmentId: '', userId: '', gender: 'UNSPECIFIED' },
   });
 
   const mutation = useMutation({
@@ -141,6 +143,15 @@ export function EmployeeForm({ employee, onSuccess, onCancel }: EmployeeFormProp
         <Input label="Last Name *" {...register('lastName')} error={errors.lastName?.message} />
         <Input label="Email" type="email" {...register('email')} error={errors.email?.message} />
         <Input label="Phone" {...register('phone')} />
+        <Select
+          label="Gender"
+          options={[
+            { value: 'UNSPECIFIED', label: 'Not set' },
+            { value: 'MALE', label: 'Male' },
+            { value: 'FEMALE', label: 'Female' },
+          ]}
+          {...register('gender')}
+        />
         <Input label="Hire Date *" type="date" {...register('hireDate')} error={errors.hireDate?.message} />
         <Input label="Salary (KES)" type="number" step="0.01" {...register('salary')} />
         <Select label="Department" options={departmentOptions} {...register('departmentId')} />

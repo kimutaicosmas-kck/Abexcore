@@ -466,6 +466,7 @@ export interface Employee {
   lastName: string;
   email?: string;
   phone?: string;
+  gender?: 'MALE' | 'FEMALE' | 'UNSPECIFIED';
   position?: string;
   hireDate?: string;
   departmentId?: string;
@@ -481,6 +482,43 @@ export interface Employee {
     lastName: string;
     status: string;
   } | null;
+}
+
+export interface LeaveBalanceRow {
+  id: string;
+  type: string;
+  year: number;
+  entitledDays: number;
+  usedDays: number;
+  remainingDays: number;
+  notes?: string | null;
+}
+
+export interface LeaveBalancesPayload {
+  year: number;
+  employee: {
+    id: string;
+    employeeNo: string;
+    name: string;
+    gender: string;
+  };
+  balances: LeaveBalanceRow[];
+}
+
+export interface StaffOnLeaveRow {
+  id: string;
+  type: string;
+  startDate: string;
+  endDate: string;
+  days: number;
+  reason?: string | null;
+  employee: {
+    id: string;
+    employeeNo: string;
+    name: string;
+    department?: string | null;
+    position?: string | null;
+  };
 }
 
 export interface Machine {

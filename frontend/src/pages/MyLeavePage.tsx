@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { CalendarPlus } from 'lucide-react';
+import { Calendar, CalendarPlus } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -20,7 +20,7 @@ import {
   QueryErrorAlert,
 } from '../components/ui';
 import { Modal } from '../components/ui/Modal';
-import { LeaveRequest } from '../types';
+import { LeaveBalancesPayload, LeaveRequest } from '../types';
 import { getApiErrorMessage } from '../utils/apiError';
 
 const myLeaveSchema = z.object({
@@ -36,16 +36,27 @@ const leaveTypeOptions = [
   { value: '', label: 'Select type...' },
   { value: 'ANNUAL', label: 'Annual Leave' },
   { value: 'SICK', label: 'Sick Leave' },
+  { value: 'COMPASSIONATE', label: 'Compassionate Leave' },
   { value: 'MATERNITY', label: 'Maternity Leave' },
   { value: 'PATERNITY', label: 'Paternity Leave' },
   { value: 'UNPAID', label: 'Unpaid Leave' },
-  { value: 'COMPASSIONATE', label: 'Compassionate Leave' },
 ];
+
+function leaveLabel(type: string) {
+  return type.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
 
 export function MyLeavePage() {
   const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
   const [open, setOpen] = useState(false);
+  const year = new Date().getFullYear();
+
+  const { data: balancesRes, isLoading: balancesLoading } = useQuery({
+    queryKey: ['my-leave-balances', year],
+    queryFn: () =>
+      hrApi.myLeaveBalances({ year }).then((r) => r.data.data as LeaveBalancesPayload),
+  });
 
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['my-leave', page],
@@ -67,6 +78,7 @@ export function MyLeavePage() {
       hrApi.requestMyLeave({ ...form, reason: form.reason || undefined }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['my-leave'] });
+      queryClient.invalidateQueries({ queryKey: ['my-leave-balances'] });
       reset();
       setOpen(false);
     },
@@ -76,7 +88,7 @@ export function MyLeavePage() {
     {
       key: 'type',
       label: 'Type',
-      render: (val: unknown) => String(val).replace(/_/g, ' '),
+      render: (val: unknown) => leaveLabel(String(val)),
     },
     {
       key: 'startDate',
@@ -109,17 +121,49 @@ export function MyLeavePage() {
     },
   ];
 
+  const balances = balancesRes?.balances || [];
+
   return (
     <div className="space-y-4">
       <PageHeader
-        subtitle="Request leave and track approval. You get an in-app notification and email when HR or admin decides."
-        action={
-          <Button size="sm" onClick={() => setOpen(true)}>
-            <CalendarPlus className="mr-1.5 h-4 w-4" />
-            Request leave
-          </Button>
-        }
+        subtitle={`Your ${year} leave balances reset each January. Request leave below — HR will review it.`}
       />
+
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+        {(balancesLoading
+          ? ['ANNUAL', 'SICK', 'COMPASSIONATE', 'PATERNITY', 'MATERNITY']
+          : balances.map((b) => b.type)
+        ).map((typeOrKey, idx) => {
+          const row = balances.find((b) => b.type === typeOrKey);
+          return (
+            <div
+              key={String(typeOrKey) + idx}
+              className="rounded-2xl border border-primary-100 bg-white px-3 py-3 shadow-sm"
+            >
+              <div className="flex items-center gap-2 text-primary-700/80 mb-1.5">
+                <Calendar className="h-3.5 w-3.5" />
+                <p className="text-[11px] font-semibold uppercase tracking-wide">
+                  {leaveLabel(String(typeOrKey))}
+                </p>
+              </div>
+              <p className="text-xl font-bold text-primary-950 tabular-nums">
+                {balancesLoading ? '…' : `${row?.remainingDays ?? 0}`}
+                <span className="text-xs font-medium text-slate-500 ml-1">days left</span>
+              </p>
+              <p className="text-xs text-slate-500 mt-0.5">
+                {balancesLoading ? 'Loading…' : `${row?.usedDays ?? 0} used · ${row?.entitledDays ?? 0} entitled`}
+              </p>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="flex justify-end">
+        <Button size="sm" onClick={() => setOpen(true)}>
+          <CalendarPlus className="mr-1.5 h-4 w-4" />
+          Request leave
+        </Button>
+      </div>
 
       {isError && <QueryErrorAlert error={error} onRetry={() => refetch()} />}
 
@@ -189,15 +233,8 @@ export function MyLeavePage() {
               error={errors.endDate?.message}
             />
           </div>
-          <div className="space-y-1">
-            <label className="block text-sm font-medium text-gray-700">Reason</label>
-            <textarea
-              className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-              rows={3}
-              {...register('reason')}
-            />
-          </div>
-          <div className="flex justify-end gap-3 border-t pt-4">
+          <Input label="Reason" {...register('reason')} />
+          <div className="flex justify-end gap-2">
             <Button type="button" variant="secondary" onClick={() => setOpen(false)}>
               Cancel
             </Button>

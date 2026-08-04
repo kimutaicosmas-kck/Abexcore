@@ -454,6 +454,7 @@ export const createEmployeeSchema = z.object({
   lastName: z.string().min(1),
   email: z.string().email().optional(),
   phone: z.string().optional(),
+  gender: z.enum(['MALE', 'FEMALE', 'UNSPECIFIED']).optional(),
   departmentId: z.string().uuid().optional(),
   branchId: z.string().uuid().optional(),
   position: z.string().optional(),
@@ -464,6 +465,15 @@ export const createEmployeeSchema = z.object({
     (v) => (v === '' ? null : v === undefined ? undefined : v),
     z.string().uuid().nullable().optional()
   ),
+});
+
+export const updateLeaveBalanceSchema = z.object({
+  employeeId: z.string().uuid(),
+  type: z.string().min(1).max(50),
+  year: z.coerce.number().int().min(2020).max(2100).optional(),
+  entitledDays: z.coerce.number().min(0).max(366),
+  usedDays: z.coerce.number().min(0).max(366).optional(),
+  notes: z.string().max(2000).optional(),
 });
 
 export const linkEmployeeUserSchema = z.object({
@@ -970,6 +980,11 @@ export const createMyLeaveSchema = z.object({
   startDate: z.string().min(1),
   endDate: z.string().min(1),
   reason: z.string().max(2000).optional(),
+});
+
+export const leaveBalancesQuerySchema = z.object({
+  year: z.coerce.number().int().min(2020).max(2100).optional(),
+  employeeId: z.string().uuid().optional(),
 });
 
 export const approveLeaveSchema = z.object({

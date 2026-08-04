@@ -1,5 +1,5 @@
 import { Router, Response } from 'express';
-import { authenticate, authorize, AuthRequest } from '../middleware/auth';
+import { authenticate, authorize, authorizeAny, AuthRequest } from '../middleware/auth';
 import { validate } from '../middleware/validate';
 import { asyncHandler, AppError } from '../middleware/errorHandler';
 import { auditLog } from '../middleware/auditLog';
@@ -11,6 +11,8 @@ import {
   createLeaveSchema,
   createMyLeaveSchema,
   linkEmployeeUserSchema,
+  updateLeaveBalanceSchema,
+  leaveBalancesQuerySchema,
 } from '../validators/schemas';
 import prisma from '../config/database';
 import { getParam, getQuery } from '../utils/request';
@@ -18,9 +20,11 @@ import { HrService } from '../services/admin.service';
 import { calculateKenyaPayroll } from '../services/payroll.service';
 import { AccountingService } from '../services/accounting.service';
 import { LeaveService } from '../services/leave.service';
+import { ExportService } from '../services/export.service';
 import { Prisma } from '@prisma/client';
 import { parseLocalDateInput } from '../utils/date';
 import { injectTenantData } from '../utils/tenant';
+import { normalizeLeaveType } from '../utils/leaveEntitlements';
 
 const router = Router();
 router.use(authenticate);
@@ -147,6 +151,7 @@ router.post(
       lastName: string;
       email?: string;
       phone?: string;
+      gender?: 'MALE' | 'FEMALE' | 'UNSPECIFIED';
       departmentId?: string;
       branchId?: string;
       position?: string;
@@ -174,6 +179,7 @@ router.post(
         email: rest.email?.toLowerCase(),
         hireDate: new Date(hireDate),
         userId: resolvedUserId,
+        gender: rest.gender || 'UNSPECIFIED',
       }),
       include: {
         department: true,
@@ -183,6 +189,7 @@ router.post(
         },
       },
     });
+    await LeaveService.ensureBalancesForEmployee(employee.id, LeaveService.currentLeaveYear(), employee.gender);
     res.status(201).json({ success: true, data: employee });
   })
 );
@@ -343,6 +350,87 @@ router.get(
   })
 );
 
+router.get(
+  '/leave/balances/me',
+  validate(leaveBalancesQuerySchema, 'query'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    if (!req.user) throw new AppError('Authentication required', 401);
+    const { year } = getQuery<{ year?: number }>(req.query);
+    const employee = await LeaveService.ensureEmployeeForUser(req.user.id);
+    const data = await LeaveService.getBalances(
+      employee.id,
+      year || LeaveService.currentLeaveYear()
+    );
+    res.json({ success: true, data });
+  })
+);
+
+router.get(
+  '/leave/balances',
+  authorize('hr:read'),
+  validate(leaveBalancesQuerySchema, 'query'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const { year, employeeId } = getQuery<{ year?: number; employeeId?: string }>(req.query);
+    if (!employeeId) throw new AppError('employeeId is required', 400);
+    const data = await LeaveService.getBalances(
+      employeeId,
+      year || LeaveService.currentLeaveYear()
+    );
+    res.json({ success: true, data });
+  })
+);
+
+router.put(
+  '/leave/balances',
+  authorizeAny('hr:update'),
+  validate(updateLeaveBalanceSchema),
+  auditLog('hr', 'update', 'leave_balance'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    if (!req.user) throw new AppError('Authentication required', 401);
+    const data = await LeaveService.updateBalance({
+      ...req.body,
+      updatedById: req.user.id,
+    });
+    res.json({ success: true, data });
+  })
+);
+
+router.get(
+  '/leave/on-leave',
+  authorize('hr:read'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const date = typeof req.query.date === 'string' ? req.query.date : undefined;
+    const data = await LeaveService.listOnLeave(date);
+    res.json({ success: true, data });
+  })
+);
+
+router.get(
+  '/leave/report/excel',
+  authorize('hr:read'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const year = req.query.year ? Number(req.query.year) : LeaveService.currentLeaveYear();
+    const rows = await LeaveService.reportRows(year);
+    const excel = await ExportService.generateLeaveBalancesExcel(rows, year);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="leave-balances-${year}.xlsx"`);
+    res.send(excel);
+  })
+);
+
+router.get(
+  '/leave/report/pdf',
+  authorize('hr:read'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const year = req.query.year ? Number(req.query.year) : LeaveService.currentLeaveYear();
+    const rows = await LeaveService.reportRows(year);
+    const pdf = await ExportService.generateLeaveBalancesPdf(rows, year);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="leave-balances-${year}.pdf"`);
+    res.send(pdf);
+  })
+);
+
 router.post(
   '/leave/me',
   validate(createMyLeaveSchema),
@@ -360,11 +448,19 @@ router.post(
     if (end < start) throw new AppError('End date must be on or after start date', 400);
 
     const employee = await LeaveService.ensureEmployeeForUser(req.user.id);
+    const normalizedType = normalizeLeaveType(type);
+    await LeaveService.assertCanTakeLeave({
+      employeeId: employee.id,
+      type: normalizedType,
+      startDate: start,
+      endDate: end,
+    });
+
     const record = await prisma.leaveRequest.create({
       data: {
         employeeId: employee.id,
         requestedByUserId: req.user.id,
-        type,
+        type: normalizedType,
         startDate: start,
         endDate: end,
         reason,
@@ -374,7 +470,7 @@ router.post(
 
     await LeaveService.notifyApproversOfRequest({
       employeeName: `${employee.firstName} ${employee.lastName}`,
-      type,
+      type: normalizedType,
       startDate: start,
       endDate: end,
     });
@@ -451,11 +547,19 @@ router.post(
     });
     if (!employee) throw new AppError('Employee not found', 404);
 
+    const normalizedType = normalizeLeaveType(type);
+    await LeaveService.assertCanTakeLeave({
+      employeeId,
+      type: normalizedType,
+      startDate: start,
+      endDate: end,
+    });
+
     const record = await prisma.leaveRequest.create({
       data: {
         employeeId,
         requestedByUserId: req.user?.id,
-        type,
+        type: normalizedType,
         startDate: start,
         endDate: end,
         reason,
@@ -465,7 +569,7 @@ router.post(
 
     await LeaveService.notifyApproversOfRequest({
       employeeName: `${employee.firstName} ${employee.lastName}`,
-      type,
+      type: normalizedType,
       startDate: start,
       endDate: end,
     });
@@ -495,6 +599,15 @@ router.patch(
     });
     if (!existing) throw new AppError('Leave request not found', 404);
 
+    if (status === 'APPROVED' && existing.status !== 'APPROVED') {
+      await LeaveService.assertCanTakeLeave({
+        employeeId: existing.employeeId,
+        type: existing.type,
+        startDate: existing.startDate,
+        endDate: existing.endDate,
+      });
+    }
+
     const record = await prisma.leaveRequest.update({
       where: { id },
       data: {
@@ -508,6 +621,27 @@ router.patch(
         approvedBy: { select: { firstName: true, lastName: true } },
       },
     });
+
+    if (status === 'APPROVED' && existing.status !== 'APPROVED') {
+      await LeaveService.applyUsage(
+        existing.employeeId,
+        existing.type,
+        existing.startDate,
+        existing.endDate,
+        1
+      );
+    } else if (
+      existing.status === 'APPROVED' &&
+      (status === 'CANCELLED' || status === 'REJECTED')
+    ) {
+      await LeaveService.applyUsage(
+        existing.employeeId,
+        existing.type,
+        existing.startDate,
+        existing.endDate,
+        -1
+      );
+    }
 
     await LeaveService.notifyRequesterOfDecision({
       requestedByUserId: existing.requestedByUserId,

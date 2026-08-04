@@ -191,6 +191,7 @@ export async function deleteCompanyCompletely(companyId: string) {
           }
           if (ids.employeeIds.length) {
             await tx.attendance.deleteMany({ where: { employeeId: { in: ids.employeeIds } } });
+            await tx.leaveBalance.deleteMany({ where: { employeeId: { in: ids.employeeIds } } });
             await tx.leaveRequest.deleteMany({ where: { employeeId: { in: ids.employeeIds } } });
             await tx.payrollRecord.deleteMany({ where: { employeeId: { in: ids.employeeIds } } });
           }

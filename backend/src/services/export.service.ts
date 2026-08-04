@@ -1584,4 +1584,117 @@ export class ExportService {
     const buffer = await workbook.xlsx.writeBuffer();
     return Buffer.from(buffer);
   }
+
+  static async generateLeaveBalancesExcel(
+    rows: Array<{
+      employeeNo: string;
+      name: string;
+      department: string;
+      gender: string;
+      type: string;
+      year: number;
+      entitled: number;
+      used: number;
+      remaining: number;
+    }>,
+    year: number
+  ): Promise<Buffer> {
+    const company = await resolveCompanyDocHeader(requireTenantId());
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet('Leave balances');
+    addExcelCompanyLetterhead(workbook, sheet, company, `${company.name} — Leave balances ${year}`, 'I');
+    const header = sheet.addRow([
+      'Employee No',
+      'Name',
+      'Department',
+      'Gender',
+      'Leave type',
+      'Year',
+      'Entitled',
+      'Used',
+      'Remaining',
+    ]);
+    header.font = { bold: true };
+    for (const r of rows) {
+      sheet.addRow([
+        r.employeeNo,
+        r.name,
+        r.department,
+        r.gender,
+        r.type.replace(/_/g, ' '),
+        r.year,
+        r.entitled,
+        r.used,
+        r.remaining,
+      ]);
+    }
+    sheet.columns = [
+      { width: 14 },
+      { width: 24 },
+      { width: 18 },
+      { width: 12 },
+      { width: 16 },
+      { width: 8 },
+      { width: 10 },
+      { width: 10 },
+      { width: 12 },
+    ];
+    const buffer = await workbook.xlsx.writeBuffer();
+    return Buffer.from(buffer);
+  }
+
+  static async generateLeaveBalancesPdf(
+    rows: Array<{
+      employeeNo: string;
+      name: string;
+      department: string;
+      gender: string;
+      type: string;
+      year: number;
+      entitled: number;
+      used: number;
+      remaining: number;
+    }>,
+    year: number
+  ): Promise<Buffer> {
+    const company = await resolveCompanyDocHeader(requireTenantId());
+    return new Promise((resolve, reject) => {
+      const doc = new PDFDocument({ margin: 40, size: 'A4', layout: 'landscape' });
+      const chunks: Buffer[] = [];
+      doc.on('data', (c) => chunks.push(c));
+      doc.on('end', () => resolve(Buffer.concat(chunks)));
+      doc.on('error', reject);
+
+      doc.fontSize(14).text(`${company.name} — Leave balances ${year}`, { align: 'left' });
+      doc.moveDown(0.5);
+      doc.fontSize(9);
+      const colX = [40, 110, 230, 340, 400, 480, 530, 580, 640];
+      const headers = ['Emp No', 'Name', 'Dept', 'Gender', 'Type', 'Year', 'Entitled', 'Used', 'Remaining'];
+      headers.forEach((h, i) => doc.text(h, colX[i], doc.y, { continued: i < headers.length - 1, width: 70 }));
+      doc.moveDown(0.4);
+      doc.moveTo(40, doc.y).lineTo(780, doc.y).stroke();
+      doc.moveDown(0.3);
+
+      for (const r of rows) {
+        if (doc.y > 520) {
+          doc.addPage();
+        }
+        const y = doc.y;
+        const vals = [
+          r.employeeNo,
+          r.name,
+          r.department,
+          r.gender,
+          r.type.replace(/_/g, ' '),
+          String(r.year),
+          String(r.entitled),
+          String(r.used),
+          String(r.remaining),
+        ];
+        vals.forEach((v, i) => doc.text(v, colX[i], y, { width: 70, lineBreak: false }));
+        doc.moveDown(0.55);
+      }
+      doc.end();
+    });
+  }
 }
