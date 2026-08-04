@@ -19,9 +19,23 @@ const orderItemSchema = z.object({
   discount: z.coerce.number().min(0).max(100).optional(),
 });
 
+function localDateInput(date = new Date()) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+function daysAgoLocal(days: number) {
+  const d = new Date();
+  d.setDate(d.getDate() - days);
+  return localDateInput(d);
+}
+
 const salesOrderSchema = z.object({
   customerId: z.string().min(1, 'Customer is required'),
   salesPersonId: z.string().optional(),
+  orderDate: z.string().min(1, 'Order date is required'),
   requiredDate: z.string().optional(),
   customerPoNumber: z.string().max(100).optional(),
   notes: z.string().optional(),
@@ -52,6 +66,7 @@ export function SalesOrderForm({ onSuccess, onCancel }: SalesOrderFormProps) {
     defaultValues: {
       salesPersonId: '',
       customerId: '',
+      orderDate: localDateInput(),
       customerPoNumber: '',
       items: [{ productId: '', quantity: 1, unitPrice: 0, discount: 0 }],
     },
@@ -219,6 +234,14 @@ export function SalesOrderForm({ onSuccess, onCancel }: SalesOrderFormProps) {
             {...register('salesPersonId')}
           />
         )}
+        <Input
+          label="Order Date *"
+          type="date"
+          max={localDateInput()}
+          min={daysAgoLocal(365)}
+          {...register('orderDate')}
+          error={errors.orderDate?.message}
+        />
         <Input label="Required Date" type="date" {...register('requiredDate')} />
         <Input
           label="LPO / Customer PO"
@@ -233,6 +256,9 @@ export function SalesOrderForm({ onSuccess, onCancel }: SalesOrderFormProps) {
           Choose a sales officer, or leave as Me — the order stays under the account that created it.
         </p>
       )}
+      <p className="-mt-1 text-xs text-slate-500">
+        Order date can be today or a past day (e.g. yesterday) so late-entered sales still count on the correct day.
+      </p>
       <p className="-mt-1 text-xs text-slate-500">
         Enter the customer&apos;s LPO / purchase order number — it is copied onto the sales invoice.
       </p>

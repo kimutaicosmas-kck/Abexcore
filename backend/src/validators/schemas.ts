@@ -303,6 +303,8 @@ export const createSalesOrderSchema = z.object({
     (v) => (v === '' || v === null || v === undefined ? undefined : v),
     z.string().uuid().optional()
   ),
+  /** Business date of the sale (`YYYY-MM-DD`). May be in the past (backdated orders). */
+  orderDate: optionalDateString,
   requiredDate: optionalDateString,
   /** Customer's own PO / LPO number (appears on the sales invoice). */
   customerPoNumber: z.preprocess(

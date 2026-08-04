@@ -14,7 +14,13 @@ import {
   productionListQuerySchema,
 } from '../validators/schemas';
 import prisma from '../config/database';
-import { dayRangeFromInput, generateNumber, nextQualityInspectionNumber } from '../utils/date';
+import {
+  dayRangeFromInput,
+  generateNumber,
+  nextQualityInspectionNumber,
+  parseLocalDateInput,
+  startOfDay,
+} from '../utils/date';
 import { getParam, getQuery } from '../utils/request';
 import { SalesService, ProductionStatsService, QualityService } from '../services/operations.service';
 import { getVatRate, getCustomerVatRate, calcTax } from '../utils/company';
@@ -32,6 +38,24 @@ const router = Router();
 router.use(authenticate);
 
 type PersonName = { firstName: string; lastName: string };
+
+/** Parse optional order date; allows past days, rejects future and >365 days ago. */
+function resolveSalesOrderDate(orderDate?: string): Date {
+  if (!orderDate) return new Date();
+  const parsed = parseLocalDateInput(orderDate);
+  if (!parsed) throw new AppError('Invalid order date. Use YYYY-MM-DD.', 400);
+  const day = startOfDay(parsed);
+  const today = startOfDay(new Date());
+  if (day.getTime() > today.getTime()) {
+    throw new AppError('Order date cannot be in the future', 400);
+  }
+  const earliest = new Date(today);
+  earliest.setDate(earliest.getDate() - 365);
+  if (day.getTime() < earliest.getTime()) {
+    throw new AppError('Order date cannot be more than 365 days in the past', 400);
+  }
+  return day;
+}
 
 function salesPersonLabel(order: {
   salesPerson?: PersonName | null;
@@ -187,8 +211,19 @@ router.post(
   validate(createSalesOrderSchema),
   auditLog('sales', 'create', 'sales_order'),
   asyncHandler(async (req: AuthRequest, res: Response) => {
-    const { customerId, quotationId, salesPersonId, requiredDate, customerPoNumber, notes, items } =
-      req.body;
+    const {
+      customerId,
+      quotationId,
+      salesPersonId,
+      orderDate,
+      requiredDate,
+      customerPoNumber,
+      notes,
+      items,
+    } = req.body;
+    const resolvedOrderDate = resolveSalesOrderDate(
+      typeof orderDate === 'string' ? orderDate : undefined
+    );
     const count = await prisma.salesOrder.count();
     const orderNumber = generateNumber('SO', count + 1);
     const isSalesOfficer = isSalesPersonRole(req.user!.roleName);
@@ -268,6 +303,7 @@ router.post(
           quotationId,
           createdById: req.user!.id,
           salesPersonId: assignedSalesPersonId,
+          orderDate: resolvedOrderDate,
           requiredDate: requiredDate ? new Date(requiredDate) : undefined,
           customerPoNumber: customerPoNumber || undefined,
           notes,
