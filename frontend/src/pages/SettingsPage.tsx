@@ -33,6 +33,8 @@ interface CompanyFormData {
   address?: string;
   currency?: string;
   vatRate?: number;
+  coopPaybillNumber?: string;
+  mpesaAccountNumber?: string;
 }
 
 interface InviteFormData {
@@ -160,6 +162,8 @@ export function SettingsPage() {
         address: company.address || '',
         currency: company.currency || 'KES',
         vatRate: Number(company.vatRate) || 16,
+        coopPaybillNumber: company.coopPaybillNumber || '',
+        mpesaAccountNumber: company.mpesaAccountNumber || '',
       });
     }
   }, [company, reset]);
@@ -402,6 +406,26 @@ export function SettingsPage() {
               <div className="grid grid-cols-2 gap-4">
                 <Input label="Currency" {...register('currency')} disabled={!canUpdate} />
                 <Input label="VAT Rate (%)" type="number" step="0.01" {...register('vatRate', { valueAsNumber: true })} disabled={!canUpdate} />
+              </div>
+              <div className="rounded-xl border border-sky-100 bg-sky-50/50 p-4 space-y-3">
+                <p className="text-sm font-semibold text-slate-800">Document payment block (Lipa na M-Pesa)</p>
+                <p className="text-xs text-slate-500">
+                  Printed on delivery notes, invoices, statements, and purchase orders when paybill is set.
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <Input
+                    label="Paybill number"
+                    placeholder="e.g. 400200"
+                    {...register('coopPaybillNumber')}
+                    disabled={!canUpdate}
+                  />
+                  <Input
+                    label="Account number"
+                    placeholder="e.g. 40098634"
+                    {...register('mpesaAccountNumber')}
+                    disabled={!canUpdate}
+                  />
+                </div>
               </div>
               {canUpdate && <Button type="submit" loading={mutation.isPending}>Save Changes</Button>}
             </form>

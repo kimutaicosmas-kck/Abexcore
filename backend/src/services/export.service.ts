@@ -2,178 +2,29 @@ import PDFDocument from 'pdfkit';
 import ExcelJS from 'exceljs';
 import path from 'path';
 import fs from 'fs';
-import sharp from 'sharp';
 import { config } from '../config';
 import prisma from '../config/database';
 import { AppError } from '../middleware/errorHandler';
-import { getCompanySettings } from '../utils/company';
-import { isPlatformCompanySlug } from '../utils/platform';
 import { requireTenantId } from '../utils/tenant';
+import {
+  DOC_BLUE,
+  PAGE_LEFT,
+  PAGE_WIDTH,
+  resolveCompanyDocHeader,
+  drawAmazonStyleHeader,
+  drawPartyAndRefs,
+  drawInstructionLine,
+  drawDocTable,
+  drawSignatureBlock,
+  drawMoneyTotals,
+  type CompanyDocHeader,
+} from '../utils/documentTemplate';
 import type { CustomerStatementResult, VatCustomerReportResult } from './customerStatement.service';
 import type { VendorStatementResult } from './vendorStatement.service';
 
 type InvoiceWithRelations = Awaited<ReturnType<typeof ExportService.getInvoice>>;
 
-type CompanyDocHeader = {
-  name: string;
-  addressLine: string;
-  contactLine: string;
-  vatRate: number;
-  /** PNG buffer for letterhead (tenant upload or platform brand mark). */
-  logoPng: Buffer | null;
-};
-
-const LOGO_PDF_SIZE = 52;
 const LOGO_EXCEL_SIZE = 64;
-
-function companyLogoDiskPath(logo: string | null | undefined): string | null {
-  if (!logo) return null;
-  const filename = path.basename(logo);
-  if (!filename || filename === '.' || filename === '..') return null;
-  return path.resolve(config.uploadDir, 'companies', filename);
-}
-
-/** Platform mark when the owner workspace has no uploadable logo. */
-async function buildPlatformLogoPng(): Promise<Buffer> {
-  const faviconCandidates = [
-    path.resolve(process.cwd(), '../frontend/public/favicon.svg'),
-    path.resolve(process.cwd(), 'frontend/public/favicon.svg'),
-    path.resolve(__dirname, '../../../frontend/public/favicon.svg'),
-  ];
-  for (const candidate of faviconCandidates) {
-    if (fs.existsSync(candidate)) {
-      return sharp(candidate)
-        .resize(256, 256, { fit: 'contain', background: { r: 255, g: 255, b: 255, alpha: 1 } })
-        .png()
-        .toBuffer();
-    }
-  }
-
-  // Fallback monogram if favicon is unavailable.
-  const svg = `
-    <svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
-      <rect width="256" height="256" rx="48" fill="#1d4ed8"/>
-      <text x="128" y="168" text-anchor="middle" font-family="Arial, Helvetica, sans-serif"
-        font-size="120" font-weight="700" fill="#ffffff">A</text>
-    </svg>`;
-  return sharp(Buffer.from(svg)).png().toBuffer();
-}
-
-async function resolveCompanyLogoPng(company: {
-  logo: string | null;
-  slug: string;
-}): Promise<Buffer | null> {
-  const diskPath = companyLogoDiskPath(company.logo);
-  if (diskPath && fs.existsSync(diskPath)) {
-    try {
-      return await sharp(diskPath)
-        .resize(256, 256, { fit: 'contain', background: { r: 255, g: 255, b: 255, alpha: 1 } })
-        .png()
-        .toBuffer();
-    } catch {
-      // Fall through to platform mark / null
-    }
-  }
-
-  if (isPlatformCompanySlug(company.slug)) {
-    try {
-      return await buildPlatformLogoPng();
-    } catch {
-      return null;
-    }
-  }
-
-  return null;
-}
-
-async function resolveCompanyDocHeader(companyId: string): Promise<CompanyDocHeader> {
-  const company = await getCompanySettings(companyId);
-  if (!company) {
-    throw new AppError('Company not found for this document', 404);
-  }
-  // Prefer trading name from company settings (each tenant's brand on documents).
-  const displayName = company.name?.trim() || company.legalName?.trim() || 'Company';
-  const addressParts = [company.address?.trim(), company.city?.trim()].filter(Boolean) as string[];
-  // Avoid "Nairobi, Nairobi" when address already includes the city.
-  const addressLine =
-    addressParts.length === 2 &&
-    addressParts[0]!.toLowerCase().includes(addressParts[1]!.toLowerCase())
-      ? addressParts[0]!
-      : addressParts.join(', ');
-  const contactLine = [company.email?.trim(), company.phone?.trim()].filter(Boolean).join(' | ');
-  const logoPng = await resolveCompanyLogoPng({ logo: company.logo, slug: company.slug });
-  return {
-    name: displayName,
-    addressLine,
-    contactLine,
-    vatRate: Number(company.vatRate),
-    logoPng,
-  };
-}
-
-/** Shared letterhead: logo + tenant company left, document title/meta right. */
-function drawCompanyDocumentHeader(
-  doc: PDFKit.PDFDocument,
-  company: Pick<CompanyDocHeader, 'name' | 'addressLine' | 'contactLine' | 'logoPng'>,
-  title: string,
-  metaLines: string[]
-): void {
-  const pageLeft = 50;
-  const rightX = 320;
-  const rightWidth = 225;
-  const headerTop = 50;
-  const textLeft = company.logoPng ? pageLeft + LOGO_PDF_SIZE + 12 : pageLeft;
-  const textWidth = company.logoPng ? 238 : 250;
-
-  if (company.logoPng) {
-    try {
-      doc.image(company.logoPng, pageLeft, headerTop, {
-        fit: [LOGO_PDF_SIZE, LOGO_PDF_SIZE],
-        align: 'center',
-        valign: 'center',
-      });
-    } catch {
-      // Continue without logo if the image cannot be embedded
-    }
-  }
-
-  doc.fontSize(18).fillColor('#1e293b').text(company.name, textLeft, headerTop, {
-    width: textWidth,
-    align: 'left',
-  });
-  let leftY = doc.y;
-  if (company.addressLine) {
-    doc.fontSize(10).fillColor('#64748b').text(company.addressLine, textLeft, leftY, { width: textWidth });
-    leftY = doc.y;
-  }
-  if (company.contactLine) {
-    doc.fontSize(10).fillColor('#64748b').text(company.contactLine, textLeft, leftY, { width: textWidth });
-    leftY = doc.y;
-  }
-  leftY = Math.max(leftY, company.logoPng ? headerTop + LOGO_PDF_SIZE : leftY);
-
-  let rightY = headerTop;
-  doc.fontSize(16).fillColor('#0f172a').text(title, rightX, rightY, {
-    width: rightWidth,
-    align: 'right',
-  });
-  rightY = doc.y + 4;
-  doc.fontSize(10).fillColor('#64748b');
-  for (const line of metaLines) {
-    doc.text(line, rightX, rightY, { width: rightWidth, align: 'right' });
-    rightY = doc.y;
-  }
-
-  // Subtle divider under letterhead
-  const dividerY = Math.max(leftY, rightY) + 10;
-  doc
-    .moveTo(pageLeft, dividerY)
-    .lineTo(545, dividerY)
-    .strokeColor('#e2e8f0')
-    .lineWidth(1)
-    .stroke();
-  doc.y = dividerY + 14;
-}
 
 function addExcelCompanyLetterhead(
   workbook: ExcelJS.Workbook,
@@ -185,10 +36,17 @@ function addExcelCompanyLetterhead(
   workbook.creator = company.name;
   sheet.mergeCells(`A1:${mergeToCol}1`);
   sheet.getCell('A1').value = title;
-  sheet.getCell('A1').font = { bold: true, size: 14, color: { argb: 'FF0F172A' } };
+  sheet.getCell('A1').font = { bold: true, size: 14, color: { argb: 'FF1E6BB8' } };
   sheet.getCell('A2').value = company.addressLine || '';
   sheet.getCell('A3').value = company.contactLine || '';
-  sheet.getCell('A4').value = `Generated: ${new Date().toLocaleString('en-KE')}`;
+  if (company.paybillNumber) {
+    sheet.getCell('A4').value = `Lipa na M-Pesa Paybill: ${company.paybillNumber}${
+      company.accountNumber ? ` · Acc: ${company.accountNumber}` : ''
+    }`;
+    sheet.getCell('A5').value = `Generated: ${new Date().toLocaleString('en-KE')}`;
+  } else {
+    sheet.getCell('A4').value = `Generated: ${new Date().toLocaleString('en-KE')}`;
+  }
 
   if (company.logoPng) {
     const imageId = workbook.addImage({
@@ -200,11 +58,10 @@ function addExcelCompanyLetterhead(
       ext: { width: LOGO_EXCEL_SIZE, height: LOGO_EXCEL_SIZE },
     });
     sheet.getRow(1).height = 48;
-    // Keep title readable beside the logo
     sheet.getCell('A1').alignment = { vertical: 'middle', indent: 10 };
   }
 
-  return 5;
+  return company.paybillNumber ? 6 : 5;
 }
 
 export class ExportService {
@@ -225,81 +82,90 @@ export class ExportService {
   static async generateInvoicePDF(invoice: NonNullable<InvoiceWithRelations>): Promise<Buffer> {
     const company = await resolveCompanyDocHeader(invoice.companyId);
     const { vatRate } = company;
+    const money = (n: number) =>
+      n.toLocaleString('en-KE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
     return new Promise((resolve, reject) => {
-      const doc = new PDFDocument({ margin: 50, size: 'A4' });
+      const doc = new PDFDocument({ margin: 40, size: 'A4' });
       const chunks: Buffer[] = [];
-
       doc.on('data', (chunk) => chunks.push(chunk));
       doc.on('end', () => resolve(Buffer.concat(chunks)));
       doc.on('error', reject);
 
       const party = invoice.customer || invoice.supplier;
-      const partyLabel = invoice.customer ? 'Bill To' : 'Supplier';
-      const metaLines = [
-        `Invoice #: ${invoice.invoiceNumber}`,
-        `Date: ${invoice.invoiceDate.toLocaleDateString('en-KE')}`,
-      ];
-      if (invoice.dueDate) {
-        metaLines.push(`Due: ${invoice.dueDate.toLocaleDateString('en-KE')}`);
-      }
-      if (invoice.type === 'SALES') {
-        metaLines.push(
-          invoice.customerPoNumber
-            ? `LPO: ${invoice.customerPoNumber}`
-            : 'LPO: —'
-        );
-      }
+      const partyAddress = [party && 'address' in party ? party.address : null, party && 'city' in party ? party.city : null]
+        .filter(Boolean)
+        .join(', ');
 
-      drawCompanyDocumentHeader(doc, company, 'TAX INVOICE', metaLines);
+      let y = drawAmazonStyleHeader(doc, company, 'INVOICE');
+      y = drawPartyAndRefs(doc, y, party?.name || 'N/A', partyAddress, [
+        { label: 'Date', value: invoice.invoiceDate.toLocaleDateString('en-KE') },
+        { label: 'Invoice No.', value: invoice.invoiceNumber },
+        {
+          label: invoice.type === 'SALES' ? 'Order / LPO' : 'Due date',
+          value:
+            invoice.type === 'SALES'
+              ? invoice.customerPoNumber || '—'
+              : invoice.dueDate
+                ? invoice.dueDate.toLocaleDateString('en-KE')
+                : '—',
+        },
+      ]);
 
-      doc.fontSize(11).fillColor('#000').text(partyLabel);
-      doc.fontSize(10).text(party?.name || 'N/A');
-      if (party && 'address' in party && party.address) doc.text(party.address);
-      if (party && 'city' in party && party.city) doc.text(String(party.city));
-      if (party && 'phone' in party && party.phone) doc.text(party.phone);
-      if (invoice.type === 'SALES') {
-        doc.moveDown(0.5);
-        doc.font('Helvetica-Bold').fontSize(10).fillColor('#0f172a').text(
-          `LPO / Customer PO: ${invoice.customerPoNumber || '—'}`
-        );
-        doc.font('Helvetica');
-      }
-      doc.moveDown();
+      y = drawInstructionLine(
+        doc,
+        y,
+        'Please receive the following goods in good order and condition'
+      );
 
-      const tableTop = doc.y;
-      doc.fontSize(10).fillColor('#fff');
-      doc.rect(50, tableTop, 495, 20).fill('#2563eb');
-      doc.fillColor('#fff').text('Description', 55, tableTop + 5, { width: 200 });
-      doc.text('Qty', 260, tableTop + 5, { width: 50 });
-      doc.text('Unit Price', 320, tableTop + 5, { width: 80 });
-      doc.text('Total', 420, tableTop + 5, { width: 80 });
+      const rows = invoice.items.map((item) => ({
+        qty: String(Number(item.quantity)),
+        description: item.description,
+        unit: money(Number(item.unitPrice)),
+        total: money(Number(item.totalPrice)),
+      }));
 
-      let y = tableTop + 25;
-      doc.fillColor('#000');
-      for (const item of invoice.items) {
-        doc.text(item.description, 55, y, { width: 200 });
-        doc.text(String(item.quantity), 260, y, { width: 50 });
-        doc.text(Number(item.unitPrice).toLocaleString('en-KE'), 320, y, { width: 80 });
-        doc.text(Number(item.totalPrice).toLocaleString('en-KE'), 420, y, { width: 80 });
-        y += 20;
-      }
+      y = drawDocTable(
+        doc,
+        y,
+        [
+          { key: 'qty', label: 'Qty', width: 50, align: 'center' },
+          { key: 'description', label: 'Description', width: 265 },
+          { key: 'unit', label: 'Unit Price', width: 92, align: 'right' },
+          { key: 'total', label: 'Amount', width: 92, align: 'right' },
+        ],
+        rows,
+        {
+          minBodyRows: Math.max(rows.length + 1, 10),
+          footerLeft: 'E.& O.E',
+          footerCenter: `No. ${invoice.invoiceNumber}`,
+        }
+      );
 
-      y += 10;
-      doc.text(`Subtotal: KES ${Number(invoice.subtotal).toLocaleString('en-KE')}`, 350, y, { align: 'right' });
-      y += 15;
-      doc.text(`VAT (${vatRate}%): KES ${Number(invoice.taxAmount).toLocaleString('en-KE')}`, 350, y, { align: 'right' });
-      y += 15;
-      doc.fontSize(12).text(`Total: KES ${Number(invoice.totalAmount).toLocaleString('en-KE')}`, 350, y, { align: 'right' });
-      y += 15;
-      doc.fontSize(10).text(`Paid: KES ${Number(invoice.paidAmount).toLocaleString('en-KE')}`, 350, y, { align: 'right' });
-      y += 15;
-      doc.text(`Balance: KES ${(Number(invoice.totalAmount) - Number(invoice.paidAmount)).toLocaleString('en-KE')}`, 350, y, { align: 'right' });
+      y = drawMoneyTotals(doc, y, [
+        { label: 'Subtotal', value: `KES ${money(Number(invoice.subtotal))}` },
+        { label: `VAT (${vatRate}%)`, value: `KES ${money(Number(invoice.taxAmount))}` },
+        { label: 'Total', value: `KES ${money(Number(invoice.totalAmount))}`, bold: true },
+        { label: 'Paid', value: `KES ${money(Number(invoice.paidAmount))}` },
+        {
+          label: 'Balance',
+          value: `KES ${money(Number(invoice.totalAmount) - Number(invoice.paidAmount))}`,
+          bold: true,
+        },
+      ]);
 
       if (invoice.notes) {
-        doc.moveDown(2);
-        doc.fontSize(9).fillColor('#666').text(`Notes: ${invoice.notes}`);
+        doc.font('Helvetica').fontSize(8).fillColor(DOC_BLUE).text(`Notes: ${invoice.notes}`, PAGE_LEFT, y, {
+          width: PAGE_WIDTH,
+        });
+        y = doc.y + 10;
       }
+
+      drawSignatureBlock(doc, Math.max(y + 8, 700), {
+        instruction: 'Please receive the following goods in good order and condition.',
+        confirmLabel: 'Confirmed by:',
+        receiveLabel: 'Received by:',
+      });
 
       doc.end();
     });
@@ -341,96 +207,92 @@ export class ExportService {
     const productById = new Map(products.map((p) => [p.id, p]));
 
     return new Promise((resolve, reject) => {
-      const doc = new PDFDocument({ margin: 50, size: 'A4' });
+      const doc = new PDFDocument({ margin: 40, size: 'A4' });
       const chunks: Buffer[] = [];
-
       doc.on('data', (chunk) => chunks.push(chunk));
       doc.on('end', () => resolve(Buffer.concat(chunks)));
       doc.on('error', reject);
 
       const customer = delivery.salesOrder.customer;
+      const partyAddress = [customer?.address, customer?.city, customer?.phone]
+        .filter(Boolean)
+        .join(', ');
+
+      let y = drawAmazonStyleHeader(doc, company, 'DELIVERY');
+      y = drawPartyAndRefs(doc, y, customer?.name || 'N/A', partyAddress, [
+        { label: 'Date', value: delivery.createdAt.toLocaleDateString('en-KE') },
+        { label: 'Delivery No.', value: delivery.deliveryNo },
+        { label: 'Order No.', value: delivery.salesOrder.orderNumber },
+      ]);
+
+      y = drawInstructionLine(
+        doc,
+        y,
+        'Please receive the following goods in good order and condition'
+      );
+
+      const rows = delivery.items.map((item) => {
+        const product = productById.get(item.productId);
+        const orderLine = delivery.salesOrder.items.find((line) => line.productId === item.productId);
+        const name = product?.name || orderLine?.product?.name || 'Product';
+        const partNo = product?.sku || '';
+        return {
+          qty: String(item.quantity),
+          description: partNo ? `${name} (${partNo})` : name,
+        };
+      });
+
+      y = drawDocTable(
+        doc,
+        y,
+        [
+          { key: 'qty', label: 'Qty', width: 70, align: 'center' },
+          { key: 'description', label: 'Description', width: 429 },
+        ],
+        rows,
+        {
+          minBodyRows: Math.max(rows.length + 2, 14),
+          footerLeft: 'E.& O.E',
+          footerCenter: `No. ${delivery.deliveryNo}`,
+        }
+      );
+
+      if (delivery.notes) {
+        doc.font('Helvetica').fontSize(8).fillColor(DOC_BLUE).text(`Notes: ${delivery.notes}`, PAGE_LEFT, y, {
+          width: PAGE_WIDTH,
+        });
+        y = doc.y + 8;
+      }
+
       const driverName = delivery.driver
         ? `${delivery.driver.firstName} ${delivery.driver.lastName}`.trim()
-        : '—';
+        : '';
       const vehicleLabel = delivery.vehicle
         ? [delivery.vehicle.registration, delivery.vehicle.make, delivery.vehicle.model]
             .filter(Boolean)
             .join(' · ')
-        : '—';
-
-      const metaLines = [
-        `Delivery #: ${delivery.deliveryNo}`,
-        `Date: ${delivery.createdAt.toLocaleDateString('en-KE')}`,
-        `Order #: ${delivery.salesOrder.orderNumber}`,
-      ];
-      if (delivery.invoices[0]?.invoiceNumber) {
-        metaLines.push(`Invoice #: ${delivery.invoices[0].invoiceNumber}`);
+        : '';
+      if (driverName || vehicleLabel) {
+        doc
+          .font('Helvetica')
+          .fontSize(8)
+          .fillColor(DOC_BLUE)
+          .text(
+            [vehicleLabel ? `Vehicle: ${vehicleLabel}` : null, driverName ? `Driver: ${driverName}` : null]
+              .filter(Boolean)
+              .join('  ·  '),
+            PAGE_LEFT,
+            y,
+            { width: PAGE_WIDTH }
+          );
+        y = doc.y + 8;
       }
 
-      drawCompanyDocumentHeader(doc, company, 'DELIVERY NOTE', metaLines);
-
-      doc.fontSize(11).fillColor('#000').text('Deliver To');
-      doc.fontSize(10).text(customer?.name || 'N/A');
-      if (customer?.address) doc.text(customer.address);
-      if (customer?.city) doc.text(customer.city);
-      if (customer?.phone) doc.text(customer.phone);
-      doc.moveDown();
-
-      doc.fontSize(10).fillColor('#000').text(`Vehicle: ${vehicleLabel}`);
-      doc.text(`Driver: ${driverName}${delivery.driver?.phone ? ` · ${delivery.driver.phone}` : ''}`);
-      if (delivery.waybillNo) {
-        doc.text(`Waybill #: ${delivery.waybillNo}`);
-      }
-      if (delivery.scheduledDate) {
-        doc.text(`Scheduled: ${delivery.scheduledDate.toLocaleDateString('en-KE')}`);
-      }
-      doc.text(`Status: ${delivery.status.replace(/_/g, ' ')}`);
-      doc.moveDown();
-
-      const tableTop = doc.y;
-      doc.fontSize(10).fillColor('#fff');
-      doc.rect(50, tableTop, 495, 20).fill('#2563eb');
-      doc.fillColor('#fff').text('Part No.', 55, tableTop + 5, { width: 90 });
-      doc.text('Product', 150, tableTop + 5, { width: 280 });
-      doc.text('Qty', 450, tableTop + 5, { width: 80 });
-
-      let y = tableTop + 25;
-      doc.fillColor('#000');
-      for (const item of delivery.items) {
-        const product = productById.get(item.productId);
-        const orderLine = delivery.salesOrder.items.find((line) => line.productId === item.productId);
-        const name = product?.name || orderLine?.product?.name || 'Product';
-        const partNo = product?.sku || '—';
-        doc.text(partNo, 55, y, { width: 90 });
-        doc.text(name, 150, y, { width: 280 });
-        doc.text(String(item.quantity), 450, y, { width: 80 });
-        y += 20;
-        if (y > 700) {
-          doc.addPage();
-          y = 50;
-        }
-      }
-
-      if (delivery.notes) {
-        y += 10;
-        doc.fontSize(9).fillColor('#666').text(`Notes: ${delivery.notes}`, 50, y, { width: 495 });
-        y += 30;
-      } else {
-        y += 20;
-      }
-
-      doc.fontSize(10).fillColor('#000');
-      doc.text('Received in good order by:', 50, Math.max(y + 20, 620));
-      doc.text('Customer name: ____________________________', 50, Math.max(y + 45, 645));
-      doc.text('Signature: ________________________________', 50, Math.max(y + 70, 670));
-      doc.text('Date: ____________________________________', 50, Math.max(y + 95, 695));
-
-      doc.fontSize(8).fillColor('#999').text(
-        'This delivery note must accompany the goods. Retain a signed copy for records.',
-        50,
-        760,
-        { width: 495, align: 'center' }
-      );
+      drawSignatureBlock(doc, Math.max(y + 4, 700), {
+        instruction: 'Please receive the following goods in good order and condition.',
+        confirmLabel: 'Confirmed by:',
+        receiveLabel: 'Received by:',
+      });
 
       doc.end();
     });
@@ -453,88 +315,79 @@ export class ExportService {
   ): Promise<Buffer> {
     const company = await resolveCompanyDocHeader(po.companyId);
     const { vatRate } = company;
+    const money = (n: number) =>
+      n.toLocaleString('en-KE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
     return new Promise((resolve, reject) => {
-      const doc = new PDFDocument({ margin: 50, size: 'A4' });
+      const doc = new PDFDocument({ margin: 40, size: 'A4' });
       const chunks: Buffer[] = [];
-
       doc.on('data', (chunk) => chunks.push(chunk));
       doc.on('end', () => resolve(Buffer.concat(chunks)));
       doc.on('error', reject);
 
-      const metaLines = [
-        `PO #: ${po.poNumber}`,
-        `Date: ${po.orderDate.toLocaleDateString('en-KE')}`,
-        `Status: ${po.status.replace(/_/g, ' ')}`,
-      ];
-      if (po.expectedDate) {
-        metaLines.push(`Expected: ${po.expectedDate.toLocaleDateString('en-KE')}`);
-      }
-
-      drawCompanyDocumentHeader(doc, company, 'PURCHASE ORDER', metaLines);
-
       const supplier = po.supplier;
-      doc.fontSize(11).fillColor('#000').text('Supplier');
-      doc.fontSize(10).text(supplier?.name || 'N/A');
-      if (supplier?.code) doc.text(`Code: ${supplier.code}`);
-      if (supplier?.address) doc.text(supplier.address);
-      if (supplier?.city) doc.text(supplier.city);
-      if (supplier?.phone) doc.text(supplier.phone);
-      if (supplier?.email) doc.text(supplier.email);
-      doc.moveDown();
+      const partyAddress = [supplier?.address, supplier?.city, supplier?.phone]
+        .filter(Boolean)
+        .join(', ');
 
-      const tableTop = doc.y;
-      doc.fontSize(10).fillColor('#fff');
-      doc.rect(50, tableTop, 495, 20).fill('#2563eb');
-      doc.fillColor('#fff').text('Description', 55, tableTop + 5, { width: 200 });
-      doc.text('Qty', 260, tableTop + 5, { width: 45 });
-      doc.text('Unit', 305, tableTop + 5, { width: 40 });
-      doc.text('Unit Price', 350, tableTop + 5, { width: 80 });
-      doc.text('Total', 440, tableTop + 5, { width: 90 });
+      let y = drawAmazonStyleHeader(doc, company, 'PURCHASE ORDER');
+      y = drawPartyAndRefs(doc, y, supplier?.name || 'N/A', partyAddress, [
+        { label: 'Date', value: po.orderDate.toLocaleDateString('en-KE') },
+        { label: 'PO No.', value: po.poNumber },
+        {
+          label: 'Expected',
+          value: po.expectedDate ? po.expectedDate.toLocaleDateString('en-KE') : '—',
+        },
+      ]);
 
-      let y = tableTop + 25;
-      doc.fillColor('#000');
-      for (const item of po.items) {
-        if (y > 700) {
-          doc.addPage();
-          y = 50;
+      y = drawInstructionLine(
+        doc,
+        y,
+        'Please supply the following goods in good order and condition'
+      );
+
+      const rows = po.items.map((item) => ({
+        qty: `${Number(item.quantity)} ${item.unit || 'pcs'}`.trim(),
+        description: item.description,
+        unit: money(Number(item.unitPrice)),
+        total: money(Number(item.totalPrice)),
+      }));
+
+      y = drawDocTable(
+        doc,
+        y,
+        [
+          { key: 'qty', label: 'Qty', width: 70, align: 'center' },
+          { key: 'description', label: 'Description', width: 245 },
+          { key: 'unit', label: 'Unit Price', width: 92, align: 'right' },
+          { key: 'total', label: 'Amount', width: 92, align: 'right' },
+        ],
+        rows,
+        {
+          minBodyRows: Math.max(rows.length + 1, 10),
+          footerLeft: 'E.& O.E',
+          footerCenter: `No. ${po.poNumber}`,
         }
-        doc.text(item.description, 55, y, { width: 200 });
-        doc.text(String(Number(item.quantity)), 260, y, { width: 45 });
-        doc.text(item.unit || 'pcs', 305, y, { width: 40 });
-        doc.text(Number(item.unitPrice).toLocaleString('en-KE'), 350, y, { width: 80 });
-        doc.text(Number(item.totalPrice).toLocaleString('en-KE'), 440, y, { width: 90 });
-        y += 20;
-      }
+      );
 
-      y += 10;
-      doc.text(`Subtotal: KES ${Number(po.subtotal).toLocaleString('en-KE')}`, 350, y, { align: 'right' });
-      y += 15;
-      doc.text(
-        `VAT (${vatRate}%): KES ${Number(po.taxAmount).toLocaleString('en-KE')}`,
-        350,
-        y,
-        { align: 'right' }
-      );
-      y += 15;
-      doc.fontSize(12).text(
-        `Total: KES ${Number(po.totalAmount).toLocaleString('en-KE')}`,
-        350,
-        y,
-        { align: 'right' }
-      );
+      y = drawMoneyTotals(doc, y, [
+        { label: 'Subtotal', value: `KES ${money(Number(po.subtotal))}` },
+        { label: `VAT (${vatRate}%)`, value: `KES ${money(Number(po.taxAmount))}` },
+        { label: 'Total', value: `KES ${money(Number(po.totalAmount))}`, bold: true },
+      ]);
 
       if (po.notes) {
-        doc.moveDown(2);
-        doc.fontSize(9).fillColor('#666').text(`Notes: ${po.notes}`, 50, doc.y, { width: 495 });
+        doc.font('Helvetica').fontSize(8).fillColor(DOC_BLUE).text(`Notes: ${po.notes}`, PAGE_LEFT, y, {
+          width: PAGE_WIDTH,
+        });
+        y = doc.y + 8;
       }
 
-      doc.fontSize(8).fillColor('#999').text(
-        'Please confirm this purchase order and advise delivery schedule.',
-        50,
-        760,
-        { width: 495, align: 'center' }
-      );
+      drawSignatureBlock(doc, Math.max(y + 8, 700), {
+        instruction: 'Please confirm this purchase order and advise delivery schedule.',
+        confirmLabel: 'Authorised by:',
+        receiveLabel: 'Acknowledged by:',
+      });
 
       doc.end();
     });
@@ -928,78 +781,27 @@ export class ExportService {
       doc.on('end', () => resolve(Buffer.concat(chunks)));
       doc.on('error', reject);
 
-      // —— Letterhead ——
-      const headerTop = 48;
-      const logoSize = 44;
-      const textLeft = company.logoPng ? LEFT + logoSize + 14 : LEFT;
-
-      if (company.logoPng) {
-        try {
-          doc.image(company.logoPng, LEFT, headerTop, {
-            fit: [logoSize, logoSize],
-            align: 'center',
-            valign: 'center',
-          });
-        } catch {
-          // skip logo
-        }
-      }
-
-      doc.font('Helvetica-Bold').fontSize(15).fillColor('#0f172a').text(company.name, textLeft, headerTop, {
-        width: 250,
-      });
-      let leftY = doc.y + 2;
-      doc.font('Helvetica').fontSize(9).fillColor('#64748b');
-      if (company.addressLine) {
-        doc.text(company.addressLine, textLeft, leftY, { width: 250 });
-        leftY = doc.y + 1;
-      }
-      if (company.contactLine) {
-        doc.text(company.contactLine, textLeft, leftY, { width: 250 });
-        leftY = doc.y;
-      }
-      leftY = Math.max(leftY, company.logoPng ? headerTop + logoSize : leftY);
-
-      doc
-        .font('Helvetica-Bold')
-        .fontSize(13)
-        .fillColor('#0f172a')
-        .text(documentTitle, 320, headerTop, { width: RIGHT - 320, align: 'right' });
-      doc
-        .font('Helvetica')
-        .fontSize(9)
-        .fillColor('#475569')
-        .text(asAtLabel, 320, headerTop + 20, { width: RIGHT - 320, align: 'right' });
-
-      const dividerY = Math.max(leftY, headerTop + 36) + 14;
-      doc
-        .moveTo(LEFT, dividerY)
-        .lineTo(RIGHT, dividerY)
-        .strokeColor('#cbd5e1')
-        .lineWidth(1)
-        .stroke();
-
-      // —— Party block ——
-      let y = dividerY + 18;
-      doc.font('Helvetica').fontSize(8).fillColor('#64748b').text(partyLabel, LEFT, y);
-      y += 14;
-      doc.font('Helvetica-Bold').fontSize(12).fillColor('#0f172a').text(statement.customer.name, LEFT, y, {
-        width: WIDTH * 0.62,
-      });
-      y = doc.y + 4;
-      doc.font('Helvetica').fontSize(9).fillColor('#475569');
-      const detailBits = [
+      // —— Stationery letterhead (Amazon-style) ——
+      const badgeLabel = documentTitle.includes('VENDOR')
+        ? 'VENDOR STMT'
+        : documentTitle.includes('OUTSTANDING')
+          ? 'OUTSTANDING'
+          : 'STATEMENT';
+      let y = drawAmazonStyleHeader(doc, company, badgeLabel);
+      const partyAddress = [
         statement.customer.code ? `Code: ${statement.customer.code}` : null,
         statement.customer.address,
         statement.customer.city,
         statement.customer.phone,
-      ].filter(Boolean) as string[];
-      for (const bit of detailBits) {
-        doc.text(bit, LEFT, y, { width: WIDTH * 0.62 });
-        y = doc.y + 2;
-      }
-
-      y = Math.max(y, dividerY + 18 + 56) + 16;
+      ]
+        .filter(Boolean)
+        .join(', ');
+      y = drawPartyAndRefs(doc, y, statement.customer.name, partyAddress, [
+        { label: 'Period', value: asAtLabel },
+        { label: partyLabel, value: statement.customer.code || '—' },
+        { label: 'Amount due', value: fmtKes(aging.amountDue) },
+      ]);
+      y = drawInstructionLine(doc, y, 'Account statement — please settle outstanding balances promptly');
 
       // —— Table ——
       type Col = { key: string; label: string; x: number; w: number; align?: 'left' | 'right' };
@@ -1024,17 +826,16 @@ export class ExportService {
           ];
 
       const drawTableHeader = (top: number) => {
-        doc.rect(LEFT, top, WIDTH, HEADER_H).fill('#f1f5f9');
-        doc
-          .moveTo(LEFT, top + HEADER_H)
-          .lineTo(RIGHT, top + HEADER_H)
-          .strokeColor('#cbd5e1')
-          .lineWidth(0.75)
-          .stroke();
-        doc.font('Helvetica-Bold').fontSize(8).fillColor('#334155');
+        doc.rect(LEFT, top, WIDTH, HEADER_H).fill(DOC_BLUE);
+        doc.font('Helvetica-Bold').fontSize(8).fillColor('#ffffff');
         for (const c of cols) {
           doc.text(c.label, c.x, top + 8, { width: c.w, align: c.align || 'left' });
         }
+        doc
+          .rect(LEFT, top, WIDTH, HEADER_H)
+          .strokeColor(DOC_BLUE)
+          .lineWidth(1)
+          .stroke();
         return top + HEADER_H;
       };
 
@@ -1351,28 +1152,21 @@ export class ExportService {
       doc.on('end', () => resolve(Buffer.concat(chunks)));
       doc.on('error', reject);
 
-      const meta = [
-        `Customers: ${report.count}`,
-        `Invoiced: KES ${fmt(report.totals.invoicedTotal)}`,
-        `VAT: KES ${fmt(report.totals.vatTotal)}`,
-        `Outstanding: KES ${fmt(report.totals.outstanding)}`,
-      ];
-      if (report.sections) {
-        meta.push(
-          `VAT customers: ${report.sections.VAT.count} · Non-VAT: ${report.sections.NON_VAT.count}`
-        );
-      }
-      drawCompanyDocumentHeader(doc, company, title.toUpperCase(), meta);
-
-      doc.fontSize(9).fillColor('#475569').text(
+      let yHead = drawAmazonStyleHeader(doc, company, 'VAT REPORT');
+      yHead = drawPartyAndRefs(doc, yHead, company.name, company.contactLine, [
+        { label: 'Customers', value: String(report.count) },
+        { label: 'Invoiced', value: `KES ${fmt(report.totals.invoicedTotal)}` },
+        { label: 'Outstanding', value: `KES ${fmt(report.totals.outstanding)}` },
+      ]);
+      doc.y = drawInstructionLine(
+        doc,
+        yHead,
         report.vatStatus === 'NON_VAT'
           ? 'Non-VAT customers receive company invoices at 0% VAT.'
           : report.vatStatus === 'ALL'
             ? 'Combined report of VAT-registered and Non-VAT customers.'
-            : 'VAT-registered customers and invoice VAT totals.',
-        { width: 500 }
+            : 'VAT-registered customers and invoice VAT totals.'
       );
-      doc.moveDown(0.8);
 
       const drawSection = (label: string, customers: VatCustomerReportResult['customers']) => {
         if (report.vatStatus === 'ALL') {
@@ -1382,7 +1176,7 @@ export class ExportService {
 
         const tableTop = doc.y;
         doc.fontSize(8).fillColor('#fff');
-        doc.rect(48, tableTop, 500, 18).fill('#1e40af');
+        doc.rect(48, tableTop, 500, 18).fill(DOC_BLUE);
         let x = 52;
         const cols = includeStatusCol
           ? [
@@ -1665,15 +1459,28 @@ export class ExportService {
       doc.on('end', () => resolve(Buffer.concat(chunks)));
       doc.on('error', reject);
 
-      doc.fontSize(14).text(`${company.name} — Leave balances ${year}`, { align: 'left' });
-      doc.moveDown(0.5);
-      doc.fontSize(9);
+      doc.font('Helvetica-Bold').fontSize(14).fillColor(DOC_BLUE).text(company.name.toUpperCase(), 40, 36);
+      doc.font('Helvetica').fontSize(9).fillColor(DOC_BLUE).text(company.contactLine || '', 40, doc.y + 2);
+      doc.rect(680, 36, 100, 24).fill(DOC_BLUE);
+      doc
+        .font('Helvetica-Bold')
+        .fontSize(11)
+        .fillColor('#ffffff')
+        .text('LEAVE', 680, 42, { width: 100, align: 'center' });
+      doc
+        .font('Helvetica-Bold')
+        .fontSize(11)
+        .fillColor(DOC_BLUE)
+        .text(`Leave balances — ${year}`, 40, 78);
+      doc.moveDown(0.6);
+      doc.font('Helvetica-Bold').fontSize(9).fillColor('#ffffff');
       const colX = [40, 110, 230, 340, 400, 480, 530, 580, 640];
       const headers = ['Emp No', 'Name', 'Dept', 'Gender', 'Type', 'Year', 'Entitled', 'Used', 'Remaining'];
-      headers.forEach((h, i) => doc.text(h, colX[i], doc.y, { continued: i < headers.length - 1, width: 70 }));
-      doc.moveDown(0.4);
-      doc.moveTo(40, doc.y).lineTo(780, doc.y).stroke();
-      doc.moveDown(0.3);
+      const headerY = doc.y;
+      doc.rect(40, headerY - 2, 740, 18).fill(DOC_BLUE);
+      headers.forEach((h, i) => doc.fillColor('#ffffff').text(h, colX[i], headerY + 2, { width: 70 }));
+      doc.moveDown(0.55);
+      doc.font('Helvetica').fontSize(9).fillColor('#0f172a');
 
       for (const r of rows) {
         if (doc.y > 520) {

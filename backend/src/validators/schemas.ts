@@ -400,6 +400,8 @@ export const companySettingsSchema = z.object({
   currency: z.string().optional(),
   vatRate: z.number().min(0).max(100).optional(),
   qualityModuleEnabled: z.boolean().optional(),
+  coopPaybillNumber: z.string().max(40).optional().nullable(),
+  mpesaAccountNumber: z.string().max(40).optional().nullable(),
 });
 
 export const createQuotationSchema = z.object({

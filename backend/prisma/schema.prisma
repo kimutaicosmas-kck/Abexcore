@@ -197,6 +197,8 @@ model Company {
   companyVatRate  Decimal @default(14) @map("company_vat_rate") @db.Decimal(5, 2)
   qualityModuleEnabled Boolean @default(false) @map("quality_module_enabled")
   coopPaybillNumber String? @map("coop_paybill_number")
+  /** M-Pesa paybill account number printed on delivery notes / invoices. */
+  mpesaAccountNumber String? @map("mpesa_account_number")
   isActive       Boolean  @default(true) @map("is_active")
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
