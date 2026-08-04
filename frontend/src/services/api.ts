@@ -195,6 +195,7 @@ export const customersApi = {
   create: (data: object) => api.post('/customers', data),
   update: (id: string, data: object) => api.put(`/customers/${id}`, data),
   delete: (id: string) => api.delete(`/customers/${id}`),
+  activate: (id: string) => api.post(`/customers/${id}/activate`),
   orders: (id: string) => api.get(`/customers/${id}/orders`),
   statement: (id: string, params?: object) => api.get(`/customers/${id}/statement`, { params }),
   vatReport: (vatStatus: 'VAT' | 'NON_VAT' | 'ALL' = 'ALL') =>

@@ -16,6 +16,7 @@ import {
   FileText,
   FileSpreadsheet,
   Download,
+  RotateCcw,
 } from 'lucide-react';
 import { customersApi, crmApi, operationsApi } from '../services/api';
 import { downloadFile } from '../utils/download';
@@ -286,9 +287,21 @@ export function CustomersPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['customers'] });
       queryClient.invalidateQueries({ queryKey: ['crm-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['customer-detail'] });
       setDeactivateModalOpen(false);
       setDetailModalOpen(false);
       setSelectedCustomer(null);
+    },
+  });
+
+  const activateMutation = useMutation({
+    mutationFn: (id: string) => customersApi.activate(id),
+    onSuccess: (res) => {
+      queryClient.invalidateQueries({ queryKey: ['customers'] });
+      queryClient.invalidateQueries({ queryKey: ['crm-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['customer-detail'] });
+      const restored = res.data.data as Customer | undefined;
+      if (restored) setSelectedCustomer(restored);
     },
   });
 
@@ -997,6 +1010,17 @@ export function CustomersPage() {
               {canDelete && customerDetail.isActive && (
                 <Button variant="danger" onClick={() => setDeactivateModalOpen(true)}><Trash2 className="h-4 w-4 mr-1.5" />Deactivate</Button>
               )}
+              {(canUpdate || canDelete) && !customerDetail.isActive && (
+                <Button
+                  loading={activateMutation.isPending}
+                  onClick={() => activateMutation.mutate(customerDetail.id)}
+                >
+                  <RotateCcw className="h-4 w-4 mr-1.5" />Activate
+                </Button>
+              )}
+              {activateMutation.isError && (
+                <Alert variant="error" className="w-full text-left">Failed to activate customer.</Alert>
+              )}
             </div>
           </div>
         ) : null}
@@ -1032,7 +1056,7 @@ export function CustomersPage() {
 
       <Modal open={deactivateModalOpen} onClose={() => setDeactivateModalOpen(false)} title="Deactivate Customer" size="md">
         <p className="text-sm text-slate-600 mb-4">
-          Deactivate <strong>{selectedCustomer?.name || customerDetail?.name}</strong>? Their record will be archived.
+          Deactivate <strong>{selectedCustomer?.name || customerDetail?.name}</strong>? They will move to Inactive and can be activated again later.
         </p>
         {deactivateMutation.isError && <Alert variant="error" className="mb-4">Failed to deactivate customer.</Alert>}
         <div className="flex justify-end gap-3">

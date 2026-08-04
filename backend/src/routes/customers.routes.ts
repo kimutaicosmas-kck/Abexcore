@@ -89,8 +89,48 @@ router.get(
         : [{ salesPersonId }];
     }
 
-    const result = await customerService.list({ page, limit, search, sortBy, sortOrder, where });
-    res.json({ success: true, ...result });
+    // Include historically soft-deleted inactive customers so they can be reactivated.
+    // Active / default lists still hide truly removed (soft-deleted) active rows.
+    const visibility =
+      isActive === false
+        ? {}
+        : isActive === true
+          ? { deletedAt: null }
+          : { OR: [{ deletedAt: null }, { isActive: false }] };
+
+    const searchFilter = search
+      ? {
+          OR: [
+            { name: { contains: search } },
+            { code: { contains: search } },
+            { email: { contains: search } },
+          ],
+        }
+      : {};
+
+    const skip = (page - 1) * limit;
+    const [data, total] = await Promise.all([
+      prisma.customer.findMany({
+        where: { AND: [where, visibility, searchFilter] },
+        skip,
+        take: limit,
+        orderBy: { [sortBy || 'createdAt']: sortOrder || 'desc' },
+        include: {
+          contacts: true,
+          salesPerson: { select: { id: true, firstName: true, lastName: true } },
+          _count: {
+            select: { salesOrders: true, invoices: true, complaints: true, opportunities: true },
+          },
+        },
+      }),
+      prisma.customer.count({ where: { AND: [where, visibility, searchFilter] } }),
+    ]);
+
+    res.json({
+      success: true,
+      data,
+      pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
+    });
   })
 );
 
@@ -220,7 +260,17 @@ router.get(
   '/:id',
   authorize('customers:read'),
   asyncHandler(async (req: AuthRequest, res: Response) => {
-    const data = await customerService.getById(getParam(req.params.id));
+    const data = await prisma.customer.findFirst({
+      where: { id: getParam(req.params.id) },
+      include: {
+        contacts: true,
+        salesPerson: { select: { id: true, firstName: true, lastName: true } },
+        _count: {
+          select: { salesOrders: true, invoices: true, complaints: true, opportunities: true },
+        },
+      },
+    });
+    if (!data) throw new AppError('Customer not found', 404);
     res.json({ success: true, data });
   })
 );
@@ -270,7 +320,26 @@ router.put(
       await assertValidSalesPerson(payload.salesPersonId);
     }
 
-    const data = await customerService.update(getParam(req.params.id), payload);
+    const id = getParam(req.params.id);
+    const existing = await prisma.customer.findFirst({ where: { id } });
+    if (!existing) throw new AppError('Customer not found', 404);
+
+    // Reactivating via edit also clears any historical soft-delete flag.
+    if (payload.isActive === true) {
+      payload.deletedAt = null;
+    }
+
+    const data = await prisma.customer.update({
+      where: { id },
+      data: payload,
+      include: {
+        contacts: true,
+        salesPerson: { select: { id: true, firstName: true, lastName: true } },
+        _count: {
+          select: { salesOrders: true, invoices: true, complaints: true, opportunities: true },
+        },
+      },
+    });
     res.json({ success: true, data });
   })
 );
@@ -280,9 +349,46 @@ router.delete(
   authorize('customers:delete'),
   auditLog('customers', 'delete', 'customer'),
   asyncHandler(async (req: AuthRequest, res: Response) => {
-    await customerService.update(getParam(req.params.id), { isActive: false });
-    await customerService.softDelete(getParam(req.params.id));
-    res.json({ success: true, message: 'Customer deactivated' });
+    // Deactivate only — keep the record listable under Inactive so it can be restored.
+    const id = getParam(req.params.id);
+    const existing = await prisma.customer.findFirst({ where: { id } });
+    if (!existing) throw new AppError('Customer not found', 404);
+    const data = await prisma.customer.update({
+      where: { id },
+      data: { isActive: false },
+      include: {
+        contacts: true,
+        salesPerson: { select: { id: true, firstName: true, lastName: true } },
+        _count: {
+          select: { salesOrders: true, invoices: true, complaints: true, opportunities: true },
+        },
+      },
+    });
+    res.json({ success: true, message: 'Customer deactivated', data });
+  })
+);
+
+router.post(
+  '/:id/activate',
+  authorizeAny('customers:update', 'customers:delete'),
+  auditLog('customers', 'update', 'customer'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const id = getParam(req.params.id);
+    const existing = await prisma.customer.findFirst({ where: { id } });
+    if (!existing) throw new AppError('Customer not found', 404);
+
+    const data = await prisma.customer.update({
+      where: { id },
+      data: { isActive: true, deletedAt: null },
+      include: {
+        contacts: true,
+        salesPerson: { select: { id: true, firstName: true, lastName: true } },
+        _count: {
+          select: { salesOrders: true, invoices: true, complaints: true, opportunities: true },
+        },
+      },
+    });
+    res.json({ success: true, message: 'Customer activated', data });
   })
 );
 
