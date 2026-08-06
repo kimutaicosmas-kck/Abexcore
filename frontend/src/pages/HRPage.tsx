@@ -268,11 +268,11 @@ export function HRPage() {
     <div className="space-y-4">
       {stats && (
         <StatGrid>
-          <StatCard title="Employees" value={stats.activeEmployees} icon={<Users className="h-5 w-5 text-white" />} color="from-primary-500 to-primary-700" onClick={() => goToTab(1)} />
-          <StatCard title="Pending Leave" value={stats.pendingLeave} icon={<Calendar className="h-5 w-5 text-white" />} color="from-amber-500 to-orange-600" onClick={() => { setLeaveStatus('PENDING'); setLeavePage(1); goToTab(3); }} />
-          <StatCard title="Payroll Due" value={formatCurrency(stats.payrollDue)} icon={<DollarSign className="h-5 w-5 text-white" />} color="from-emerald-500 to-teal-600" onClick={() => goToTab(4)} />
-          <StatCard title="Present Today" value={stats.attendanceToday} icon={<UserCheck className="h-5 w-5 text-white" />} color="from-primary-600 to-primary-800" onClick={() => goToTab(2)} />
-          <StatCard title="Total Headcount" value={stats.totalEmployees} icon={<Users className="h-5 w-5 text-white" />} color="from-slate-600 to-slate-800" onClick={() => goToTab(1)} />
+          <StatCard title="Employees" value={stats.activeEmployees} icon={<Users className="h-5 w-5 text-white" />} color="from-teal-500 to-teal-700" onClick={() => goToTab(1)} />
+          <StatCard title="Pending Leave" value={stats.pendingLeave} icon={<Calendar className="h-5 w-5 text-white" />} color="from-indigo-500 to-indigo-700" onClick={() => { setLeaveStatus('PENDING'); setLeavePage(1); goToTab(3); }} />
+          <StatCard title="Payroll Due" value={formatCurrency(stats.payrollDue)} icon={<DollarSign className="h-5 w-5 text-white" />} color="from-orange-500 to-orange-700" onClick={() => goToTab(4)} />
+          <StatCard title="Present Today" value={stats.attendanceToday} icon={<UserCheck className="h-5 w-5 text-white" />} color="from-fuchsia-500 to-fuchsia-700" onClick={() => goToTab(2)} />
+          <StatCard title="Total Headcount" value={stats.totalEmployees} icon={<Users className="h-5 w-5 text-white" />} color="from-cyan-500 to-cyan-700" onClick={() => goToTab(1)} />
         </StatGrid>
       )}
 

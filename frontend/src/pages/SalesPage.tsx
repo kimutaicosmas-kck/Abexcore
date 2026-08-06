@@ -513,35 +513,35 @@ export function SalesPage() {
             title={myBook ? 'My Open Orders' : 'Open Orders'}
             value={stats.openOrders}
             icon={<ShoppingCart className="h-5 w-5 text-white" />}
-            color="from-primary-500 to-primary-700"
+            color="from-teal-500 to-teal-700"
             onClick={() => goToTab(1)}
           />
           <StatCard
             title={myBook ? 'My Pipeline Value' : 'Pipeline Value'}
             value={formatCurrency(stats.pipelineValue)}
             icon={<TrendingUp className="h-5 w-5 text-white" />}
-            color="from-emerald-500 to-teal-600"
+            color="from-indigo-500 to-indigo-700"
             onClick={() => goToTab(1)}
           />
           <StatCard
             title={myBook ? 'My Pending Quotes' : 'Pending Quotes'}
             value={stats.pendingQuotations}
             icon={<FileText className="h-5 w-5 text-white" />}
-            color="from-amber-500 to-orange-600"
+            color="from-orange-500 to-orange-700"
             onClick={() => goToTab(2)}
           />
           <StatCard
             title={myBook ? 'My Orders This Month' : 'Orders This Month'}
             value={stats.ordersThisMonth}
             icon={<CalendarDays className="h-5 w-5 text-white" />}
-            color="from-primary-600 to-primary-800"
+            color="from-fuchsia-500 to-fuchsia-700"
             onClick={() => goToTab(1)}
           />
           <StatCard
             title={myBook ? 'My Monthly Revenue' : 'Monthly Revenue'}
             value={formatCurrency(stats.monthlyRevenue)}
             icon={<Receipt className="h-5 w-5 text-white" />}
-            color="from-slate-600 to-slate-800"
+            color="from-cyan-500 to-cyan-700"
             to={myBook ? '/my-sales' : '/finance'}
           />
         </StatGrid>

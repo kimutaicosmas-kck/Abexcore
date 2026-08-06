@@ -172,35 +172,35 @@ export function ProductionPage() {
             title="Active orders"
             value={stats.activeOrders}
             icon={<Factory className="h-5 w-5 text-white" />}
-            color="from-primary-500 to-primary-700"
+            color="from-blue-500 to-blue-700"
             onClick={() => goToTab(1)}
           />
           <StatCard
             title="In progress"
             value={stats.inProgress}
             icon={<Clock className="h-5 w-5 text-white" />}
-            color="from-orange-500 to-amber-600"
+            color="from-lime-500 to-lime-700"
             onClick={() => { setStatusFilter('IN_PROGRESS'); goToTab(1); }}
           />
           <StatCard
             title="Scheduled"
             value={stats.scheduled}
             icon={<Calendar className="h-5 w-5 text-white" />}
-            color="from-primary-600 to-primary-800"
+            color="from-pink-500 to-pink-700"
             onClick={() => { setStatusFilter('SCHEDULED'); goToTab(1); }}
           />
           <StatCard
             title="Awaiting production"
             value={stats.awaitingProduction}
             icon={<Package className="h-5 w-5 text-white" />}
-            color="from-emerald-500 to-teal-600"
+            color="from-amber-500 to-amber-700"
             onClick={() => { setStatusFilter('PLANNED'); goToTab(1); }}
           />
           <StatCard
             title="Completed (Month)"
             value={stats.completedInPeriod}
             icon={<CheckCircle className="h-5 w-5 text-white" />}
-            color="from-slate-600 to-slate-800"
+            color="from-slate-500 to-slate-700"
             onClick={() => { setStatusFilter('COMPLETED'); goToTab(1); }}
           />
         </StatGrid>

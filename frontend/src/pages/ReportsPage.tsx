@@ -165,35 +165,35 @@ export function ReportsPage() {
             title="Total sales"
             value={formatCurrency(summary.totalSales)}
             icon={<TrendingUp className="h-5 w-5 text-white" />}
-            color="from-emerald-500 to-teal-600"
+            color="from-teal-500 to-teal-700"
             to="/sales"
           />
           <StatCard
             title="Total purchases"
             value={formatCurrency(summary.totalPurchases)}
             icon={<Truck className="h-5 w-5 text-white" />}
-            color="from-red-500 to-rose-600"
+            color="from-indigo-500 to-indigo-700"
             to="/procurement"
           />
           <StatCard
             title="Customers"
             value={summary.totalCustomers}
             icon={<Users className="h-5 w-5 text-white" />}
-            color="from-primary-500 to-primary-700"
+            color="from-orange-500 to-orange-700"
             to="/customers"
           />
           <StatCard
             title="Production completed"
             value={summary.completedProduction}
             icon={<Factory className="h-5 w-5 text-white" />}
-            color="from-orange-500 to-amber-600"
+            color="from-fuchsia-500 to-fuchsia-700"
             to="/production"
           />
           <StatCard
             title="Unpaid invoices"
             value={summary.unpaidInvoices}
             icon={<AlertCircle className="h-5 w-5 text-white" />}
-            color="from-slate-600 to-slate-800"
+            color="from-cyan-500 to-cyan-700"
             to="/finance"
           />
         </StatGrid>

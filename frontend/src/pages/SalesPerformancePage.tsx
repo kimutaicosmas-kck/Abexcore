@@ -135,35 +135,35 @@ export function SalesPerformancePanel() {
             title="Team invoiced"
             value={formatCurrency(data.summary.invoiced)}
             icon={<TrendingUp className="h-5 w-5 text-white" />}
-            color="from-emerald-500 to-teal-600"
+            color="from-cyan-500 to-cyan-700"
             to="/finance"
           />
           <StatCard
             title="Collected"
             value={formatCurrency(data.summary.collected)}
             icon={<Wallet className="h-5 w-5 text-white" />}
-            color="from-primary-600 to-primary-800"
+            color="from-violet-500 to-violet-700"
             to="/finance"
           />
           <StatCard
             title="Orders"
             value={data.summary.orderCount}
             icon={<ShoppingCart className="h-5 w-5 text-white" />}
-            color="from-primary-500 to-primary-700"
+            color="from-emerald-500 to-emerald-700"
             to="/sales"
           />
           <StatCard
             title="Avg target hit"
             value={data.summary.avgAchievement != null ? `${data.summary.avgAchievement}%` : '—'}
             icon={<Target className="h-5 w-5 text-white" />}
-            color="from-amber-500 to-orange-600"
+            color="from-orange-500 to-orange-700"
             to="/sales-performance?tab=targets"
           />
           <StatCard
             title="Outstanding"
             value={formatCurrency(data.summary.outstanding)}
             icon={<AlertCircle className="h-5 w-5 text-white" />}
-            color="from-slate-600 to-slate-800"
+            color="from-rose-500 to-rose-700"
             to="/finance"
           />
         </StatGrid>

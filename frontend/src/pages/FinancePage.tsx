@@ -563,11 +563,11 @@ export function FinancePage() {
     <div className="space-y-4">
       {stats && (
         <StatGrid>
-          <StatCard title="Monthly Revenue" value={formatCurrency(stats.monthlyRevenue)} icon={<TrendingUp className="h-5 w-5 text-white" />} color="from-emerald-500 to-teal-600" onClick={() => goToTab(1)} />
-          <StatCard title="Receivable" value={formatCurrency(stats.accountsReceivable)} icon={<Wallet className="h-5 w-5 text-white" />} color="from-primary-500 to-primary-700" onClick={() => goToTab(1)} />
-          <StatCard title="Payable" value={formatCurrency(stats.accountsPayable)} icon={<TrendingDown className="h-5 w-5 text-white" />} color="from-red-500 to-rose-600" onClick={() => goToTab(1)} />
-          <StatCard title="Overdue" value={stats.overdueInvoices} icon={<AlertCircle className="h-5 w-5 text-white" />} color="from-amber-500 to-orange-600" onClick={() => goToTab(1)} />
-          <StatCard title="Total Sales" value={formatCurrency(stats.totalSales)} icon={<Receipt className="h-5 w-5 text-white" />} color="from-primary-600 to-primary-800" onClick={() => goToTab(1)} />
+          <StatCard title="Monthly Revenue" value={formatCurrency(stats.monthlyRevenue)} icon={<TrendingUp className="h-5 w-5 text-white" />} color="from-blue-500 to-blue-700" onClick={() => goToTab(1)} />
+          <StatCard title="Receivable" value={formatCurrency(stats.accountsReceivable)} icon={<Wallet className="h-5 w-5 text-white" />} color="from-lime-500 to-lime-700" onClick={() => goToTab(1)} />
+          <StatCard title="Payable" value={formatCurrency(stats.accountsPayable)} icon={<TrendingDown className="h-5 w-5 text-white" />} color="from-pink-500 to-pink-700" onClick={() => goToTab(1)} />
+          <StatCard title="Overdue" value={stats.overdueInvoices} icon={<AlertCircle className="h-5 w-5 text-white" />} color="from-amber-500 to-amber-700" onClick={() => goToTab(1)} />
+          <StatCard title="Total Sales" value={formatCurrency(stats.totalSales)} icon={<Receipt className="h-5 w-5 text-white" />} color="from-slate-500 to-slate-700" onClick={() => goToTab(1)} />
         </StatGrid>
       )}
 
@@ -1011,10 +1011,10 @@ export function FinancePage() {
       {activeTab === 5 && reconciliation && (
         <>
           <StatGrid>
-            <StatCard title="Bank Balance (GL)" value={formatCurrency(reconciliation.bankBalance)} icon={<Landmark className="h-5 w-5 text-white" />} color="from-slate-600 to-slate-700" />
-            <StatCard title="Statement Balance" value={formatCurrency(reconciliation.statementBalance ?? 0)} icon={<Landmark className="h-5 w-5 text-white" />} color="from-blue-600 to-indigo-700" />
-            <StatCard title="Variance" value={formatCurrency(reconciliation.variance ?? 0)} icon={<CircleDollarSign className="h-5 w-5 text-white" />} color="from-rose-500 to-red-600" />
-            <StatCard title="Unreconciled" value={formatCurrency(reconciliation.unreconciledTotal)} icon={<CircleDollarSign className="h-5 w-5 text-white" />} color="from-amber-500 to-orange-600" />
+            <StatCard title="Bank Balance (GL)" value={formatCurrency(reconciliation.bankBalance)} icon={<Landmark className="h-5 w-5 text-white" />} color="from-teal-500 to-teal-700" />
+            <StatCard title="Statement Balance" value={formatCurrency(reconciliation.statementBalance ?? 0)} icon={<Landmark className="h-5 w-5 text-white" />} color="from-indigo-500 to-indigo-700" />
+            <StatCard title="Variance" value={formatCurrency(reconciliation.variance ?? 0)} icon={<CircleDollarSign className="h-5 w-5 text-white" />} color="from-orange-500 to-orange-700" />
+            <StatCard title="Unreconciled" value={formatCurrency(reconciliation.unreconciledTotal)} icon={<CircleDollarSign className="h-5 w-5 text-white" />} color="from-fuchsia-500 to-fuchsia-700" />
           </StatGrid>
           {canUpdate && (
             <div className="mb-4 p-4 bg-white rounded-xl border border-slate-200 space-y-3">

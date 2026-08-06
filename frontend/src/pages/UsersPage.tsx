@@ -287,11 +287,11 @@ export function UsersPage() {
     <div className="space-y-4">
       {stats && (
         <StatGrid>
-          <StatCard title="Total Users" value={stats.total} icon={<Users className="h-5 w-5 text-white" />} color="from-primary-500 to-primary-700" onClick={() => goToTab(1)} />
-          <StatCard title="Active" value={stats.active} icon={<UserCheck className="h-5 w-5 text-white" />} color="from-emerald-500 to-teal-600" onClick={() => { setStatusFilter('ACTIVE'); setPage(1); goToTab(1); }} />
-          <StatCard title="Inactive / Suspended" value={stats.inactive + stats.suspended} icon={<UserX className="h-5 w-5 text-white" />} color="from-red-500 to-rose-600" onClick={() => { setStatusFilter('INACTIVE'); setPage(1); goToTab(1); }} />
-          <StatCard title="Logged In (7d)" value={stats.recentLogins} icon={<Shield className="h-5 w-5 text-white" />} color="from-primary-600 to-primary-800" onClick={() => goToTab(1)} />
-          <StatCard title="Roles" value={stats.byRole.length} icon={<ScrollText className="h-5 w-5 text-white" />} color="from-slate-600 to-slate-800" onClick={() => goToTab(2)} />
+          <StatCard title="Total Users" value={stats.total} icon={<Users className="h-5 w-5 text-white" />} color="from-blue-500 to-blue-700" onClick={() => goToTab(1)} />
+          <StatCard title="Active" value={stats.active} icon={<UserCheck className="h-5 w-5 text-white" />} color="from-lime-500 to-lime-700" onClick={() => { setStatusFilter('ACTIVE'); setPage(1); goToTab(1); }} />
+          <StatCard title="Inactive / Suspended" value={stats.inactive + stats.suspended} icon={<UserX className="h-5 w-5 text-white" />} color="from-pink-500 to-pink-700" onClick={() => { setStatusFilter('INACTIVE'); setPage(1); goToTab(1); }} />
+          <StatCard title="Logged In (7d)" value={stats.recentLogins} icon={<Shield className="h-5 w-5 text-white" />} color="from-amber-500 to-amber-700" onClick={() => goToTab(1)} />
+          <StatCard title="Roles" value={stats.byRole.length} icon={<ScrollText className="h-5 w-5 text-white" />} color="from-slate-500 to-slate-700" onClick={() => goToTab(2)} />
         </StatGrid>
       )}
 

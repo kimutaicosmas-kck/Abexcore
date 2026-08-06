@@ -145,35 +145,35 @@ export function QualityPage() {
             title="Pending"
             value={stats.pending}
             icon={<ClipboardCheck className="h-5 w-5 text-white" />}
-            color="from-amber-500 to-orange-600"
+            color="from-cyan-500 to-cyan-700"
             onClick={() => { setStatus('PENDING'); setPage(1); goToTab(1); }}
           />
           <StatCard
             title="Passed"
             value={stats.passed}
             icon={<CheckCircle className="h-5 w-5 text-white" />}
-            color="from-emerald-500 to-teal-600"
+            color="from-violet-500 to-violet-700"
             onClick={() => { setStatus('PASSED'); setPage(1); goToTab(1); }}
           />
           <StatCard
             title="Failed"
             value={stats.failed}
             icon={<XCircle className="h-5 w-5 text-white" />}
-            color="from-red-500 to-rose-600"
+            color="from-emerald-500 to-emerald-700"
             onClick={() => { setStatus('FAILED'); setPage(1); goToTab(1); }}
           />
           <StatCard
             title="Pass Rate"
             value={`${stats.passRate}%`}
             icon={<Percent className="h-5 w-5 text-white" />}
-            color="from-primary-500 to-primary-700"
+            color="from-orange-500 to-orange-700"
             onClick={() => { setStatus(''); setPage(1); goToTab(1); }}
           />
           <StatCard
             title="Total Inspections"
             value={stats.total}
             icon={<ClipboardCheck className="h-5 w-5 text-white" />}
-            color="from-slate-600 to-slate-800"
+            color="from-rose-500 to-rose-700"
             onClick={() => { setStatus(''); setPage(1); goToTab(1); }}
           />
         </StatGrid>

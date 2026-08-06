@@ -337,35 +337,35 @@ export function InventoryPage() {
             title="Inventory value"
             value={formatCurrency(stats.inventoryValue)}
             icon={<Boxes className="h-5 w-5 text-white" />}
-            color="from-emerald-500 to-teal-600"
+            color="from-cyan-500 to-cyan-700"
             onClick={() => goToTab(1)}
           />
           <StatCard
             title="Raw materials"
             value={stats.materialsCount}
             icon={<Package className="h-5 w-5 text-white" />}
-            color="from-primary-500 to-primary-700"
+            color="from-violet-500 to-violet-700"
             onClick={() => goToTab(2)}
           />
           <StatCard
             title="Warehouses"
             value={stats.warehouses}
             icon={<Warehouse className="h-5 w-5 text-white" />}
-            color="from-slate-600 to-slate-800"
+            color="from-emerald-500 to-emerald-700"
             onClick={() => goToTab(3)}
           />
           <StatCard
             title="Low stock"
             value={stats.lowStockCount}
             icon={<TrendingDown className="h-5 w-5 text-white" />}
-            color="from-red-500 to-rose-600"
+            color="from-orange-500 to-orange-700"
             onClick={() => goToTab(4)}
           />
           <StatCard
             title="Movements today"
             value={stats.transfersToday}
             icon={<Activity className="h-5 w-5 text-white" />}
-            color="from-primary-600 to-primary-800"
+            color="from-rose-500 to-rose-700"
             onClick={() => goToTab(5)}
           />
         </StatGrid>

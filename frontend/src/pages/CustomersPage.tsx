@@ -617,35 +617,35 @@ export function CustomersPage() {
             title={myBook ? 'My Customers' : 'Customers'}
             value={stats.customers.active}
             icon={<Users className="h-5 w-5 text-white" />}
-            color="from-primary-500 to-primary-700"
+            color="from-emerald-500 to-emerald-700"
             onClick={() => goToTab(1)}
           />
           <StatCard
             title={myBook ? 'My Open Complaints' : 'Open Complaints'}
             value={stats.complaints.open}
             icon={<AlertCircle className="h-5 w-5 text-white" />}
-            color="from-red-500 to-rose-600"
+            color="from-sky-500 to-sky-700"
             onClick={() => goToTab(2)}
           />
           <StatCard
             title={myBook ? 'My Pipeline' : 'Pipeline Value'}
             value={formatCurrency(stats.opportunities.pipelineValue)}
             icon={<TrendingUp className="h-5 w-5 text-white" />}
-            color="from-emerald-500 to-teal-600"
+            color="from-violet-500 to-violet-700"
             onClick={() => goToTab(3)}
           />
           <StatCard
             title={myBook ? 'My Warranties Expiring' : 'Warranties Expiring'}
             value={stats.warranties.expiringSoon}
             icon={<Shield className="h-5 w-5 text-white" />}
-            color="from-primary-600 to-primary-800"
+            color="from-amber-500 to-amber-700"
             onClick={() => goToTab(4)}
           />
           <StatCard
             title={myBook ? 'My Open Opportunities' : 'Open Opportunities'}
             value={stats.opportunities.open}
             icon={<Target className="h-5 w-5 text-white" />}
-            color="from-slate-600 to-slate-800"
+            color="from-rose-500 to-rose-700"
             onClick={() => goToTab(3)}
           />
         </StatGrid>

@@ -134,21 +134,21 @@ export function ProductsSoldPanel({ toolbar }: { toolbar?: ReactNode }) {
             title="Products sold"
             value={report.summary.productCount}
             icon={<Package className="h-5 w-5 text-white" />}
-            color="from-primary-500 to-primary-700"
+            color="from-teal-500 to-teal-700"
             to="/products"
           />
           <StatCard
             title="Total qty sold"
             value={report.summary.totalQtySold}
             icon={<Boxes className="h-5 w-5 text-white" />}
-            color="from-emerald-500 to-teal-600"
+            color="from-indigo-500 to-indigo-700"
             to="/sales"
           />
           <StatCard
             title="Need restock"
             value={report.summary.needsRestockCount}
             icon={<AlertTriangle className="h-5 w-5 text-white" />}
-            color="from-amber-500 to-orange-600"
+            color="from-orange-500 to-orange-700"
             to="/inventory"
           />
         </StatGrid>
