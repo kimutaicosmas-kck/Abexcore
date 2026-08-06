@@ -615,11 +615,11 @@ export function DeliveryPage() {
       />
       {stats && (
         <StatGrid>
-          <StatCard title="Pending" value={stats.pending} icon={<Package className="h-5 w-5 text-white" />} color="from-amber-500 to-orange-600" />
-          <StatCard title="In Transit" value={stats.inTransit} icon={<Truck className="h-5 w-5 text-white" />} color="from-primary-500 to-primary-700" />
-          <StatCard title="Delivered Today" value={stats.deliveredToday} icon={<MapPin className="h-5 w-5 text-white" />} color="from-emerald-500 to-teal-600" />
-          <StatCard title="Motorcycles" value={stats.motorcycles ?? 0} icon={<Bike className="h-5 w-5 text-white" />} color="from-sky-500 to-cyan-600" />
-          <StatCard title="Trucks" value={stats.trucks ?? 0} icon={<Truck className="h-5 w-5 text-white" />} color="from-primary-600 to-primary-800" />
+          <StatCard title="Pending" value={stats.pending} icon={<Package className="h-5 w-5 text-white" />} color="from-amber-500 to-orange-600" onClick={() => { setStatus('PENDING'); setPage(1); goToTab(1); }} />
+          <StatCard title="In Transit" value={stats.inTransit} icon={<Truck className="h-5 w-5 text-white" />} color="from-primary-500 to-primary-700" onClick={() => { setStatus('IN_TRANSIT'); setPage(1); goToTab(1); }} />
+          <StatCard title="Delivered Today" value={stats.deliveredToday} icon={<MapPin className="h-5 w-5 text-white" />} color="from-emerald-500 to-teal-600" onClick={() => { setStatus('DELIVERED'); setPage(1); goToTab(1); }} />
+          <StatCard title="Motorcycles" value={stats.motorcycles ?? 0} icon={<Bike className="h-5 w-5 text-white" />} color="from-sky-500 to-cyan-600" onClick={() => goToTab(2)} />
+          <StatCard title="Trucks" value={stats.trucks ?? 0} icon={<Truck className="h-5 w-5 text-white" />} color="from-primary-600 to-primary-800" onClick={() => goToTab(2)} />
         </StatGrid>
       )}
 

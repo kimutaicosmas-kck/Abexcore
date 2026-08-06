@@ -1,4 +1,5 @@
 import { useId, useState } from 'react';
+import { Link } from 'react-router-dom';
 import clsx from 'clsx';
 import { ChevronRight } from 'lucide-react';
 
@@ -242,17 +243,64 @@ export function Badge({ children, variant = 'default' }: BadgeProps) {
   );
 }
 
+/** Resolve Tailwind color tokens used on stat cards to hex for the top accent bar. */
+const STAT_ACCENT_HEX: Record<string, string> = {
+  'primary-500': '#3b82f6',
+  'primary-600': '#2563eb',
+  'primary-700': '#1d4ed8',
+  'primary-800': '#1e40af',
+  'emerald-500': '#10b981',
+  'teal-600': '#0d9488',
+  'orange-500': '#f97316',
+  'amber-500': '#f59e0b',
+  'amber-600': '#d97706',
+  'red-500': '#ef4444',
+  'red-600': '#dc2626',
+  'rose-500': '#f43f5e',
+  'rose-600': '#e11d48',
+  'slate-600': '#475569',
+  'slate-700': '#334155',
+  'slate-800': '#1e293b',
+  'sky-500': '#0ea5e9',
+  'cyan-600': '#0891b2',
+  'blue-600': '#2563eb',
+  'indigo-700': '#4338ca',
+};
+
+function resolveStatAccent(color: string): { from: string; to: string } {
+  const fromMatch = color.match(/from-([a-z]+-\d+)/);
+  const toMatch = color.match(/to-([a-z]+-\d+)/);
+  const bgMatch = color.match(/bg-([a-z]+-\d+)/);
+  const fromKey = fromMatch?.[1] || bgMatch?.[1] || 'primary-600';
+  const toKey = toMatch?.[1] || fromKey;
+  return {
+    from: STAT_ACCENT_HEX[fromKey] || STAT_ACCENT_HEX['primary-600'],
+    to: STAT_ACCENT_HEX[toKey] || STAT_ACCENT_HEX[fromKey] || STAT_ACCENT_HEX['primary-600'],
+  };
+}
+
 interface StatCardProps {
   title: string;
   value: string | number;
   icon: React.ReactNode;
   trend?: { value: number; label: string };
   color?: string;
+  /** Navigate to a route when the card is clicked. */
+  to?: string;
+  /** Same-page action (e.g. switch tab / apply filter). Ignored when `to` is set. */
+  onClick?: () => void;
 }
 
-export function StatCard({ title, value, icon, trend, color = 'bg-primary-600' }: StatCardProps) {
-  return (
-    <div className="stat-card flex flex-col gap-1.5 sm:gap-2.5 snap-start">
+export function StatCard({ title, value, icon, trend, color = 'bg-primary-600', to, onClick }: StatCardProps) {
+  const interactive = Boolean(to || onClick);
+  const accent = resolveStatAccent(color);
+  const accentStyle = {
+    ['--stat-accent-from' as string]: accent.from,
+    ['--stat-accent-to' as string]: accent.to,
+  } as React.CSSProperties;
+
+  const content = (
+    <>
       <div className="flex items-start justify-between gap-1.5 sm:gap-2">
         <p className="stat-card-title min-w-0 flex-1 text-[10px] sm:text-xs font-medium text-primary-700/70 uppercase tracking-wide leading-snug line-clamp-2">
           {title}
@@ -274,6 +322,34 @@ export function StatCard({ title, value, icon, trend, color = 'bg-primary-600' }
           {trend.value >= 0 ? '+' : ''}{trend.value}% {trend.label}
         </p>
       )}
+    </>
+  );
+
+  const className = clsx(
+    'stat-card flex flex-col gap-1.5 sm:gap-2.5 snap-start text-left w-full',
+    interactive &&
+      'stat-card-interactive cursor-pointer transition-all duration-150 hover:border-primary-300 hover:shadow-md hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2'
+  );
+
+  if (to) {
+    return (
+      <Link to={to} className={className} style={accentStyle} aria-label={`View ${title}`}>
+        {content}
+      </Link>
+    );
+  }
+
+  if (onClick) {
+    return (
+      <button type="button" onClick={onClick} className={className} style={accentStyle} aria-label={`View ${title}`}>
+        {content}
+      </button>
+    );
+  }
+
+  return (
+    <div className={className} style={accentStyle}>
+      {content}
     </div>
   );
 }

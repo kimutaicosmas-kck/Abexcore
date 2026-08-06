@@ -44,6 +44,7 @@ import { SalesOrderForm } from '../components/forms/SalesOrderForm';
 import { SalesOrderEditForm } from '../components/forms/SalesOrderEditForm';
 import { QuotationForm } from '../components/forms/QuotationForm';
 import { useAuth } from '../contexts/AuthContext';
+import { canManageSalesTargets } from '../utils/salesTargets';
 import { SalesOrder, SalesQuotation, SalesStats } from '../types';
 
 const tabs = ['Overview', 'Sales Orders', 'Quotations'];
@@ -108,7 +109,7 @@ function getNextOrderAction(
 
 export function SalesPage() {
   const queryClient = useQueryClient();
-  const { hasPermission, isSalesOfficer } = useAuth();
+  const { hasPermission, isSalesOfficer, user } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const orderIdFromUrl = searchParams.get('orderId');
@@ -167,6 +168,7 @@ export function SalesPage() {
     navigate(`/delivery?${params.toString()}`);
   };
   const canViewPerformance = hasPermission('reports:read') || hasPermission('finance:read');
+  const canManageTargets = canManageSalesTargets(user?.role?.name, hasPermission);
   const canDownloadInvoice = hasPermission('finance:read');
   const [downloadingInvoiceId, setDownloadingInvoiceId] = useState<string | null>(null);
 
@@ -504,11 +506,11 @@ export function SalesPage() {
     <div className="space-y-4">
       {stats && (
         <StatGrid>
-          <StatCard title="Open Orders" value={stats.openOrders} icon={<ShoppingCart className="h-5 w-5 text-white" />} color="from-primary-500 to-primary-700" />
-          <StatCard title="Pipeline Value" value={formatCurrency(stats.pipelineValue)} icon={<TrendingUp className="h-5 w-5 text-white" />} color="from-emerald-500 to-teal-600" />
-          <StatCard title="Pending Quotes" value={stats.pendingQuotations} icon={<FileText className="h-5 w-5 text-white" />} color="from-amber-500 to-orange-600" />
-          <StatCard title="Orders This Month" value={stats.ordersThisMonth} icon={<CalendarDays className="h-5 w-5 text-white" />} color="from-primary-600 to-primary-800" />
-          <StatCard title="Monthly Revenue" value={formatCurrency(stats.monthlyRevenue)} icon={<Receipt className="h-5 w-5 text-white" />} color="from-slate-600 to-slate-800" />
+          <StatCard title="Open Orders" value={stats.openOrders} icon={<ShoppingCart className="h-5 w-5 text-white" />} color="from-primary-500 to-primary-700" onClick={() => goToTab(1)} />
+          <StatCard title="Pipeline Value" value={formatCurrency(stats.pipelineValue)} icon={<TrendingUp className="h-5 w-5 text-white" />} color="from-emerald-500 to-teal-600" onClick={() => goToTab(1)} />
+          <StatCard title="Pending Quotes" value={stats.pendingQuotations} icon={<FileText className="h-5 w-5 text-white" />} color="from-amber-500 to-orange-600" onClick={() => goToTab(2)} />
+          <StatCard title="Orders This Month" value={stats.ordersThisMonth} icon={<CalendarDays className="h-5 w-5 text-white" />} color="from-primary-600 to-primary-800" onClick={() => goToTab(1)} />
+          <StatCard title="Monthly Revenue" value={formatCurrency(stats.monthlyRevenue)} icon={<Receipt className="h-5 w-5 text-white" />} color="from-slate-600 to-slate-800" to="/finance" />
         </StatGrid>
       )}
 
@@ -520,6 +522,14 @@ export function SalesPage() {
                 <Button variant="secondary" size="sm">
                   <Target className="h-4 w-4 mr-1.5" />
                   Team performance
+                </Button>
+              </Link>
+            )}
+            {canManageTargets && (
+              <Link to="/sales-performance?tab=targets">
+                <Button variant="secondary" size="sm">
+                  <Target className="h-4 w-4 mr-1.5" />
+                  Set targets
                 </Button>
               </Link>
             )}

@@ -175,30 +175,35 @@ export function MySalesPage() {
             value={formatCurrency(summary.totalSales)}
             icon={<TrendingUp className="h-5 w-5 text-white" />}
             color="from-emerald-500 to-teal-600"
+            to="/sales"
           />
           <StatCard
             title="Invoiced"
             value={formatCurrency(summary.totalInvoiced)}
             icon={<Receipt className="h-5 w-5 text-white" />}
             color="from-primary-500 to-primary-700"
+            to="/finance"
           />
           <StatCard
             title="Collected"
             value={formatCurrency(summary.totalPaid)}
             icon={<Wallet className="h-5 w-5 text-white" />}
             color="from-primary-600 to-primary-800"
+            to="/finance"
           />
           <StatCard
             title="Monthly target"
             value={summary.monthlyTarget > 0 ? `${achievement ?? 0}%` : 'Not set'}
             icon={<Target className="h-5 w-5 text-white" />}
             color="from-amber-500 to-orange-600"
+            to="/sales-performance?tab=targets"
           />
           <StatCard
             title="Outstanding"
             value={formatCurrency(summary.outstanding)}
             icon={<AlertCircle className="h-5 w-5 text-white" />}
             color="from-slate-600 to-slate-800"
+            to="/finance"
           />
         </StatGrid>
       )}

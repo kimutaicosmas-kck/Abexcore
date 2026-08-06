@@ -609,11 +609,11 @@ export function CustomersPage() {
     <div className="space-y-4">
       {stats && (
         <StatGrid>
-          <StatCard title="Customers" value={stats.customers.active} icon={<Users className="h-5 w-5 text-white" />} color="from-primary-500 to-primary-700" />
-          <StatCard title="Open Complaints" value={stats.complaints.open} icon={<AlertCircle className="h-5 w-5 text-white" />} color="from-red-500 to-rose-600" />
-          <StatCard title="Pipeline Value" value={formatCurrency(stats.opportunities.pipelineValue)} icon={<TrendingUp className="h-5 w-5 text-white" />} color="from-emerald-500 to-teal-600" />
-          <StatCard title="Warranties Expiring" value={stats.warranties.expiringSoon} icon={<Shield className="h-5 w-5 text-white" />} color="from-primary-600 to-primary-800" />
-          <StatCard title="Open Opportunities" value={stats.opportunities.open} icon={<Target className="h-5 w-5 text-white" />} color="from-slate-600 to-slate-800" />
+          <StatCard title="Customers" value={stats.customers.active} icon={<Users className="h-5 w-5 text-white" />} color="from-primary-500 to-primary-700" onClick={() => goToTab(1)} />
+          <StatCard title="Open Complaints" value={stats.complaints.open} icon={<AlertCircle className="h-5 w-5 text-white" />} color="from-red-500 to-rose-600" onClick={() => goToTab(2)} />
+          <StatCard title="Pipeline Value" value={formatCurrency(stats.opportunities.pipelineValue)} icon={<TrendingUp className="h-5 w-5 text-white" />} color="from-emerald-500 to-teal-600" onClick={() => goToTab(3)} />
+          <StatCard title="Warranties Expiring" value={stats.warranties.expiringSoon} icon={<Shield className="h-5 w-5 text-white" />} color="from-primary-600 to-primary-800" onClick={() => goToTab(4)} />
+          <StatCard title="Open Opportunities" value={stats.opportunities.open} icon={<Target className="h-5 w-5 text-white" />} color="from-slate-600 to-slate-800" onClick={() => goToTab(3)} />
         </StatGrid>
       )}
 

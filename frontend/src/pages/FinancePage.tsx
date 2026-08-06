@@ -563,11 +563,11 @@ export function FinancePage() {
     <div className="space-y-4">
       {stats && (
         <StatGrid>
-          <StatCard title="Monthly Revenue" value={formatCurrency(stats.monthlyRevenue)} icon={<TrendingUp className="h-5 w-5 text-white" />} color="from-emerald-500 to-teal-600" />
-          <StatCard title="Receivable" value={formatCurrency(stats.accountsReceivable)} icon={<Wallet className="h-5 w-5 text-white" />} color="from-primary-500 to-primary-700" />
-          <StatCard title="Payable" value={formatCurrency(stats.accountsPayable)} icon={<TrendingDown className="h-5 w-5 text-white" />} color="from-red-500 to-rose-600" />
-          <StatCard title="Overdue" value={stats.overdueInvoices} icon={<AlertCircle className="h-5 w-5 text-white" />} color="from-amber-500 to-orange-600" />
-          <StatCard title="Total Sales" value={formatCurrency(stats.totalSales)} icon={<Receipt className="h-5 w-5 text-white" />} color="from-primary-600 to-primary-800" />
+          <StatCard title="Monthly Revenue" value={formatCurrency(stats.monthlyRevenue)} icon={<TrendingUp className="h-5 w-5 text-white" />} color="from-emerald-500 to-teal-600" onClick={() => goToTab(1)} />
+          <StatCard title="Receivable" value={formatCurrency(stats.accountsReceivable)} icon={<Wallet className="h-5 w-5 text-white" />} color="from-primary-500 to-primary-700" onClick={() => goToTab(1)} />
+          <StatCard title="Payable" value={formatCurrency(stats.accountsPayable)} icon={<TrendingDown className="h-5 w-5 text-white" />} color="from-red-500 to-rose-600" onClick={() => goToTab(1)} />
+          <StatCard title="Overdue" value={stats.overdueInvoices} icon={<AlertCircle className="h-5 w-5 text-white" />} color="from-amber-500 to-orange-600" onClick={() => goToTab(1)} />
+          <StatCard title="Total Sales" value={formatCurrency(stats.totalSales)} icon={<Receipt className="h-5 w-5 text-white" />} color="from-primary-600 to-primary-800" onClick={() => goToTab(1)} />
         </StatGrid>
       )}
 

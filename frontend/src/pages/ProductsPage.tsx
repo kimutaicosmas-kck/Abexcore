@@ -213,30 +213,35 @@ export function ProductsPage() {
             value={stats.total}
             icon={<Package className="h-5 w-5 text-white" />}
             color="from-primary-500 to-primary-700"
+            onClick={() => goToTab(1)}
           />
           <StatCard
             title="Active"
             value={stats.active}
             icon={<Box className="h-5 w-5 text-white" />}
             color="from-emerald-500 to-teal-600"
+            onClick={() => goToTab(1)}
           />
           <StatCard
             title="Inactive"
             value={stats.inactive}
             icon={<FileText className="h-5 w-5 text-white" />}
             color="from-slate-600 to-slate-800"
+            onClick={() => goToTab(1)}
           />
           <StatCard
             title="FG in Stock"
             value={stats.finishedGoodsQty.toLocaleString()}
             icon={<Package className="h-5 w-5 text-white" />}
             color="from-orange-500 to-amber-600"
+            to="/inventory"
           />
           <StatCard
             title="Categories"
             value={stats.byCategory.length}
             icon={<FileText className="h-5 w-5 text-white" />}
             color="from-primary-600 to-primary-800"
+            onClick={() => goToTab(1)}
           />
         </StatGrid>
       )}

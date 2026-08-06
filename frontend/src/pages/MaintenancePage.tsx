@@ -139,11 +139,11 @@ export function MaintenancePage() {
       />
       {stats && (
         <StatGrid>
-          <StatCard title="Machines" value={stats.totalMachines} icon={<Cog className="h-5 w-5 text-white" />} color="from-primary-500 to-primary-700" />
-          <StatCard title="Operational" value={stats.operational} icon={<CheckCircle2 className="h-5 w-5 text-white" />} color="from-emerald-500 to-teal-600" />
-          <StatCard title="Open Requests" value={stats.openRequests} icon={<Wrench className="h-5 w-5 text-white" />} color="from-amber-500 to-orange-600" />
-          <StatCard title="Overdue" value={stats.overdueRequests} icon={<AlertTriangle className="h-5 w-5 text-white" />} color="from-red-500 to-rose-600" />
-          <StatCard title="Completed (Month)" value={stats.completedMonth} icon={<Calendar className="h-5 w-5 text-white" />} color="from-slate-600 to-slate-800" />
+          <StatCard title="Machines" value={stats.totalMachines} icon={<Cog className="h-5 w-5 text-white" />} color="from-primary-500 to-primary-700" onClick={() => goToTab(1)} />
+          <StatCard title="Operational" value={stats.operational} icon={<CheckCircle2 className="h-5 w-5 text-white" />} color="from-emerald-500 to-teal-600" onClick={() => goToTab(1)} />
+          <StatCard title="Open Requests" value={stats.openRequests} icon={<Wrench className="h-5 w-5 text-white" />} color="from-amber-500 to-orange-600" onClick={() => goToTab(2)} />
+          <StatCard title="Overdue" value={stats.overdueRequests} icon={<AlertTriangle className="h-5 w-5 text-white" />} color="from-red-500 to-rose-600" onClick={() => { setStatus('OVERDUE'); setPage(1); goToTab(2); }} />
+          <StatCard title="Completed (Month)" value={stats.completedMonth} icon={<Calendar className="h-5 w-5 text-white" />} color="from-slate-600 to-slate-800" onClick={() => goToTab(2)} />
         </StatGrid>
       )}
 

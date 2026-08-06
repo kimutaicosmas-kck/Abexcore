@@ -112,30 +112,35 @@ export function SalesByPersonPanel({ toolbar }: { toolbar?: ReactNode }) {
             value={report.summary.invoiceCount}
             icon={<Users className="h-5 w-5 text-white" />}
             color="from-primary-500 to-primary-700"
+            to="/finance"
           />
           <StatCard
             title="Total sales"
             value={formatCurrency(report.summary.totalSales)}
             icon={<Users className="h-5 w-5 text-white" />}
             color="from-emerald-500 to-teal-600"
+            to="/sales"
           />
           <StatCard
             title="Collected"
             value={formatCurrency(report.summary.totalPaid)}
             icon={<Users className="h-5 w-5 text-white" />}
             color="from-primary-600 to-primary-800"
+            to="/finance"
           />
           <StatCard
             title="Outstanding"
             value={formatCurrency(report.summary.outstanding)}
             icon={<Users className="h-5 w-5 text-white" />}
             color="from-amber-500 to-orange-600"
+            to="/finance"
           />
           <StatCard
             title="Salespeople"
             value={report.summary.bySalesPerson.length}
             icon={<Users className="h-5 w-5 text-white" />}
             color="from-slate-600 to-slate-800"
+            to="/sales-performance"
           />
         </StatGrid>
       )}

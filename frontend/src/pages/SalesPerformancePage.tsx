@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Target, TrendingUp, Wallet, ShoppingCart, AlertCircle } from 'lucide-react';
@@ -17,6 +17,7 @@ import {
 } from '../components/ui';
 import { SalesTeamPerformance } from '../types';
 import { useAuth } from '../contexts/AuthContext';
+import { canManageSalesTargets } from '../utils/salesTargets';
 import { SalesTargetsPanel } from './SalesTargetsPage';
 
 function localDateInput(date = new Date()) {
@@ -30,7 +31,7 @@ function startOfMonth(date = new Date()) {
   return localDateInput(new Date(date.getFullYear(), date.getMonth(), 1));
 }
 
-export function SalesPerformancePanel({ toolbar }: { toolbar?: ReactNode }) {
+export function SalesPerformancePanel() {
   const today = localDateInput();
   const from = startOfMonth();
   const to = today;
@@ -135,35 +136,38 @@ export function SalesPerformancePanel({ toolbar }: { toolbar?: ReactNode }) {
             value={formatCurrency(data.summary.invoiced)}
             icon={<TrendingUp className="h-5 w-5 text-white" />}
             color="from-emerald-500 to-teal-600"
+            to="/finance"
           />
           <StatCard
             title="Collected"
             value={formatCurrency(data.summary.collected)}
             icon={<Wallet className="h-5 w-5 text-white" />}
             color="from-primary-600 to-primary-800"
+            to="/finance"
           />
           <StatCard
             title="Orders"
             value={data.summary.orderCount}
             icon={<ShoppingCart className="h-5 w-5 text-white" />}
             color="from-primary-500 to-primary-700"
+            to="/sales"
           />
           <StatCard
             title="Avg target hit"
             value={data.summary.avgAchievement != null ? `${data.summary.avgAchievement}%` : '—'}
             icon={<Target className="h-5 w-5 text-white" />}
             color="from-amber-500 to-orange-600"
+            to="/sales-performance?tab=targets"
           />
           <StatCard
             title="Outstanding"
             value={formatCurrency(data.summary.outstanding)}
             icon={<AlertCircle className="h-5 w-5 text-white" />}
             color="from-slate-600 to-slate-800"
+            to="/finance"
           />
         </StatGrid>
       )}
-
-      {toolbar}
 
       <DataPanel>
         {isError ? (
@@ -176,7 +180,7 @@ export function SalesPerformancePanel({ toolbar }: { toolbar?: ReactNode }) {
         ) : !isLoading && data && data.performers.length === 0 ? (
           <EmptyState
             title="No sales officers found"
-            description="Add Sales Officer users and assign targets to track performance."
+            description="Add Sales Officer or Sales Representative users under Users, then set monthly targets on the Targets tab."
           />
         ) : (
           <>
@@ -229,54 +233,39 @@ export function SalesPerformancePanel({ toolbar }: { toolbar?: ReactNode }) {
 }
 
 export function SalesPerformancePage() {
-  const { hasPermission, isSuperAdmin } = useAuth();
+  const { hasPermission, user, isSuperAdmin } = useAuth();
   const [searchParams] = useSearchParams();
   const canViewPerformance = hasPermission('reports:read') || hasPermission('finance:read');
-  const canManageTargets = isSuperAdmin && hasPermission('settings:read');
+  const canManageTargets =
+    isSuperAdmin || canManageSalesTargets(user?.role?.name, hasPermission);
 
   const tabs = useMemo(() => {
     const items: string[] = [];
     if (canViewPerformance) items.push('Performance');
-    if (canManageTargets) items.push('Targets');
+    if (canManageTargets) items.push('Set targets');
     return items;
   }, [canViewPerformance, canManageTargets]);
 
-  const initialTab = searchParams.get('tab') === 'targets' && canManageTargets ? 'Targets' : 'Performance';
-  const [activeTabName, setActiveTabName] = useState(
-    tabs.includes(initialTab) ? initialTab : tabs[0] || 'Performance'
-  );
+  const wantTargets =
+    (searchParams.get('tab') === 'targets' || searchParams.get('tab') === 'Set targets') &&
+    canManageTargets;
+  const initialTab = wantTargets ? 'Set targets' : tabs[0] || 'Performance';
+  const [activeTabName, setActiveTabName] = useState(initialTab);
   const activeTab = Math.max(0, tabs.indexOf(activeTabName));
 
   if (tabs.length === 0) {
     return <Alert variant="warning">You do not have access to sales performance or targets.</Alert>;
   }
 
-  const performanceToolbar =
-    tabs.length > 1 ? (
-      <PageToolbar
-        tabs={tabs}
-        activeTab={activeTab}
-        onTabChange={(index) => setActiveTabName(tabs[index])}
-      />
-    ) : undefined;
-
   return (
     <div className="space-y-4">
-      {activeTabName === 'Performance' && canViewPerformance && (
-        <SalesPerformancePanel toolbar={performanceToolbar} />
-      )}
-      {activeTabName === 'Targets' && canManageTargets && (
-        <>
-          {tabs.length > 1 && (
-            <PageToolbar
-              tabs={tabs}
-              activeTab={activeTab}
-              onTabChange={(index) => setActiveTabName(tabs[index])}
-            />
-          )}
-          <SalesTargetsPanel />
-        </>
-      )}
+      <PageToolbar
+        tabs={tabs}
+        activeTab={activeTab >= 0 ? activeTab : 0}
+        onTabChange={(index) => setActiveTabName(tabs[index])}
+      />
+      {activeTabName === 'Performance' && canViewPerformance && <SalesPerformancePanel />}
+      {activeTabName === 'Set targets' && canManageTargets && <SalesTargetsPanel />}
     </div>
   );
 }

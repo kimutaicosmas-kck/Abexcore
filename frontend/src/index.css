@@ -232,7 +232,11 @@ body {
     position: absolute;
     inset: 0 0 auto 0;
     height: 2px;
-    background: linear-gradient(90deg, #2563eb, #0ea5e9);
+    background: linear-gradient(
+      90deg,
+      var(--stat-accent-from, #2563eb),
+      var(--stat-accent-to, #0ea5e9)
+    );
   }
 
   .stat-card .stat-card-title {
@@ -398,7 +402,14 @@ body {
 
 .stat-card {
   @apply rounded-xl border border-primary-100 bg-white p-3 sm:p-4 shadow-soft min-w-0 overflow-hidden;
-  border-top: 3px solid var(--color-primary-600);
+  border-top: 3px solid var(--stat-accent-from, var(--color-primary-600));
+  --stat-accent-from: var(--color-primary-600);
+  --stat-accent-to: #0ea5e9;
+}
+
+.stat-card-interactive {
+  text-decoration: none;
+  color: inherit;
 }
 
 .page-tabs {

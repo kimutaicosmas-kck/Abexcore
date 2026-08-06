@@ -604,11 +604,11 @@ export function ProcurementPage() {
       />
       {stats && (
         <StatGrid>
-          <StatCard title="Pending Requisitions" value={stats.pendingRequisitions} icon={<ClipboardList className="h-5 w-5 text-white" />} color="from-amber-500 to-orange-600" />
-          <StatCard title="Open RFQs" value={stats.openRfqs} icon={<FileText className="h-5 w-5 text-white" />} color="from-primary-500 to-primary-700" />
-          <StatCard title="Active PO Value" value={formatCurrency(stats.activePoValue)} icon={<ShoppingCart className="h-5 w-5 text-white" />} color="from-emerald-500 to-teal-600" />
-          <StatCard title="Suppliers" value={stats.suppliers} icon={<Users className="h-5 w-5 text-white" />} color="from-primary-600 to-primary-800" />
-          <StatCard title="Active POs" value={stats.activePurchaseOrders} icon={<PackageCheck className="h-5 w-5 text-white" />} color="from-slate-600 to-slate-800" />
+          <StatCard title="Pending Requisitions" value={stats.pendingRequisitions} icon={<ClipboardList className="h-5 w-5 text-white" />} color="from-amber-500 to-orange-600" onClick={() => goToTab(2)} />
+          <StatCard title="Open RFQs" value={stats.openRfqs} icon={<FileText className="h-5 w-5 text-white" />} color="from-primary-500 to-primary-700" onClick={() => goToTab(3)} />
+          <StatCard title="Active PO Value" value={formatCurrency(stats.activePoValue)} icon={<ShoppingCart className="h-5 w-5 text-white" />} color="from-emerald-500 to-teal-600" onClick={() => goToTab(1)} />
+          <StatCard title="Suppliers" value={stats.suppliers} icon={<Users className="h-5 w-5 text-white" />} color="from-primary-600 to-primary-800" onClick={() => goToTab(5)} />
+          <StatCard title="Active POs" value={stats.activePurchaseOrders} icon={<PackageCheck className="h-5 w-5 text-white" />} color="from-slate-600 to-slate-800" onClick={() => goToTab(1)} />
         </StatGrid>
       )}
 
