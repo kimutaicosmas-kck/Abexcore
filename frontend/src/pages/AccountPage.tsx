@@ -1,14 +1,15 @@
-import { useRef, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Building2, Camera, KeyRound, LogOut, Settings, Shield, UserCircle } from 'lucide-react';
+import { Building2, Camera, KeyRound, LogOut, Shield } from 'lucide-react';
 import { authApi } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
-import { Alert, Button, Card, Input, formatDateTime } from '../components/ui';
+import { Alert, Badge, Button, Card, Input, PageToolbar, formatDateTime } from '../components/ui';
 import { UserAvatar } from '../components/ui/UserAvatar';
 import { getApiErrorMessage } from '../utils/apiError';
+import { SettingsPage } from './SettingsPage';
 
 const passwordSchema = z
   .object({
@@ -23,9 +24,9 @@ const passwordSchema = z
 
 type PasswordForm = z.infer<typeof passwordSchema>;
 
-export function AccountPage() {
+function ProfilePanel() {
   const navigate = useNavigate();
-  const { user, company, logout, canAccessRoute, refreshUser } = useAuth();
+  const { user, company, logout, refreshUser } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [passwordError, setPasswordError] = useState('');
   const [passwordSuccess, setPasswordSuccess] = useState('');
@@ -42,8 +43,6 @@ export function AccountPage() {
   } = useForm<PasswordForm>({
     resolver: zodResolver(passwordSchema),
   });
-
-  const canOpenSettings = canAccessRoute('/settings');
 
   const onChangePassword = async (data: PasswordForm) => {
     setPasswordError('');
@@ -88,102 +87,93 @@ export function AccountPage() {
     return <Alert variant="error">Unable to load your profile. Try signing in again.</Alert>;
   }
 
+  const workspaceLine =
+    [user.department?.name, user.branch?.name].filter(Boolean).join(' · ') || 'No branch assigned';
+
   return (
-    <div className="space-y-4 max-w-2xl mx-auto">
-      <Card padding={false} className="overflow-hidden">
-        <div className="bg-gradient-to-br from-primary-600 to-primary-800 px-4 py-6 text-white">
-          <div className="flex items-center gap-4">
-            <div className="relative shrink-0">
-              <UserAvatar
-                firstName={user.firstName}
-                lastName={user.lastName}
-                avatar={user.avatar}
-                size="lg"
-                className="ring-1 ring-white/25 bg-white/15"
-              />
-              <button
-                type="button"
-                disabled={avatarUploading}
-                onClick={() => fileInputRef.current?.click()}
-                className="absolute -bottom-1 -right-1 flex h-8 w-8 items-center justify-center rounded-full bg-white text-primary-700 shadow-md ring-2 ring-primary-700 hover:bg-primary-50 disabled:opacity-60"
-                aria-label="Upload profile photo"
-                title="Upload profile photo"
-              >
-                <Camera className="h-4 w-4" />
-              </button>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/jpeg,image/png,image/webp"
-                className="hidden"
-                disabled={avatarUploading}
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) onUploadAvatar(file);
-                }}
-              />
-            </div>
-            <div className="min-w-0">
-              <h2 className="text-lg font-semibold truncate">
+    <div className="space-y-4 max-w-3xl">
+      <Card>
+        <div className="flex flex-col sm:flex-row sm:items-center gap-5">
+          <div className="relative shrink-0 self-start">
+            <UserAvatar
+              firstName={user.firstName}
+              lastName={user.lastName}
+              avatar={user.avatar}
+              size="lg"
+              className="ring-2 ring-primary-100"
+            />
+            <button
+              type="button"
+              disabled={avatarUploading}
+              onClick={() => fileInputRef.current?.click()}
+              className="absolute -bottom-1 -right-1 flex h-8 w-8 items-center justify-center rounded-full border border-primary-100 bg-white text-primary-700 shadow-sm hover:bg-primary-50 disabled:opacity-60"
+              aria-label="Upload profile photo"
+              title="Upload profile photo"
+            >
+              <Camera className="h-4 w-4" />
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              className="hidden"
+              disabled={avatarUploading}
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) onUploadAvatar(file);
+              }}
+            />
+          </div>
+
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-xl font-semibold text-slate-900 truncate">
                 {user.firstName} {user.lastName}
               </h2>
-              <p className="text-sm text-primary-100 truncate">{user.email}</p>
-              <p className="text-xs text-primary-200/90 mt-1">{user.role?.name}</p>
-              <button
-                type="button"
-                disabled={avatarUploading}
-                onClick={() => fileInputRef.current?.click()}
-                className="mt-2 text-xs font-medium text-white/90 underline-offset-2 hover:underline disabled:opacity-60"
-              >
-                {avatarUploading ? 'Uploading…' : user.avatar ? 'Change photo' : 'Upload photo'}
-              </button>
+              <Badge variant="info">{user.role?.name || 'User'}</Badge>
             </div>
+            <p className="text-sm text-slate-600 mt-1 truncate">{user.email}</p>
+            {user.phone && <p className="text-sm text-slate-500 mt-0.5">{user.phone}</p>}
+            <button
+              type="button"
+              disabled={avatarUploading}
+              onClick={() => fileInputRef.current?.click()}
+              className="mt-3 text-sm font-medium text-primary-700 hover:text-primary-800 disabled:opacity-60"
+            >
+              {avatarUploading ? 'Uploading…' : user.avatar ? 'Change photo' : 'Upload photo'}
+            </button>
           </div>
-          {avatarError && (
-            <div className="mt-3">
-              <Alert variant="error">{avatarError}</Alert>
-            </div>
-          )}
-          {avatarSuccess && (
-            <div className="mt-3">
-              <Alert variant="success">{avatarSuccess}</Alert>
-            </div>
-          )}
         </div>
 
-        <ul className="divide-y divide-slate-100">
-          <li className="flex items-start gap-3 px-4 py-3.5">
-            <UserCircle className="h-5 w-5 text-primary-600 mt-0.5 shrink-0" />
-            <div className="min-w-0">
-              <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Profile</p>
-              <p className="text-sm font-medium text-slate-900 mt-0.5">
-                {user.firstName} {user.lastName}
-              </p>
-              {user.phone && <p className="text-xs text-slate-500 mt-0.5">{user.phone}</p>}
+        {(avatarError || avatarSuccess) && (
+          <div className="mt-4 space-y-2">
+            {avatarError && <Alert variant="error">{avatarError}</Alert>}
+            {avatarSuccess && <Alert variant="success">{avatarSuccess}</Alert>}
+          </div>
+        )}
+
+        <div className="mt-6 grid gap-3 sm:grid-cols-2">
+          <div className="rounded-xl border border-slate-100 bg-slate-50/80 px-3.5 py-3">
+            <div className="flex items-center gap-2 text-slate-500">
+              <Building2 className="h-4 w-4 shrink-0" />
+              <p className="text-[11px] font-semibold uppercase tracking-wide">Workspace</p>
             </div>
-          </li>
-          <li className="flex items-start gap-3 px-4 py-3.5">
-            <Building2 className="h-5 w-5 text-primary-600 mt-0.5 shrink-0" />
-            <div className="min-w-0">
-              <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Workspace</p>
-              <p className="text-sm font-medium text-slate-900 mt-0.5">{company?.name || '—'}</p>
-              <p className="text-xs text-slate-500 mt-0.5">
-                {[user.department?.name, user.branch?.name].filter(Boolean).join(' · ') || 'No branch assigned'}
-              </p>
+            <p className="mt-1.5 text-sm font-medium text-slate-900">{company?.name || '—'}</p>
+            <p className="text-xs text-slate-500 mt-0.5">{workspaceLine}</p>
+          </div>
+          <div className="rounded-xl border border-slate-100 bg-slate-50/80 px-3.5 py-3">
+            <div className="flex items-center gap-2 text-slate-500">
+              <Shield className="h-4 w-4 shrink-0" />
+              <p className="text-[11px] font-semibold uppercase tracking-wide">Access</p>
             </div>
-          </li>
-          <li className="flex items-start gap-3 px-4 py-3.5">
-            <Shield className="h-5 w-5 text-primary-600 mt-0.5 shrink-0" />
-            <div className="min-w-0">
-              <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Access</p>
-              <p className="text-sm font-medium text-slate-900 mt-0.5">{user.role?.name}</p>
-              <p className="text-xs text-slate-500 mt-0.5 capitalize">Status: {user.status?.toLowerCase()}</p>
-              {user.lastLoginAt && (
-                <p className="text-xs text-slate-500 mt-0.5">Last login: {formatDateTime(user.lastLoginAt)}</p>
-              )}
-            </div>
-          </li>
-        </ul>
+            <p className="mt-1.5 text-sm font-medium text-slate-900 capitalize">
+              {user.status?.toLowerCase() || '—'}
+            </p>
+            {user.lastLoginAt && (
+              <p className="text-xs text-slate-500 mt-0.5">Last login: {formatDateTime(user.lastLoginAt)}</p>
+            )}
+          </div>
+        </div>
       </Card>
 
       <Card title="Change password">
@@ -193,27 +183,31 @@ export function AccountPage() {
           </p>
           {passwordError && <Alert variant="error">{passwordError}</Alert>}
           {passwordSuccess && <Alert variant="success">{passwordSuccess}</Alert>}
-          <Input
-            label="Current password"
-            type="password"
-            autoComplete="current-password"
-            {...register('currentPassword')}
-            error={errors.currentPassword?.message}
-          />
-          <Input
-            label="New password"
-            type="password"
-            autoComplete="new-password"
-            {...register('newPassword')}
-            error={errors.newPassword?.message}
-          />
-          <Input
-            label="Confirm new password"
-            type="password"
-            autoComplete="new-password"
-            {...register('confirmPassword')}
-            error={errors.confirmPassword?.message}
-          />
+          <div className="grid gap-3 sm:grid-cols-1">
+            <Input
+              label="Current password"
+              type="password"
+              autoComplete="current-password"
+              {...register('currentPassword')}
+              error={errors.currentPassword?.message}
+            />
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Input
+                label="New password"
+                type="password"
+                autoComplete="new-password"
+                {...register('newPassword')}
+                error={errors.newPassword?.message}
+              />
+              <Input
+                label="Confirm new password"
+                type="password"
+                autoComplete="new-password"
+                {...register('confirmPassword')}
+                error={errors.confirmPassword?.message}
+              />
+            </div>
+          </div>
           <Button type="submit" loading={isSubmitting} className="w-full sm:w-auto">
             <KeyRound className="h-4 w-4 mr-1.5" />
             Update password
@@ -221,21 +215,58 @@ export function AccountPage() {
         </form>
       </Card>
 
-      <div className="grid gap-2 sm:grid-cols-2">
-        {canOpenSettings && (
-          <Link
-            to="/settings"
-            className="flex items-center justify-center gap-2 rounded-2xl border border-primary-100 bg-white px-4 py-3 text-sm font-medium text-primary-800 shadow-soft active:scale-[0.98]"
-          >
-            <Settings className="h-4 w-4" />
-            Company settings
-          </Link>
-        )}
-        <Button variant="danger" loading={loggingOut} onClick={handleLogout} className="w-full">
+      <div className="pt-1">
+        <Button variant="danger" loading={loggingOut} onClick={handleLogout} className="w-full sm:w-auto">
           <LogOut className="h-4 w-4 mr-1.5" />
           Sign out
         </Button>
       </div>
+    </div>
+  );
+}
+
+export function AccountPage() {
+  const { hasPermission } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const canOpenSettings = hasPermission('settings:read');
+
+  const tabs = useMemo(() => {
+    if (!canOpenSettings) return ['Profile'];
+    return ['Profile', 'Company'];
+  }, [canOpenSettings]);
+
+  const wantCompany =
+    canOpenSettings &&
+    ['settings', 'company', 'company settings'].includes((searchParams.get('tab') || '').toLowerCase());
+
+  const initialTab = wantCompany ? 'Company' : 'Profile';
+  const [activeTabName, setActiveTabName] = useState(initialTab);
+  const activeTab = Math.max(0, tabs.indexOf(activeTabName));
+
+  useEffect(() => {
+    const next = wantCompany ? 'Company' : 'Profile';
+    setActiveTabName((current) => (current === next ? current : next));
+  }, [wantCompany]);
+
+  const setTab = (name: string) => {
+    setActiveTabName(name);
+    const next = new URLSearchParams(searchParams);
+    if (name === 'Company') next.set('tab', 'settings');
+    else next.delete('tab');
+    setSearchParams(next, { replace: true });
+  };
+
+  return (
+    <div className="space-y-4">
+      {canOpenSettings && (
+        <PageToolbar
+          tabs={tabs}
+          activeTab={activeTab >= 0 ? activeTab : 0}
+          onTabChange={(index) => setTab(tabs[index])}
+        />
+      )}
+      {activeTabName === 'Profile' && <ProfilePanel />}
+      {activeTabName === 'Company' && canOpenSettings && <SettingsPage />}
     </div>
   );
 }

@@ -4,7 +4,7 @@ export const MODULE_LABELS: Record<string, string> = {
   dashboard: 'Dashboard',
   users: 'Users & admin',
   customers: 'Customers & CRM',
-  products: 'Products',
+  products: 'Products (catalog)',
   inventory: 'Inventory & warehouse',
   procurement: 'Procurement',
   production: 'Production',
@@ -15,7 +15,7 @@ export const MODULE_LABELS: Record<string, string> = {
   maintenance: 'Maintenance',
   quality: 'Quality control',
   reports: 'Reports',
-  settings: 'Settings',
+  settings: 'Company settings',
 };
 
 export const ASSIGNABLE_MODULES = [

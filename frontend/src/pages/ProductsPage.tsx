@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Plus,
@@ -9,6 +10,7 @@ import {
   Box,
   FileText,
   ChevronRight,
+  Boxes,
 } from 'lucide-react';
 import { productsApi } from '../services/api';
 import {
@@ -33,8 +35,8 @@ import { ProductForm } from '../components/forms/ProductForm';
 import { useAuth } from '../contexts/AuthContext';
 import { Product, ProductCategoryOption, ProductStats } from '../types';
 import { PART_NUMBER_LABEL, formatPartNumberLine } from '../utils/productDisplay';
-
-const tabs = ['Overview', 'Catalog'];
+import { AvailableProductsPanel } from './AvailableProductsPage';
+import { STAT_ROW_5 } from '../constants/statCardTones';
 
 const STATUS_OPTIONS = [
   { value: '', label: 'All statuses' },
@@ -45,7 +47,53 @@ const STATUS_OPTIONS = [
 export function ProductsPage() {
   const queryClient = useQueryClient();
   const { hasPermission } = useAuth();
-  const [activeTab, setActiveTab] = useState(0);
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const canManageProducts = hasPermission('products:read');
+  const canViewAvailable = hasPermission('sales:read');
+  const canCreate = hasPermission('products:create');
+  const canUpdate = hasPermission('products:update');
+  const canDelete = hasPermission('products:delete');
+
+  const tabs = useMemo(() => {
+    const items: string[] = [];
+    if (canManageProducts) {
+      items.push('Overview', 'Catalog');
+    }
+    if (canViewAvailable) items.push('Available');
+    return items;
+  }, [canManageProducts, canViewAvailable]);
+
+  const tabParam = (searchParams.get('tab') || '').toLowerCase();
+  const wantAvailable = tabParam === 'available' && canViewAvailable;
+  const wantCatalog = (tabParam === 'catalog' || tabParam === '1') && canManageProducts;
+  const initialTab = wantAvailable
+    ? 'Available'
+    : wantCatalog
+      ? 'Catalog'
+      : tabs[0] || 'Overview';
+
+  const [activeTabName, setActiveTabName] = useState(initialTab);
+  const activeTab = Math.max(0, tabs.indexOf(activeTabName));
+
+  useEffect(() => {
+    if (!tabs.includes(activeTabName) && tabs[0]) {
+      setActiveTabName(tabs[0]);
+      return;
+    }
+    if (wantAvailable && activeTabName !== 'Available') setActiveTabName('Available');
+    else if (wantCatalog && activeTabName !== 'Catalog') setActiveTabName('Catalog');
+  }, [wantAvailable, wantCatalog, tabs, activeTabName]);
+
+  const setTab = (name: string) => {
+    setActiveTabName(name);
+    const next = new URLSearchParams(searchParams);
+    if (name === 'Available') next.set('tab', 'available');
+    else if (name === 'Catalog') next.set('tab', 'catalog');
+    else next.delete('tab');
+    setSearchParams(next, { replace: true });
+  };
+
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [searchInput, setSearchInput] = useState('');
@@ -58,17 +106,18 @@ export function ProductsPage() {
   const [editing, setEditing] = useState<Product | null>(null);
   const [selected, setSelected] = useState<Product | null>(null);
 
-  const canCreate = hasPermission('products:create');
-  const canUpdate = hasPermission('products:update');
-  const canDelete = hasPermission('products:delete');
+  const showCatalogQueries = canManageProducts && (activeTabName === 'Overview' || activeTabName === 'Catalog');
+
   const { data: stats } = useQuery({
     queryKey: ['product-stats'],
     queryFn: () => productsApi.stats().then((r) => r.data.data as ProductStats),
+    enabled: canManageProducts,
   });
 
   const { data: categoriesData } = useQuery({
     queryKey: ['product-categories'],
     queryFn: () => productsApi.categories().then((r) => r.data.data as ProductCategoryOption[]),
+    enabled: canManageProducts,
   });
 
   const categoryOptions = [
@@ -88,7 +137,7 @@ export function ProductsPage() {
           isActive: isActive === '' ? undefined : isActive === 'true',
         })
         .then((r) => r.data),
-    enabled: activeTab === 0 || activeTab === 1,
+    enabled: showCatalogQueries,
   });
 
   const { data: productDetail, isLoading: detailLoading } = useQuery({
@@ -114,10 +163,6 @@ export function ProductsPage() {
     if (selected?.id === product.id) queryClient.invalidateQueries({ queryKey: ['product-detail', product.id] });
   };
 
-  const goToTab = (index: number) => {
-    setActiveTab(index);
-  };
-
   const openDetail = (product: Product) => {
     setSelected(product);
     setDetailOpen(true);
@@ -129,7 +174,7 @@ export function ProductsPage() {
   };
 
   const products = (productsRes?.data as Product[]) || [];
-  const recentProducts = activeTab === 0 ? products.slice(0, 6) : [];
+  const recentProducts = activeTabName === 'Overview' ? products.slice(0, 6) : [];
 
   const columns = [
     {
@@ -195,136 +240,167 @@ export function ProductsPage() {
     },
   ];
 
+  if (tabs.length === 0) {
+    return <Alert variant="warning">You do not have access to the products module.</Alert>;
+  }
+
   const toolbarActions =
-    canCreate &&
-    (activeTab === 0 || activeTab === 1 ? (
+    canCreate && (activeTabName === 'Overview' || activeTabName === 'Catalog') ? (
       <Button size="sm" onClick={openAddProduct}>
         <Plus className="h-4 w-4 mr-1.5" />
         Add Product
       </Button>
-    ) : undefined);
+    ) : undefined;
+
+  const subtitle =
+    activeTabName === 'Available'
+      ? 'Finished goods you can sell — live available quantity after reservations.'
+      : activeTabName === 'Catalog'
+        ? 'Manage the full product catalog, prices, and status.'
+        : 'Catalog health and sellable stock in one place.';
 
   return (
     <div className="space-y-4">
-      {stats && (
+      <PageHeader subtitle={subtitle} />
+
+      {canManageProducts && stats && activeTabName !== 'Available' && (
         <StatGrid>
           <StatCard
             title="Total Products"
             value={stats.total}
             icon={<Package className="h-5 w-5 text-white" />}
-            color="from-emerald-500 to-emerald-700"
-            onClick={() => goToTab(1)}
+            color={STAT_ROW_5[0]}
+            onClick={() => setTab('Catalog')}
           />
           <StatCard
             title="Active"
             value={stats.active}
             icon={<Box className="h-5 w-5 text-white" />}
-            color="from-sky-500 to-sky-700"
-            onClick={() => goToTab(1)}
+            color={STAT_ROW_5[1]}
+            onClick={() => setTab('Catalog')}
           />
           <StatCard
             title="Inactive"
             value={stats.inactive}
             icon={<FileText className="h-5 w-5 text-white" />}
-            color="from-violet-500 to-violet-700"
-            onClick={() => goToTab(1)}
+            color={STAT_ROW_5[2]}
+            onClick={() => setTab('Catalog')}
           />
           <StatCard
             title="FG in Stock"
             value={stats.finishedGoodsQty.toLocaleString()}
             icon={<Package className="h-5 w-5 text-white" />}
-            color="from-amber-500 to-amber-700"
+            color={STAT_ROW_5[3]}
             to="/inventory"
           />
           <StatCard
-            title="Categories"
-            value={stats.byCategory.length}
-            icon={<FileText className="h-5 w-5 text-white" />}
-            color="from-rose-500 to-rose-700"
-            onClick={() => goToTab(1)}
+            title={canViewAvailable ? 'Sellable view' : 'Categories'}
+            value={canViewAvailable ? 'Available' : stats.byCategory.length}
+            icon={<Boxes className="h-5 w-5 text-white" />}
+            color={STAT_ROW_5[4]}
+            onClick={() => (canViewAvailable ? setTab('Available') : setTab('Catalog'))}
           />
         </StatGrid>
       )}
 
-      <PageHeader />
+      <PageToolbar
+        tabs={tabs}
+        activeTab={activeTab >= 0 ? activeTab : 0}
+        onTabChange={(index) => setTab(tabs[index])}
+        actions={toolbarActions}
+      />
 
-      <PageToolbar tabs={tabs} activeTab={activeTab} onTabChange={setActiveTab} actions={toolbarActions} />
+      {activeTabName === 'Overview' && canManageProducts && (
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+          <Card
+            title="Recent products"
+            action={
+              recentProducts.length > 0 ? (
+                <Button variant="ghost" size="sm" onClick={() => setTab('Catalog')}>
+                  View catalog
+                </Button>
+              ) : undefined
+            }
+            padding={false}
+          >
+            {recentProducts.length === 0 ? (
+              <div className="p-6">
+                <EmptyState title="No products yet" description="Add products to populate your catalog." />
+              </div>
+            ) : (
+              <ul className="divide-y divide-slate-100">
+                {recentProducts.map((product) => (
+                  <li
+                    key={product.id}
+                    className="flex items-center gap-3 px-4 py-3 hover:bg-primary-50/50 cursor-pointer"
+                    onClick={() => openDetail(product)}
+                  >
+                    <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary-100 text-primary-600">
+                      <Package className="h-4 w-4" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-slate-900 truncate">{product.name}</p>
+                      <p className="text-xs text-slate-500">{formatPartNumberLine(product.sku)}</p>
+                    </div>
+                    <ChevronRight className="h-4 w-4 text-slate-400 shrink-0" />
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Card>
 
-      {activeTab === 0 && (
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-            <Card
-              title="Recent products"
-              action={
-                recentProducts.length > 0 ? (
-                  <Button variant="ghost" size="sm" onClick={() => goToTab(1)}>
-                    View all
-                  </Button>
-                ) : undefined
-              }
-              padding={false}
-            >
-              {recentProducts.length === 0 ? (
-                <div className="p-6">
-                  <EmptyState title="No products yet" description="Add products to populate your catalog." />
-                </div>
-              ) : (
-                <ul className="divide-y divide-slate-100">
-                  {recentProducts.map((product) => (
-                    <li
-                      key={product.id}
-                      className="flex items-center gap-3 px-4 py-3 hover:bg-primary-50/50 cursor-pointer"
-                      onClick={() => openDetail(product)}
-                    >
-                      <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary-100 text-primary-600">
-                        <Package className="h-4 w-4" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-slate-900 truncate">{product.name}</p>
-                        <p className="text-xs text-slate-500">{formatPartNumberLine(product.sku)}</p>
-                      </div>
-                      <ChevronRight className="h-4 w-4 text-slate-400 shrink-0" />
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </Card>
-
-            <Card title="By category" padding={false}>
-              {(stats?.byCategory?.length || 0) === 0 ? (
-                <div className="p-6">
-                  <EmptyState title="No category data" description="Product categories will appear here once catalog is populated." />
-                </div>
-              ) : (
-                <ul className="divide-y divide-slate-100">
-                  {(stats?.byCategory || []).slice(0, 6).map((item) => (
-                    <li
-                      key={item.categoryId}
-                      className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 cursor-pointer"
-                      onClick={() => { setCategory(item.categoryId); setPage(1); goToTab(1); }}
-                    >
-                      <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary-100 text-primary-600">
-                        <Package className="h-4 w-4" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-slate-900">{item.category}</p>
-                      </div>
-                      <span className="text-sm font-semibold tabular-nums text-slate-700">{item.count}</span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </Card>
-          </div>
+          <Card
+            title="By category"
+            action={
+              canViewAvailable ? (
+                <Button variant="ghost" size="sm" onClick={() => setTab('Available')}>
+                  Sellable stock
+                </Button>
+              ) : undefined
+            }
+            padding={false}
+          >
+            {(stats?.byCategory?.length || 0) === 0 ? (
+              <div className="p-6">
+                <EmptyState title="No category data" description="Product categories will appear here once the catalog is populated." />
+              </div>
+            ) : (
+              <ul className="divide-y divide-slate-100">
+                {(stats?.byCategory || []).slice(0, 6).map((item) => (
+                  <li
+                    key={item.categoryId}
+                    className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 cursor-pointer"
+                    onClick={() => {
+                      setCategory(item.categoryId);
+                      setPage(1);
+                      setTab('Catalog');
+                    }}
+                  >
+                    <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary-100 text-primary-600">
+                      <Package className="h-4 w-4" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-slate-900">{item.category}</p>
+                    </div>
+                    <span className="text-sm font-semibold tabular-nums text-slate-700">{item.count}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Card>
         </div>
       )}
 
-      {activeTab === 1 && (
+      {activeTabName === 'Catalog' && canManageProducts && (
         <DataPanel>
           <div className="p-4 pb-0 flex flex-col sm:flex-row flex-wrap items-end gap-3">
             <form
               className="flex-1 min-w-[200px] sm:max-w-md"
-              onSubmit={(e) => { e.preventDefault(); setSearch(searchInput); setPage(1); }}
+              onSubmit={(e) => {
+                e.preventDefault();
+                setSearch(searchInput);
+                setPage(1);
+              }}
             >
               <Input
                 placeholder="Search part number or name…"
@@ -335,19 +411,31 @@ export function ProductsPage() {
             <Select
               options={categoryOptions}
               value={category}
-              onChange={(e) => { setCategory(e.target.value); setPage(1); }}
+              onChange={(e) => {
+                setCategory(e.target.value);
+                setPage(1);
+              }}
               className="sm:w-44"
             />
             <Select
               options={STATUS_OPTIONS}
               value={isActive}
-              onChange={(e) => { setIsActive(e.target.value); setPage(1); }}
+              onChange={(e) => {
+                setIsActive(e.target.value);
+                setPage(1);
+              }}
               className="sm:w-36"
             />
             <Button
               variant="secondary"
               size="sm"
-              onClick={() => { setSearchInput(''); setSearch(''); setCategory(''); setIsActive(''); setPage(1); }}
+              onClick={() => {
+                setSearchInput('');
+                setSearch('');
+                setCategory('');
+                setIsActive('');
+                setPage(1);
+              }}
             >
               Clear
             </Button>
@@ -400,27 +488,78 @@ export function ProductsPage() {
         </DataPanel>
       )}
 
-      <Modal open={formOpen} onClose={() => { setFormOpen(false); setEditing(null); }} title={editing ? 'Edit Product' : 'Add Product'} size="lg">
-        <ProductForm product={editing} onSuccess={() => { setFormOpen(false); setEditing(null); }} onCancel={() => { setFormOpen(false); setEditing(null); }} />
+      {activeTabName === 'Available' && canViewAvailable && <AvailableProductsPanel />}
+
+      <Modal
+        open={formOpen}
+        onClose={() => {
+          setFormOpen(false);
+          setEditing(null);
+        }}
+        title={editing ? 'Edit Product' : 'Add Product'}
+        size="lg"
+      >
+        <ProductForm
+          product={editing}
+          onSuccess={() => {
+            setFormOpen(false);
+            setEditing(null);
+          }}
+          onCancel={() => {
+            setFormOpen(false);
+            setEditing(null);
+          }}
+        />
       </Modal>
 
-      <Modal open={detailOpen} onClose={() => { setDetailOpen(false); setSelected(null); }} title="Product Details" size="xl">
+      <Modal
+        open={detailOpen}
+        onClose={() => {
+          setDetailOpen(false);
+          setSelected(null);
+        }}
+        title="Product Details"
+        size="xl"
+      >
         {detailLoading ? (
           <div className="py-8 text-center text-sm text-slate-500">Loading…</div>
         ) : productDetail ? (
           <div className="space-y-6">
             <div className="flex gap-4">
               {productDetail.imageUrl ? (
-                <img src={productDetail.imageUrl} alt={productDetail.name} className="h-24 w-24 rounded-xl object-cover border border-border" />
+                <img
+                  src={productDetail.imageUrl}
+                  alt={productDetail.name}
+                  className="h-24 w-24 rounded-xl object-cover border border-border"
+                />
               ) : (
-                <div className="h-24 w-24 rounded-xl bg-surface-muted flex items-center justify-center text-slate-400 text-xs">No image</div>
+                <div className="h-24 w-24 rounded-xl bg-surface-muted flex items-center justify-center text-slate-400 text-xs">
+                  No image
+                </div>
               )}
               <div className="grid grid-cols-2 gap-3 flex-1 text-sm">
-                <div><p className="text-slate-500">{PART_NUMBER_LABEL}</p><p className="font-semibold">{productDetail.sku}</p></div>
-                <div><p className="text-slate-500">Category</p><Badge variant="info">{productDetail.category?.name || 'Uncategorized'}</Badge></div>
-                <div><p className="text-slate-500">Selling Price</p><p className="font-semibold">{formatCurrency(Number(productDetail.sellingPrice))}</p></div>
-                <div><p className="text-slate-500">Min Stock</p><p className="font-semibold">{productDetail.minStockLevel}</p></div>
-                <div><p className="text-slate-500">Status</p><Badge variant={productDetail.isActive ? 'success' : 'danger'}>{productDetail.isActive ? 'Active' : 'Inactive'}</Badge></div>
+                <div>
+                  <p className="text-slate-500">{PART_NUMBER_LABEL}</p>
+                  <p className="font-semibold">{productDetail.sku}</p>
+                </div>
+                <div>
+                  <p className="text-slate-500">Category</p>
+                  <Badge variant="info">{productDetail.category?.name || 'Uncategorized'}</Badge>
+                </div>
+                <div>
+                  <p className="text-slate-500">Selling Price</p>
+                  <p className="font-semibold">{formatCurrency(Number(productDetail.sellingPrice))}</p>
+                </div>
+                <div>
+                  <p className="text-slate-500">Min Stock</p>
+                  <p className="font-semibold">{productDetail.minStockLevel}</p>
+                </div>
+                <div>
+                  <p className="text-slate-500">Status</p>
+                  <Badge variant={productDetail.isActive ? 'success' : 'danger'}>
+                    {productDetail.isActive ? 'Active' : 'Inactive'}
+                  </Badge>
+                </div>
               </div>
             </div>
             {productDetail.description && <p className="text-sm text-slate-600">{productDetail.description}</p>}
@@ -438,13 +577,22 @@ export function ProductsPage() {
 
             <div className="flex justify-end gap-3 pt-4 border-t">
               {canUpdate && (
-                <Button variant="secondary" onClick={() => { setEditing(productDetail); setFormOpen(true); setDetailOpen(false); }}>
-                  <Pencil className="h-4 w-4 mr-1.5" />Edit
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    setEditing(productDetail);
+                    setFormOpen(true);
+                    setDetailOpen(false);
+                  }}
+                >
+                  <Pencil className="h-4 w-4 mr-1.5" />
+                  Edit
                 </Button>
               )}
               {canDelete && productDetail.isActive && (
                 <Button variant="danger" onClick={() => setDeactivateOpen(true)}>
-                  <Trash2 className="h-4 w-4 mr-1.5" />Deactivate
+                  <Trash2 className="h-4 w-4 mr-1.5" />
+                  Deactivate
                 </Button>
               )}
             </div>
@@ -453,10 +601,20 @@ export function ProductsPage() {
       </Modal>
 
       <Modal open={deactivateOpen} onClose={() => setDeactivateOpen(false)} title="Deactivate Product" size="md">
-        <p className="text-sm text-slate-600 mb-4">Deactivate <strong>{productDetail?.name}</strong>?</p>
+        <p className="text-sm text-slate-600 mb-4">
+          Deactivate <strong>{productDetail?.name}</strong>?
+        </p>
         <div className="flex justify-end gap-3">
-          <Button variant="secondary" onClick={() => setDeactivateOpen(false)}>Cancel</Button>
-          <Button variant="danger" loading={deactivateMutation.isPending} onClick={() => productDetail && deactivateMutation.mutate(productDetail.id)}>Deactivate</Button>
+          <Button variant="secondary" onClick={() => setDeactivateOpen(false)}>
+            Cancel
+          </Button>
+          <Button
+            variant="danger"
+            loading={deactivateMutation.isPending}
+            onClick={() => productDetail && deactivateMutation.mutate(productDetail.id)}
+          >
+            Deactivate
+          </Button>
         </div>
       </Modal>
     </div>

@@ -3,7 +3,6 @@ import { useQuery } from '@tanstack/react-query';
 import { Search } from 'lucide-react';
 import { productsApi } from '../services/api';
 import {
-  PageHeader,
   Table,
   Badge,
   Button,
@@ -35,7 +34,8 @@ export interface AvailableProduct {
   category?: { id: string; name: string };
 }
 
-export function AvailableProductsPage() {
+/** Sellable finished-goods list — used as a tab inside Products. */
+export function AvailableProductsPanel() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [searchInput, setSearchInput] = useState('');
@@ -116,8 +116,6 @@ export function AvailableProductsPage() {
 
   return (
     <div className="space-y-4">
-      <PageHeader subtitle="Active catalog with finished-goods stock you can sell." />
-
       {isError && <QueryErrorAlert error={error} onRetry={() => refetch()} />}
 
       <PageToolbar
@@ -191,4 +189,9 @@ export function AvailableProductsPage() {
       </DataPanel>
     </div>
   );
+}
+
+/** @deprecated Prefer Products module Available tab — kept for redirect compatibility. */
+export function AvailableProductsPage() {
+  return <AvailableProductsPanel />;
 }

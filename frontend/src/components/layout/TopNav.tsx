@@ -6,7 +6,7 @@ import { financeApi } from '../../services/api';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { GlobalSearch } from './GlobalSearch';
 import { NOTIFICATION_POLL_MS } from '../../config/realtime';
-import { normalizeRoutePath } from '../../config/routeAccess';
+import { accountNavLabel, normalizeRoutePath } from '../../config/routeAccess';
 import { APP_NAME } from '../../constants/brand';
 import { UserAvatar } from '../ui/UserAvatar';
 
@@ -17,7 +17,6 @@ interface TopNavProps {
 }
 
 const routeTitles: Record<string, string> = {
-  '/available-products': 'Available Products',
   '/my-leave': 'My Leave',
   '/': 'Dashboard',
   '/users': 'Users',
@@ -35,12 +34,10 @@ const routeTitles: Record<string, string> = {
   '/hr': 'HR',
   '/maintenance': 'Maintenance',
   '/reports': 'Reports',
-  '/settings': 'Settings',
-  '/account': 'Account',
 };
 
 export function TopNav({ onMenuClick, sidebarOffset }: TopNavProps) {
-  const { user, logout } = useAuth();
+  const { user, logout, hasPermission } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const queryClient = useQueryClient();
@@ -69,7 +66,11 @@ export function TopNav({ onMenuClick, sidebarOffset }: TopNavProps) {
   const unreadNotifications =
     notifications?.filter((n: { isRead: boolean }) => !n.isRead) || [];
   const unreadCount = unreadNotifications.length;
-  const pageTitle = routeTitles[normalizeRoutePath(location.pathname)] || 'Workspace';
+  const routeKey = normalizeRoutePath(location.pathname);
+  const pageTitle =
+    routeKey === '/account'
+      ? accountNavLabel(hasPermission('settings:read'))
+      : routeTitles[routeKey] || 'Workspace';
 
   useEffect(() => {
     setSearchOpen(false);

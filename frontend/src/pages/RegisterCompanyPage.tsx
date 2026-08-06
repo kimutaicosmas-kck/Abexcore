@@ -67,7 +67,7 @@ export function RegisterCompanyPage() {
       const res = await tenantApi.registerCompany(formData);
       const slug = res.data.data.company.slug as string;
       setSuccess(res.data.message || `Company registered. Admin signs in with code "${slug}".`);
-      setTimeout(() => navigate('/settings'), 2500);
+      setTimeout(() => navigate('/account?tab=settings'), 2500);
     } catch (err) {
       setError(getApiErrorMessage(err));
     } finally {

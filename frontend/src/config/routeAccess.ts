@@ -1,8 +1,13 @@
+/** Sidebar / top title for /account — Settings if authorized, otherwise Account. */
+export function accountNavLabel(canReadSettings: boolean): 'Settings' | 'Account' {
+  return canReadSettings ? 'Settings' : 'Account';
+}
+
 export const ROUTE_PERMISSIONS: Record<string, string | string[] | undefined> = {
   '/': undefined,
   '/users': 'users:read',
   '/customers': 'customers:read',
-  '/products': 'products:read',
+  '/products': ['products:read', 'sales:read'],
   '/available-products': 'sales:read',
   '/inventory': 'inventory:read',
   '/procurement': 'procurement:read',

@@ -46,17 +46,11 @@ const QualityPage = lazy(() =>
 const ReportsPage = lazy(() =>
   import('./pages/ReportsPage').then((m) => ({ default: m.ReportsPage }))
 );
-const SettingsPage = lazy(() =>
-  import('./pages/SettingsPage').then((m) => ({ default: m.SettingsPage }))
-);
 const DeliveryPage = lazy(() =>
   import('./pages/DeliveryPage').then((m) => ({ default: m.DeliveryPage }))
 );
 const MySalesPage = lazy(() =>
   import('./pages/MySalesPage').then((m) => ({ default: m.MySalesPage }))
-);
-const AvailableProductsPage = lazy(() =>
-  import('./pages/AvailableProductsPage').then((m) => ({ default: m.AvailableProductsPage }))
 );
 const MyLeavePage = lazy(() =>
   import('./pages/MyLeavePage').then((m) => ({ default: m.MyLeavePage }))
@@ -164,10 +158,7 @@ function AppRoutes() {
           <Route path="quality" element={<PermissionRoute><QualityPage /></PermissionRoute>} />
           <Route path="sales" element={<PermissionRoute><SalesPage /></PermissionRoute>} />
           <Route path="my-sales" element={<PermissionRoute><MySalesPage /></PermissionRoute>} />
-          <Route
-            path="available-products"
-            element={<PermissionRoute><AvailableProductsPage /></PermissionRoute>}
-          />
+          <Route path="available-products" element={<Navigate to="/products?tab=available" replace />} />
           <Route
             path="sales-performance"
             element={<PermissionRoute><SalesPerformancePage /></PermissionRoute>}
@@ -179,7 +170,7 @@ function AppRoutes() {
           <Route path="my-leave" element={<PermissionRoute><MyLeavePage /></PermissionRoute>} />
           <Route path="maintenance" element={<PermissionRoute><MaintenancePage /></PermissionRoute>} />
           <Route path="reports" element={<PermissionRoute><ReportsPage /></PermissionRoute>} />
-          <Route path="settings" element={<PermissionRoute><SettingsPage /></PermissionRoute>} />
+          <Route path="settings" element={<Navigate to="/account?tab=settings" replace />} />
           <Route path="account" element={<AccountPage />} />
           <Route
             path="admin/register-company"

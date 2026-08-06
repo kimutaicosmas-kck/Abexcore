@@ -9,11 +9,12 @@ import {
   Package,
   Building2,
   UserCircle,
+  Settings,
   type LucideIcon,
 } from 'lucide-react';
 import clsx from 'clsx';
 import { useAuth } from '../../contexts/AuthContext';
-import { isSidebarNavActive } from '../../config/routeAccess';
+import { accountNavLabel, isSidebarNavActive } from '../../config/routeAccess';
 
 type TabItem = {
   id: string;
@@ -65,7 +66,7 @@ const CANDIDATE_TABS: Array<{
     name: 'Products',
     href: '/products',
     icon: Package,
-    canShow: ({ hasPermission }) => hasPermission('products:read'),
+    canShow: ({ hasPermission }) => hasPermission('products:read') || hasPermission('sales:read'),
   },
   {
     id: 'finance',
@@ -91,6 +92,8 @@ function isAccountRoute(pathname: string) {
 export function MobileBottomNav() {
   const { hasPermission, isSalesOfficer } = useAuth();
   const location = useLocation();
+  const canReadSettings = hasPermission('settings:read');
+  const accountLabel = accountNavLabel(canReadSettings);
 
   const middleTabs: TabItem[] = CANDIDATE_TABS.filter((tab) =>
     tab.canShow({ hasPermission, isSalesOfficer })
@@ -106,9 +109,13 @@ export function MobileBottomNav() {
   const tabs: TabItem[] = [
     { id: 'home', name: 'Home', href: '/', icon: LayoutDashboard },
     ...middleTabs,
-    { id: 'account', name: 'Account', href: '/account', icon: UserCircle },
+    {
+      id: 'account',
+      name: accountLabel,
+      href: '/account',
+      icon: canReadSettings ? Settings : UserCircle,
+    },
   ];
-
   return (
     <nav
       aria-label="Primary"

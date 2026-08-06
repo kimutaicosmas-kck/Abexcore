@@ -14,18 +14,17 @@ import {
   UserCircle,
   Wrench,
   BarChart3,
-  Settings,
   PanelLeftClose,
   PanelLeft,
   TrendingUp,
   Target,
-  Boxes,
   CalendarDays,
   CircleUser,
+  Settings,
 } from 'lucide-react';
 import clsx from 'clsx';
 import { useAuth } from '../../contexts/AuthContext';
-import { isSidebarNavActive } from '../../config/routeAccess';
+import { accountNavLabel, isSidebarNavActive } from '../../config/routeAccess';
 import { CompanyBrand } from '../brand/CompanyBrand';
 import { PoweredBy } from '../brand/PoweredBy';
 
@@ -52,8 +51,12 @@ const navigationGroups: NavGroup[] = [
     items: [
       { name: 'Users', href: '/users', icon: Users, permission: 'users:read' },
       { name: 'CRM', href: '/customers', icon: Building2, permission: 'customers:read' },
-      { name: 'Products', href: '/products', icon: Package, permission: 'products:read' },
-      { name: 'Available Products', href: '/available-products', icon: Boxes, permission: 'sales:read' },
+      {
+        name: 'Products',
+        href: '/products',
+        icon: Package,
+        permissions: ['products:read', 'sales:read'],
+      },
     ],
   },
   {
@@ -80,10 +83,7 @@ const navigationGroups: NavGroup[] = [
   },
   {
     label: 'System',
-    items: [
-      { name: 'Account', href: '/account', icon: CircleUser },
-      { name: 'Settings', href: '/settings', icon: Settings, permission: 'settings:read' },
-    ],
+    items: [{ name: 'Account', href: '/account', icon: CircleUser }],
   },
 ];
 
@@ -97,6 +97,9 @@ export function Sidebar({ collapsed, mobileOpen, onToggle }: SidebarProps) {
   const { hasPermission, isSalesOfficer, company } = useAuth();
   const location = useLocation();
   const navRef = useRef<HTMLElement>(null);
+  const canReadSettings = hasPermission('settings:read');
+  const systemNavName = accountNavLabel(canReadSettings);
+  const systemNavIcon = canReadSettings ? Settings : CircleUser;
 
   useEffect(() => {
     navRef.current?.scrollTo({ top: 0 });
@@ -109,6 +112,16 @@ export function Sidebar({ collapsed, mobileOpen, onToggle }: SidebarProps) {
   ];
 
   const navigationGroupsWithExtras: NavGroup[] = navigationGroups.map((group) => {
+    if (group.label === 'System') {
+      return {
+        ...group,
+        items: group.items.map((item) =>
+          item.href === '/account'
+            ? { ...item, name: systemNavName, icon: systemNavIcon }
+            : item
+        ),
+      };
+    }
     if (group.label !== 'Operations') return group;
     return {
       ...group,
