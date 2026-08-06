@@ -31,7 +31,11 @@ import { AccountingService } from '../services/accounting.service';
 import { salesPersonOrderFilter } from '../services/my-sales.service';
 import { NotificationService } from '../services/notification.service';
 import { injectTenantData, requireTenantId } from '../utils/tenant';
-import { isSalesPersonRole, SALES_PERSON_ROLE_NAMES } from '../config/rolePermissions';
+import {
+  isSalesBookOwner,
+  isSalesPersonRole,
+  SALES_PERSON_ROLE_NAMES,
+} from '../config/rolePermissions';
 import { Prisma } from '@prisma/client';
 
 const router = Router();
@@ -70,7 +74,7 @@ router.get(
   '/stats',
   authorize('sales:read'),
   asyncHandler(async (req: AuthRequest, res: Response) => {
-    const scopedId = isSalesPersonRole(req.user!.roleName) ? req.user!.id : undefined;
+    const scopedId = isSalesBookOwner(req.user!.roleName) ? req.user!.id : undefined;
     const data = await SalesService.getStats(scopedId);
     res.json({ success: true, data });
   })
@@ -104,7 +108,7 @@ router.get(
     const where: Prisma.SalesOrderWhereInput = {};
     if (status) where.status = status as Prisma.EnumOrderStatusFilter['equals'];
 
-    if (isSalesPersonRole(req.user!.roleName)) {
+    if (isSalesBookOwner(req.user!.roleName)) {
       Object.assign(where, salesPersonOrderFilter(req.user!.id));
     } else if (salesPersonId) {
       Object.assign(where, salesPersonOrderFilter(salesPersonId));

@@ -14,7 +14,7 @@ import { createCrudService } from '../utils/crud';
 import { getParam, getQuery } from '../utils/request';
 import prisma from '../config/database';
 import { requireTenantId } from '../utils/tenant';
-import { isSalesPersonRole, SALES_PERSON_ROLE_NAMES } from '../config/rolePermissions';
+import { isSalesBookOwner, SALES_PERSON_ROLE_NAMES } from '../config/rolePermissions';
 import { CustomerStatementService } from '../services/customerStatement.service';
 import { z } from 'zod';
 
@@ -78,8 +78,9 @@ router.get(
     if (vatStatus) where.vatStatus = vatStatus;
     if (isActive !== undefined) where.isActive = isActive;
 
-    // Sales officers see their own customers plus unassigned (free) accounts.
-    if (isSalesPersonRole(req.user!.roleName)) {
+    // Sales officers/reps see their own customers plus unassigned (free) accounts.
+    // Sales Manager keeps company-wide CRM visibility.
+    if (isSalesBookOwner(req.user!.roleName)) {
       where.OR = [{ salesPersonId: req.user!.id }, { salesPersonId: null }];
     } else if (salesPersonId === 'none') {
       where.salesPersonId = null;
@@ -287,7 +288,7 @@ router.post(
     if (existing) throw new AppError('Customer code already exists', 409);
 
     const payload = { ...req.body };
-    if (isSalesPersonRole(req.user!.roleName)) {
+    if (isSalesBookOwner(req.user!.roleName)) {
       payload.salesPersonId = req.user!.id;
     } else {
       await assertValidSalesPerson(payload.salesPersonId);
@@ -305,8 +306,8 @@ router.put(
   auditLog('customers', 'update', 'customer'),
   asyncHandler(async (req: AuthRequest, res: Response) => {
     const payload = { ...req.body };
-    if (isSalesPersonRole(req.user!.roleName)) {
-      // Sales roles may edit their own customers or free (unassigned) ones; cannot reassign ownership.
+    if (isSalesBookOwner(req.user!.roleName)) {
+      // Sales officers/reps may edit their own customers or free (unassigned) ones; cannot reassign.
       const existing = await prisma.customer.findFirst({
         where: {
           id: getParam(req.params.id),

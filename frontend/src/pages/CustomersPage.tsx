@@ -50,8 +50,10 @@ import { ContactForm } from '../components/forms/ContactForm';
 import { useAuth } from '../contexts/AuthContext';
 import { Complaint, CrmStats, Customer, Opportunity, Warranty } from '../types';
 import { formatProductOptionLabel } from '../utils/productDisplay';
+import { isSalesBookOwner } from '../utils/salesTargets';
 
-const tabs = ['Overview', 'Customers', 'Complaints', 'Opportunities', 'Warranties'];
+const COMPANY_TABS = ['Overview', 'Customers', 'Complaints', 'Opportunities', 'Warranties'];
+const MY_BOOK_TABS = ['Overview', 'My Customers', 'My Complaints', 'My Opportunities', 'My Warranties'];
 
 const CUSTOMER_TYPE_OPTIONS = [
   { value: '', label: 'All types' },
@@ -108,7 +110,9 @@ function warrantyStatus(endDate: string) {
 
 export function CustomersPage() {
   const queryClient = useQueryClient();
-  const { hasPermission, isSalesOfficer } = useAuth();
+  const { hasPermission, isSalesOfficer, user } = useAuth();
+  const myBook = isSalesBookOwner(user?.role?.name);
+  const tabs = myBook ? MY_BOOK_TABS : COMPANY_TABS;
   const [activeTab, setActiveTab] = useState(0);
 
   const [custPage, setCustPage] = useState(1);
@@ -609,11 +613,41 @@ export function CustomersPage() {
     <div className="space-y-4">
       {stats && (
         <StatGrid>
-          <StatCard title="Customers" value={stats.customers.active} icon={<Users className="h-5 w-5 text-white" />} color="from-primary-500 to-primary-700" onClick={() => goToTab(1)} />
-          <StatCard title="Open Complaints" value={stats.complaints.open} icon={<AlertCircle className="h-5 w-5 text-white" />} color="from-red-500 to-rose-600" onClick={() => goToTab(2)} />
-          <StatCard title="Pipeline Value" value={formatCurrency(stats.opportunities.pipelineValue)} icon={<TrendingUp className="h-5 w-5 text-white" />} color="from-emerald-500 to-teal-600" onClick={() => goToTab(3)} />
-          <StatCard title="Warranties Expiring" value={stats.warranties.expiringSoon} icon={<Shield className="h-5 w-5 text-white" />} color="from-primary-600 to-primary-800" onClick={() => goToTab(4)} />
-          <StatCard title="Open Opportunities" value={stats.opportunities.open} icon={<Target className="h-5 w-5 text-white" />} color="from-slate-600 to-slate-800" onClick={() => goToTab(3)} />
+          <StatCard
+            title={myBook ? 'My Customers' : 'Customers'}
+            value={stats.customers.active}
+            icon={<Users className="h-5 w-5 text-white" />}
+            color="from-primary-500 to-primary-700"
+            onClick={() => goToTab(1)}
+          />
+          <StatCard
+            title={myBook ? 'My Open Complaints' : 'Open Complaints'}
+            value={stats.complaints.open}
+            icon={<AlertCircle className="h-5 w-5 text-white" />}
+            color="from-red-500 to-rose-600"
+            onClick={() => goToTab(2)}
+          />
+          <StatCard
+            title={myBook ? 'My Pipeline' : 'Pipeline Value'}
+            value={formatCurrency(stats.opportunities.pipelineValue)}
+            icon={<TrendingUp className="h-5 w-5 text-white" />}
+            color="from-emerald-500 to-teal-600"
+            onClick={() => goToTab(3)}
+          />
+          <StatCard
+            title={myBook ? 'My Warranties Expiring' : 'Warranties Expiring'}
+            value={stats.warranties.expiringSoon}
+            icon={<Shield className="h-5 w-5 text-white" />}
+            color="from-primary-600 to-primary-800"
+            onClick={() => goToTab(4)}
+          />
+          <StatCard
+            title={myBook ? 'My Open Opportunities' : 'Open Opportunities'}
+            value={stats.opportunities.open}
+            icon={<Target className="h-5 w-5 text-white" />}
+            color="from-slate-600 to-slate-800"
+            onClick={() => goToTab(3)}
+          />
         </StatGrid>
       )}
 
@@ -622,7 +656,7 @@ export function CustomersPage() {
           stats && stats.complaints.open > 0 ? (
             <Button variant="secondary" size="sm" onClick={() => goToTab(2)}>
               <AlertCircle className="h-4 w-4 mr-1.5 text-red-500" />
-              {stats.complaints.open} open complaints
+              {stats.complaints.open} {myBook ? 'my open complaints' : 'open complaints'}
             </Button>
           ) : undefined
         }
@@ -645,7 +679,7 @@ export function CustomersPage() {
         <div className="space-y-4">
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
             <Card
-              title="Open complaints"
+              title={myBook ? 'My open complaints' : 'Open complaints'}
               action={
                 openComplaints.length > 0 ? (
                   <Button variant="ghost" size="sm" onClick={() => goToTab(2)}>
@@ -657,7 +691,14 @@ export function CustomersPage() {
             >
               {openComplaints.length === 0 ? (
                 <div className="p-6">
-                  <EmptyState title="No open complaints" description="Customer issues will appear here for resolution." />
+                  <EmptyState
+                    title={myBook ? 'No open complaints on your customers' : 'No open complaints'}
+                    description={
+                      myBook
+                        ? 'Issues logged against your assigned customers will appear here.'
+                        : 'Customer issues will appear here for resolution.'
+                    }
+                  />
                 </div>
               ) : (
                 <ul className="divide-y divide-slate-100">
@@ -680,7 +721,7 @@ export function CustomersPage() {
             </Card>
 
             <Card
-              title="Pipeline opportunities"
+              title={myBook ? 'My pipeline opportunities' : 'Pipeline opportunities'}
               action={
                 <Button variant="ghost" size="sm" onClick={() => goToTab(3)}>
                   Full pipeline
@@ -691,7 +732,14 @@ export function CustomersPage() {
             >
               {pipelineOpps.length === 0 ? (
                 <div className="p-6">
-                  <EmptyState title="No open opportunities" description="Add deals to track your sales pipeline." />
+                  <EmptyState
+                    title={myBook ? 'No open opportunities in your book' : 'No open opportunities'}
+                    description={
+                      myBook
+                        ? 'Add deals for your customers to track your personal pipeline.'
+                        : 'Add deals to track your sales pipeline.'
+                    }
+                  />
                 </div>
               ) : (
                 <ul className="divide-y divide-slate-100">

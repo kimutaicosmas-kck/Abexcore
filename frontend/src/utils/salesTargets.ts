@@ -6,6 +6,9 @@ const SALES_TARGET_MANAGER_ROLES = [
   'Sales Manager',
 ] as const;
 
+/** Front-line sales book (personal CRM / My Sales) — excludes Sales Manager. */
+const SALES_BOOK_OWNER_ROLES = ['Sales Officer', 'Sales Representative'] as const;
+
 export function canManageSalesTargets(
   roleName: string | null | undefined,
   hasPermission: (permission: string) => boolean
@@ -14,4 +17,8 @@ export function canManageSalesTargets(
     return true;
   }
   return hasPermission('settings:update');
+}
+
+export function isSalesBookOwner(roleName: string | null | undefined): boolean {
+  return !!roleName && (SALES_BOOK_OWNER_ROLES as readonly string[]).includes(roleName);
 }

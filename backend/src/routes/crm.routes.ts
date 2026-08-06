@@ -16,17 +16,34 @@ import { CrmService } from '../services/crm.service';
 import prisma from '../config/database';
 import { getParam, getQuery } from '../utils/request';
 import { Prisma } from '@prisma/client';
+import { isSalesBookOwner } from '../config/rolePermissions';
 
 const router = Router();
 router.use(authenticate);
 
 const STAGE_ORDER = ['PROSPECTING', 'QUALIFICATION', 'PROPOSAL', 'NEGOTIATION', 'CLOSED_WON'];
 
+function bookOwnerId(req: AuthRequest): string | undefined {
+  return isSalesBookOwner(req.user?.roleName) ? req.user!.id : undefined;
+}
+
+/** Limit CRM rows to customers assigned to the current salesperson. */
+function applySalesBookCustomerFilter<T extends { customer?: Prisma.CustomerWhereInput }>(
+  where: T,
+  salesPersonId: string | undefined
+): T {
+  if (!salesPersonId) return where;
+  const existing =
+    where.customer && typeof where.customer === 'object' ? where.customer : {};
+  where.customer = { ...existing, salesPersonId };
+  return where;
+}
+
 router.get(
   '/stats',
   authorize('customers:read'),
-  asyncHandler(async (_req: AuthRequest, res: Response) => {
-    const data = await CrmService.getStats();
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const data = await CrmService.getStats(bookOwnerId(req));
     res.json({ success: true, data });
   })
 );
@@ -69,6 +86,7 @@ router.get(
         },
       ];
     }
+    applySalesBookCustomerFilter(where, bookOwnerId(req));
 
     const [data, total] = await Promise.all([
       prisma.complaint.findMany({
@@ -169,6 +187,7 @@ router.get(
         { customer: { name: { contains: search } } },
       ];
     }
+    applySalesBookCustomerFilter(where, bookOwnerId(req));
 
     const [data, total] = await Promise.all([
       prisma.opportunity.findMany({
@@ -279,6 +298,7 @@ router.get(
           ],
         }
       : {};
+    applySalesBookCustomerFilter(where, bookOwnerId(req));
 
     const [data, total] = await Promise.all([
       prisma.warranty.findMany({

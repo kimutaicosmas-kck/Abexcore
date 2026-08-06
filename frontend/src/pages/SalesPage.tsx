@@ -44,10 +44,11 @@ import { SalesOrderForm } from '../components/forms/SalesOrderForm';
 import { SalesOrderEditForm } from '../components/forms/SalesOrderEditForm';
 import { QuotationForm } from '../components/forms/QuotationForm';
 import { useAuth } from '../contexts/AuthContext';
-import { canManageSalesTargets } from '../utils/salesTargets';
+import { canManageSalesTargets, isSalesBookOwner } from '../utils/salesTargets';
 import { SalesOrder, SalesQuotation, SalesStats } from '../types';
 
-const tabs = ['Overview', 'Sales Orders', 'Quotations'];
+const COMPANY_TABS = ['Overview', 'Sales Orders', 'Quotations'];
+const MY_BOOK_TABS = ['Overview', 'My Orders', 'Quotations'];
 
 const ORDER_STATUS_OPTIONS = [
   { value: '', label: 'All statuses' },
@@ -110,6 +111,8 @@ function getNextOrderAction(
 export function SalesPage() {
   const queryClient = useQueryClient();
   const { hasPermission, isSalesOfficer, user } = useAuth();
+  const myBook = isSalesBookOwner(user?.role?.name);
+  const tabs = myBook ? MY_BOOK_TABS : COMPANY_TABS;
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const orderIdFromUrl = searchParams.get('orderId');
@@ -506,11 +509,41 @@ export function SalesPage() {
     <div className="space-y-4">
       {stats && (
         <StatGrid>
-          <StatCard title="Open Orders" value={stats.openOrders} icon={<ShoppingCart className="h-5 w-5 text-white" />} color="from-primary-500 to-primary-700" onClick={() => goToTab(1)} />
-          <StatCard title="Pipeline Value" value={formatCurrency(stats.pipelineValue)} icon={<TrendingUp className="h-5 w-5 text-white" />} color="from-emerald-500 to-teal-600" onClick={() => goToTab(1)} />
-          <StatCard title="Pending Quotes" value={stats.pendingQuotations} icon={<FileText className="h-5 w-5 text-white" />} color="from-amber-500 to-orange-600" onClick={() => goToTab(2)} />
-          <StatCard title="Orders This Month" value={stats.ordersThisMonth} icon={<CalendarDays className="h-5 w-5 text-white" />} color="from-primary-600 to-primary-800" onClick={() => goToTab(1)} />
-          <StatCard title="Monthly Revenue" value={formatCurrency(stats.monthlyRevenue)} icon={<Receipt className="h-5 w-5 text-white" />} color="from-slate-600 to-slate-800" to="/finance" />
+          <StatCard
+            title={myBook ? 'My Open Orders' : 'Open Orders'}
+            value={stats.openOrders}
+            icon={<ShoppingCart className="h-5 w-5 text-white" />}
+            color="from-primary-500 to-primary-700"
+            onClick={() => goToTab(1)}
+          />
+          <StatCard
+            title={myBook ? 'My Pipeline Value' : 'Pipeline Value'}
+            value={formatCurrency(stats.pipelineValue)}
+            icon={<TrendingUp className="h-5 w-5 text-white" />}
+            color="from-emerald-500 to-teal-600"
+            onClick={() => goToTab(1)}
+          />
+          <StatCard
+            title={myBook ? 'My Pending Quotes' : 'Pending Quotes'}
+            value={stats.pendingQuotations}
+            icon={<FileText className="h-5 w-5 text-white" />}
+            color="from-amber-500 to-orange-600"
+            onClick={() => goToTab(2)}
+          />
+          <StatCard
+            title={myBook ? 'My Orders This Month' : 'Orders This Month'}
+            value={stats.ordersThisMonth}
+            icon={<CalendarDays className="h-5 w-5 text-white" />}
+            color="from-primary-600 to-primary-800"
+            onClick={() => goToTab(1)}
+          />
+          <StatCard
+            title={myBook ? 'My Monthly Revenue' : 'Monthly Revenue'}
+            value={formatCurrency(stats.monthlyRevenue)}
+            icon={<Receipt className="h-5 w-5 text-white" />}
+            color="from-slate-600 to-slate-800"
+            to={myBook ? '/my-sales' : '/finance'}
+          />
         </StatGrid>
       )}
 

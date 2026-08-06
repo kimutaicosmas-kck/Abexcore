@@ -90,6 +90,16 @@ export function isSalesPersonRole(roleName: string | null | undefined): boolean 
   return !!roleName && (SALES_PERSON_ROLE_NAMES as readonly string[]).includes(roleName);
 }
 
+/**
+ * Front-line sales book owners (personal CRM / My Sales).
+ * Sales Manager is excluded so they keep company/team-wide CRM visibility.
+ */
+export const SALES_BOOK_OWNER_ROLE_NAMES = ['Sales Officer', 'Sales Representative'] as const;
+
+export function isSalesBookOwner(roleName: string | null | undefined): boolean {
+  return !!roleName && (SALES_BOOK_OWNER_ROLE_NAMES as readonly string[]).includes(roleName);
+}
+
 /** Roles that may assign monthly sales targets for sales persons. */
 export const SALES_TARGET_MANAGER_ROLES = [
   'Super Admin',
