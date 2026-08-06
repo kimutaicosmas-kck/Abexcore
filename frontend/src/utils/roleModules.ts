@@ -52,13 +52,15 @@ const ROLE_MODULE_ACCESS: Record<string, readonly string[]> = {
   'Warehouse Officer': ['dashboard', 'inventory'],
   Storekeeper: ['dashboard', 'inventory'],
   'Sales Officer': ['dashboard', 'customers', 'sales'],
-  'Sales Representative': ['dashboard', 'customers', 'sales'],
+  'Sales Executive': ['dashboard', 'customers', 'sales'],
+  'Sales Representative': ['dashboard', 'customers', 'sales'], // legacy
   'Machine Operator': ['dashboard', 'production'],
   'Finance Officer': ['dashboard', 'finance', 'reports'],
   Accountant: ['dashboard', 'finance', 'reports'],
   HR: ['dashboard', 'hr'],
   'Customer Service': ['dashboard', 'customers'],
-  Driver: ['dashboard', 'delivery'],
+  'Logistics & Delivery': ['dashboard', 'delivery'],
+  Driver: ['dashboard', 'delivery'], // legacy
   Auditor: ['dashboard', 'reports', 'finance'],
 };
 
@@ -83,6 +85,7 @@ export function resolveRoleIdFromModules(
   const selected = new Set(modules);
   if (selected.size === 0) {
     return (
+      roles.find((r) => r.name === 'Sales Executive')?.id ||
       roles.find((r) => r.name === 'Sales Representative')?.id ||
       roles.find((r) => r.name === 'Sales Officer')?.id ||
       roles[0]?.id
@@ -90,6 +93,7 @@ export function resolveRoleIdFromModules(
   }
 
   let bestRole =
+    roles.find((r) => r.name === 'Sales Executive') ||
     roles.find((r) => r.name === 'Sales Representative') ||
     roles.find((r) => r.name === 'Sales Officer') ||
     roles[0];

@@ -385,7 +385,7 @@ export function UserForm({ user, onSuccess, onCancel }: UserFormProps) {
         value={selectedModules}
         roleBaseline={roleBaseline}
         onChange={(next) => {
-          setSelectedModules(mergeRoleAndExtraModules(selectedRoleName || 'Sales Representative', next));
+          setSelectedModules(mergeRoleAndExtraModules(selectedRoleName || 'Sales Executive', next));
           setModuleError('');
         }}
         error={moduleError}

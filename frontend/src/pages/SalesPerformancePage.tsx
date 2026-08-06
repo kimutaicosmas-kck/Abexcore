@@ -180,7 +180,7 @@ export function SalesPerformancePanel() {
         ) : !isLoading && data && data.performers.length === 0 ? (
           <EmptyState
             title="No sales officers found"
-            description="Add Sales Officer or Sales Representative users under Users, then set monthly targets on the Targets tab."
+            description="Add Sales Officer or Sales Executive users under Users, then set monthly targets on the Targets tab."
           />
         ) : (
           <>

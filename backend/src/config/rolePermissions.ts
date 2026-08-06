@@ -34,20 +34,21 @@ export const SYSTEM_ROLES = [
   'Procurement Officer',
   'Warehouse Officer',
   'Sales Officer',
-  'Sales Representative',
+  'Sales Executive',
   'Storekeeper',
   'Machine Operator',
   'Finance Officer',
   'Accountant',
   'HR',
   'Customer Service',
-  'Driver',
+  'Logistics & Delivery',
   'Auditor',
 ] as const;
 
 /**
  * Default module access per role.
  * Includes both demo seed names and production seed names (aliases).
+ * Legacy role names are kept so unmigrated DBs keep working until rename migration runs.
  */
 export const ROLE_MODULE_ACCESS: Record<string, readonly string[]> = {
   'Managing Director': PERMISSION_MODULES,
@@ -64,13 +65,15 @@ export const ROLE_MODULE_ACCESS: Record<string, readonly string[]> = {
   'Warehouse Officer': ['dashboard', 'inventory'],
   Storekeeper: ['dashboard', 'inventory'],
   'Sales Officer': ['dashboard', 'customers', 'sales'],
-  'Sales Representative': ['dashboard', 'customers', 'sales'],
+  'Sales Executive': ['dashboard', 'customers', 'sales'],
+  'Sales Representative': ['dashboard', 'customers', 'sales'], // legacy
   'Machine Operator': ['dashboard', 'production'],
   'Finance Officer': ['dashboard', 'finance', 'reports'],
   Accountant: ['dashboard', 'finance', 'reports'],
   HR: ['dashboard', 'hr'],
   'Customer Service': ['dashboard', 'customers'],
-  Driver: ['dashboard', 'delivery'],
+  'Logistics & Delivery': ['dashboard', 'delivery'],
+  Driver: ['dashboard', 'delivery'], // legacy
   Auditor: ['dashboard', 'reports', 'finance'],
 };
 
@@ -82,7 +85,8 @@ export function modulesForRoleName(roleName: string): string[] {
 /** Roles that own a personal sales book (My Sales, targets, customer assignment). */
 export const SALES_PERSON_ROLE_NAMES = [
   'Sales Officer',
-  'Sales Representative',
+  'Sales Executive',
+  'Sales Representative', // legacy
   'Sales Manager',
 ] as const;
 
@@ -94,10 +98,21 @@ export function isSalesPersonRole(roleName: string | null | undefined): boolean 
  * Front-line sales book owners (personal CRM / My Sales).
  * Sales Manager is excluded so they keep company/team-wide CRM visibility.
  */
-export const SALES_BOOK_OWNER_ROLE_NAMES = ['Sales Officer', 'Sales Representative'] as const;
+export const SALES_BOOK_OWNER_ROLE_NAMES = [
+  'Sales Officer',
+  'Sales Executive',
+  'Sales Representative', // legacy
+] as const;
 
 export function isSalesBookOwner(roleName: string | null | undefined): boolean {
   return !!roleName && (SALES_BOOK_OWNER_ROLE_NAMES as readonly string[]).includes(roleName);
+}
+
+/** Logistics / delivery field roles (formerly Driver). */
+export const LOGISTICS_DELIVERY_ROLE_NAMES = ['Logistics & Delivery', 'Driver'] as const;
+
+export function isLogisticsDeliveryRole(roleName: string | null | undefined): boolean {
+  return !!roleName && (LOGISTICS_DELIVERY_ROLE_NAMES as readonly string[]).includes(roleName);
 }
 
 /** Roles that may assign monthly sales targets for sales persons. */

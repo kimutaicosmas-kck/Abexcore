@@ -7,7 +7,11 @@ const SALES_TARGET_MANAGER_ROLES = [
 ] as const;
 
 /** Front-line sales book (personal CRM / My Sales) — excludes Sales Manager. */
-const SALES_BOOK_OWNER_ROLES = ['Sales Officer', 'Sales Representative'] as const;
+const SALES_BOOK_OWNER_ROLES = [
+  'Sales Officer',
+  'Sales Executive',
+  'Sales Representative', // legacy
+] as const;
 
 export function canManageSalesTargets(
   roleName: string | null | undefined,

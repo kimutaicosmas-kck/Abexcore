@@ -58,7 +58,13 @@ export class SalespersonReportService {
         status: 'ACTIVE',
         OR: [
           { salesOrders: { some: {} } },
-          { role: { name: { in: ['Sales Officer', 'Sales Representative', 'Sales Manager'] } } },
+          {
+            role: {
+              name: {
+                in: ['Sales Officer', 'Sales Executive', 'Sales Representative', 'Sales Manager'],
+              },
+            },
+          },
         ],
       },
       select: {

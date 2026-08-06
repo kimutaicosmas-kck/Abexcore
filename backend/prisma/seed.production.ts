@@ -29,10 +29,10 @@ const ROLES = [
   'Finance Manager',
   'HR Manager',
   'Accountant',
-  'Sales Representative',
+  'Sales Executive',
   'Storekeeper',
   'Machine Operator',
-  'Driver',
+  'Logistics & Delivery',
 ];
 
 const MODULES = [

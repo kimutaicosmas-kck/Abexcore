@@ -227,10 +227,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isAuthenticated: !!user,
         isSuperAdmin: user?.role?.name === 'Super Admin',
         isPlatformOwner,
-        isSalesOfficer: ['Sales Officer', 'Sales Representative', 'Sales Manager'].includes(
-          user?.role?.name || ''
-        ),
-        isDriver: user?.role?.name === 'Driver',
+        isSalesOfficer: [
+          'Sales Officer',
+          'Sales Executive',
+          'Sales Representative',
+          'Sales Manager',
+        ].includes(user?.role?.name || ''),
+        isDriver: ['Logistics & Delivery', 'Driver'].includes(user?.role?.name || ''),
         mustChangePassword,
         login,
         logout,

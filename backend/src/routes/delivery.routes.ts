@@ -25,11 +25,14 @@ import {
 } from '../services/delivery-trip.service';
 import { NotificationService } from '../services/notification.service';
 import { Prisma } from '@prisma/client';
+import { isLogisticsDeliveryRole } from '../config/rolePermissions';
+
 const router = Router();
 
 router.use(authenticate);
+
 function isDriverUser(req: AuthRequest) {
-  return req.user!.roleName === 'Driver';
+  return isLogisticsDeliveryRole(req.user!.roleName);
 }
 /** Drivers may advance or complete assigned deliveries; completion is shared with admin. */
 const DRIVER_STATUS_TRANSITIONS: Record<string, readonly string[]> = {
@@ -89,13 +92,13 @@ async function assertActiveDriver(driverId: string) {
     : [];
   const roleModules = driver.role.permissions.map((p) => p.permission.module);
   const canDeliver =
-    driver.role.name === 'Driver' ||
+    isLogisticsDeliveryRole(driver.role.name) ||
     modules.includes('delivery') ||
     roleModules.includes('delivery');
 
   if (!canDeliver) {
     throw new AppError(
-      'Selected delivery person must be a Driver or have delivery module access',
+      'Selected delivery person must have the Logistics & Delivery role or delivery module access',
       400
     );
   }
@@ -136,7 +139,7 @@ router.get(
         ? (user.allowedModules as string[])
         : [];
       return (
-        user.role.name === 'Driver' ||
+        isLogisticsDeliveryRole(user.role.name) ||
         modules.includes('delivery') ||
         user.role.permissions.some((p) => p.permission.module === 'delivery')
       );

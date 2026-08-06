@@ -325,7 +325,7 @@ export async function seedDemoDataForCompany(
       'Procurement Officer',
       'HR',
       'Customer Service',
-      'Driver',
+      'Logistics & Delivery',
       'Accountant',
       'Operations Manager',
     ];
@@ -345,7 +345,7 @@ export async function seedDemoDataForCompany(
         'Warehouse Officer': 'Warehouse',
         'Sales Officer': 'Sales',
         HR: 'HR',
-        Driver: 'Warehouse',
+        'Logistics & Delivery': 'Warehouse',
         'Operations Manager': 'Management',
         'Customer Service': 'Sales',
       };
@@ -973,7 +973,11 @@ export async function seedDemoDataForCompany(
     // --- Delivery trips ---
     const tripBefore = await tx.deliveryTrip.count({ where: { companyId: cid } });
     const driverUser = await tx.user.findFirst({
-      where: { companyId: cid, role: { name: 'Driver' }, deletedAt: null },
+      where: {
+        companyId: cid,
+        role: { name: { in: ['Logistics & Delivery', 'Driver'] } },
+        deletedAt: null,
+      },
     });
     for (let i = tripBefore; i < MIN_RECORDS; i++) {
       await tx.deliveryTrip.create({

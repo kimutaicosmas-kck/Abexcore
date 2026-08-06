@@ -741,7 +741,7 @@ export function SettingsPage() {
                   value={inviteModules}
                   roleBaseline={inviteRoleBaseline}
                   onChange={(next) =>
-                    setInviteModules(mergeRoleAndExtraModules(inviteRoleName || 'Sales Representative', next))
+                    setInviteModules(mergeRoleAndExtraModules(inviteRoleName || 'Sales Executive', next))
                   }
                   error={inviteModuleError}
                 />
