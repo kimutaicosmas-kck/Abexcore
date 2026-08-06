@@ -98,3 +98,37 @@ export const changePassword = asyncHandler(async (req: AuthRequest, res: Respons
   await AuthService.changePassword(req.user!.id, currentPassword, newPassword);
   res.json({ success: true, message: 'Password changed successfully' });
 });
+
+export const uploadAvatar = asyncHandler(async (req: AuthRequest, res: Response) => {
+  const { prisma } = await import('../config/database');
+  const { processUserAvatar } = await import('../utils/image');
+  const { config } = await import('../config');
+  const { AppError } = await import('../middleware/errorHandler');
+  const fs = await import('fs/promises');
+  const path = await import('path');
+
+  if (!req.file) throw new AppError('No photo uploaded', 400);
+
+  const userId = req.user!.id;
+  const existing = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { avatar: true },
+  });
+
+  const filename = await processUserAvatar(req.file.path);
+  const avatar = `/uploads/avatars/${filename}`;
+
+  const updated = await prisma.user.update({
+    where: { id: userId },
+    data: { avatar },
+    select: { id: true, avatar: true, firstName: true, lastName: true },
+  });
+
+  const previous = existing?.avatar;
+  if (previous?.startsWith('/uploads/avatars/') && previous !== avatar) {
+    const oldPath = path.resolve(config.uploadDir, previous.replace(/^\/uploads\//, ''));
+    await fs.unlink(oldPath).catch(() => undefined);
+  }
+
+  res.json({ success: true, data: updated, message: 'Profile photo updated' });
+});

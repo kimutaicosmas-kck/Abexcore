@@ -166,6 +166,11 @@ export const authApi = {
   me: () => api.get('/auth/me'),
   changePassword: (currentPassword: string, newPassword: string) =>
     api.post('/auth/change-password', { currentPassword, newPassword }),
+  uploadAvatar: (file: File) => {
+    const formData = new FormData();
+    formData.append('avatar', file);
+    return api.post('/auth/avatar', formData);
+  },
   setup2FA: () => api.post('/auth/2fa/setup'),
   verify2FA: (token: string) => api.post('/auth/2fa/verify', { token }),
 };

@@ -8,6 +8,7 @@ import { GlobalSearch } from './GlobalSearch';
 import { NOTIFICATION_POLL_MS } from '../../config/realtime';
 import { normalizeRoutePath } from '../../config/routeAccess';
 import { APP_NAME } from '../../constants/brand';
+import { UserAvatar } from '../ui/UserAvatar';
 
 interface TopNavProps {
   onMenuClick: () => void;
@@ -91,8 +92,6 @@ export function TopNav({ onMenuClick, sidebarOffset }: TopNavProps) {
     await logout();
     navigate('/login');
   };
-
-  const initials = `${user?.firstName?.[0] || ''}${user?.lastName?.[0] || ''}`.toUpperCase() || 'U';
 
   return (
     <>
@@ -200,9 +199,12 @@ export function TopNav({ onMenuClick, sidebarOffset }: TopNavProps) {
                 <p className="text-xs font-semibold text-slate-900">{user?.firstName} {user?.lastName}</p>
                 <p className="text-[11px] text-primary-600 font-medium">{user?.role.name}</p>
               </div>
-              <div className="h-9 w-9 rounded-lg bg-primary-600 flex items-center justify-center text-white text-xs font-bold">
-                {initials}
-              </div>
+              <UserAvatar
+                firstName={user?.firstName}
+                lastName={user?.lastName}
+                avatar={user?.avatar}
+                size="sm"
+              />
               <button
                 onClick={handleLogout}
                 className="p-2 rounded-xl hover:bg-red-50 text-slate-500 hover:text-red-600 transition-colors"

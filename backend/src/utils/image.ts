@@ -40,3 +40,21 @@ export async function processCompanyLogo(filePath: string): Promise<string> {
   await fs.unlink(filePath).catch(() => undefined);
   return outName;
 }
+
+const USER_AVATAR_SIZE = 256;
+
+/** Square cover crop for profile photos (faces fill the circle). */
+export async function processUserAvatar(filePath: string): Promise<string> {
+  const dir = path.dirname(filePath);
+  const outName = `${Date.now()}-avatar.webp`;
+  const outPath = path.join(dir, outName);
+
+  await sharp(filePath)
+    .rotate()
+    .resize(USER_AVATAR_SIZE, USER_AVATAR_SIZE, { fit: 'cover', position: 'centre' })
+    .webp({ quality: 85 })
+    .toFile(outPath);
+
+  await fs.unlink(filePath).catch(() => undefined);
+  return outName;
+}
