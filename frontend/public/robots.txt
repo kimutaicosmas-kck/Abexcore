@@ -1,5 +1,6 @@
-# AbexCore ERP — public login may be indexed; authenticated app routes stay private.
+# AbexCore ERP — public pages may be indexed; authenticated app routes stay private.
 User-agent: *
+Allow: /
 Allow: /login
 Allow: /login?
 Disallow: /api/
