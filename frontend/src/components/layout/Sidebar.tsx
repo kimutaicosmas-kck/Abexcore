@@ -101,8 +101,12 @@ export function Sidebar({ collapsed, mobileOpen, onToggle }: SidebarProps) {
   const systemNavName = accountNavLabel(canReadSettings);
   const systemNavIcon = canReadSettings ? Settings : CircleUser;
 
+  // Keep the active item visible — do not reset the sidebar to the top on navigation.
   useEffect(() => {
-    navRef.current?.scrollTo({ top: 0 });
+    const nav = navRef.current;
+    if (!nav) return;
+    const active = nav.querySelector<HTMLElement>('[data-active="true"]');
+    active?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   }, [location.pathname]);
 
   const extraItems: NavItem[] = [
