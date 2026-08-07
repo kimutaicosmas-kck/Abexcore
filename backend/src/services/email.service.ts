@@ -33,14 +33,23 @@ function createTransport(smtp: SmtpRuntime): nodemailer.Transporter {
     secure,
     requireTLS: smtp.port === 587,
     auth: { user: smtp.user, pass: smtp.pass },
+    connectionTimeout: 20_000,
+    greetingTimeout: 20_000,
+    socketTimeout: 30_000,
   });
 }
 
 function formatSmtpError(error: unknown): string {
-  const err = error as { code?: string; response?: string; message?: string; reason?: string };
-  const raw = `${err.response || ''} ${err.message || ''} ${err.reason || ''}`;
+  const err = error as { code?: string; response?: string; message?: string; reason?: string; command?: string };
+  const raw = `${err.response || ''} ${err.message || ''} ${err.reason || ''} ${err.code || ''}`;
   if (/535|BadCredentials|Username and Password not accepted/i.test(raw)) {
     return 'SMTP login rejected. Paste the 16-character Google App Password into Settings → Email (not your normal Gmail password), Save, then test again. Creating the App Password in Google alone is not enough.';
+  }
+  if (/ETIMEDOUT|ESOCKETTIMEDOUT|Greeting never received|Connection timeout/i.test(raw) || err.code === 'ETIMEDOUT') {
+    return 'Could not reach the SMTP server (timeout). On Contabo/VPS, outbound ports 25/465/587 are often blocked — ask the host to open SMTP, or use an API email provider (Resend, SendGrid, Mailgun).';
+  }
+  if (/ECONNREFUSED|ENOTFOUND|EHOSTUNREACH|ENETUNREACH/i.test(raw) || err.code === 'ECONNREFUSED' || err.code === 'ENOTFOUND') {
+    return 'Cannot connect to the SMTP host. Check host/port, or ask Contabo to allow outbound SMTP.';
   }
   if (/wrong version number|ESOCKET|ECONNECTION/i.test(raw)) {
     return 'SMTP TLS/port mismatch. Use port 587 without SSL, or port 465 with SSL.';

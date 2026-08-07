@@ -455,7 +455,8 @@ router.post(
     try {
       await EmailService.sendTestEmail(companyId, to);
     } catch (err) {
-      throw new AppError(err instanceof Error ? err.message : 'Test email failed', 502);
+      // 400 (not 502): production errorHandler hides 5xx messages as "Internal server error".
+      throw new AppError(err instanceof Error ? err.message : 'Test email failed', 400);
     }
     res.json({ success: true, data: { to }, message: `Test email sent to ${to}` });
   })
