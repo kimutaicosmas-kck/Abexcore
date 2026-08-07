@@ -17,6 +17,11 @@ async function start() {
     logger.warn('Refresh token hash migration skipped', err)
   );
 
+  const { ensureLegacyRoleRenames } = await import('./utils/roleRenames');
+  await ensureLegacyRoleRenames().catch((err) =>
+    logger.warn('Legacy role rename skipped', err)
+  );
+
   const app = createApp();
   const server: Server = app.listen(config.port, () => {
     logger.info(`AbexCore ERP v2.1.0 running on port ${config.port} [${config.nodeEnv}] TZ=${config.timezone}`);

@@ -46,6 +46,14 @@ async function main() {
   const adminEmail = process.env.SEED_ADMIN_EMAIL || PLATFORM_OWNER_EMAIL;
   const adminPassword = process.env.SEED_ADMIN_PASSWORD || PLATFORM_OWNER_DEFAULT_PASSWORD;
 
+  // Apply display renames before upserts (USE_DB_PUSH hosts may never run SQL migrations).
+  await prisma.$executeRawUnsafe(
+    `UPDATE \`roles\` SET \`name\` = 'Sales Executive' WHERE \`name\` = 'Sales Representative'`
+  );
+  await prisma.$executeRawUnsafe(
+    `UPDATE \`roles\` SET \`name\` = 'Logistics & Delivery' WHERE \`name\` = 'Driver'`
+  );
+
   for (const name of ROLES) {
     await prisma.role.upsert({
       where: { name },

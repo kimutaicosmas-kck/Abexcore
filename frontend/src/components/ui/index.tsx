@@ -618,7 +618,7 @@ export function TabGroup({ tabs, activeIndex, onChange, className }: TabGroupPro
     <div className={clsx('page-tabs', className)}>
       {tabs.map((tab, i) => (
         <button
-          key={tab}
+          key={`tab-${i}-${tab}`}
           onClick={() => onChange(i)}
           className={clsx(
             'px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 whitespace-nowrap shrink-0',

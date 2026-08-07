@@ -22,7 +22,7 @@ export class NotificationService {
     });
 
     if (user?.email) {
-      await EmailService.sendNotificationEmail(user.email, title, message, link);
+      await EmailService.sendNotificationEmail(user.email, title, message, link, companyId);
     }
 
     return notification;
@@ -62,7 +62,9 @@ export class NotificationService {
     await Promise.all(
       role.users
         .filter((user) => user.email)
-        .map((user) => EmailService.sendNotificationEmail(user.email!, title, message, link))
+        .map((user) =>
+          EmailService.sendNotificationEmail(user.email!, title, message, link, companyId)
+        )
     );
 
     return role.users.map((user) => user.id);

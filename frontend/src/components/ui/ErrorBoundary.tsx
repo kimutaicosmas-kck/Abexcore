@@ -24,7 +24,10 @@ export class ErrorBoundary extends Component<Props, State> {
     if (this.state.hasError) {
       return (
         <ErrorPage
-          onRetry={() => this.setState({ hasError: false })}
+          onRetry={() => {
+            // Full reload recovers from HMR/context tears (e.g. AuthProvider).
+            window.location.reload();
+          }}
         />
       );
     }

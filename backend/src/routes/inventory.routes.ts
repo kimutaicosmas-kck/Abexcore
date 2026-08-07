@@ -704,12 +704,16 @@ router.post(
     if (!to) {
       throw new AppError('Supplier has no email address on file', 400);
     }
-    if (!EmailService.isConfigured()) {
-      throw new AppError('Email is not configured. Download the PDF and send it manually.', 400);
+    const company = await getCompanySettings();
+    const companyId = company?.id;
+    if (!(await EmailService.isConfiguredForCompany(companyId))) {
+      throw new AppError(
+        'Email is not configured. Add SMTP under Settings → Email, or download the PDF and send it manually.',
+        400
+      );
     }
 
     const pdf = await ExportService.generatePurchaseOrderPDF(po);
-    const company = await getCompanySettings();
     const companyName = company?.name || 'AbexCore ERP';
     const html = `
       <div style="font-family:Arial,sans-serif;max-width:640px;margin:0 auto">
@@ -728,7 +732,8 @@ router.post(
       to,
       `Purchase Order ${po.poNumber} — ${companyName}`,
       html,
-      [{ filename: `${po.poNumber}.pdf`, content: pdf, contentType: 'application/pdf' }]
+      [{ filename: `${po.poNumber}.pdf`, content: pdf, contentType: 'application/pdf' }],
+      companyId
     );
     if (!sent) {
       throw new AppError('Failed to send purchase order email', 502);

@@ -398,4 +398,67 @@ router.post(
   })
 );
 
+const emailConfigSchema = z.object({
+  host: z.string().min(1).max(200),
+  port: z.coerce.number().int().min(1).max(65535).default(587),
+  secure: z.boolean().optional(),
+  username: z.string().min(1).max(200),
+  password: z.string().max(500).optional(),
+  fromEmail: z.string().email().max(200),
+  fromName: z.string().min(1).max(200),
+  isActive: z.boolean().optional(),
+});
+
+router.get(
+  '/email-config',
+  authorize('settings:read'),
+  asyncHandler(async (_req: AuthRequest, res: Response) => {
+    const companyId = requireTenantId();
+    const { EmailService } = await import('../services/email.service');
+    const status = await EmailService.getCompanyEmailStatus(companyId);
+    res.json({ success: true, data: status });
+  })
+);
+
+router.put(
+  '/email-config',
+  authorize('settings:update'),
+  validate(emailConfigSchema),
+  auditLog('tenant', 'update', 'email_config'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const companyId = requireTenantId();
+    const { EmailService } = await import('../services/email.service');
+    try {
+      await EmailService.upsertCompanyEmailConfig(companyId, req.body);
+    } catch (err) {
+      throw new AppError(err instanceof Error ? err.message : 'Failed to save email settings', 400);
+    }
+    const status = await EmailService.getCompanyEmailStatus(companyId);
+    res.json({ success: true, data: status, message: 'Email settings saved' });
+  })
+);
+
+router.post(
+  '/email-config/test',
+  authorize('settings:update'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const companyId = requireTenantId();
+    const { EmailService } = await import('../services/email.service');
+    const to =
+      (typeof req.body?.to === 'string' && req.body.to.trim()) ||
+      req.user?.email ||
+      '';
+    if (!to) throw new AppError('No recipient email available for the test', 400);
+    if (!(await EmailService.isConfiguredForCompany(companyId))) {
+      throw new AppError('Save SMTP settings first, then send a test email.', 400);
+    }
+    try {
+      await EmailService.sendTestEmail(companyId, to);
+    } catch (err) {
+      throw new AppError(err instanceof Error ? err.message : 'Test email failed', 502);
+    }
+    res.json({ success: true, data: { to }, message: `Test email sent to ${to}` });
+  })
+);
+
 export default router;

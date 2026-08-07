@@ -21,7 +21,7 @@ import {
 } from '../utils/roleModules';
 import { getApiErrorMessage } from '../utils/apiError';
 
-const baseTabs = ['Company Profile', 'Workspace', 'Team', 'Catalog', 'Branches & Tax', 'Security'];
+const baseTabs = ['Company Profile', 'Email', 'Workspace', 'Team', 'Catalog', 'Branches & Tax', 'Security'];
 
 interface CompanyFormData {
   name: string;
@@ -65,7 +65,9 @@ export function SettingsPage() {
   const [inviteModules, setInviteModules] = useState<string[]>(['dashboard']);
   const [inviteModuleError, setInviteModuleError] = useState('');
 
-  const tabs = isPlatformOwner ? ['Company Profile', 'Workspace', 'Companies', ...baseTabs.slice(2)] : baseTabs;
+  const tabs = isPlatformOwner
+    ? ['Company Profile', 'Email', 'Workspace', 'Companies', 'Team', 'Catalog', 'Branches & Tax', 'Security']
+    : baseTabs;
   const activeTabName = tabs[activeTab] ?? tabs[0];
 
   const canUpdate = hasPermission('settings:update');
@@ -75,6 +77,19 @@ export function SettingsPage() {
   const canEditCategories = hasPermission('products:update') || hasPermission('products:create');
   const canEditMaterialTypes = hasPermission('inventory:update') || hasPermission('inventory:create');
   const twoFaEnabled = !!(user as { twoFactorEnabled?: boolean } | null)?.twoFactorEnabled;
+
+  const [emailHost, setEmailHost] = useState('smtp.gmail.com');
+  const [emailPort, setEmailPort] = useState('587');
+  const [emailSecure, setEmailSecure] = useState(false);
+  const [emailUsername, setEmailUsername] = useState('');
+  const [emailPassword, setEmailPassword] = useState('');
+  const [emailFromEmail, setEmailFromEmail] = useState('');
+  const [emailFromName, setEmailFromName] = useState('AbexCore ERP');
+  const [emailActive, setEmailActive] = useState(true);
+  const [emailMessage, setEmailMessage] = useState('');
+  const [emailError, setEmailError] = useState('');
+  const [emailSaving, setEmailSaving] = useState(false);
+  const [emailTesting, setEmailTesting] = useState(false);
 
   const { data: company, isLoading } = useQuery({
     queryKey: ['company'],
@@ -98,6 +113,40 @@ export function SettingsPage() {
     queryFn: () => tenantApi.listCompanies().then((r) => r.data.data as RegisteredCompany[]),
     enabled: activeTabName === 'Companies' && isPlatformOwner,
   });
+
+  type EmailConfigStatus = {
+    configured: boolean;
+    source: 'company' | 'env' | 'none';
+    hasPassword: boolean;
+    envFallback: boolean;
+    config: {
+      host: string;
+      port: number;
+      secure: boolean;
+      username: string;
+      fromEmail: string;
+      fromName: string;
+      isActive: boolean;
+    } | null;
+  };
+
+  const { data: emailStatus, isLoading: emailLoading } = useQuery({
+    queryKey: ['tenant-email-config'],
+    queryFn: () => tenantApi.emailConfig().then((r) => r.data.data as EmailConfigStatus),
+    enabled: activeTabName === 'Email',
+  });
+
+  useEffect(() => {
+    if (!emailStatus?.config) return;
+    setEmailHost(emailStatus.config.host || 'smtp.gmail.com');
+    setEmailPort(String(emailStatus.config.port || 587));
+    setEmailSecure(!!emailStatus.config.secure);
+    setEmailUsername(emailStatus.config.username || '');
+    setEmailFromEmail(emailStatus.config.fromEmail || '');
+    setEmailFromName(emailStatus.config.fromName || 'AbexCore ERP');
+    setEmailActive(emailStatus.config.isActive !== false);
+    setEmailPassword('');
+  }, [emailStatus]);
 
   const { data: rolesResponse } = useQuery({
     queryKey: ['user-roles'],
@@ -863,6 +912,185 @@ export function SettingsPage() {
             )}
           </Card>
         </div>
+      )}
+
+      {activeTabName === 'Email' && (
+        <Card title="Email notifications (SMTP)">
+          {emailLoading ? (
+            <p className="text-sm text-slate-500">Loading…</p>
+          ) : (
+            <form
+              className="space-y-3 max-w-xl"
+              onSubmit={async (e) => {
+                e.preventDefault();
+                if (!canUpdate) return;
+                setEmailError('');
+                setEmailMessage('');
+                setEmailSaving(true);
+                try {
+                  await tenantApi.updateEmailConfig({
+                    host: emailHost.trim(),
+                    port: Number(emailPort) || 587,
+                    secure: emailSecure || Number(emailPort) === 465,
+                    username: emailUsername.trim(),
+                    ...(emailPassword.trim() ? { password: emailPassword } : {}),
+                    fromEmail: emailFromEmail.trim(),
+                    fromName: emailFromName.trim(),
+                    isActive: emailActive,
+                  });
+                  setEmailPassword('');
+                  await queryClient.invalidateQueries({ queryKey: ['tenant-email-config'] });
+                  setEmailMessage('Email settings saved. Send a test email to confirm delivery.');
+                } catch (err) {
+                  setEmailError(getApiErrorMessage(err) || 'Failed to save email settings.');
+                } finally {
+                  setEmailSaving(false);
+                }
+              }}
+            >
+              <div className="rounded-xl border border-slate-100 bg-slate-50/80 px-3.5 py-3 text-sm">
+                <p className="font-medium text-slate-900">
+                  Status:{' '}
+                  {emailStatus?.configured ? (
+                    <span className="text-emerald-700">
+                      Ready ({emailStatus.source === 'company' ? 'company SMTP' : 'server env fallback'})
+                    </span>
+                  ) : (
+                    <span className="text-amber-700">Not configured — notifications stay in-app only</span>
+                  )}
+                </p>
+                <p className="text-xs text-slate-500 mt-1">
+                  When configured, low stock, delivery, leave, invites, and other alerts are emailed to users
+                  in addition to the bell notifications.
+                </p>
+              </div>
+
+              {emailMessage && <Alert variant="success">{emailMessage}</Alert>}
+              {emailError && <Alert variant="error">{emailError}</Alert>}
+
+              <Input
+                label="SMTP host"
+                value={emailHost}
+                onChange={(e) => setEmailHost(e.target.value)}
+                placeholder="smtp.gmail.com"
+                disabled={!canUpdate}
+                required
+              />
+              <div className="grid grid-cols-2 gap-3">
+                <Input
+                  label="Port"
+                  type="number"
+                  value={emailPort}
+                  onChange={(e) => {
+                    const next = e.target.value;
+                    setEmailPort(next);
+                    if (Number(next) === 587) setEmailSecure(false);
+                    if (Number(next) === 465) setEmailSecure(true);
+                  }}
+                  disabled={!canUpdate}
+                  required
+                />
+                <div className="flex items-end pb-1">
+                  <label className="inline-flex items-center gap-2 text-sm text-slate-700">
+                    <input
+                      type="checkbox"
+                      checked={Number(emailPort) === 465 ? true : Number(emailPort) === 587 ? false : emailSecure}
+                      onChange={(e) => setEmailSecure(e.target.checked)}
+                      disabled={!canUpdate || Number(emailPort) === 587 || Number(emailPort) === 465}
+                    />
+                    Use SSL (only for port 465)
+                  </label>
+                </div>
+              </div>
+              <Input
+                label="SMTP username"
+                value={emailUsername}
+                onChange={(e) => setEmailUsername(e.target.value)}
+                placeholder="you@company.com"
+                disabled={!canUpdate}
+                required
+              />
+              <Input
+                label={
+                  emailStatus?.hasPassword
+                    ? 'SMTP / App password (paste again if login was rejected)'
+                    : 'SMTP / App password'
+                }
+                type="password"
+                value={emailPassword}
+                onChange={(e) => setEmailPassword(e.target.value)}
+                autoComplete="new-password"
+                placeholder="16-character Google App Password"
+                disabled={!canUpdate}
+                required={!emailStatus?.hasPassword}
+              />
+              <p className="text-xs text-amber-800 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
+                Creating an App Password in Google only generates the code once. You must paste that
+                16-character password into this field and click <strong>Save email settings</strong>,
+                then <strong>Send test email</strong>. Leaving this blank keeps the old (wrong) password.
+              </p>
+              <Input
+                label="From name"
+                value={emailFromName}
+                onChange={(e) => setEmailFromName(e.target.value)}
+                disabled={!canUpdate}
+                required
+              />
+              <Input
+                label="From email"
+                type="email"
+                value={emailFromEmail}
+                onChange={(e) => setEmailFromEmail(e.target.value)}
+                placeholder="noreply@company.com"
+                disabled={!canUpdate}
+                required
+              />
+              <label className="inline-flex items-center gap-2 text-sm text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={emailActive}
+                  onChange={(e) => setEmailActive(e.target.checked)}
+                  disabled={!canUpdate}
+                />
+                Send email notifications (active)
+              </label>
+
+              <p className="text-xs text-slate-500">
+                Gmail: enable 2FA, then create an App Password at Google Account → Security → App passwords.
+                Use port <strong>587</strong> (not SSL). Contabo/VPS must allow outbound SMTP.
+              </p>
+
+              {canUpdate && (
+                <div className="flex flex-wrap gap-2 pt-1">
+                  <Button type="submit" loading={emailSaving}>
+                    Save email settings
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    loading={emailTesting}
+                    disabled={!emailStatus?.configured && !emailStatus?.hasPassword}
+                    onClick={async () => {
+                      setEmailError('');
+                      setEmailMessage('');
+                      setEmailTesting(true);
+                      try {
+                        const { data } = await tenantApi.testEmailConfig(user?.email);
+                        setEmailMessage(data.message || `Test email sent to ${user?.email}`);
+                      } catch (err) {
+                        setEmailError(getApiErrorMessage(err) || 'Test email failed.');
+                      } finally {
+                        setEmailTesting(false);
+                      }
+                    }}
+                  >
+                    Send test email
+                  </Button>
+                </div>
+              )}
+            </form>
+          )}
+        </Card>
       )}
 
       {activeTabName === 'Security' && (

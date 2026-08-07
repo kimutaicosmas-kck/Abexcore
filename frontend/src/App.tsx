@@ -191,13 +191,13 @@ export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
-        <AuthProvider>
-          <InactivityMonitor />
-          <ErrorBoundary>
+        <ErrorBoundary>
+          <AuthProvider>
+            <InactivityMonitor />
             <PwaShell />
             <AppRoutes />
-          </ErrorBoundary>
-        </AuthProvider>
+          </AuthProvider>
+        </ErrorBoundary>
       </BrowserRouter>
     </QueryClientProvider>
   );

@@ -448,6 +448,9 @@ export const tenantApi = {
     api.delete(`/tenant/companies/${id}`, { data: { confirmSlug } }),
   registerCompany: (formData: FormData) => api.post('/tenant/companies', formData),
   uploadLogo: (formData: FormData) => api.post('/tenant/logo', formData),
+  emailConfig: () => api.get('/tenant/email-config'),
+  updateEmailConfig: (data: object) => api.put('/tenant/email-config', data),
+  testEmailConfig: (to?: string) => api.post('/tenant/email-config/test', to ? { to } : {}),
 };
 
 export const qualityApi = {

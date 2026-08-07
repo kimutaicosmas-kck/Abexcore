@@ -53,6 +53,9 @@ const ACTIONS = [...PERMISSION_ACTIONS];
 async function main() {
   console.log('Seeding database...');
 
+  const { ensureLegacyRoleRenames } = await import('../src/utils/roleRenames');
+  await ensureLegacyRoleRenames();
+
   // Permissions
   const permissions = [];
   for (const module of MODULES) {
