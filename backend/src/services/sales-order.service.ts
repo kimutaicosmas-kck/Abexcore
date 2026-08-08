@@ -2,7 +2,7 @@ import { Prisma, OrderStatus } from '@prisma/client';
 import { assertOrderStatusTransition, assertCreditLimit, syncCustomerCreditUsed } from '../utils/credit';
 import { AppError } from '../middleware/errorHandler';
 import { generateNumber } from '../utils/date';
-import { getCustomerVatRate, calcTax } from '../utils/company';
+import { getCustomerVatRate, splitInclusiveAmount } from '../utils/company';
 import { StockMovementService } from './inventory.service';
 
 type TxClient = Prisma.TransactionClient;
@@ -369,9 +369,9 @@ export class SalesOrderService {
       select: { vatStatus: true },
     });
     const vatRate = await getCustomerVatRate(customer);
-    const subtotal = updatedItems.reduce((sum, item) => sum + Number(item.totalPrice), 0);
-    const taxAmount = calcTax(subtotal, vatRate);
-    const totalAmount = subtotal + taxAmount;
+    // Line totalPrice is the keyed (VAT-inclusive) amount.
+    const gross = updatedItems.reduce((sum, item) => sum + Number(item.totalPrice), 0);
+    const { subtotal, taxAmount, totalAmount } = splitInclusiveAmount(gross, vatRate);
 
     await assertCreditLimit(order.customerId, totalAmount, tx);
 

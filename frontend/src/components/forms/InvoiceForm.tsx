@@ -83,12 +83,19 @@ export function InvoiceForm({ onSuccess, onCancel }: InvoiceFormProps) {
   const selectedCustomer = customersData?.find((c) => c.id === customerId);
   const vatRate =
     isCustomerType && selectedCustomer?.vatStatus === 'NON_VAT' ? 0 : companyVatRate;
-  const lineTotal = items.reduce(
+  const isVatCustomer = isCustomerType && selectedCustomer?.vatStatus === 'VAT';
+  const keyedTotal = items.reduce(
     (sum, item) => sum + (item.quantity || 0) * (item.unitPrice || 0),
     0
   );
-  const taxAmount = lineTotal * (vatRate / 100);
-  const grandTotal = lineTotal + taxAmount;
+  // Sales: keyed prices include VAT. Purchases: VAT is added on top of cost.
+  const taxAmount = isCustomerType
+    ? vatRate > 0
+      ? keyedTotal * (vatRate / (100 + vatRate))
+      : 0
+    : keyedTotal * (vatRate / 100);
+  const net = isCustomerType ? keyedTotal - taxAmount : keyedTotal;
+  const grandTotal = isCustomerType ? keyedTotal : keyedTotal + taxAmount;
 
   const mutation = useMutation({
     mutationFn: (data: InvoiceFormData) => {
@@ -169,7 +176,18 @@ export function InvoiceForm({ onSuccess, onCancel }: InvoiceFormProps) {
                 <Input label={index === 0 ? 'Qty' : undefined} type="number" step="0.001" min={0.001} {...register(`items.${index}.quantity`)} />
               </div>
               <div className="col-span-12 sm:col-span-3">
-                <Input label={index === 0 ? 'Unit Price' : undefined} type="number" step="0.01" {...register(`items.${index}.unitPrice`)} />
+                <Input
+                  label={
+                    index === 0
+                      ? isVatCustomer
+                        ? 'Unit Price (incl. VAT)'
+                        : 'Unit Price'
+                      : undefined
+                  }
+                  type="number"
+                  step="0.01"
+                  {...register(`items.${index}.unitPrice`)}
+                />
               </div>
               <div className="col-span-12 sm:col-span-1">
                 {fields.length > 1 && (
@@ -187,13 +205,17 @@ export function InvoiceForm({ onSuccess, onCancel }: InvoiceFormProps) {
 
       <div className="rounded-xl bg-slate-50 border border-slate-100 p-4 text-sm space-y-2">
         <div className="flex justify-between text-slate-600">
-          <span>Subtotal</span>
-          <span>KES {lineTotal.toLocaleString('en-KE', { minimumFractionDigits: 2 })}</span>
+          <span>{isVatCustomer ? 'Net (excl. VAT)' : 'Subtotal'}</span>
+          <span>KES {net.toLocaleString('en-KE', { minimumFractionDigits: 2 })}</span>
         </div>
         <div className="flex justify-between text-slate-600">
           <span>
             VAT ({vatRate}%)
-            {isCustomerType && selectedCustomer?.vatStatus === 'NON_VAT' ? ' · Non-VAT customer' : ''}
+            {isCustomerType && selectedCustomer?.vatStatus === 'NON_VAT'
+              ? ' · Non-VAT (not added)'
+              : isVatCustomer
+                ? ' · included in prices'
+                : ''}
           </span>
           <span>KES {taxAmount.toLocaleString('en-KE', { minimumFractionDigits: 2 })}</span>
         </div>

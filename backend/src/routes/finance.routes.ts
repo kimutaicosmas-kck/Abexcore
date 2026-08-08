@@ -1,5 +1,5 @@
 import { Router, Response } from 'express';
-import { authenticate, authorize, AuthRequest, authorizeAny, requireSuperAdmin } from '../middleware/auth';
+import { authenticate, authorize, AuthRequest, authorizeAny, requireSalesTargetManager } from '../middleware/auth';
 import { validate } from '../middleware/validate';
 import { asyncHandler, AppError } from '../middleware/errorHandler';
 import { auditLog } from '../middleware/auditLog';
@@ -35,7 +35,7 @@ import { FinanceService, ReportsService } from '../services/admin.service';
 import { AccountingService } from '../services/accounting.service';
 import { FinanceInvoiceService, FinancePaymentService } from '../services/finance.service';
 import { SalesOrderService } from '../services/sales-order.service';
-import { getCompanySettings, getVatRate, getCustomerVatRate, calcTax } from '../utils/company';
+import { getCompanySettings, getVatRate, getCustomerVatRate, calcTax, splitInclusiveAmount } from '../utils/company';
 import { injectTenantData, requireTenantId } from '../utils/tenant';
 import { syncCustomerCreditUsed } from '../utils/credit';
 import { InvoiceMaintenanceService } from '../services/invoice-maintenance.service';
@@ -355,7 +355,7 @@ router.post(
     } = req.body;
 
     let vatRate = await getVatRate();
-    if (type === 'SALES' && customerId) {
+    if ((type === 'SALES' || type === 'CREDIT_NOTE') && customerId) {
       const customer = await prisma.customer.findFirst({
         where: { id: customerId, companyId: requireTenantId(), deletedAt: null },
         select: { vatStatus: true },
@@ -364,13 +364,21 @@ router.post(
       vatRate = await getCustomerVatRate(customer);
     }
 
-    const subtotal = items.reduce(
+    const keyedTotal = items.reduce(
       (sum: number, item: { quantity: number; unitPrice: number }) =>
         sum + item.quantity * item.unitPrice,
       0
     );
-    const taxAmount = calcTax(subtotal, vatRate);
-    const totalAmount = subtotal + taxAmount;
+    // Sales/credit notes: keyed prices include VAT. Purchases: VAT added on top of cost.
+    const isSalesSide = type === 'SALES' || type === 'CREDIT_NOTE';
+    const purchaseTax = calcTax(keyedTotal, vatRate);
+    const { subtotal, taxAmount, totalAmount } = isSalesSide
+      ? splitInclusiveAmount(keyedTotal, vatRate)
+      : {
+          subtotal: keyedTotal,
+          taxAmount: purchaseTax,
+          totalAmount: keyedTotal + purchaseTax,
+        };
 
     const invoice = await prisma.$transaction(async (tx) => {
       let resolvedCustomerPo = customerPoNumber as string | undefined;
@@ -817,8 +825,12 @@ router.get(
   asyncHandler(async (req: AuthRequest, res: Response) => {
     const { year, month } = getQuery<{ year?: number; month?: number }>(req.query);
     const { MySalesService } = await import('../services/my-sales.service');
+    const { canManageSalesTargets } = await import('../config/rolePermissions');
 
-    if (req.user!.roleName === 'Super Admin' || req.user!.permissions.includes('reports:read')) {
+    if (
+      canManageSalesTargets(req.user!.roleName, req.user!.permissions) ||
+      req.user!.permissions.includes('reports:read')
+    ) {
       const data = await MySalesService.listTargets(
         year ? Number(year) : undefined,
         month ? Number(month) : undefined
@@ -856,7 +868,7 @@ router.get(
 
 router.put(
   '/sales-targets',
-  requireSuperAdmin,
+  requireSalesTargetManager,
   validate(upsertSalesTargetSchema),
   asyncHandler(async (req: AuthRequest, res: Response) => {
     const { salesPersonId, year, month, targetAmount } = req.body;

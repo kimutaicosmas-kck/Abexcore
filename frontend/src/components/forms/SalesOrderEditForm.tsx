@@ -117,7 +117,12 @@ export function SalesOrderEditForm({ order, onSuccess, onCancel }: SalesOrderEdi
                 />
               </div>
               <div className="sm:col-span-2">
-                <Input label="Price" type="number" step="0.01" {...register(`items.${index}.unitPrice`)} />
+                <Input
+                  label={order.customer?.vatStatus === 'VAT' ? 'Price (incl. VAT)' : 'Price'}
+                  type="number"
+                  step="0.01"
+                  {...register(`items.${index}.unitPrice`)}
+                />
               </div>
               <div className="sm:col-span-2">
                 <Input label="Disc %" type="number" min={0} max={100} {...register(`items.${index}.discount`)} />

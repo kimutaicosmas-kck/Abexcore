@@ -1,6 +1,6 @@
 import { Prisma } from '@prisma/client';
 import { AppError } from '../middleware/errorHandler';
-import { getVatRate, getCustomerVatRate, calcTax } from '../utils/company';
+import { getVatRate, getCustomerVatRate, calcTax, splitInclusiveAmount } from '../utils/company';
 import { AccountingService } from './accounting.service';
 import { syncCustomerCreditUsed } from '../utils/credit';
 import { nextInvoiceNumber, nextPaymentNumber } from '../utils/numbering';
@@ -8,8 +8,9 @@ import { SalesOrderService } from './sales-order.service';
 
 type TxClient = Prisma.TransactionClient;
 
+/** Cap a VAT-inclusive sales invoice total, then extract net + VAT. */
 function capInvoiceAmounts(
-  subtotal: number,
+  gross: number,
   vatRate: number,
   remainingToInvoice: number,
   invoiceLines: {
@@ -20,21 +21,19 @@ function capInvoiceAmounts(
     totalPrice: number;
   }[]
 ) {
-  const taxAmount = calcTax(subtotal, vatRate);
-  const totalAmount = subtotal + taxAmount;
+  const split = splitInclusiveAmount(gross, vatRate);
 
-  if (totalAmount <= remainingToInvoice + 0.01) {
-    return { subtotal, taxAmount, totalAmount, invoiceLines };
+  if (split.totalAmount <= remainingToInvoice + 0.01) {
+    return { ...split, invoiceLines };
   }
 
   const cappedTotal = Math.max(0, remainingToInvoice);
-  const cappedSubtotal = cappedTotal / (1 + vatRate / 100);
-  const cappedTax = cappedTotal - cappedSubtotal;
-  const ratio = subtotal > 0 ? cappedSubtotal / subtotal : 0;
+  const capped = splitInclusiveAmount(cappedTotal, vatRate);
+  const ratio = gross > 0 ? cappedTotal / gross : 0;
 
   return {
-    subtotal: cappedSubtotal,
-    taxAmount: cappedTax,
+    subtotal: capped.subtotal,
+    taxAmount: capped.taxAmount,
     totalAmount: cappedTotal,
     invoiceLines: invoiceLines.map((line) => ({
       ...line,
@@ -109,8 +108,9 @@ export class FinanceInvoiceService {
     }
 
     // Non-VAT customers still get a company invoice — at 0% VAT.
+    // Order unit prices are VAT-inclusive; extract VAT from the keyed gross.
     const vatRate = await getCustomerVatRate(order.customer);
-    let subtotal = 0;
+    let gross = 0;
 
     const invoiceLines = delivery.items.map((deliveryItem) => {
       const orderItem = order.items.find((item) => item.productId === deliveryItem.productId);
@@ -120,19 +120,19 @@ export class FinanceInvoiceService {
 
       const unitPrice = Number(orderItem.unitPrice);
       const discount = Number(orderItem.discount || 0);
-      const lineSubtotal = deliveryItem.quantity * unitPrice * (1 - discount / 100);
-      subtotal += lineSubtotal;
+      const lineGross = deliveryItem.quantity * unitPrice * (1 - discount / 100);
+      gross += lineGross;
 
       return {
         description: orderItem.product.name,
         quantity: deliveryItem.quantity,
         unitPrice,
         taxRate: vatRate,
-        totalPrice: lineSubtotal,
+        totalPrice: lineGross,
       };
     });
 
-    const capped = capInvoiceAmounts(subtotal, vatRate, remainingToInvoice, invoiceLines);
+    const capped = capInvoiceAmounts(gross, vatRate, remainingToInvoice, invoiceLines);
 
     const invoiceNumber = await nextInvoiceNumber(tx, 'INV');
     const paymentTerms = Number(order.customer?.paymentTerms || 30);
@@ -195,25 +195,24 @@ export class FinanceInvoiceService {
 
     const order = delivery.salesOrder;
     const vatRate = await getCustomerVatRate(order.customer);
-    let subtotal = 0;
+    let gross = 0;
     const invoiceLines = delivery.items.map((deliveryItem) => {
       const orderItem = order.items.find((item) => item.productId === deliveryItem.productId);
       if (!orderItem) throw new AppError('Delivery product not found on sales order', 400);
       const unitPrice = Number(orderItem.unitPrice);
       const discount = Number(orderItem.discount || 0);
-      const lineSubtotal = deliveryItem.quantity * unitPrice * (1 - discount / 100);
-      subtotal += lineSubtotal;
+      const lineGross = deliveryItem.quantity * unitPrice * (1 - discount / 100);
+      gross += lineGross;
       return {
         description: orderItem.product.name,
         quantity: deliveryItem.quantity,
         unitPrice,
         taxRate: vatRate,
-        totalPrice: lineSubtotal,
+        totalPrice: lineGross,
       };
     });
 
-    const taxAmount = calcTax(subtotal, vatRate);
-    const totalAmount = subtotal + taxAmount;
+    const { subtotal, taxAmount, totalAmount } = splitInclusiveAmount(gross, vatRate);
 
     await tx.invoiceItem.deleteMany({ where: { invoiceId: invoice.id } });
     await tx.invoice.update({

@@ -57,14 +57,16 @@ export function QuotationForm({ onSuccess, onCancel }: QuotationFormProps) {
   const companyVatRate = useVatRate();
   const selectedCustomer = customersData?.find((c) => c.id === customerId);
   const vatRate = selectedCustomer?.vatStatus === 'NON_VAT' ? 0 : companyVatRate;
-  const vatMultiplier = vatRate / 100;
+  const isVatCustomer = selectedCustomer?.vatStatus === 'VAT';
 
-  const lineTotal = items.reduce((sum, item) => {
+  // Keyed prices already include VAT for VAT customers — extract, do not add on top.
+  const keyedTotal = items.reduce((sum, item) => {
     const discount = item.discount || 0;
     return sum + (item.quantity || 0) * (item.unitPrice || 0) * (1 - discount / 100);
   }, 0);
-  const tax = lineTotal * vatMultiplier;
-  const total = lineTotal + tax;
+  const tax = vatRate > 0 ? keyedTotal * (vatRate / (100 + vatRate)) : 0;
+  const net = keyedTotal - tax;
+  const total = keyedTotal;
 
   const mutation = useMutation({
     mutationFn: (data: QuotationFormData) => operationsApi.createQuotation(data),
@@ -145,7 +147,12 @@ export function QuotationForm({ onSuccess, onCancel }: QuotationFormProps) {
                 <Input label={index === 0 ? 'Qty' : undefined} type="number" min={1} {...register(`items.${index}.quantity`)} />
               </div>
               <div className="col-span-12 sm:col-span-2">
-                <Input label={index === 0 ? 'Price' : undefined} type="number" step="0.01" {...register(`items.${index}.unitPrice`)} />
+                <Input
+                  label={index === 0 ? (isVatCustomer ? 'Price (incl. VAT)' : 'Price') : undefined}
+                  type="number"
+                  step="0.01"
+                  {...register(`items.${index}.unitPrice`)}
+                />
               </div>
               <div className="col-span-12 sm:col-span-2">
                 <Input label={index === 0 ? 'Disc %' : undefined} type="number" min={0} max={100} {...register(`items.${index}.discount`)} />
@@ -165,11 +172,18 @@ export function QuotationForm({ onSuccess, onCancel }: QuotationFormProps) {
       <Input label="Notes" {...register('notes')} />
 
       <div className="bg-gray-50 rounded-lg p-4 space-y-1 text-sm">
-        <div className="flex justify-between"><span>Subtotal</span><span>KES {lineTotal.toLocaleString('en-KE', { minimumFractionDigits: 2 })}</span></div>
+        <div className="flex justify-between">
+          <span>{isVatCustomer ? 'Net (excl. VAT)' : 'Subtotal'}</span>
+          <span>KES {net.toLocaleString('en-KE', { minimumFractionDigits: 2 })}</span>
+        </div>
         <div className="flex justify-between">
           <span>
             VAT ({vatRate}%)
-            {selectedCustomer?.vatStatus === 'NON_VAT' ? ' · Non-VAT customer' : ''}
+            {selectedCustomer?.vatStatus === 'NON_VAT'
+              ? ' · Non-VAT (not added)'
+              : isVatCustomer
+                ? ' · included in prices'
+                : ''}
           </span>
           <span>KES {tax.toLocaleString('en-KE', { minimumFractionDigits: 2 })}</span>
         </div>

@@ -197,8 +197,8 @@ export function CustomerForm({ customer, onSuccess, onCancel }: CustomerFormProp
       </div>
       <p className="text-xs text-slate-500 -mt-1">
         {vatStatus === 'NON_VAT'
-          ? 'Non-VAT: the company still creates sales invoices for this customer, charged at 0% VAT.'
-          : 'VAT: invoices include company VAT. Tax PIN is required.'}
+          ? 'Non-VAT: enter the final selling price for this customer. No VAT is added on top (0% on the invoice).'
+          : 'VAT: enter the final selling price including VAT. VAT is extracted from that total for accounting — never added on top. Tax PIN is required.'}
       </p>
       {canAssignSalesPerson && (
         <p className="-mt-2 text-xs text-slate-500">

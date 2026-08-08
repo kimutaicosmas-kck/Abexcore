@@ -23,7 +23,7 @@ import {
 } from '../utils/date';
 import { getParam, getQuery } from '../utils/request';
 import { SalesService, ProductionStatsService, QualityService } from '../services/operations.service';
-import { getVatRate, getCustomerVatRate, calcTax } from '../utils/company';
+import { getCustomerVatRate, splitInclusiveAmount } from '../utils/company';
 import { assertCreditLimit, assertOrderStatusTransition, syncCustomerCreditUsed } from '../utils/credit';
 import { StockMovementService } from '../services/inventory.service';
 import { SalesOrderService, StockShortage } from '../services/sales-order.service';
@@ -278,15 +278,15 @@ router.post(
       throw new AppError('Select a customer assigned to this sales person (or an unassigned customer).', 400);
     }
 
-    const subtotal = items.reduce(
+    // Keyed unit prices are VAT-inclusive for VAT customers — do not add VAT on top.
+    const gross = items.reduce(
       (sum: number, item: { quantity: number; unitPrice: number; discount?: number }) => {
         const discount = item.discount || 0;
         return sum + item.quantity * item.unitPrice * (1 - discount / 100);
       },
       0
     );
-    const taxAmount = calcTax(subtotal, vatRate);
-    const totalAmount = subtotal + taxAmount;
+    const { subtotal, taxAmount, totalAmount } = splitInclusiveAmount(gross, vatRate);
 
     await assertCreditLimit(customerId, totalAmount);
 
@@ -671,13 +671,13 @@ router.post(
     if (!customer) throw new AppError('Customer not found', 404);
     const vatRate = await getCustomerVatRate(customer);
 
-    const subtotal = items.reduce(
+    // Keyed unit prices are VAT-inclusive for VAT customers — do not add VAT on top.
+    const gross = items.reduce(
       (sum: number, item: { quantity: number; unitPrice: number; discount?: number }) =>
         sum + item.quantity * item.unitPrice * (1 - (item.discount || 0) / 100),
       0
     );
-    const taxAmount = calcTax(subtotal, vatRate);
-    const totalAmount = subtotal + taxAmount;
+    const { subtotal, taxAmount, totalAmount } = splitInclusiveAmount(gross, vatRate);
 
     const quotation = await prisma.salesQuotation.create({
       data: injectTenantData({
