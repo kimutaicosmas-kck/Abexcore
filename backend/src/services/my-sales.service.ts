@@ -57,9 +57,10 @@ export class MySalesService {
     const limit = opts.limit ?? 15;
     const skip = (page - 1) * limit;
 
+    const { salesOrderInDateRange } = await import('../utils/salesDate');
     const orderWhere: Prisma.SalesOrderWhereInput = {
       ...salesPersonOrderFilter(opts.salesPersonId),
-      orderDate: { gte: from, lte: to },
+      AND: [salesOrderInDateRange({ gte: from, lte: to })],
     };
 
     const invoiceWhere: Prisma.InvoiceWhereInput = {
@@ -90,7 +91,7 @@ export class MySalesService {
         where: orderWhere,
         skip,
         take: limit,
-        orderBy: { orderDate: 'desc' },
+        orderBy: [{ requiredDate: 'desc' }, { orderDate: 'desc' }],
         include: {
           customer: { select: { id: true, name: true, code: true } },
           invoices: {
@@ -153,7 +154,8 @@ export class MySalesService {
         orderNumber: order.orderNumber,
         customerName: order.customer.name,
         customerCode: order.customer.code,
-        orderDate: order.orderDate.toISOString(),
+        orderDate: (order.requiredDate ?? order.orderDate).toISOString(),
+        requiredDate: order.requiredDate?.toISOString() ?? null,
         status: order.status,
         totalAmount: Number(order.totalAmount),
         invoicedAmount: order.invoices.reduce((sum, inv) => sum + Number(inv.totalAmount), 0),

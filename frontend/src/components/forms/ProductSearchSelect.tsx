@@ -38,7 +38,7 @@ export function ProductSearchSelect({
   onChange,
   onProductSelect,
   error,
-  placeholder = 'Search by name or SKU…',
+  placeholder = 'Search product…',
   allowClear = true,
   disabled = false,
   className,

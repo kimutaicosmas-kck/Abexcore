@@ -351,6 +351,8 @@ export interface SalesOrder {
   customer: Customer;
   status: string;
   orderDate: string;
+  /** Business / sale date used for day filters and invoice dating. */
+  requiredDate?: string | null;
   totalAmount: number;
   /** Customer's own PO / LPO number — carried onto the sales invoice. */
   customerPoNumber?: string | null;

@@ -4,6 +4,7 @@ import { getVatRate, getCustomerVatRate, calcTax, roundMoney, splitInclusiveAmou
 import { AccountingService } from './accounting.service';
 import { syncCustomerCreditUsed } from '../utils/credit';
 import { nextInvoiceNumber, nextPaymentNumber } from '../utils/numbering';
+import { resolveSalesBusinessDate } from '../utils/salesDate';
 import { SalesOrderService } from './sales-order.service';
 
 type TxClient = Prisma.TransactionClient;
@@ -136,6 +137,9 @@ export class FinanceInvoiceService {
 
     const invoiceNumber = await nextInvoiceNumber(tx, 'INV');
     const paymentTerms = Number(order.customer?.paymentTerms || 30);
+    // Backdate invoice to the order's required/sale date (not dispatch time).
+    const invoiceDate = resolveSalesBusinessDate(order);
+    const dueDate = new Date(invoiceDate.getTime() + paymentTerms * 24 * 60 * 60 * 1000);
 
     const inv = await tx.invoice.create({
       data: {
@@ -146,10 +150,11 @@ export class FinanceInvoiceService {
         salesOrderId: order.id,
         deliveryNoteId: delivery.id,
         customerPoNumber: order.customerPoNumber || undefined,
+        invoiceDate,
         subtotal: capped.subtotal,
         taxAmount: capped.taxAmount,
         totalAmount: capped.totalAmount,
-        dueDate: new Date(Date.now() + paymentTerms * 24 * 60 * 60 * 1000),
+        dueDate,
         fiscalStatus: 'PENDING',
         items: { create: capped.invoiceLines },
       },

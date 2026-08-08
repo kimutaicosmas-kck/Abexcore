@@ -3,12 +3,13 @@ import { Controller, useFieldArray, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plus, Trash2 } from 'lucide-react';
+import { Check, ChevronDown, Plus, Search, Trash2, X } from 'lucide-react';
 import { operationsApi, customersApi } from '../../services/api';
 import { Alert, Button, Input, Select, formatCurrency, ModalFormBody } from '../ui';
 import { Customer } from '../../types';
 import { useAuth, useVatRate } from '../../contexts/AuthContext';
 import { getApiErrorCode, getApiErrorMessage } from '../../utils/apiError';
+import { formatProductOptionLabel } from '../../utils/productDisplay';
 import { ProductSearchSelect } from './ProductSearchSelect';
 
 const orderItemSchema = z.object({
@@ -35,7 +36,7 @@ const salesOrderSchema = z.object({
   customerId: z.string().min(1, 'Customer is required'),
   salesPersonId: z.string().optional(),
   orderDate: z.string().min(1, 'Order date is required'),
-  requiredDate: z.string().optional(),
+  requiredDate: z.string().min(1, 'Sale / required date is required'),
   customerPoNumber: z.string().max(100).optional(),
   notes: z.string().optional(),
   items: z.array(orderItemSchema).min(1, 'Add at least one item'),
@@ -54,6 +55,10 @@ export function SalesOrderForm({ onSuccess, onCancel }: SalesOrderFormProps) {
   const canAssignSalesPerson = !isSalesOfficer;
   const [customerSearch, setCustomerSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [customerListOpen, setCustomerListOpen] = useState(false);
+  const [expandedItemIndex, setExpandedItemIndex] = useState(0);
+  const [productLabels, setProductLabels] = useState<Record<string, string>>({});
+  const customerBoxRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const t = window.setTimeout(() => setDebouncedSearch(customerSearch.trim()), 250);
@@ -66,6 +71,7 @@ export function SalesOrderForm({ onSuccess, onCancel }: SalesOrderFormProps) {
       salesPersonId: '',
       customerId: '',
       orderDate: localDateInput(),
+      requiredDate: localDateInput(),
       customerPoNumber: '',
       items: [{ productId: '', quantity: 1, unitPrice: 0, discount: 0 }],
     },
@@ -74,6 +80,7 @@ export function SalesOrderForm({ onSuccess, onCancel }: SalesOrderFormProps) {
   const salesPersonId = watch('salesPersonId') || '';
   const customerId = watch('customerId');
   const items = watch('items');
+  const orderDate = watch('orderDate');
 
   const { data: salesOfficers } = useQuery({
     queryKey: ['sales-officers'],
@@ -84,7 +91,6 @@ export function SalesOrderForm({ onSuccess, onCancel }: SalesOrderFormProps) {
     enabled: canAssignSalesPerson,
   });
 
-  // Filter customers by selected sales person (or unassigned). Sales officers are scoped by API.
   const customerFilterKey = canAssignSalesPerson
     ? salesPersonId
       ? salesPersonId
@@ -108,18 +114,6 @@ export function SalesOrderForm({ onSuccess, onCancel }: SalesOrderFormProps) {
         .then((r) => r.data.data as Customer[]),
   });
 
-  const customerOptions = [
-    { value: '', label: customersLoading ? 'Loading customers…' : 'Select customer…' },
-    ...(customersData || []).map((c) => {
-      const vatTag = c.vatStatus === 'NON_VAT' ? 'Non-VAT' : 'VAT';
-      const base = `${c.code} - ${c.name} (${vatTag})`;
-      return {
-        value: c.id,
-        label: !c.salesPersonId ? `${base} (unassigned — open to sales)` : base,
-      };
-    }),
-  ];
-
   const salesPersonOptions = [
     { value: '', label: 'Me — this sale stays under my name' },
     ...(salesOfficers || []).map((o) => ({
@@ -131,20 +125,32 @@ export function SalesOrderForm({ onSuccess, onCancel }: SalesOrderFormProps) {
   const { fields, append, remove } = useFieldArray({ control, name: 'items' });
   const errorRef = useRef<HTMLDivElement>(null);
 
-  // When sales person changes, clear customer (list is a different set).
   useEffect(() => {
     if (!canAssignSalesPerson) return;
     setValue('customerId', '');
     setCustomerSearch('');
+    setCustomerListOpen(false);
   }, [salesPersonId, canAssignSalesPerson, setValue]);
 
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (customerBoxRef.current && !customerBoxRef.current.contains(e.target as Node)) {
+        setCustomerListOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
   const companyVatRate = useVatRate();
-  const selectedCustomer = customersData?.find((c) => c.id === customerId);
+  const selectedCustomer =
+    customersData?.find((c) => c.id === customerId) ||
+    (customerId
+      ? ({ id: customerId, name: customerSearch, code: '', vatStatus: 'VAT' } as Customer)
+      : undefined);
   const vatRate = selectedCustomer?.vatStatus === 'NON_VAT' ? 0 : companyVatRate;
   const isVatCustomer = selectedCustomer?.vatStatus === 'VAT';
 
-  // Keyed prices already include VAT for VAT customers — extract, do not add on top.
-  // All amounts are whole KES (no decimals).
   const keyedTotal = Math.round(
     items.reduce((sum, item) => {
       const discount = item.discount || 0;
@@ -166,6 +172,7 @@ export function SalesOrderForm({ onSuccess, onCancel }: SalesOrderFormProps) {
       operationsApi.createSalesOrder({
         ...data,
         salesPersonId: data.salesPersonId || undefined,
+        requiredDate: data.requiredDate || data.orderDate,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['sales-orders'] });
@@ -188,6 +195,24 @@ export function SalesOrderForm({ onSuccess, onCancel }: SalesOrderFormProps) {
     reset();
   }, [customerId, total, reset]);
 
+  const pickCustomer = (c: Customer) => {
+    setValue('customerId', c.id, { shouldValidate: true });
+    const vatTag = c.vatStatus === 'NON_VAT' ? 'Non-VAT' : 'VAT';
+    setCustomerSearch(`${c.code} — ${c.name} (${vatTag})`);
+    setCustomerListOpen(false);
+  };
+
+  const clearCustomer = () => {
+    setValue('customerId', '', { shouldValidate: true });
+    setCustomerSearch('');
+    setCustomerListOpen(true);
+  };
+
+  const addItem = () => {
+    append({ productId: '', quantity: 1, unitPrice: 0, discount: 0 });
+    setExpandedItemIndex(fields.length);
+  };
+
   return (
     <form onSubmit={handleSubmit((data) => mutate(data))}>
       <ModalFormBody
@@ -209,14 +234,21 @@ export function SalesOrderForm({ onSuccess, onCancel }: SalesOrderFormProps) {
           />
         )}
         <Input
-          label="Order Date *"
+          label="Entry date *"
           type="date"
           max={localDateInput()}
           min={daysAgoLocal(365)}
           {...register('orderDate')}
           error={errors.orderDate?.message}
         />
-        <Input label="Required Date" type="date" {...register('requiredDate')} />
+        <Input
+          label="Sale / required date *"
+          type="date"
+          max={localDateInput()}
+          min={daysAgoLocal(365)}
+          {...register('requiredDate')}
+          error={errors.requiredDate?.message}
+        />
         <Input
           label="LPO / Customer PO"
           placeholder="e.g. customer's purchase order number"
@@ -231,35 +263,88 @@ export function SalesOrderForm({ onSuccess, onCancel }: SalesOrderFormProps) {
         </p>
       )}
       <p className="-mt-1 text-xs text-slate-500">
-        Order date can be today or a past day (e.g. yesterday) so late-entered sales still count on the correct day.
+        Sale / required date is when the sale counts (e.g. yesterday). Invoices use this date.
+        Entry date is when you typed the order (defaults to today).
+        {orderDate && !watch('requiredDate') ? ' Required date defaults to entry date if left blank.' : ''}
       </p>
-      <p className="-mt-1 text-xs text-slate-500">
+      <p className="mt-1 text-xs text-slate-500">
         Enter the customer&apos;s LPO / purchase order number — it is copied onto the sales invoice.
       </p>
 
-      <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-3 space-y-3">
-        <p className="text-sm font-medium text-slate-800">Customer</p>
-        <Input
-          label="Search customer"
-          placeholder="Search by name or code…"
-          value={customerSearch}
-          onChange={(e) => setCustomerSearch(e.target.value)}
-        />
-        <Select
-          label="Customer *"
-          options={customerOptions}
-          {...register('customerId')}
-          error={errors.customerId?.message}
-        />
+      <div ref={customerBoxRef} className="rounded-xl border border-slate-200 bg-slate-50/60 p-3 space-y-2">
+        <p className="text-sm font-medium text-slate-800">Customer *</p>
+        {customerId && selectedCustomer && !customerListOpen ? (
+          <div className="flex items-center gap-2 rounded-xl border border-primary-100 bg-white px-3 py-2 text-sm shadow-sm">
+            <Check className="h-4 w-4 shrink-0 text-emerald-600" />
+            <button
+              type="button"
+              onClick={() => {
+                setCustomerListOpen(true);
+                setCustomerSearch('');
+              }}
+              className="min-w-0 flex-1 truncate text-left font-medium text-slate-900"
+            >
+              {customerSearch || selectedCustomer.name}
+            </button>
+            <button type="button" onClick={clearCustomer} className="rounded-lg p-1 text-slate-400 hover:bg-slate-100" aria-label="Clear customer">
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        ) : (
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+            <input
+              type="search"
+              autoComplete="off"
+              placeholder="Search customer by name or code…"
+              value={customerSearch}
+              onChange={(e) => {
+                setCustomerSearch(e.target.value);
+                setCustomerListOpen(true);
+                if (customerId) setValue('customerId', '');
+              }}
+              onFocus={() => setCustomerListOpen(true)}
+              className="block w-full rounded-xl border border-primary-100 bg-white py-2 pl-8 pr-3 text-sm shadow-sm focus:border-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-500/20"
+            />
+            {customerListOpen && (
+              <div className="absolute z-30 mt-1 max-h-56 w-full overflow-y-auto rounded-xl border border-primary-100 bg-white shadow-float">
+                {customersLoading ? (
+                  <p className="px-3 py-3 text-sm text-slate-500">Searching…</p>
+                ) : (customersData?.length || 0) === 0 ? (
+                  <p className="px-3 py-3 text-sm text-slate-500">No matching customers</p>
+                ) : (
+                  <ul className="py-1">
+                    {(customersData || []).map((c) => {
+                      const vatTag = c.vatStatus === 'NON_VAT' ? 'Non-VAT' : 'VAT';
+                      return (
+                        <li key={c.id}>
+                          <button
+                            type="button"
+                            onClick={() => pickCustomer(c)}
+                            className="flex w-full flex-col px-3 py-2.5 text-left text-sm hover:bg-primary-50/80"
+                          >
+                            <span className="font-medium text-slate-900">
+                              {c.code} — {c.name}
+                            </span>
+                            <span className="text-xs text-slate-500">
+                              {vatTag}
+                              {!c.salesPersonId ? ' · unassigned' : ''}
+                            </span>
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+        {errors.customerId?.message && (
+          <p className="text-sm text-red-600">{errors.customerId.message}</p>
+        )}
         <p className="text-xs text-slate-500">
-          {canAssignSalesPerson
-            ? salesPersonId
-              ? 'Showing this officer’s customers plus unassigned ones. Choosing an unassigned customer assigns them to that officer.'
-              : 'Showing unassigned customers. This order stays under your account name.'
-            : 'Showing your customers and unassigned (free) customers. Anyone with sales rights can sell to unassigned accounts.'}
-          {(customersData?.length ?? 0) === 0 && !customersLoading
-            ? ' No matching customers found.'
-            : ''}
+          Type to search — matching customers appear below (no dropdown needed).
         </p>
       </div>
 
@@ -294,12 +379,7 @@ export function SalesOrderForm({ onSuccess, onCancel }: SalesOrderFormProps) {
       <div>
         <div className="flex items-center justify-between mb-2">
           <label className="text-sm font-medium text-gray-700">Order Items *</label>
-          <Button
-            type="button"
-            size="sm"
-            variant="secondary"
-            onClick={() => append({ productId: '', quantity: 1, unitPrice: 0, discount: 0 })}
-          >
+          <Button type="button" size="sm" variant="secondary" onClick={addItem}>
             <Plus className="h-3 w-3 mr-1" /> Add Item
           </Button>
         </div>
@@ -308,51 +388,104 @@ export function SalesOrderForm({ onSuccess, onCancel }: SalesOrderFormProps) {
           <p className="text-sm text-red-600 mb-2">{errors.items.message}</p>
         )}
 
-        <div className="space-y-3">
-          {fields.map((field, index) => (
-            <div key={field.id} className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-end p-3 bg-gray-50 rounded-lg">
-              <div className="col-span-12 sm:col-span-5">
-                <Controller
-                  name={`items.${index}.productId`}
-                  control={control}
-                  render={({ field }) => (
-                    <ProductSearchSelect
-                      label={index === 0 ? 'Product' : undefined}
-                      value={field.value}
-                      onChange={field.onChange}
-                      onProductSelect={(product) => {
-                        if (product && (!items[index]?.unitPrice || items[index].unitPrice === 0)) {
-                          setValue(`items.${index}.unitPrice`, Number(product.sellingPrice));
-                        }
-                      }}
-                      error={errors.items?.[index]?.productId?.message}
-                    />
-                  )}
-                />
-              </div>
-              <div className="col-span-12 sm:col-span-2">
-                <Input label={index === 0 ? 'Qty' : undefined} type="number" min={1} {...register(`items.${index}.quantity`)} />
-              </div>
-              <div className="col-span-12 sm:col-span-2">
-                <Input
-                  label={index === 0 ? (isVatCustomer ? 'Price (incl. VAT)' : 'Price') : undefined}
-                  type="number"
-                  step="0.01"
-                  {...register(`items.${index}.unitPrice`)}
-                />
-              </div>
-              <div className="col-span-12 sm:col-span-2">
-                <Input label={index === 0 ? 'Disc %' : undefined} type="number" min={0} max={100} {...register(`items.${index}.discount`)} />
-              </div>
-              <div className="col-span-12 sm:col-span-1">
-                {fields.length > 1 && (
-                  <Button type="button" variant="ghost" size="sm" onClick={() => remove(index)}>
-                    <Trash2 className="h-4 w-4 text-red-500" />
+        <div className="space-y-2">
+          {fields.map((field, index) => {
+            const line = items[index];
+            const hasProduct = !!line?.productId;
+            const collapsed = hasProduct && expandedItemIndex !== index;
+            const label = productLabels[line?.productId || ''] || 'Product';
+            const lineTotal = Math.round(
+              (line?.quantity || 0) * (line?.unitPrice || 0) * (1 - (line?.discount || 0) / 100)
+            );
+
+            if (collapsed) {
+              return (
+                <div
+                  key={field.id}
+                  className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2"
+                >
+                  <button
+                    type="button"
+                    onClick={() => setExpandedItemIndex(index)}
+                    className="min-w-0 flex-1 text-left"
+                  >
+                    <p className="truncate text-sm font-medium text-slate-900">{label}</p>
+                    <p className="text-xs text-slate-500">
+                      Qty {line?.quantity || 0} · {formatCurrency(line?.unitPrice || 0)}
+                      {(line?.discount || 0) > 0 ? ` · ${line?.discount}% off` : ''}
+                      {' · '}
+                      {formatCurrency(lineTotal)}
+                    </p>
+                  </button>
+                  <Button type="button" variant="ghost" size="sm" onClick={() => setExpandedItemIndex(index)} title="Edit">
+                    <ChevronDown className="h-4 w-4 text-slate-500" />
                   </Button>
-                )}
+                  {fields.length > 1 && (
+                    <Button type="button" variant="ghost" size="sm" onClick={() => remove(index)}>
+                      <Trash2 className="h-4 w-4 text-red-500" />
+                    </Button>
+                  )}
+                </div>
+              );
+            }
+
+            return (
+              <div key={field.id} className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-end p-3 bg-gray-50 rounded-lg">
+                <div className="col-span-12 sm:col-span-5">
+                  <Controller
+                    name={`items.${index}.productId`}
+                    control={control}
+                    render={({ field: productField }) => (
+                      <ProductSearchSelect
+                        label="Search product"
+                        value={productField.value}
+                        onChange={productField.onChange}
+                        onProductSelect={(product) => {
+                          if (product) {
+                            setProductLabels((prev) => ({
+                              ...prev,
+                              [product.id]: formatProductOptionLabel(product),
+                            }));
+                            if (!items[index]?.unitPrice || items[index].unitPrice === 0) {
+                              setValue(`items.${index}.unitPrice`, Number(product.sellingPrice));
+                            }
+                            setExpandedItemIndex(-1);
+                          }
+                        }}
+                        error={errors.items?.[index]?.productId?.message}
+                      />
+                    )}
+                  />
+                </div>
+                <div className="col-span-6 sm:col-span-2">
+                  <Input label="Qty" type="number" min={1} {...register(`items.${index}.quantity`)} />
+                </div>
+                <div className="col-span-6 sm:col-span-2">
+                  <Input
+                    label={isVatCustomer ? 'Price (incl. VAT)' : 'Price'}
+                    type="number"
+                    step="1"
+                    {...register(`items.${index}.unitPrice`)}
+                  />
+                </div>
+                <div className="col-span-6 sm:col-span-2">
+                  <Input label="Disc %" type="number" min={0} max={100} {...register(`items.${index}.discount`)} />
+                </div>
+                <div className="col-span-6 sm:col-span-1 flex gap-1 justify-end">
+                  {hasProduct && (
+                    <Button type="button" variant="ghost" size="sm" onClick={() => setExpandedItemIndex(-1)} title="Collapse">
+                      Done
+                    </Button>
+                  )}
+                  {fields.length > 1 && (
+                    <Button type="button" variant="ghost" size="sm" onClick={() => remove(index)}>
+                      <Trash2 className="h-4 w-4 text-red-500" />
+                    </Button>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
 

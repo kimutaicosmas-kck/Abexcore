@@ -767,7 +767,7 @@ export const salesListQuerySchema = paginationSchema.extend({
     (v) => (v === '' || v === undefined ? undefined : v),
     z.string().uuid().optional()
   ),
-  /** Local calendar day `YYYY-MM-DD` — filter orderDate to that day. */
+  /** Local calendar day `YYYY-MM-DD` — filter by requiredDate (fallback orderDate). */
   date: z.preprocess(
     (v) => (v === '' || v === undefined ? undefined : v),
     z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional()

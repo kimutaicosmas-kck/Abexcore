@@ -116,7 +116,14 @@ router.get(
 
     if (date) {
       const range = dayRangeFromInput(date);
-      if (range) where.orderDate = range;
+      // Filter by required (sale) date; fall back to orderDate when requiredDate is unset.
+      if (range) {
+        const { salesOrderInDateRange } = await import('../utils/salesDate');
+        where.AND = [
+          ...(Array.isArray(where.AND) ? where.AND : where.AND ? [where.AND] : []),
+          salesOrderInDateRange(range),
+        ];
+      }
     }
 
     if (search) {
@@ -308,7 +315,8 @@ router.post(
           createdById: req.user!.id,
           salesPersonId: assignedSalesPersonId,
           orderDate: resolvedOrderDate,
-          requiredDate: requiredDate ? new Date(requiredDate) : undefined,
+          // Persist business/sale date so day filters and invoices use requiredDate.
+          requiredDate: requiredDate ? new Date(requiredDate) : resolvedOrderDate,
           customerPoNumber: customerPoNumber || undefined,
           notes,
           subtotal,

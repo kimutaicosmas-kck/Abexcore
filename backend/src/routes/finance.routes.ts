@@ -438,6 +438,7 @@ router.post(
 
     const invoice = await prisma.$transaction(async (tx) => {
       let resolvedCustomerPo = customerPoNumber as string | undefined;
+      let salesInvoiceDate: Date | undefined;
       if (type === 'SALES' && salesOrderId) {
         const order = await tx.salesOrder.findUnique({
           where: { id: salesOrderId },
@@ -447,6 +448,8 @@ router.post(
         if (!resolvedCustomerPo && order.customerPoNumber) {
           resolvedCustomerPo = order.customerPoNumber;
         }
+        const { resolveSalesBusinessDate } = await import('../utils/salesDate');
+        salesInvoiceDate = resolveSalesBusinessDate(order);
         await SalesOrderService.validateOrderLinesForInvoicing(
           tx,
           order.items.map((item) => ({
@@ -467,7 +470,12 @@ router.post(
           salesOrderId,
           purchaseOrderId,
           customerPoNumber: type === 'SALES' ? resolvedCustomerPo : undefined,
-          dueDate: dueDate ? new Date(dueDate) : undefined,
+          ...(salesInvoiceDate ? { invoiceDate: salesInvoiceDate } : {}),
+          dueDate: dueDate
+            ? new Date(dueDate)
+            : salesInvoiceDate
+              ? new Date(salesInvoiceDate.getTime() + 30 * 24 * 60 * 60 * 1000)
+              : undefined,
           fiscalStatus: type === 'SALES' ? 'PENDING' : 'NOT_REQUIRED',
           subtotal,
           taxAmount,

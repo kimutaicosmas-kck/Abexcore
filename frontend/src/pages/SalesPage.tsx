@@ -373,8 +373,9 @@ export function SalesPage() {
     },
     {
       key: 'orderDate',
-      label: 'Date',
-      render: (val: unknown) => formatDate(val as string),
+      label: 'Sale date',
+      render: (_val: unknown, row: Record<string, unknown>) =>
+        formatDate((row.requiredDate as string) || (row.orderDate as string)),
     },
     {
       key: 'totalAmount',
@@ -690,7 +691,7 @@ export function SalesPage() {
             />
             <Input
               type="date"
-              label="Date"
+              label="Sale date"
               value={orderDate}
               onChange={(e) => { setOrderDate(e.target.value); setOrderPage(1); }}
               className="sm:w-44"
@@ -894,7 +895,12 @@ export function SalesPage() {
                   })()}
                 </p>
               </div>
-              <div><p className="text-slate-500">Date</p><p className="font-semibold">{formatDate(activeOrder.orderDate)}</p></div>
+              <div>
+                <p className="text-slate-500">Sale date</p>
+                <p className="font-semibold">
+                  {formatDate((activeOrder as { requiredDate?: string }).requiredDate || activeOrder.orderDate)}
+                </p>
+              </div>
               <div><p className="text-slate-500">Status</p><Badge variant={getStatusBadge(activeOrder.status)}>{activeOrder.status.replace(/_/g, ' ')}</Badge></div>
               <div><p className="text-slate-500">Total</p><p className="font-semibold text-lg">{formatCurrency(Number(activeOrder.totalAmount))}</p></div>
             </div>

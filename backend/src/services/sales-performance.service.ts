@@ -35,9 +35,10 @@ export class SalesPerformanceService {
     const performers = await Promise.all(
       officers.map(async (officer) => {
         const personFilter = salesPersonOrderFilter(officer.id);
+        const { salesOrderInDateRange } = await import('../utils/salesDate');
         const orderWhere = {
           ...personFilter,
-          orderDate: { gte: period.from, lte: period.to },
+          AND: [salesOrderInDateRange({ gte: period.from, lte: period.to })],
         };
         const invoiceWhere = {
           type: 'SALES' as const,
