@@ -231,39 +231,24 @@ export class ExportService {
         'Please receive the following goods in good order and condition'
       );
 
-      const money = (n: number) =>
-        Math.round(n).toLocaleString('en-KE', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
-
+      // Delivery notes are quantity-only — no prices or money totals (invoice carries pricing).
       const rows = delivery.items.map((item) => {
         const product = productById.get(item.productId);
         const orderLine = delivery.salesOrder.items.find((line) => line.productId === item.productId);
         const name = product?.name || orderLine?.product?.name || 'Product';
         const partNo = product?.sku || '';
-        const unitPrice = orderLine ? Number(orderLine.unitPrice) : 0;
-        const discount = orderLine ? Number(orderLine.discount) : 0;
-        const lineTotal = unitPrice * item.quantity * (1 - discount / 100);
         return {
           qty: String(item.quantity),
           description: partNo ? `${name} (${partNo})` : name,
-          amount: money(lineTotal),
         };
       });
-
-      const deliveredLinesTotal = delivery.items.reduce((sum, item) => {
-        const orderLine = delivery.salesOrder.items.find((line) => line.productId === item.productId);
-        if (!orderLine) return sum;
-        const unitPrice = Number(orderLine.unitPrice);
-        const discount = Number(orderLine.discount);
-        return sum + unitPrice * item.quantity * (1 - discount / 100);
-      }, 0);
 
       y = drawDocTable(
         doc,
         y,
         [
-          { key: 'qty', label: 'Qty', width: 55, align: 'center' },
-          { key: 'description', label: 'Description', width: 344 },
-          { key: 'amount', label: 'Amount', width: 100, align: 'right' },
+          { key: 'qty', label: 'Qty', width: 70, align: 'center' },
+          { key: 'description', label: 'Description', width: 429 },
         ],
         rows,
         {
@@ -272,17 +257,6 @@ export class ExportService {
           footerCenter: `No. ${delivery.deliveryNo}`,
         }
       );
-
-      y = drawMoneyTotals(doc, y, [
-        { label: 'This delivery', value: `KES ${money(deliveredLinesTotal)}` },
-        { label: 'Order subtotal', value: `KES ${money(Number(delivery.salesOrder.subtotal))}` },
-        { label: 'VAT', value: `KES ${money(Number(delivery.salesOrder.taxAmount))}` },
-        {
-          label: 'Order total',
-          value: `KES ${money(Number(delivery.salesOrder.totalAmount))}`,
-          bold: true,
-        },
-      ]);
 
       if (delivery.notes) {
         doc.font('Helvetica').fontSize(8).fillColor(DOC_BLUE).text(`Notes: ${delivery.notes}`, PAGE_LEFT, y, {
