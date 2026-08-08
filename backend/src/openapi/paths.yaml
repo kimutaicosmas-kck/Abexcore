@@ -1111,6 +1111,21 @@ paths:
           description: Unauthorized
         '403':
           description: Forbidden
+  /finance/notifications/read-all:
+    patch:
+      tags: [Finance]
+      summary: PATCH /finance/notifications/read-all
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
   /finance/notifications/{id}/read:
     patch:
       tags: [Finance]
@@ -1159,6 +1174,21 @@ paths:
     get:
       tags: [Finance]
       summary: GET /finance/payments
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /finance/payments/excel:
+    get:
+      tags: [Finance]
+      summary: GET /finance/payments/excel
       security:
         - bearerAuth: []
       responses:
