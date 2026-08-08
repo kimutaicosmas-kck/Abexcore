@@ -5,6 +5,7 @@ import prisma from '../config/database';
 import { AppError } from './errorHandler';
 import { runWithTenant } from '../utils/tenant';
 import { resolveUserPermissionStrings } from '../utils/userPermissions';
+import { canManageSalesTargets } from '../config/rolePermissions';
 
 export interface AuthRequest extends Request {
   user?: {
@@ -108,6 +109,15 @@ export const requireSuperAdmin = (req: AuthRequest, _res: Response, next: NextFu
   if (!req.user) return next(new AppError('Authentication required', 401));
   if (req.user.roleName !== 'Super Admin') {
     return next(new AppError('Super Admin access required', 403));
+  }
+  next();
+};
+
+/** Company leadership / sales managers may assign monthly salesperson targets. */
+export const requireSalesTargetManager = (req: AuthRequest, _res: Response, next: NextFunction) => {
+  if (!req.user) return next(new AppError('Authentication required', 401));
+  if (!canManageSalesTargets(req.user.roleName, req.user.permissions)) {
+    return next(new AppError('Insufficient permissions to assign sales targets', 403));
   }
   next();
 };
