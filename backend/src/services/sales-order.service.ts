@@ -2,7 +2,7 @@ import { Prisma, OrderStatus } from '@prisma/client';
 import { assertOrderStatusTransition, assertCreditLimit, syncCustomerCreditUsed } from '../utils/credit';
 import { AppError } from '../middleware/errorHandler';
 import { generateNumber } from '../utils/date';
-import { getCustomerVatRate, splitInclusiveAmount } from '../utils/company';
+import { getCustomerVatRate, roundMoney, splitInclusiveAmount } from '../utils/company';
 import { StockMovementService } from './inventory.service';
 
 type TxClient = Prisma.TransactionClient;
@@ -307,9 +307,11 @@ export class SalesOrderService {
           where: { id: existing.id },
           data: {
             quantity: input.quantity,
-            unitPrice: input.unitPrice,
+            unitPrice: roundMoney(input.unitPrice),
             discount: input.discount ?? 0,
-            totalPrice: input.quantity * input.unitPrice * (1 - (input.discount ?? 0) / 100),
+            totalPrice: roundMoney(
+              input.quantity * input.unitPrice * (1 - (input.discount ?? 0) / 100)
+            ),
           },
         });
         continue;
@@ -342,9 +344,11 @@ export class SalesOrderService {
           salesOrderId: orderId,
           productId: input.productId,
           quantity: input.quantity,
-          unitPrice: input.unitPrice,
+          unitPrice: roundMoney(input.unitPrice),
           discount: input.discount ?? 0,
-          totalPrice: input.quantity * input.unitPrice * (1 - (input.discount ?? 0) / 100),
+          totalPrice: roundMoney(
+            input.quantity * input.unitPrice * (1 - (input.discount ?? 0) / 100)
+          ),
         },
       });
     }

@@ -60,11 +60,14 @@ export function QuotationForm({ onSuccess, onCancel }: QuotationFormProps) {
   const isVatCustomer = selectedCustomer?.vatStatus === 'VAT';
 
   // Keyed prices already include VAT for VAT customers — extract, do not add on top.
-  const keyedTotal = items.reduce((sum, item) => {
-    const discount = item.discount || 0;
-    return sum + (item.quantity || 0) * (item.unitPrice || 0) * (1 - discount / 100);
-  }, 0);
-  const tax = vatRate > 0 ? keyedTotal * (vatRate / (100 + vatRate)) : 0;
+  // All amounts are whole KES (no decimals).
+  const keyedTotal = Math.round(
+    items.reduce((sum, item) => {
+      const discount = item.discount || 0;
+      return sum + (item.quantity || 0) * (item.unitPrice || 0) * (1 - discount / 100);
+    }, 0)
+  );
+  const tax = vatRate > 0 ? Math.round(keyedTotal * (vatRate / (100 + vatRate))) : 0;
   const net = keyedTotal - tax;
   const total = keyedTotal;
 
@@ -174,7 +177,7 @@ export function QuotationForm({ onSuccess, onCancel }: QuotationFormProps) {
       <div className="bg-gray-50 rounded-lg p-4 space-y-1 text-sm">
         <div className="flex justify-between">
           <span>{isVatCustomer ? 'Net (excl. VAT)' : 'Subtotal'}</span>
-          <span>KES {net.toLocaleString('en-KE', { minimumFractionDigits: 2 })}</span>
+          <span>KES {net.toLocaleString('en-KE')}</span>
         </div>
         <div className="flex justify-between">
           <span>
@@ -185,9 +188,9 @@ export function QuotationForm({ onSuccess, onCancel }: QuotationFormProps) {
                 ? ' · included in prices'
                 : ''}
           </span>
-          <span>KES {tax.toLocaleString('en-KE', { minimumFractionDigits: 2 })}</span>
+          <span>KES {tax.toLocaleString('en-KE')}</span>
         </div>
-        <div className="flex justify-between font-bold text-base pt-1 border-t"><span>Total</span><span>KES {total.toLocaleString('en-KE', { minimumFractionDigits: 2 })}</span></div>
+        <div className="flex justify-between font-bold text-base pt-1 border-t"><span>Total</span><span>KES {total.toLocaleString('en-KE')}</span></div>
       </div>
       </ModalFormBody>
     </form>

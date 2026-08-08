@@ -893,7 +893,12 @@ export function formatDateTime(date: string) {
 }
 
 export function formatCurrency(amount: number, currency = 'KES') {
-  return new Intl.NumberFormat('en-KE', { style: 'currency', currency }).format(amount);
+  return new Intl.NumberFormat('en-KE', {
+    style: 'currency',
+    currency,
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(Math.round(Number(amount) || 0));
 }
 
 export function getStatusBadge(status: string) {

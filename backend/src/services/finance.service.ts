@@ -1,6 +1,6 @@
 import { Prisma } from '@prisma/client';
 import { AppError } from '../middleware/errorHandler';
-import { getVatRate, getCustomerVatRate, calcTax, splitInclusiveAmount } from '../utils/company';
+import { getVatRate, getCustomerVatRate, calcTax, roundMoney, splitInclusiveAmount } from '../utils/company';
 import { AccountingService } from './accounting.service';
 import { syncCustomerCreditUsed } from '../utils/credit';
 import { nextInvoiceNumber, nextPaymentNumber } from '../utils/numbering';
@@ -37,7 +37,7 @@ function capInvoiceAmounts(
     totalAmount: cappedTotal,
     invoiceLines: invoiceLines.map((line) => ({
       ...line,
-      totalPrice: line.totalPrice * ratio,
+      totalPrice: roundMoney(line.totalPrice * ratio),
     })),
   };
 }
@@ -118,9 +118,9 @@ export class FinanceInvoiceService {
         throw new AppError('Delivery product not found on sales order', 400);
       }
 
-      const unitPrice = Number(orderItem.unitPrice);
+      const unitPrice = roundMoney(Number(orderItem.unitPrice));
       const discount = Number(orderItem.discount || 0);
-      const lineGross = deliveryItem.quantity * unitPrice * (1 - discount / 100);
+      const lineGross = roundMoney(deliveryItem.quantity * unitPrice * (1 - discount / 100));
       gross += lineGross;
 
       return {
@@ -199,9 +199,9 @@ export class FinanceInvoiceService {
     const invoiceLines = delivery.items.map((deliveryItem) => {
       const orderItem = order.items.find((item) => item.productId === deliveryItem.productId);
       if (!orderItem) throw new AppError('Delivery product not found on sales order', 400);
-      const unitPrice = Number(orderItem.unitPrice);
+      const unitPrice = roundMoney(Number(orderItem.unitPrice));
       const discount = Number(orderItem.discount || 0);
-      const lineGross = deliveryItem.quantity * unitPrice * (1 - discount / 100);
+      const lineGross = roundMoney(deliveryItem.quantity * unitPrice * (1 - discount / 100));
       gross += lineGross;
       return {
         description: orderItem.product.name,

@@ -35,7 +35,7 @@ import { FinanceService, ReportsService } from '../services/admin.service';
 import { AccountingService } from '../services/accounting.service';
 import { FinanceInvoiceService, FinancePaymentService } from '../services/finance.service';
 import { SalesOrderService } from '../services/sales-order.service';
-import { getCompanySettings, getVatRate, getCustomerVatRate, calcTax, splitInclusiveAmount } from '../utils/company';
+import { getCompanySettings, getVatRate, getCustomerVatRate, calcTax, roundMoney, splitInclusiveAmount } from '../utils/company';
 import { injectTenantData, requireTenantId } from '../utils/tenant';
 import { syncCustomerCreditUsed } from '../utils/credit';
 import { InvoiceMaintenanceService } from '../services/invoice-maintenance.service';
@@ -420,8 +420,9 @@ router.post(
           items: {
             create: items.map((item: { description: string; quantity: number; unitPrice: number }) => ({
               ...item,
+              unitPrice: roundMoney(item.unitPrice),
               taxRate: vatRate,
-              totalPrice: item.quantity * item.unitPrice,
+              totalPrice: roundMoney(item.quantity * item.unitPrice),
             })),
           },
         }),

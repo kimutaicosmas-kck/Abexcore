@@ -83,7 +83,7 @@ export class ExportService {
     const company = await resolveCompanyDocHeader(invoice.companyId);
     const { vatRate } = company;
     const money = (n: number) =>
-      n.toLocaleString('en-KE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      Math.round(n).toLocaleString('en-KE', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 
     return new Promise((resolve, reject) => {
       const doc = new PDFDocument({ margin: 40, size: 'A4' });
@@ -232,7 +232,7 @@ export class ExportService {
       );
 
       const money = (n: number) =>
-        n.toLocaleString('en-KE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        Math.round(n).toLocaleString('en-KE', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 
       const rows = delivery.items.map((item) => {
         const product = productById.get(item.productId);
@@ -343,7 +343,7 @@ export class ExportService {
     const company = await resolveCompanyDocHeader(po.companyId);
     const { vatRate } = company;
     const money = (n: number) =>
-      n.toLocaleString('en-KE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      Math.round(n).toLocaleString('en-KE', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 
     return new Promise((resolve, reject) => {
       const doc = new PDFDocument({ margin: 40, size: 'A4' });
@@ -762,7 +762,7 @@ export class ExportService {
     const partyLabel = opts?.partyLabel || 'CUSTOMER';
     const footerLabel = opts?.footerLabel || 'Customer statement';
     const fmt = (n: number) =>
-      n.toLocaleString('en-KE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      Math.round(n).toLocaleString('en-KE', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
     const fmtKes = (n: number) => `KES ${fmt(n)}`;
     const fmtDate = (iso: string | null | undefined) => {
       if (!iso) return '—';
@@ -1169,7 +1169,7 @@ export class ExportService {
     const company = await resolveCompanyDocHeader(requireTenantId());
     const title = this.vatCustomerReportTitle(report.vatStatus);
     const fmt = (n: number) =>
-      n.toLocaleString('en-KE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      Math.round(n).toLocaleString('en-KE', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
     const includeStatusCol = report.vatStatus === 'ALL';
 
     return new Promise((resolve, reject) => {

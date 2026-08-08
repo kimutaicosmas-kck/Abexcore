@@ -23,7 +23,7 @@ import {
 } from '../utils/date';
 import { getParam, getQuery } from '../utils/request';
 import { SalesService, ProductionStatsService, QualityService } from '../services/operations.service';
-import { getCustomerVatRate, splitInclusiveAmount } from '../utils/company';
+import { getCustomerVatRate, roundMoney, splitInclusiveAmount } from '../utils/company';
 import { assertCreditLimit, assertOrderStatusTransition, syncCustomerCreditUsed } from '../utils/credit';
 import { StockMovementService } from '../services/inventory.service';
 import { SalesOrderService, StockShortage } from '../services/sales-order.service';
@@ -317,7 +317,10 @@ router.post(
           items: {
             create: items.map((item: { productId: string; quantity: number; unitPrice: number; discount?: number }) => ({
               ...item,
-              totalPrice: item.quantity * item.unitPrice * (1 - (item.discount || 0) / 100),
+              unitPrice: roundMoney(item.unitPrice),
+              totalPrice: roundMoney(
+                item.quantity * item.unitPrice * (1 - (item.discount || 0) / 100)
+              ),
             })),
           },
         }),
@@ -691,7 +694,10 @@ router.post(
         items: {
           create: items.map((item: { productId: string; quantity: number; unitPrice: number; discount?: number }) => ({
             ...item,
-            totalPrice: item.quantity * item.unitPrice * (1 - (item.discount || 0) / 100),
+            unitPrice: roundMoney(item.unitPrice),
+            totalPrice: roundMoney(
+              item.quantity * item.unitPrice * (1 - (item.discount || 0) / 100)
+            ),
           })),
         },
       }),

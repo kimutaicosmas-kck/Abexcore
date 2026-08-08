@@ -23,23 +23,30 @@ export async function getVatMultiplier(companyId?: string): Promise<number> {
   return (await getVatRate(companyId)) / 100;
 }
 
+/** All money amounts are whole KES (no cents / decimals). */
+export function roundMoney(amount: number): number {
+  return Math.round(Number(amount) || 0);
+}
+
 /** VAT on a net (exclusive) amount — used for purchases / supplier invoices. */
 export function calcTax(subtotal: number, vatRate: number): number {
-  return subtotal * (vatRate / 100);
+  return roundMoney(subtotal * (vatRate / 100));
 }
 
 /**
  * Sales prices are VAT-inclusive: the salesperson's keyed total is the customer total.
  * Split into net + VAT for accounting (do not add VAT on top).
  * NON_VAT (rate 0) leaves the amount unchanged.
+ * Net, VAT, and total are always whole numbers and always sum: net + VAT = total.
  */
 export function splitInclusiveAmount(inclusive: number, vatRate: number) {
-  if (vatRate <= 0 || inclusive <= 0) {
-    return { subtotal: inclusive, taxAmount: 0, totalAmount: inclusive };
+  const totalAmount = roundMoney(inclusive);
+  if (vatRate <= 0 || totalAmount <= 0) {
+    return { subtotal: totalAmount, taxAmount: 0, totalAmount };
   }
-  const taxAmount = inclusive * (vatRate / (100 + vatRate));
-  const subtotal = inclusive - taxAmount;
-  return { subtotal, taxAmount, totalAmount: inclusive };
+  const taxAmount = roundMoney(totalAmount * (vatRate / (100 + vatRate)));
+  const subtotal = totalAmount - taxAmount;
+  return { subtotal, taxAmount, totalAmount };
 }
 
 /** Effective VAT % for a customer: Non-VAT customers are invoiced at 0%. */

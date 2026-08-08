@@ -89,13 +89,15 @@ export function InvoiceForm({ onSuccess, onCancel }: InvoiceFormProps) {
     0
   );
   // Sales: keyed prices include VAT. Purchases: VAT is added on top of cost.
+  // All amounts are whole KES (no decimals).
+  const roundedKeyed = Math.round(keyedTotal);
   const taxAmount = isCustomerType
     ? vatRate > 0
-      ? keyedTotal * (vatRate / (100 + vatRate))
+      ? Math.round(roundedKeyed * (vatRate / (100 + vatRate)))
       : 0
-    : keyedTotal * (vatRate / 100);
-  const net = isCustomerType ? keyedTotal - taxAmount : keyedTotal;
-  const grandTotal = isCustomerType ? keyedTotal : keyedTotal + taxAmount;
+    : Math.round(roundedKeyed * (vatRate / 100));
+  const net = isCustomerType ? roundedKeyed - taxAmount : roundedKeyed;
+  const grandTotal = isCustomerType ? roundedKeyed : roundedKeyed + taxAmount;
 
   const mutation = useMutation({
     mutationFn: (data: InvoiceFormData) => {
