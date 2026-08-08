@@ -63,6 +63,15 @@ export function TopNav({ onMenuClick, sidebarOffset }: TopNavProps) {
     },
   });
 
+  const markAllRead = useMutation({
+    mutationFn: () => financeApi.markAllNotificationsRead(),
+    onSuccess: () => {
+      queryClient.setQueryData(['notifications'], []);
+      queryClient.invalidateQueries({ queryKey: ['notifications'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-kpis'] });
+    },
+  });
+
   const unreadNotifications =
     notifications?.filter((n: { isRead: boolean }) => !n.isRead) || [];
   const unreadCount = unreadNotifications.length;
@@ -161,32 +170,60 @@ export function TopNav({ onMenuClick, sidebarOffset }: TopNavProps) {
                   <div className="fixed left-3 right-3 top-[calc(3.5rem+env(safe-area-inset-top)+0.35rem)] z-50 max-h-[min(70dvh,22rem)] overflow-hidden rounded-2xl border border-primary-100 bg-white shadow-float md:absolute md:left-auto md:right-0 md:inset-x-auto md:top-full md:mt-2 md:w-80 md:max-h-80">
                     <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-primary-100 bg-primary-50/90">
                       <p className="text-xs font-semibold text-primary-900">Notifications</p>
-                      <button
-                        type="button"
-                        className="md:hidden text-xs font-medium text-primary-700 px-2 py-1 rounded-lg hover:bg-primary-100"
-                        onClick={() => setNotifOpen(false)}
-                      >
-                        Close
-                      </button>
+                      <div className="flex items-center gap-1">
+                        {unreadCount > 0 && (
+                          <button
+                            type="button"
+                            className="text-xs font-medium text-primary-700 px-2 py-1 rounded-lg hover:bg-primary-100 disabled:opacity-50"
+                            disabled={markAllRead.isPending}
+                            onClick={() => markAllRead.mutate()}
+                          >
+                            Mark all read
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          className="md:hidden text-xs font-medium text-primary-700 px-2 py-1 rounded-lg hover:bg-primary-100"
+                          onClick={() => setNotifOpen(false)}
+                        >
+                          Close
+                        </button>
+                      </div>
                     </div>
                     <div className="max-h-[min(58dvh,18rem)] md:max-h-64 overflow-y-auto overscroll-contain">
                       {!unreadNotifications.length ? (
                         <p className="px-4 py-10 text-xs text-slate-500 text-center">No new notifications</p>
                       ) : (
                         unreadNotifications.map((n: { id: string; title: string; message: string; isRead: boolean; link?: string }) => (
-                          <button
+                          <div
                             key={n.id}
-                            type="button"
-                            onClick={() => {
-                              markRead.mutate(n.id);
-                              if (n.link) navigate(n.link);
-                              setNotifOpen(false);
-                            }}
-                            className="w-full text-left px-4 py-3 hover:bg-primary-50/80 border-b border-primary-50 text-sm transition-colors"
+                            className="flex items-start gap-2 px-3 py-3 border-b border-primary-50 hover:bg-primary-50/80 transition-colors"
                           >
-                            <p className="font-medium text-slate-900 text-xs">{n.title}</p>
-                            <p className="text-[11px] text-slate-500 mt-0.5 line-clamp-2">{n.message}</p>
-                          </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                markRead.mutate(n.id);
+                                if (n.link) navigate(n.link);
+                                setNotifOpen(false);
+                              }}
+                              className="min-w-0 flex-1 text-left text-sm"
+                            >
+                              <p className="font-medium text-slate-900 text-xs">{n.title}</p>
+                              <p className="text-[11px] text-slate-500 mt-0.5 line-clamp-2">{n.message}</p>
+                            </button>
+                            <button
+                              type="button"
+                              title="Mark as read"
+                              disabled={markRead.isPending}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                markRead.mutate(n.id);
+                              }}
+                              className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-primary-700 px-2 py-1 rounded-lg hover:bg-primary-100 disabled:opacity-50"
+                            >
+                              Read
+                            </button>
+                          </div>
                         ))
                       )}
                     </div>

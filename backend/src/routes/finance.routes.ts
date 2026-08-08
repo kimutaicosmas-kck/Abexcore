@@ -112,6 +112,62 @@ async function paymentIdsByInvoiceTiming(
   return rows.map((r) => r.id);
 }
 
+type PaymentListFilters = {
+  search?: string;
+  period?: PaymentPeriodPreset | PaymentInvoiceTimingPreset;
+  from?: string;
+  to?: string;
+  method?: string;
+};
+
+/** Shared filters for payments list + Excel export. Returns null when filters match nothing. */
+async function buildPaymentWhere(
+  companyId: string,
+  filters: PaymentListFilters
+): Promise<Prisma.PaymentWhereInput | null> {
+  const { search, period, from, to, method } = filters;
+  const where: Prisma.PaymentWhereInput = { companyId };
+
+  if (period && INVOICE_TIMING_PERIODS.has(period as PaymentInvoiceTimingPreset)) {
+    const ids = await paymentIdsByInvoiceTiming(companyId, period as PaymentInvoiceTimingPreset);
+    if (ids.length === 0) return null;
+    where.id = { in: ids };
+  } else if (period && DATE_PERIODS.has(period as PaymentPeriodPreset)) {
+    where.paymentDate = paymentPeriodRange(period as PaymentPeriodPreset);
+  } else if (from || to) {
+    const range: Prisma.DateTimeFilter = {};
+    if (from) {
+      const fromRange = dayRangeFromInput(from);
+      if (fromRange) range.gte = fromRange.gte;
+    }
+    if (to) {
+      const toRange = dayRangeFromInput(to);
+      if (toRange) range.lte = toRange.lte;
+    }
+    if (Object.keys(range).length) where.paymentDate = range;
+  }
+
+  if (method) {
+    where.method = method as Prisma.PaymentWhereInput['method'];
+  }
+
+  if (search) {
+    where.AND = [
+      {
+        OR: [
+          { paymentNumber: { contains: search } },
+          { reference: { contains: search } },
+          { bankReference: { contains: search } },
+          { invoice: { invoiceNumber: { contains: search } } },
+          { invoice: { customer: { name: { contains: search } } } },
+        ],
+      },
+    ];
+  }
+
+  return where;
+}
+
 const router = Router();
 router.use(authenticate);
 
@@ -527,63 +583,23 @@ router.get(
       page: number;
       limit: number;
       search?: string;
-      period?:
-        | PaymentPeriodPreset
-        | PaymentInvoiceTimingPreset;
+      period?: PaymentPeriodPreset | PaymentInvoiceTimingPreset;
       from?: string;
       to?: string;
       method?: string;
     }>(req.query);
     const skip = (page - 1) * limit;
     const companyId = requireTenantId();
+    const where = await buildPaymentWhere(companyId, { search, period, from, to, method });
 
-    const where: Prisma.PaymentWhereInput = { companyId };
-
-    // Invoice timing filters (paid in the week/month the invoice was taken).
-    if (period && INVOICE_TIMING_PERIODS.has(period as PaymentInvoiceTimingPreset)) {
-      const ids = await paymentIdsByInvoiceTiming(companyId, period as PaymentInvoiceTimingPreset);
-      if (ids.length === 0) {
-        res.json({
-          success: true,
-          data: [],
-          pagination: { page, limit, total: 0, totalPages: 0 },
-          filters: { period, from: from || null, to: to || null, method: method || null },
-        });
-        return;
-      }
-      where.id = { in: ids };
-    } else if (period && DATE_PERIODS.has(period as PaymentPeriodPreset)) {
-      // Filter by payment date only — older invoices paid this week are included.
-      where.paymentDate = paymentPeriodRange(period as PaymentPeriodPreset);
-    } else if (from || to) {
-      const range: Prisma.DateTimeFilter = {};
-      if (from) {
-        const fromRange = dayRangeFromInput(from);
-        if (fromRange) range.gte = fromRange.gte;
-      }
-      if (to) {
-        const toRange = dayRangeFromInput(to);
-        if (toRange) range.lte = toRange.lte;
-      }
-      if (Object.keys(range).length) where.paymentDate = range;
-    }
-
-    if (method) {
-      where.method = method as Prisma.PaymentWhereInput['method'];
-    }
-
-    if (search) {
-      where.AND = [
-        {
-          OR: [
-            { paymentNumber: { contains: search } },
-            { reference: { contains: search } },
-            { bankReference: { contains: search } },
-            { invoice: { invoiceNumber: { contains: search } } },
-            { invoice: { customer: { name: { contains: search } } } },
-          ],
-        },
-      ];
+    if (!where) {
+      res.json({
+        success: true,
+        data: [],
+        pagination: { page, limit, total: 0, totalPages: 0 },
+        filters: { period: period || null, from: from || null, to: to || null, method: method || null },
+      });
+      return;
     }
 
     const [rows, total] = await Promise.all([
@@ -632,6 +648,74 @@ router.get(
 );
 
 router.get(
+  '/payments/excel',
+  authorize('finance:read'),
+  validate(paymentListQuerySchema, 'query'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const { search, period, from, to, method } = getQuery<{
+      search?: string;
+      period?: PaymentPeriodPreset | PaymentInvoiceTimingPreset;
+      from?: string;
+      to?: string;
+      method?: string;
+    }>(req.query);
+    const companyId = requireTenantId();
+    const where = await buildPaymentWhere(companyId, { search, period, from, to, method });
+
+    const rows = where
+      ? await prisma.payment.findMany({
+          where,
+          take: 5000,
+          include: {
+            invoice: {
+              select: {
+                invoiceNumber: true,
+                invoiceDate: true,
+                customer: { select: { name: true } },
+                supplier: { select: { name: true } },
+                salesOrder: { select: { orderNumber: true } },
+              },
+            },
+          },
+          orderBy: { paymentDate: 'desc' },
+        })
+      : [];
+
+    const exportRows = rows.map((p) => {
+      const invoiceDate = p.invoice?.invoiceDate ? new Date(p.invoice.invoiceDate) : null;
+      const paidOn = new Date(p.paymentDate);
+      return {
+        paymentNumber: p.paymentNumber,
+        paymentDate: p.paymentDate,
+        amount: Number(p.amount),
+        method: p.method,
+        reference: p.reference,
+        bankReference: p.bankReference,
+        invoiceNumber: p.invoice?.invoiceNumber || null,
+        partyName: p.invoice?.customer?.name || p.invoice?.supplier?.name || null,
+        orderNumber: p.invoice?.salesOrder?.orderNumber || null,
+        paidSameWeekAsInvoice: !!(invoiceDate && isSameLocalWeek(paidOn, invoiceDate)),
+        paidSameMonthAsInvoice: !!(invoiceDate && isSameLocalMonth(paidOn, invoiceDate)),
+      };
+    });
+
+    const filterParts = [
+      period ? `Period: ${period}` : null,
+      from || to ? `Dates: ${from || '…'} to ${to || '…'}` : null,
+      method ? `Method: ${method}` : null,
+      search ? `Search: ${search}` : null,
+      `Rows: ${exportRows.length}`,
+    ].filter(Boolean);
+
+    const { ExportService } = await import('../services/export.service');
+    const excel = await ExportService.generatePaymentsExcel(exportRows, filterParts.join(' · ') || undefined);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', 'attachment; filename="payments.xlsx"');
+    res.send(excel);
+  })
+);
+
+router.get(
   '/accounts',
   authorize('finance:read'),
   asyncHandler(async (_req: AuthRequest, res: Response) => {
@@ -653,6 +737,17 @@ router.get(
       take: 50,
     });
     res.json({ success: true, data: notifications });
+  })
+);
+
+router.patch(
+  '/notifications/read-all',
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const result = await prisma.notification.updateMany({
+      where: { userId: req.user!.id, isRead: false },
+      data: { isRead: true },
+    });
+    res.json({ success: true, data: { marked: result.count } });
   })
 );
 

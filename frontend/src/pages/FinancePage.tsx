@@ -137,6 +137,7 @@ export function FinancePage() {
   const [journalSearch, setJournalSearch] = useState('');
 
   const [downloading, setDownloading] = useState<string | null>(null);
+  const [paymentsExporting, setPaymentsExporting] = useState(false);
   const [invoiceModalOpen, setInvoiceModalOpen] = useState(false);
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
   const [journalModalOpen, setJournalModalOpen] = useState(false);
@@ -269,6 +270,21 @@ export function FinancePage() {
       await downloadFile(path, `${invoiceNumber}.${exportType === 'pdf' ? 'pdf' : 'xlsx'}`);
     } finally {
       setDownloading(null);
+    }
+  };
+
+  const exportPaymentsExcel = async () => {
+    setPaymentsExporting(true);
+    try {
+      await downloadFile(financeApi.paymentsExcelPath(), 'payments.xlsx', {
+        search: paySearch || undefined,
+        period: payPeriodPreset,
+        method: payMethod || undefined,
+        from: !payPeriodPreset && payFrom ? payFrom : undefined,
+        to: !payPeriodPreset && payTo ? payTo : undefined,
+      });
+    } finally {
+      setPaymentsExporting(false);
     }
   };
 
@@ -898,6 +914,16 @@ export function FinancePage() {
               }}
             >
               Reset
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              loading={paymentsExporting}
+              disabled={payLoading || (payments?.data?.length || 0) === 0}
+              onClick={() => void exportPaymentsExcel()}
+            >
+              <FileSpreadsheet className="h-4 w-4 mr-1.5" />
+              Export Excel
             </Button>
           </div>
           <p className="px-4 pt-2 text-xs text-slate-500">

@@ -527,6 +527,94 @@ export class ExportService {
     return Buffer.from(buffer);
   }
 
+  static async generatePaymentsExcel(
+    rows: Array<{
+      paymentNumber: string;
+      paymentDate: Date | string;
+      amount: number;
+      method: string;
+      reference?: string | null;
+      bankReference?: string | null;
+      invoiceNumber?: string | null;
+      partyName?: string | null;
+      orderNumber?: string | null;
+      paidSameWeekAsInvoice?: boolean;
+      paidSameMonthAsInvoice?: boolean;
+    }>,
+    filterLabel?: string
+  ): Promise<Buffer> {
+    const company = await resolveCompanyDocHeader(requireTenantId());
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet('Payments');
+    const nextRow = addExcelCompanyLetterhead(
+      workbook,
+      sheet,
+      company,
+      `${company.name} — Payments`,
+      'K'
+    );
+    if (filterLabel) {
+      sheet.getCell(`A${nextRow}`).value = filterLabel;
+    }
+
+    const headerRow = sheet.addRow([
+      'Payment #',
+      'Payment Date',
+      'Amount (KES)',
+      'Method',
+      'Invoice #',
+      'Customer / Supplier',
+      'Order #',
+      'Reference',
+      'Bank Ref',
+      'Same week as invoice',
+      'Same month as invoice',
+    ]);
+    headerRow.font = { bold: true };
+
+    let total = 0;
+    for (const row of rows) {
+      total += Number(row.amount) || 0;
+      const paidOn =
+        row.paymentDate instanceof Date
+          ? row.paymentDate
+          : new Date(row.paymentDate);
+      sheet.addRow([
+        row.paymentNumber,
+        Number.isNaN(paidOn.getTime()) ? String(row.paymentDate) : paidOn.toLocaleDateString('en-KE'),
+        Math.round(Number(row.amount) || 0),
+        (row.method || '').replace(/_/g, ' '),
+        row.invoiceNumber || '',
+        row.partyName || '',
+        row.orderNumber || '',
+        row.reference || '',
+        row.bankReference || '',
+        row.paidSameWeekAsInvoice ? 'Yes' : 'No',
+        row.paidSameMonthAsInvoice ? 'Yes' : 'No',
+      ]);
+    }
+
+    sheet.addRow([]);
+    sheet.addRow(['', 'Total', Math.round(total), '', '', '', '', '', '', '', '']);
+
+    sheet.columns = [
+      { width: 16 },
+      { width: 14 },
+      { width: 14 },
+      { width: 16 },
+      { width: 16 },
+      { width: 28 },
+      { width: 14 },
+      { width: 18 },
+      { width: 18 },
+      { width: 18 },
+      { width: 18 },
+    ];
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    return Buffer.from(buffer);
+  }
+
   static async generateSalesByPersonExcel(query: {
     salesPersonId?: string;
     startDate?: string;
