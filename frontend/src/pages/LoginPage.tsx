@@ -19,7 +19,12 @@ import { AbexCoreLogo } from '../components/brand/AbexCoreLogo';
 import { PoweredBy } from '../components/brand/PoweredBy';
 import { APP_NAME, APP_TAGLINE } from '../constants/brand';
 import { getApiErrorMessage } from '../utils/apiError';
-import { resolveTenantSlugFromHost, resolveTenantSlugFromQuery, buildTenantLoginUrl } from '../utils/tenant';
+import {
+  resolveTenantSlugFromHost,
+  resolveTenantSlugFromQuery,
+  buildTenantLoginUrl,
+  isStandalonePwa,
+} from '../utils/tenant';
 import { CompanyLogoMark } from '../components/brand/CompanyBrand';
 import { PLATFORM_COMPANY_SLUG } from '../constants/platform';
 
@@ -73,11 +78,15 @@ export function LoginPage() {
   const [tenantLoading, setTenantLoading] = useState(false);
   const [tenantError, setTenantError] = useState('');
 
-  // Explicit ?tenant= wins over host parsing (important for multi-part TLDs like .co.ke).
-  const hostSlug = useMemo(
-    () => resolveTenantSlugFromQuery(window.location.search) || resolveTenantSlugFromHost(),
-    [searchParams]
-  );
+  const installedPwa = isStandalonePwa();
+
+  // Browser: ?tenant= or subdomain can lock the company. Installed PWA must stay multi-company —
+  // old installs still open /login?tenant=owner which hid the company field and blocked other tenants.
+  const hostSlug = useMemo(() => {
+    const fromHost = resolveTenantSlugFromHost();
+    if (installedPwa) return fromHost; // ignore ?tenant= in the installed app
+    return resolveTenantSlugFromQuery(window.location.search) || fromHost;
+  }, [searchParams, installedPwa]);
   const tenantLocked = !!hostSlug;
   const isPlatformLogin = hostSlug === PLATFORM_COMPANY_SLUG;
   const platformLoginUrl = buildTenantLoginUrl(PLATFORM_COMPANY_SLUG);
@@ -90,6 +99,19 @@ export function LoginPage() {
       password: '',
     },
   });
+
+  // Strip legacy ?tenant=owner from installed-app URLs so company code stays visible.
+  useEffect(() => {
+    if (!installedPwa) return;
+    const params = new URLSearchParams(window.location.search);
+    if (!params.has('tenant')) return;
+    params.delete('tenant');
+    const next = `${window.location.pathname}${params.toString() ? `?${params}` : ''}${window.location.hash}`;
+    window.history.replaceState({}, '', next);
+    setValue('companySlug', localStorage.getItem('companySlug') || '');
+    setResolvedTenant(null);
+    setTenantError('');
+  }, [installedPwa, setValue]);
 
   useEffect(() => {
     if (!hostSlug) return;
@@ -117,6 +139,11 @@ export function LoginPage() {
     // Do not trim password — spaces can be intentional; trimming broke some mobile autofills.
     const password = data.password;
     const companySlug = (hostSlug || data.companySlug).trim().toLowerCase();
+    if (!companySlug) {
+      setError('Enter your company code, then email and password.');
+      setLoading(false);
+      return;
+    }
     try {
       await login(companySlug, email, password, data.totpCode?.trim());
       navigate('/');
@@ -235,13 +262,18 @@ export function LoginPage() {
                   )}
                   {tenantError && <Alert variant="error">{tenantError}</Alert>}
                   {error && <Alert variant="error">{error}</Alert>}
+                  {installedPwa && !tenantLocked && (
+                    <Alert variant="info">
+                      Enter your <strong>company code</strong> (same as in the browser), then email and password.
+                    </Alert>
+                  )}
 
                   {tenantLocked ? (
                     <input type="hidden" {...register('companySlug')} />
                   ) : (
                     <Input
-                      label="Company code"
-                      placeholder="e.g. owner or your-company"
+                      label="Company code *"
+                      placeholder="e.g. your-company"
                       autoComplete="organization"
                       {...register('companySlug')}
                       error={errors.companySlug?.message}

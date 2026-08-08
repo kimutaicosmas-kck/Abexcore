@@ -89,6 +89,15 @@ export function resolveTenantSlugFromQuery(search: string): string | null {
   return slug || null;
 }
 
+/** True when running as an installed PWA / Add to Home Screen app. */
+export function isStandalonePwa(): boolean {
+  if (typeof window === 'undefined') return false;
+  return (
+    window.matchMedia('(display-mode: standalone)').matches ||
+    (navigator as Navigator & { standalone?: boolean }).standalone === true
+  );
+}
+
 export function buildTenantLoginUrl(slug: string, baseHost = getAppBaseHost()): string {
   const protocol = window.location.protocol;
   const port = window.location.port ? `:${window.location.port}` : '';

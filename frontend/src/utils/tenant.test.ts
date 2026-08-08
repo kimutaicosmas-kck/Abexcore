@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getAppBaseHost, resolveTenantSlugFromHost } from './tenant';
+import { getAppBaseHost, isStandalonePwa, resolveTenantSlugFromHost } from './tenant';
 
 describe('resolveTenantSlugFromHost', () => {
   it('does not treat apex .co.ke as a tenant subdomain', () => {
@@ -31,5 +31,11 @@ describe('resolveTenantSlugFromHost', () => {
 
   it('treats bare localhost as non-tenant', () => {
     expect(resolveTenantSlugFromHost('localhost')).toBeNull();
+  });
+});
+
+describe('isStandalonePwa', () => {
+  it('is false in normal jsdom (not an installed app)', () => {
+    expect(isStandalonePwa()).toBe(false);
   });
 });

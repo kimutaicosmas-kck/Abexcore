@@ -29,9 +29,10 @@ export default defineConfig({
         display: 'standalone',
         orientation: 'portrait-primary',
         scope: '/',
-        // Do not lock ?tenant=owner — that hid company code and rejected other tenants' logins in the installed app.
+        // Plain /login — never ?tenant=owner (that hid company code in installed apps).
         start_url: '/login',
-        id: '/',
+        // Bump id so devices pick up the corrected start_url on next install/update.
+        id: '/app',
         categories: ['business', 'productivity'],
         icons: [
           {
