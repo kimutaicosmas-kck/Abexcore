@@ -10,10 +10,16 @@ USE_DB_PUSH="$(printf '%s' "${USE_DB_PUSH:-true}" | tr -d '\r' | tr '[:upper:]' 
 echo "Syncing database schema (USE_DB_PUSH=${USE_DB_PUSH})..."
 if [ "$USE_DB_PUSH" != "false" ]; then
   echo "Using: prisma db push"
-  npx prisma db push --skip-generate --accept-data-loss
+  if ! npx prisma db push --skip-generate --accept-data-loss; then
+    echo "ERROR: prisma db push failed — login and writes will break until schema matches."
+    exit 1
+  fi
 else
   echo "Using: prisma migrate deploy"
-  npx prisma migrate deploy
+  if ! npx prisma migrate deploy; then
+    echo "ERROR: prisma migrate deploy failed — login and writes will break until schema matches."
+    exit 1
+  fi
 fi
 
 if [ "$(printf '%s' "${SEED_ON_START:-false}" | tr -d '\r' | tr '[:upper:]' '[:lower:]')" = "true" ]; then

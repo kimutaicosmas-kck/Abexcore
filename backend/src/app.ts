@@ -49,7 +49,8 @@ export function createApp() {
         callback(null, true);
         return;
       }
-      callback(new Error('Not allowed by CORS'));
+      // Avoid turning CORS denials into unhandled 500s in the error middleware.
+      callback(null, false);
     },
     credentials: true,
   }));

@@ -57,39 +57,84 @@ export class AuthService {
     companySlug?: string,
     totpCode?: string,
     ipAddress?: string,
-    userAgent?: string
+    userAgent?: string | string[]
   ) {
     const normalizedEmail = email.toLowerCase();
     let companyId: string | undefined;
 
     if (companySlug?.trim()) {
+      // Select only id — a full-row read fails if prod DB is missing a newer companies.* column.
       const company = await prisma.company.findFirst({
         where: { slug: companySlug.trim().toLowerCase(), isActive: true },
+        select: { id: true },
       });
       if (!company) throw new AppError('Company not found or inactive', 404);
       companyId = company.id;
     }
+
+    const agent =
+      typeof userAgent === 'string' ? userAgent : Array.isArray(userAgent) ? userAgent[0] : undefined;
 
     const user = await prisma.user.findFirst({
       where: {
         email: normalizedEmail,
         ...(companyId ? { companyId } : {}),
       },
-      include: {
+      select: {
+        id: true,
+        companyId: true,
+        email: true,
+        passwordHash: true,
+        firstName: true,
+        lastName: true,
+        phone: true,
+        avatar: true,
+        roleId: true,
+        departmentId: true,
+        branchId: true,
+        status: true,
+        twoFactorEnabled: true,
+        twoFactorSecret: true,
+        mustChangePassword: true,
+        allowedModules: true,
+        lastLoginAt: true,
+        passwordChangedAt: true,
+        createdAt: true,
+        updatedAt: true,
+        deletedAt: true,
         role: {
-          include: { permissions: { include: { permission: true } } },
+          select: {
+            id: true,
+            name: true,
+            description: true,
+            permissions: { select: { permission: { select: { module: true, action: true } } } },
+          },
         },
-        department: true,
-        branch: true,
-        company: { select: { id: true, slug: true, name: true, logo: true, vatRate: true, currency: true, isActive: true } },
+        department: { select: { id: true, name: true } },
+        branch: { select: { id: true, name: true, code: true } },
+        company: {
+          select: {
+            id: true,
+            slug: true,
+            name: true,
+            logo: true,
+            vatRate: true,
+            currency: true,
+            isActive: true,
+          },
+        },
       },
     });
 
     const loginFail = async (reason: string) => {
       if (user) {
-        await prisma.loginHistory.create({
-          data: { userId: user.id, ipAddress, userAgent, success: false },
-        });
+        try {
+          await prisma.loginHistory.create({
+            data: { userId: user.id, ipAddress, userAgent: agent, success: false },
+          });
+        } catch {
+          // Do not turn auth failures into 500s if history write fails.
+        }
       }
       await auditAuthFailure({
         companyId: user?.companyId || companyId,
@@ -97,7 +142,7 @@ export class AuthService {
         email: normalizedEmail,
         reason,
         ipAddress,
-        userAgent,
+        userAgent: agent,
       });
       throw new AppError('Invalid email or password', 401);
     };
@@ -105,7 +150,12 @@ export class AuthService {
     if (!user || user.deletedAt || user.status !== 'ACTIVE') await loginFail('invalid_credentials');
     if (!user!.company?.isActive) throw new AppError('Company account is inactive', 403);
 
-    const valid = await bcrypt.compare(password, user!.passwordHash);
+    let valid = false;
+    try {
+      valid = await bcrypt.compare(password, user!.passwordHash || '');
+    } catch {
+      await loginFail('invalid_password_hash');
+    }
     if (!valid) await loginFail('invalid_password');
 
     if (user!.twoFactorEnabled) {
@@ -126,7 +176,7 @@ export class AuthService {
           email: normalizedEmail,
           reason: 'invalid_2fa',
           ipAddress,
-          userAgent,
+          userAgent: agent,
         });
         throw new AppError('Invalid 2FA code', 401);
       }
@@ -147,9 +197,13 @@ export class AuthService {
       data: { lastLoginAt: new Date() },
     });
 
-    await prisma.loginHistory.create({
-      data: { userId: user!.id, ipAddress, userAgent, success: true },
-    });
+    try {
+      await prisma.loginHistory.create({
+        data: { userId: user!.id, ipAddress, userAgent: agent, success: true },
+      });
+    } catch {
+      // Non-fatal — login already succeeded.
+    }
 
     await auditAuthSuccess({
       companyId: user!.companyId,
@@ -157,7 +211,7 @@ export class AuthService {
       ipAddress,
     });
 
-    const { passwordHash, twoFactorSecret, ...safeUser } = user!;
+    const { passwordHash: _pw, twoFactorSecret: _tfa, ...safeUser } = user!;
     const company = user!.company;
     const permissions = await resolveUserPermissionStrings(user!);
 
@@ -182,7 +236,12 @@ export class AuthService {
   }
 
   static async refreshToken(token: string) {
-    const decoded = jwt.verify(token, config.jwt.refreshSecret) as { userId: string };
+    let decoded: { userId: string };
+    try {
+      decoded = jwt.verify(token, config.jwt.refreshSecret) as { userId: string };
+    } catch {
+      throw new AppError('Invalid refresh token', 401);
+    }
     const tokenHash = hashToken(token);
 
     const stored = await prisma.refreshToken.findFirst({

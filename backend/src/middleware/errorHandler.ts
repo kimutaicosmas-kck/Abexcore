@@ -17,7 +17,17 @@ export class AppError extends Error {
 }
 
 function mapPrismaError(err: Error): AppError | null {
-  const anyErr = err as Error & { code?: string; meta?: { target?: string | string[] } };
+  const anyErr = err as Error & {
+    code?: string;
+    meta?: { target?: string | string[]; column?: string };
+    message?: string;
+  };
+  if (anyErr.code === 'P2022' || /Unknown column/i.test(anyErr.message || '')) {
+    return new AppError(
+      'Database schema is out of date. Restart the API container so schema sync can run (db push / migrate).',
+      503
+    );
+  }
   if (anyErr.code !== 'P2002') return null;
   const target = Array.isArray(anyErr.meta?.target)
     ? anyErr.meta.target.join(',')
@@ -37,7 +47,11 @@ export const errorHandler = (
   res: Response,
   _next: NextFunction
 ) => {
-  const mapped = err instanceof AppError ? err : mapPrismaError(err);
+  let mapped: AppError | null = err instanceof AppError ? err : mapPrismaError(err);
+  // express.json() SyntaxError must not surface as a masked 500 in production.
+  if (!mapped && err instanceof SyntaxError && 'body' in err) {
+    mapped = new AppError('Invalid JSON body', 400);
+  }
   const finalErr = mapped || err;
   const statusCode = finalErr instanceof AppError ? finalErr.statusCode : 500;
   const message = finalErr.message || 'Internal server error';
