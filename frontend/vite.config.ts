@@ -29,7 +29,8 @@ export default defineConfig({
         display: 'standalone',
         orientation: 'portrait-primary',
         scope: '/',
-        start_url: '/login?tenant=owner',
+        // Do not lock ?tenant=owner — that hid company code and rejected other tenants' logins in the installed app.
+        start_url: '/login',
         id: '/',
         categories: ['business', 'productivity'],
         icons: [
@@ -57,7 +58,8 @@ export default defineConfig({
         disableDevLogs: true,
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
         navigateFallback: '/index.html',
-        navigateFallbackDenylist: [/^\/api\//],
+        navigateFallbackDenylist: [/^\/api\//, /^\/uploads\//],
+        cleanupOutdatedCaches: true,
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
@@ -77,10 +79,31 @@ export default defineConfig({
               cacheableResponse: { statuses: [0, 200] },
             },
           },
+          // Never cache API — Workbox defaults to GET-only; register POST too for login.
           {
-            // Never cache API calls — stale SW responses caused "Login failed" on mobile.
             urlPattern: /\/api\/.*/i,
             handler: 'NetworkOnly',
+            method: 'GET',
+          },
+          {
+            urlPattern: /\/api\/.*/i,
+            handler: 'NetworkOnly',
+            method: 'POST',
+          },
+          {
+            urlPattern: /\/api\/.*/i,
+            handler: 'NetworkOnly',
+            method: 'PUT',
+          },
+          {
+            urlPattern: /\/api\/.*/i,
+            handler: 'NetworkOnly',
+            method: 'PATCH',
+          },
+          {
+            urlPattern: /\/api\/.*/i,
+            handler: 'NetworkOnly',
+            method: 'DELETE',
           },
         ],
       },
@@ -109,7 +132,8 @@ export default defineConfig({
   },
   server: {
     host: true,
-    port: 5173,
+    port: 5174,
+    strictPort: true,
     proxy: {
       '/api': {
         target: 'http://localhost:3001',

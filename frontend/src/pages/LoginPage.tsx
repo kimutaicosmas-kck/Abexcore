@@ -114,8 +114,9 @@ export function LoginPage() {
     setLoading(true);
     setError('');
     const email = data.email.trim();
-    const password = data.password.trim();
-    const companySlug = (hostSlug || data.companySlug).trim();
+    // Do not trim password — spaces can be intentional; trimming broke some mobile autofills.
+    const password = data.password;
+    const companySlug = (hostSlug || data.companySlug).trim().toLowerCase();
     try {
       await login(companySlug, email, password, data.totpCode?.trim());
       navigate('/');
@@ -241,13 +242,26 @@ export function LoginPage() {
                     <Input
                       label="Company code"
                       placeholder="e.g. owner or your-company"
+                      autoComplete="organization"
                       {...register('companySlug')}
                       error={errors.companySlug?.message}
                     />
                   )}
 
-                  <Input label="Email" type="email" {...register('email')} error={errors.email?.message} />
-                  <Input label="Password" type="password" {...register('password')} error={errors.password?.message} />
+                  <Input
+                    label="Email"
+                    type="email"
+                    autoComplete="username"
+                    {...register('email')}
+                    error={errors.email?.message}
+                  />
+                  <Input
+                    label="Password"
+                    type="password"
+                    autoComplete="current-password"
+                    {...register('password')}
+                    error={errors.password?.message}
+                  />
                   <Button type="submit" loading={loading || tenantLoading} className="w-full mt-2">
                     Sign in
                   </Button>
