@@ -48,7 +48,6 @@ import { DashboardCharts, DashboardKPIs } from '../types';
 import { useDashboardNavigation } from '../components/dashboard/DashboardNav';
 import { OverviewLayout, OverviewPreviewCard } from '../components/layout/ModuleOverview';
 import { formatPartNumberLine } from '../utils/productDisplay';
-import { useAuth } from '../contexts/AuthContext';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, ArcElement, Filler);
 
@@ -74,21 +73,12 @@ const QUICK_ACTIONS = [
   { label: 'Inventory', desc: 'Check stock levels', icon: Package, color: 'border-primary-100 hover:border-primary-300', href: '/inventory' },
 ] as const;
 
-function greetingForHour(hour: number): string {
-  if (hour < 12) return 'Good morning';
-  if (hour < 17) return 'Good afternoon';
-  return 'Good evening';
-}
-
 export function DashboardPage() {
   const location = useLocation();
-  const { user, company } = useAuth();
   const { canOpen, openModule } = useDashboardNavigation();
   const accessDenied = (location.state as { accessDenied?: boolean } | null)?.accessDenied;
   const [activeTab, setActiveTab] = useState(0);
   const [chartDays, setChartDays] = useState('1');
-  const displayName = user?.firstName?.trim() || user?.email?.split('@')[0] || 'there';
-  const timeGreeting = greetingForHour(new Date().getHours());
 
   const { data: kpis, isLoading, isError, refetch, isFetching } = useQuery({
     queryKey: ['dashboard-kpis'],
@@ -107,38 +97,9 @@ export function DashboardPage() {
     enabled: activeTab === 1,
   });
 
-  const welcomeHeader = (
-    <header className="relative overflow-hidden rounded-2xl border border-primary-100/80 bg-gradient-to-br from-slate-50 via-white to-sky-50/80 px-5 py-5 sm:px-6 sm:py-6 shadow-sm">
-      <div
-        className="pointer-events-none absolute -right-10 -top-12 h-40 w-40 rounded-full bg-primary-400/10 blur-2xl"
-        aria-hidden
-      />
-      <div
-        className="pointer-events-none absolute -bottom-14 left-1/3 h-36 w-36 rounded-full bg-sky-400/10 blur-2xl"
-        aria-hidden
-      />
-      <div className="relative">
-        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary-600/80">Dashboard</p>
-        <h1 className="mt-1.5 text-2xl sm:text-3xl font-bold tracking-tight text-slate-900">
-          Welcome back, {displayName}
-        </h1>
-        <p className="mt-1.5 text-sm text-slate-500">
-          {timeGreeting}
-          {company?.name ? (
-            <>
-              {' · '}
-              <span className="font-medium text-slate-600">{company.name}</span>
-            </>
-          ) : null}
-        </p>
-      </div>
-    </header>
-  );
-
   if (isLoading) {
     return (
-      <div className="space-y-5">
-        {welcomeHeader}
+      <div className="space-y-4">
         <LoadingSpinner className="h-48" size="md" />
       </div>
     );
@@ -146,8 +107,7 @@ export function DashboardPage() {
 
   if (isError || !kpis) {
     return (
-      <div className="space-y-5">
-        {welcomeHeader}
+      <div className="space-y-4">
         <Alert variant="error">
           Failed to load dashboard.{' '}
           <button type="button" onClick={() => refetch()} className="underline font-medium">
@@ -219,8 +179,6 @@ export function DashboardPage() {
 
   return (
     <div className="space-y-5">
-      {welcomeHeader}
-
       <StatGrid>
         <StatCard title="Sales today" value={formatCurrency(kpis.salesToday)} icon={<DollarSign className="h-5 w-5 text-white" />} color="from-emerald-500 to-emerald-700" to="/sales" />
         <StatCard title="Monthly Sales" value={formatCurrency(kpis.monthlyRevenue)} icon={<TrendingUp className="h-5 w-5 text-white" />} color="from-sky-500 to-sky-700" to="/finance" />

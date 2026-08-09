@@ -75,6 +75,7 @@ export function TopNav({ onMenuClick, sidebarOffset }: TopNavProps) {
   const unreadCount = unreadNotifications.length;
   const routeKey = normalizeRoutePath(location.pathname);
   const isDashboard = routeKey === '/';
+  const displayName = user?.firstName?.trim() || user?.email?.split('@')[0] || 'there';
   const pageTitle =
     routeKey === '/account'
       ? accountNavLabel(hasPermission('settings:read'))
@@ -111,7 +112,11 @@ export function TopNav({ onMenuClick, sidebarOffset }: TopNavProps) {
           >
             <Menu className="h-5 w-5" />
           </button>
-          {!isDashboard && (
+          {isDashboard ? (
+            <h1 className="min-w-0 text-[15px] sm:text-base font-semibold text-primary-950 truncate tracking-tight">
+              Welcome back, <span className="text-primary-700">{displayName}</span>
+            </h1>
+          ) : (
             <div className="min-w-0 shrink-0 max-w-[46vw] sm:max-w-none">
               <p className="text-[10px] font-semibold uppercase tracking-wider text-primary-600/80 hidden sm:block">
                 {APP_NAME}
