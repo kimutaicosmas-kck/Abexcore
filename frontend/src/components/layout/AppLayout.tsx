@@ -4,6 +4,7 @@ import { Sidebar } from './Sidebar';
 import { TopNav } from './TopNav';
 import { MobileBottomNav } from './MobileBottomNav';
 import { RealtimeSync } from './RealtimeSync';
+import { LoginWelcomeToast } from './LoginWelcomeToast';
 
 const SIDEBAR_WIDTH = '16rem';
 const SIDEBAR_COLLAPSED = '4.5rem';
@@ -64,6 +65,7 @@ export function AppLayout() {
         sidebarOffset={sidebarOffset}
         mobileOpen={mobileOpen}
       />
+      <LoginWelcomeToast />
 
       <main
         className="pt-[calc(3.5rem+env(safe-area-inset-top))] pb-[calc(4.75rem+env(safe-area-inset-bottom))] lg:pt-14 lg:pb-[max(1rem,env(safe-area-inset-bottom))] transition-all duration-300 min-w-0 lg:ml-[var(--sidebar-w)]"

@@ -199,6 +199,8 @@ model Company {
   coopPaybillNumber String? @map("coop_paybill_number")
   /** M-Pesa paybill account number printed on delivery notes / invoices. */
   mpesaAccountNumber String? @map("mpesa_account_number")
+  /** Shown once after login in the welcome ceremony. Unique per tenant. */
+  welcomeMessage String? @map("welcome_message") @db.VarChar(280)
   isActive       Boolean  @default(true) @map("is_active")
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")

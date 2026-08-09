@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Copy, Check, Upload } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { settingsApi, authApi, tenantApi, usersApi, productsApi, inventoryApi } from '../services/api';
-import { Card, Button, Input, Alert, PageToolbar, EmptyState, Select, formatDate, formatDateTime } from '../components/ui';
+import { Card, Button, Input, Textarea, Alert, PageToolbar, EmptyState, Select, formatDate, formatDateTime } from '../components/ui';
 import { useAuth } from '../contexts/AuthContext';
 import { CatalogManageItem, CompanySettings, RegisteredCompany, TenantTeamMember, WorkspaceSettings } from '../types';
 import { CompanyLogoMark } from '../components/brand/CompanyBrand';
@@ -35,6 +35,7 @@ interface CompanyFormData {
   vatRate?: number;
   coopPaybillNumber?: string;
   mpesaAccountNumber?: string;
+  welcomeMessage?: string;
 }
 
 interface InviteFormData {
@@ -213,6 +214,7 @@ export function SettingsPage() {
         vatRate: Number(company.vatRate) || 16,
         coopPaybillNumber: company.coopPaybillNumber || '',
         mpesaAccountNumber: company.mpesaAccountNumber || '',
+        welcomeMessage: company.welcomeMessage || '',
       });
     }
   }, [company, reset]);
@@ -228,7 +230,12 @@ export function SettingsPage() {
     onSuccess: (_res, variables) => {
       queryClient.invalidateQueries({ queryKey: ['company'] });
       if (authCompany) {
-        setCompany({ ...authCompany, name: variables.name, vatRate: variables.vatRate ?? authCompany.vatRate });
+        setCompany({
+          ...authCompany,
+          name: variables.name,
+          vatRate: variables.vatRate ?? authCompany.vatRate,
+          welcomeMessage: variables.welcomeMessage?.trim() || null,
+        });
       }
       setSuccessMessage('Company settings saved successfully.');
       setTimeout(() => setSuccessMessage(''), 4000);
@@ -475,6 +482,20 @@ export function SettingsPage() {
                     disabled={!canUpdate}
                   />
                 </div>
+              </div>
+              <div className="rounded-xl border border-primary-100 bg-primary-50/40 p-4 space-y-3">
+                <p className="text-sm font-semibold text-slate-800">Login welcome message</p>
+                <p className="text-xs text-slate-500">
+                  Shown once after a user signs in. Keep it unique to your company (max 280 characters).
+                </p>
+                <Textarea
+                  label="Welcome message"
+                  rows={3}
+                  maxLength={280}
+                  placeholder="e.g. Welcome to Acme Filters. Quality production starts here."
+                  {...register('welcomeMessage')}
+                  disabled={!canUpdate}
+                />
               </div>
               {canUpdate && <Button type="submit" loading={mutation.isPending}>Save Changes</Button>}
             </form>

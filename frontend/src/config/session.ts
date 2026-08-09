@@ -10,6 +10,9 @@ export const INACTIVITY_WARNING_MINUTES = Number(
 
 export const LAST_ACTIVITY_KEY = 'apex_last_activity_at';
 
+/** Set on successful login; consumed once by the welcome toast. */
+export const LOGIN_WELCOME_FLAG = 'abexcore:showLoginWelcome';
+
 export const INACTIVITY_TIMEOUT_MS = INACTIVITY_TIMEOUT_MINUTES * 60 * 1000;
 export const INACTIVITY_WARNING_MS = INACTIVITY_WARNING_MINUTES * 60 * 1000;
 

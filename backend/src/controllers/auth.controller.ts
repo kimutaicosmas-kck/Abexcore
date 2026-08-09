@@ -39,7 +39,7 @@ export const resolveTenant = asyncHandler(async (req: AuthRequest, res: Response
   const company = await TenantService.resolveTenant(slug);
   res.json({ success: true, data: company });
 });
-
+// refresh feature to happen in background
 export const refresh = asyncHandler(async (req: AuthRequest, res: Response) => {
   const { refreshToken } = req.body;
   const tokens = await AuthService.refreshToken(refreshToken);
@@ -59,7 +59,17 @@ export const me = asyncHandler(async (req: AuthRequest, res: Response) => {
       role: true,
       department: true,
       branch: true,
-      company: { select: { id: true, slug: true, name: true, logo: true, vatRate: true, currency: true } },
+      company: {
+        select: {
+          id: true,
+          slug: true,
+          name: true,
+          logo: true,
+          vatRate: true,
+          currency: true,
+          welcomeMessage: true,
+        },
+      },
     },
   });
   const { passwordHash, twoFactorSecret, company, ...safeUser } = user!;
@@ -76,6 +86,7 @@ export const me = asyncHandler(async (req: AuthRequest, res: Response) => {
             logo: company.logo,
             vatRate: Number(company.vatRate),
             currency: company.currency,
+            welcomeMessage: company.welcomeMessage,
           })
         : null,
     },

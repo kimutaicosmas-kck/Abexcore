@@ -121,6 +121,7 @@ export class AuthService {
             vatRate: true,
             currency: true,
             isActive: true,
+            welcomeMessage: true,
           },
         },
       },
@@ -229,8 +230,9 @@ export class AuthService {
             logo: company.logo,
             vatRate: Number(company.vatRate),
             currency: company.currency,
+            welcomeMessage: company.welcomeMessage,
           })
-        : { name: 'Company', vatRate: 16, currency: 'KES' },
+        : { name: 'Company', vatRate: 16, currency: 'KES', welcomeMessage: null },
       ...tokens,
     };
   }

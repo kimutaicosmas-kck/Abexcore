@@ -102,6 +102,7 @@ async function main() {
       legalName: 'AbexCore Platform',
       website: 'https://abexcore.co.ke',
       email: PLATFORM_OWNER_EMAIL,
+      welcomeMessage: 'Welcome to AbexCore Platform. Platform operations are ready.',
     },
     create: {
       id: '00000000-0000-0000-0000-000000000001',
@@ -114,6 +115,7 @@ async function main() {
       city: 'Nairobi',
       country: 'Kenya',
       phone: '+254 700 123 456',
+      welcomeMessage: 'Welcome to AbexCore Platform. Platform operations are ready.',
       email: PLATFORM_OWNER_EMAIL,
       website: 'https://abexcore.co.ke',
       currency: 'KES',

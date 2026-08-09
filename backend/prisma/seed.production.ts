@@ -83,25 +83,32 @@ async function main() {
     });
   }
 
+  const seedCompanyName = process.env.SEED_COMPANY_NAME || 'AbexCore Platform';
   const company = await prisma.company.upsert({
     where: { id: '00000000-0000-0000-0000-000000000001' },
     update: {
       slug: PLATFORM_OWNER_SLUG,
       isActive: true,
-      name: process.env.SEED_COMPANY_NAME || 'AbexCore Platform',
-      legalName: process.env.SEED_COMPANY_NAME || 'AbexCore Platform',
+      name: seedCompanyName,
+      legalName: seedCompanyName,
       website: process.env.SEED_COMPANY_WEBSITE || 'https://abexcore.co.ke',
+      welcomeMessage:
+        process.env.SEED_WELCOME_MESSAGE ||
+        `Welcome to ${seedCompanyName}. Platform operations are ready.`,
     },
     create: {
       id: '00000000-0000-0000-0000-000000000001',
       slug: PLATFORM_OWNER_SLUG,
-      name: process.env.SEED_COMPANY_NAME || 'AbexCore Platform',
-      legalName: process.env.SEED_COMPANY_NAME || 'AbexCore Platform',
+      name: seedCompanyName,
+      legalName: seedCompanyName,
       website: process.env.SEED_COMPANY_WEBSITE || 'https://abexcore.co.ke',
       currency: 'KES',
       country: 'Kenya',
       vatRate: 16,
       isActive: true,
+      welcomeMessage:
+        process.env.SEED_WELCOME_MESSAGE ||
+        `Welcome to ${seedCompanyName}. Platform operations are ready.`,
     },
   });
 

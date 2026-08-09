@@ -867,6 +867,7 @@ export interface CompanySettings {
   qualityModuleEnabled?: boolean;
   coopPaybillNumber?: string | null;
   mpesaAccountNumber?: string | null;
+  welcomeMessage?: string | null;
   branches?: { id: string; name: string; code: string; city: string }[];
   taxRates?: { id: string; name: string; rate: number; isDefault: boolean }[];
 }

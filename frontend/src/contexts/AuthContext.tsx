@@ -10,8 +10,14 @@ import {
   SESSION_EXPIRED_EVENT,
 } from '../services/api';
 import { canAccessRoute as checkRouteAccess } from '../config/routeAccess';
-import { clearUserActivity, isInactivityExpired, markUserActivity } from '../config/session';
+import {
+  clearUserActivity,
+  isInactivityExpired,
+  LOGIN_WELCOME_FLAG,
+  markUserActivity,
+} from '../config/session';
 import { PLATFORM_COMPANY_SLUG } from '../constants/platform';
+import { unlockWelcomeAudio } from '../utils/welcomeSound';
 
 function parseCompany(data: unknown): CompanyConfig | null {
   if (!data || typeof data !== 'object') return null;
@@ -27,6 +33,7 @@ export interface CompanyConfig {
   logo?: string | null;
   vatRate: number;
   currency: string;
+  welcomeMessage?: string | null;
 }
 
 interface AuthContextType {
@@ -179,12 +186,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [user]);
 
   const login = async (companySlug: string, email: string, password: string, totpCode?: string) => {
+    // Unlock audio during the login gesture so the welcome chime can play after navigate.
+    void unlockWelcomeAudio();
     const { data } = await authApi.login(companySlug, email, password, totpCode);
     resetSessionGuards();
     localStorage.setItem('accessToken', data.data.accessToken);
     localStorage.setItem('refreshToken', data.data.refreshToken);
     if (data.data.company?.slug) {
       localStorage.setItem('companySlug', data.data.company.slug);
+    }
+    try {
+      sessionStorage.setItem(LOGIN_WELCOME_FLAG, '1');
+    } catch {
+      // ignore
     }
     markUserActivity();
     setUser(data.data.user);
@@ -201,6 +215,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     localStorage.removeItem('accessToken');
     localStorage.removeItem('refreshToken');
+    try {
+      sessionStorage.removeItem(LOGIN_WELCOME_FLAG);
+    } catch {
+      // ignore
+    }
     clearUserActivity();
     setUser(null);
     setCompany(null);

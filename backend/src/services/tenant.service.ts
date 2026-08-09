@@ -52,10 +52,11 @@ export class TenantService {
 
     return runWithoutTenant(() =>
       prisma.$transaction(async (tx) => {
+        const companyName = input.companyName.trim();
         const company = await tx.company.create({
           data: {
-            name: input.companyName.trim(),
-            legalName: input.companyName.trim(),
+            name: companyName,
+            legalName: companyName,
             slug,
             logo: input.logo,
             isActive: true,
@@ -63,6 +64,7 @@ export class TenantService {
             currency: input.currency || 'KES',
             phone: input.phone,
             email: email,
+            welcomeMessage: `Welcome to ${companyName}. Your team workspace is ready — let's make today count.`,
           },
         });
 
