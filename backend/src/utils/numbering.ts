@@ -55,3 +55,12 @@ export async function nextDeliveryTripNumber(tx: TxClient, companyId: string): P
   });
   return generateNumber('TR', maxSequenceFromNumbers(rows.map((r) => r.tripNo), 'TR') + 1);
 }
+
+export async function nextSalaryAdvanceNumber(tx: TxClient, companyId: string): Promise<string> {
+  const year = new Date().getFullYear();
+  const rows = await tx.salaryAdvance.findMany({
+    where: { companyId, advanceNo: { startsWith: `ADV-${year}-` } },
+    select: { advanceNo: true },
+  });
+  return generateNumber('ADV', maxSequenceFromNumbers(rows.map((r) => r.advanceNo), 'ADV') + 1);
+}

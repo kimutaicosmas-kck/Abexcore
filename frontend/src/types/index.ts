@@ -714,6 +714,82 @@ export interface HrStats {
   unpaidPayroll: number;
   payrollDue: number;
   attendanceToday: number;
+  pendingAdvances?: number;
+  activeAdvances?: number;
+  advancesOutstanding?: number;
+}
+
+export type SalaryAdvanceStatus =
+  | 'PENDING'
+  | 'ACTIVE'
+  | 'COMPLETED'
+  | 'CANCELLED'
+  | 'WRITTEN_OFF';
+
+export type SalaryAdvanceRepaymentMethod =
+  | 'PAYROLL'
+  | 'CASH'
+  | 'BANK_TRANSFER'
+  | 'MPESA'
+  | 'MANUAL';
+
+export interface SalaryAdvanceRepayment {
+  id: string;
+  amount: number;
+  method: SalaryAdvanceRepaymentMethod;
+  isApplied: boolean;
+  paidAt?: string | null;
+  notes?: string | null;
+  createdAt?: string;
+  recordedBy?: { id: string; firstName: string; lastName: string } | null;
+  payrollRecord?: {
+    id: string;
+    periodStart: string;
+    periodEnd: string;
+    isPaid: boolean;
+  } | null;
+}
+
+export interface SalaryAdvance {
+  id: string;
+  advanceNo: string;
+  employeeId: string;
+  amount: number;
+  monthlyDeduction: number;
+  remainingBalance: number;
+  totalRepaid: number;
+  installments: number;
+  reason?: string | null;
+  notes?: string | null;
+  status: SalaryAdvanceStatus;
+  deductionStartDate: string;
+  requestedAt?: string;
+  approvedAt?: string | null;
+  rejectedAt?: string | null;
+  rejectionReason?: string | null;
+  disbursedAt?: string | null;
+  cancelledAt?: string | null;
+  cancelReason?: string | null;
+  employee: {
+    id: string;
+    employeeNo: string;
+    firstName: string;
+    lastName: string;
+    salary: number;
+    isActive: boolean;
+  };
+  createdBy?: { id: string; firstName: string; lastName: string } | null;
+  approvedBy?: { id: string; firstName: string; lastName: string } | null;
+  repayments?: SalaryAdvanceRepayment[];
+  schedule?: { dueDate: string; amount: number }[];
+}
+
+export interface SalaryAdvanceStats {
+  pendingApproval: number;
+  activeAdvances: number;
+  completedAdvances: number;
+  outstandingBalance: number;
+  recoveredThisMonth: number;
 }
 
 export interface MaintenanceStats {
@@ -924,6 +1000,14 @@ export interface PayrollRecord {
   id: string;
   periodStart: string;
   periodEnd: string;
+  basicSalary?: number;
+  allowances?: number;
+  paye?: number;
+  nssf?: number;
+  shif?: number;
+  housingLevy?: number;
+  advanceDeduction?: number;
+  deductions?: number;
   netPay: number;
   isPaid: boolean;
   employee: { firstName: string; lastName: string; employeeNo: string };

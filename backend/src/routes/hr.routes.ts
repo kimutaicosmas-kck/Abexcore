@@ -13,6 +13,14 @@ import {
   linkEmployeeUserSchema,
   updateLeaveBalanceSchema,
   leaveBalancesQuerySchema,
+  salaryAdvanceListQuerySchema,
+  createSalaryAdvanceSchema,
+  updateSalaryAdvanceSchema,
+  approveSalaryAdvanceSchema,
+  rejectSalaryAdvanceSchema,
+  repaySalaryAdvanceSchema,
+  cancelSalaryAdvanceSchema,
+  createPayrollSchema,
 } from '../validators/schemas';
 import prisma from '../config/database';
 import { getParam, getQuery } from '../utils/request';
@@ -21,6 +29,7 @@ import { calculateKenyaPayroll } from '../services/payroll.service';
 import { AccountingService } from '../services/accounting.service';
 import { LeaveService } from '../services/leave.service';
 import { ExportService } from '../services/export.service';
+import { SalaryAdvanceService } from '../services/salary-advance.service';
 import { Prisma } from '@prisma/client';
 import { parseLocalDateInput } from '../utils/date';
 import { injectTenantData } from '../utils/tenant';
@@ -699,27 +708,61 @@ router.get(
 router.post(
   '/payroll',
   authorize('hr:create'),
+  validate(createPayrollSchema),
   auditLog('hr', 'create', 'payroll_record'),
   asyncHandler(async (req: AuthRequest, res: Response) => {
     const { employeeId, periodStart, periodEnd, basicSalary, allowances } = req.body;
+    const start = parseLocalDateInput(periodStart) || new Date(periodStart);
+    const end = parseLocalDateInput(periodEnd) || new Date(periodEnd);
     const breakdown = calculateKenyaPayroll(Number(basicSalary), Number(allowances || 0));
+    const availableForAdvance = Math.max(0, breakdown.netPay);
 
-    const record = await prisma.payrollRecord.create({
-      data: {
-        employeeId,
-        periodStart: new Date(periodStart),
-        periodEnd: new Date(periodEnd),
-        basicSalary,
-        allowances: allowances || 0,
-        paye: breakdown.paye,
-        nssf: breakdown.nssf,
-        shif: breakdown.shif,
-        housingLevy: breakdown.housingLevy,
-        deductions: breakdown.totalDeductions,
-        netPay: breakdown.netPay,
-      },
-      include: { employee: { select: { firstName: true, lastName: true } } },
+    const record = await prisma.$transaction(async (tx) => {
+      const created = await tx.payrollRecord.create({
+        data: {
+          employeeId,
+          periodStart: start,
+          periodEnd: end,
+          basicSalary,
+          allowances: allowances || 0,
+          paye: breakdown.paye,
+          nssf: breakdown.nssf,
+          shif: breakdown.shif,
+          housingLevy: breakdown.housingLevy,
+          advanceDeduction: 0,
+          deductions: breakdown.totalDeductions,
+          netPay: breakdown.netPay,
+        },
+      });
+
+      const { total: advanceDeduction, allocations } =
+        await SalaryAdvanceService.schedulePayrollDeductions(
+          tx,
+          created.id,
+          employeeId,
+          end,
+          availableForAdvance,
+          req.user?.id
+        );
+
+      const netPay = Math.round((breakdown.netPay - advanceDeduction) * 100) / 100;
+      return tx.payrollRecord.update({
+        where: { id: created.id },
+        data: {
+          advanceDeduction,
+          deductions: Math.round((breakdown.totalDeductions + advanceDeduction) * 100) / 100,
+          netPay,
+        },
+        include: {
+          employee: { select: { firstName: true, lastName: true, employeeNo: true } },
+          advanceRepayments: {
+            where: { isApplied: false },
+            include: { advance: { select: { advanceNo: true } } },
+          },
+        },
+      }).then((row) => ({ ...row, advanceAllocations: allocations }));
     });
+
     res.status(201).json({ success: true, data: record });
   })
 );
@@ -728,9 +771,35 @@ router.post(
   '/payroll/calculate',
   authorize('hr:read'),
   asyncHandler(async (req: AuthRequest, res: Response) => {
-    const { basicSalary, allowances } = req.body;
+    const { basicSalary, allowances, employeeId, periodEnd } = req.body;
     const breakdown = calculateKenyaPayroll(Number(basicSalary), Number(allowances || 0));
-    res.json({ success: true, data: breakdown });
+    let advanceDeduction = 0;
+    let advanceAllocations: { advanceId: string; amount: number; advanceNo: string }[] = [];
+
+    if (employeeId) {
+      const end = periodEnd
+        ? parseLocalDateInput(String(periodEnd)) || new Date(periodEnd)
+        : new Date();
+      const planned = await SalaryAdvanceService.planDeductionsForEmployee(
+        employeeId,
+        end,
+        Math.max(0, breakdown.netPay)
+      );
+      advanceDeduction = planned.total;
+      advanceAllocations = planned.allocations;
+    }
+
+    const netPay = Math.round((breakdown.netPay - advanceDeduction) * 100) / 100;
+    res.json({
+      success: true,
+      data: {
+        ...breakdown,
+        advanceDeduction,
+        advanceAllocations,
+        netPay,
+        totalDeductions: Math.round((breakdown.totalDeductions + advanceDeduction) * 100) / 100,
+      },
+    });
   })
 );
 
@@ -749,6 +818,8 @@ router.patch(
       if (!existing) throw new AppError('Payroll record not found', 404);
       if (existing.isPaid) throw new AppError('Payroll record already paid', 400);
 
+      await SalaryAdvanceService.applyPayrollDeductions(tx, payrollId);
+
       await AccountingService.postPayrollPayment(tx, {
         id: existing.id,
         employeeName: `${existing.employee.firstName} ${existing.employee.lastName}`,
@@ -760,16 +831,162 @@ router.patch(
         shif: Number(existing.shif),
         housingLevy: Number(existing.housingLevy),
         netPay: Number(existing.netPay),
+        advanceDeduction: Number(existing.advanceDeduction),
       });
 
       return tx.payrollRecord.update({
         where: { id: payrollId },
         data: { isPaid: true, paidAt: new Date() },
-        include: { employee: { select: { firstName: true, lastName: true } } },
+        include: { employee: { select: { firstName: true, lastName: true, employeeNo: true } } },
       });
     });
 
     res.json({ success: true, data: record });
+  })
+);
+
+// ==================== Salary Advances ====================
+
+router.get(
+  '/advances/stats',
+  authorize('hr:read'),
+  asyncHandler(async (_req: AuthRequest, res: Response) => {
+    const data = await SalaryAdvanceService.getStats();
+    res.json({ success: true, data });
+  })
+);
+
+router.get(
+  '/advances',
+  authorize('hr:read'),
+  validate(salaryAdvanceListQuerySchema, 'query'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const query = getQuery<{
+      page: number;
+      limit: number;
+      search?: string;
+      status?: string;
+      employeeId?: string;
+    }>(req.query);
+    const result = await SalaryAdvanceService.list(query);
+    res.json({ success: true, ...result });
+  })
+);
+
+router.get(
+  '/advances/:id',
+  authorize('hr:read'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const data = await SalaryAdvanceService.getById(getParam(req.params.id));
+    res.json({ success: true, data });
+  })
+);
+
+router.post(
+  '/advances',
+  authorize('hr:create'),
+  validate(createSalaryAdvanceSchema),
+  auditLog('hr', 'create', 'salary_advance'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const data = await SalaryAdvanceService.create(req.body, req.user?.id);
+    res.status(201).json({ success: true, data });
+  })
+);
+
+router.patch(
+  '/advances/:id',
+  authorize('hr:update'),
+  validate(updateSalaryAdvanceSchema),
+  auditLog('hr', 'update', 'salary_advance'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const data = await SalaryAdvanceService.update(getParam(req.params.id), req.body);
+    res.json({ success: true, data });
+  })
+);
+
+router.patch(
+  '/advances/:id/approve',
+  authorize('hr:update'),
+  validate(approveSalaryAdvanceSchema),
+  auditLog('hr', 'approve', 'salary_advance'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    if (!req.user?.id) throw new AppError('Authentication required', 401);
+    const data = await SalaryAdvanceService.approve(
+      getParam(req.params.id),
+      req.user.id,
+      req.body.disburseNow !== false
+    );
+    res.json({ success: true, data });
+  })
+);
+
+router.patch(
+  '/advances/:id/reject',
+  authorize('hr:update'),
+  validate(rejectSalaryAdvanceSchema),
+  auditLog('hr', 'update', 'salary_advance'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    if (!req.user?.id) throw new AppError('Authentication required', 401);
+    const data = await SalaryAdvanceService.reject(
+      getParam(req.params.id),
+      req.user.id,
+      req.body.reason
+    );
+    res.json({ success: true, data });
+  })
+);
+
+router.patch(
+  '/advances/:id/disburse',
+  authorize('hr:update'),
+  auditLog('hr', 'update', 'salary_advance'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const data = await SalaryAdvanceService.disburse(
+      getParam(req.params.id),
+      req.body?.method || 'CASH'
+    );
+    res.json({ success: true, data });
+  })
+);
+
+router.post(
+  '/advances/:id/repay',
+  authorize('hr:update'),
+  validate(repaySalaryAdvanceSchema),
+  auditLog('hr', 'update', 'salary_advance'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const data = await SalaryAdvanceService.recordManualRepayment(
+      getParam(req.params.id),
+      req.body,
+      req.user?.id
+    );
+    res.json({ success: true, data });
+  })
+);
+
+router.patch(
+  '/advances/:id/cancel',
+  authorize('hr:update'),
+  validate(cancelSalaryAdvanceSchema),
+  auditLog('hr', 'update', 'salary_advance'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const data = await SalaryAdvanceService.cancel(getParam(req.params.id), req.body.reason);
+    res.json({ success: true, data });
+  })
+);
+
+router.patch(
+  '/advances/:id/write-off',
+  authorize('hr:update'),
+  validate(cancelSalaryAdvanceSchema),
+  auditLog('hr', 'update', 'salary_advance'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const data = await SalaryAdvanceService.writeOff(
+      getParam(req.params.id),
+      req.body.reason,
+      req.user?.id
+    );
+    res.json({ success: true, data });
   })
 );
 

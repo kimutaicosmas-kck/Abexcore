@@ -23,6 +23,8 @@ export const TENANT_SCOPED_MODELS = new Set([
   'Payment',
   'Employee',
   'LeaveBalance',
+  'SalaryAdvance',
+  'SalaryAdvanceRepayment',
   'Account',
   'BankStatement',
   'AuditLog',

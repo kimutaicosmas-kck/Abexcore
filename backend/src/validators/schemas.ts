@@ -927,6 +927,99 @@ export const hrListQuerySchema = paginationSchema.extend({
   ),
 });
 
+export const salaryAdvanceListQuerySchema = paginationSchema.extend({
+  status: z.preprocess(
+    (v) => (v === '' || v === undefined ? undefined : v),
+    z.enum(['PENDING', 'ACTIVE', 'COMPLETED', 'CANCELLED', 'WRITTEN_OFF']).optional()
+  ),
+  employeeId: z.preprocess(
+    (v) => (v === '' || v === undefined ? undefined : v),
+    z.string().uuid().optional()
+  ),
+});
+
+export const createSalaryAdvanceSchema = z
+  .object({
+    employeeId: z.string().uuid(),
+    amount: z.coerce.number().positive(),
+    monthlyDeduction: z.coerce.number().positive(),
+    deductionStartDate: z.string().min(1),
+    reason: z.string().max(2000).optional(),
+    notes: z.string().max(2000).optional(),
+    /**
+     * ISSUE = new cash advance (optional GL disburse).
+     * RECORD_EXISTING = already paid out outside the system (no cash GL).
+     */
+    entryMode: z.enum(['ISSUE', 'RECORD_EXISTING']).optional().default('ISSUE'),
+    /** Approve immediately (skip PENDING). Implied when disburseNow / RECORD_EXISTING. */
+    approveNow: z.boolean().optional(),
+    /** Disburse cash and post GL immediately (ISSUE only). */
+    disburseNow: z.boolean().optional(),
+    /** Date the money was given (required for RECORD_EXISTING). */
+    disbursedAt: z.string().optional(),
+    /** Still owed; defaults to full amount. Must be <= amount. */
+    remainingBalance: z.coerce.number().min(0).optional(),
+    /** Already recovered before recording; alternative to remainingBalance. */
+    alreadyRepaid: z.coerce.number().min(0).optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.entryMode === 'RECORD_EXISTING' && !data.disbursedAt) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Date given is required when recording an existing advance',
+        path: ['disbursedAt'],
+      });
+    }
+    if (data.remainingBalance !== undefined && data.remainingBalance > data.amount) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Remaining balance cannot exceed the original amount',
+        path: ['remainingBalance'],
+      });
+    }
+    if (data.alreadyRepaid !== undefined && data.alreadyRepaid > data.amount) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Already repaid cannot exceed the original amount',
+        path: ['alreadyRepaid'],
+      });
+    }
+  });
+
+export const updateSalaryAdvanceSchema = z.object({
+  monthlyDeduction: z.coerce.number().positive().optional(),
+  reason: z.string().max(2000).optional().nullable(),
+  notes: z.string().max(2000).optional().nullable(),
+  deductionStartDate: z.string().optional(),
+});
+
+export const approveSalaryAdvanceSchema = z.object({
+  disburseNow: z.boolean().optional().default(true),
+});
+
+export const rejectSalaryAdvanceSchema = z.object({
+  reason: z.string().max(2000).optional(),
+});
+
+export const repaySalaryAdvanceSchema = z.object({
+  amount: z.coerce.number().positive(),
+  method: z.enum(['CASH', 'BANK_TRANSFER', 'MPESA', 'MANUAL']).optional(),
+  notes: z.string().max(2000).optional(),
+  paidAt: z.string().optional(),
+});
+
+export const cancelSalaryAdvanceSchema = z.object({
+  reason: z.string().max(2000).optional(),
+});
+
+export const createPayrollSchema = z.object({
+  employeeId: z.string().uuid(),
+  periodStart: z.string().min(1),
+  periodEnd: z.string().min(1),
+  basicSalary: z.coerce.number().min(0),
+  allowances: z.coerce.number().min(0).optional(),
+});
+
 export const maintenanceListQuerySchema = paginationSchema.extend({
   status: z.preprocess(
     (v) => (v === '' || v === undefined ? undefined : v),

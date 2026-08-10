@@ -53,6 +53,19 @@ export class AccountingService {
     return account;
   }
 
+  /** Ensure staff advances receivable exists for tenants created before this account was added. */
+  static async ensureStaffAdvanceAccount(tx: TxClient) {
+    const existing = await tx.account.findFirst({ where: { code: '1210' } });
+    if (existing) return existing;
+    return tx.account.create({
+      data: injectTenantData({
+        code: '1210',
+        name: 'Staff Salary Advances',
+        type: 'ASSET',
+      }),
+    });
+  }
+
   static async resolveJournalLines(tx: TxClient, lines: JournalLineInput[]) {
     this.assertBalanced(lines);
 
@@ -216,15 +229,20 @@ export class AccountingService {
       shif: number;
       housingLevy: number;
       netPay: number;
+      /** Optional — when provided, recovery is posted inside the payroll JE. */
+      advanceDeduction?: number;
     }
   ) {
     const gross = Number(record.basicSalary) + Number(record.allowances);
     const netPay = Number(record.netPay);
-    const deductions =
+    const statutory =
       Number(record.paye) +
       Number(record.nssf) +
       Number(record.shif) +
       Number(record.housingLevy);
+    // Advance recovery is posted separately via postSalaryAdvanceRepayment to keep
+    // the staff-advances receivable ledger accurate per advance document.
+    const deductions = statutory;
 
     const lines = [
       {
@@ -245,12 +263,165 @@ export class AccountingService {
       });
     }
 
+    // Bridge: cash not paid out for advance recovery must balance the JE.
+    const advanceDeduction = Number(record.advanceDeduction || 0);
+    if (advanceDeduction > 0) {
+      await this.ensureStaffAdvanceAccount(tx);
+      lines.push({
+        accountCode: '1210',
+        debit: 0,
+        credit: advanceDeduction,
+        description: 'Salary advance recovery (payroll)',
+      });
+    }
+
     return this.createJournalEntry(tx, {
       description: `Payroll ${record.periodLabel} - ${record.employeeName}`,
       reference: record.id,
       sourceType: 'PAYROLL',
       sourceId: record.id,
       lines,
+    });
+  }
+
+  static async postSalaryAdvanceDisbursement(
+    tx: TxClient,
+    advance: {
+      id: string;
+      advanceNo: string;
+      amount: number;
+      employeeName: string;
+      method?: string;
+    }
+  ) {
+    const amount = Number(advance.amount);
+    if (amount <= 0) return null;
+    await this.ensureStaffAdvanceAccount(tx);
+    const cashCode = await this.resolveCashAccountCode(tx, advance.method);
+
+    return this.createJournalEntry(tx, {
+      description: `Salary advance ${advance.advanceNo} - ${advance.employeeName}`,
+      reference: advance.advanceNo,
+      sourceType: 'SALARY_ADVANCE',
+      sourceId: advance.id,
+      lines: [
+        {
+          accountCode: '1210',
+          debit: amount,
+          credit: 0,
+          description: 'Staff salary advance receivable',
+        },
+        {
+          accountCode: cashCode,
+          debit: 0,
+          credit: amount,
+          description: 'Advance disbursed to employee',
+        },
+      ],
+    });
+  }
+
+  static async postSalaryAdvanceRepayment(
+    tx: TxClient,
+    repayment: {
+      id: string;
+      advanceNo: string;
+      amount: number;
+      employeeName: string;
+      method?: string;
+      sourceId?: string;
+    }
+  ) {
+    const amount = Number(repayment.amount);
+    if (amount <= 0) return null;
+
+    // Payroll recoveries are already credited to 1210 inside the payroll JE.
+    if ((repayment.method || '').toUpperCase() === 'PAYROLL') {
+      return null;
+    }
+
+    await this.ensureStaffAdvanceAccount(tx);
+    const cashCode = await this.resolveCashAccountCode(tx, repayment.method);
+    return this.createJournalEntry(tx, {
+      description: `Advance repayment ${repayment.advanceNo} - ${repayment.employeeName}`,
+      reference: repayment.advanceNo,
+      sourceType: 'SALARY_ADVANCE_REPAYMENT',
+      sourceId: repayment.sourceId || repayment.id,
+      lines: [
+        {
+          accountCode: cashCode,
+          debit: amount,
+          credit: 0,
+          description: 'Cash received for advance repayment',
+        },
+        {
+          accountCode: '1210',
+          debit: 0,
+          credit: amount,
+          description: 'Clear staff salary advance',
+        },
+      ],
+    });
+  }
+
+  static async postSalaryAdvanceWriteOff(
+    tx: TxClient,
+    advance: { id: string; advanceNo: string; amount: number; employeeName: string }
+  ) {
+    const amount = Number(advance.amount);
+    if (amount <= 0) return null;
+    await this.ensureStaffAdvanceAccount(tx);
+
+    return this.createJournalEntry(tx, {
+      description: `Advance write-off ${advance.advanceNo} - ${advance.employeeName}`,
+      reference: advance.advanceNo,
+      sourceType: 'SALARY_ADVANCE_WRITEOFF',
+      sourceId: advance.id,
+      lines: [
+        {
+          accountCode: '5200',
+          debit: amount,
+          credit: 0,
+          description: 'Salary advance written off',
+        },
+        {
+          accountCode: '1210',
+          debit: 0,
+          credit: amount,
+          description: 'Clear staff salary advance',
+        },
+      ],
+    });
+  }
+
+  static async reverseSalaryAdvanceDisbursement(
+    tx: TxClient,
+    advance: { id: string; advanceNo: string; amount: number; employeeName: string; method?: string }
+  ) {
+    const amount = Number(advance.amount);
+    if (amount <= 0) return null;
+    await this.ensureStaffAdvanceAccount(tx);
+    const cashCode = await this.resolveCashAccountCode(tx, advance.method);
+
+    return this.createJournalEntry(tx, {
+      description: `Reverse advance ${advance.advanceNo} - ${advance.employeeName}`,
+      reference: advance.advanceNo,
+      sourceType: 'SALARY_ADVANCE_REVERSE',
+      sourceId: advance.id,
+      lines: [
+        {
+          accountCode: cashCode,
+          debit: amount,
+          credit: 0,
+          description: 'Advance funds returned / cancelled',
+        },
+        {
+          accountCode: '1210',
+          debit: 0,
+          credit: amount,
+          description: 'Clear staff salary advance',
+        },
+      ],
     });
   }
 

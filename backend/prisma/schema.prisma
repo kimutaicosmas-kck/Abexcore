@@ -142,6 +142,22 @@ enum Gender {
   UNSPECIFIED
 }
 
+enum SalaryAdvanceStatus {
+  PENDING
+  ACTIVE
+  COMPLETED
+  CANCELLED
+  WRITTEN_OFF
+}
+
+enum SalaryAdvanceRepaymentMethod {
+  PAYROLL
+  CASH
+  BANK_TRANSFER
+  MPESA
+  MANUAL
+}
+
 enum MaintenanceStatus {
   SCHEDULED
   IN_PROGRESS
@@ -369,6 +385,9 @@ model User {
   leaveRequestsRequested LeaveRequest[] @relation("LeaveRequestedBy")
   leaveRequestsApproved  LeaveRequest[] @relation("LeaveApprovedBy")
   leaveBalancesUpdated   LeaveBalance[] @relation("LeaveBalanceUpdatedBy")
+  salaryAdvancesCreated  SalaryAdvance[] @relation("SalaryAdvanceCreatedBy")
+  salaryAdvancesApproved SalaryAdvance[] @relation("SalaryAdvanceApprovedBy")
+  salaryAdvanceRepaymentsRecorded SalaryAdvanceRepayment[] @relation("SalaryAdvanceRepaymentRecordedBy")
 
   @@unique([companyId, email])
   @@map("users")
@@ -1475,6 +1494,7 @@ model Employee {
   leaveRequests LeaveRequest[]
   leaveBalances LeaveBalance[]
   payrollRecords PayrollRecord[]
+  salaryAdvances SalaryAdvance[]
 
   @@unique([companyId, employeeNo])
   @@map("employees")
@@ -1551,15 +1571,81 @@ model PayrollRecord {
   nssf        Decimal  @default(0) @db.Decimal(15, 2)
   shif        Decimal  @default(0) @db.Decimal(15, 2)
   housingLevy Decimal  @default(0) @map("housing_levy") @db.Decimal(15, 2)
+  /** Salary advance recovery for this period (applied to balances when marked paid). */
+  advanceDeduction Decimal @default(0) @map("advance_deduction") @db.Decimal(15, 2)
+  /** Statutory + advance deductions. */
   deductions  Decimal  @default(0) @db.Decimal(15, 2)
   netPay      Decimal  @map("net_pay") @db.Decimal(15, 2)
   isPaid      Boolean  @default(false) @map("is_paid")
   paidAt      DateTime? @map("paid_at")
   createdAt   DateTime @default(now()) @map("created_at")
 
-  employee Employee @relation(fields: [employeeId], references: [id])
+  employee           Employee @relation(fields: [employeeId], references: [id])
+  advanceRepayments  SalaryAdvanceRepayment[]
 
   @@map("payroll_records")
+}
+
+/** Staff salary advance with monthly payroll recovery. */
+model SalaryAdvance {
+  id                 String              @id @default(uuid())
+  companyId          String              @map("company_id")
+  employeeId         String              @map("employee_id")
+  advanceNo          String              @map("advance_no")
+  amount             Decimal             @db.Decimal(15, 2)
+  monthlyDeduction   Decimal             @map("monthly_deduction") @db.Decimal(15, 2)
+  remainingBalance   Decimal             @map("remaining_balance") @db.Decimal(15, 2)
+  totalRepaid        Decimal             @default(0) @map("total_repaid") @db.Decimal(15, 2)
+  installments       Int                 @default(1)
+  reason             String?             @db.Text
+  notes              String?             @db.Text
+  status             SalaryAdvanceStatus @default(PENDING)
+  deductionStartDate DateTime            @map("deduction_start_date") @db.Date
+  requestedAt        DateTime            @default(now()) @map("requested_at")
+  approvedAt         DateTime?           @map("approved_at")
+  approvedById       String?             @map("approved_by_id")
+  rejectedAt         DateTime?           @map("rejected_at")
+  rejectionReason    String?             @map("rejection_reason") @db.Text
+  disbursedAt        DateTime?           @map("disbursed_at")
+  cancelledAt        DateTime?           @map("cancelled_at")
+  cancelReason       String?             @map("cancel_reason") @db.Text
+  createdById        String?             @map("created_by_id")
+  createdAt          DateTime            @default(now()) @map("created_at")
+  updatedAt          DateTime            @updatedAt @map("updated_at")
+
+  employee   Employee                @relation(fields: [employeeId], references: [id])
+  createdBy  User?                   @relation("SalaryAdvanceCreatedBy", fields: [createdById], references: [id])
+  approvedBy User?                   @relation("SalaryAdvanceApprovedBy", fields: [approvedById], references: [id])
+  repayments SalaryAdvanceRepayment[]
+
+  @@unique([companyId, advanceNo])
+  @@index([companyId, status])
+  @@index([employeeId, status])
+  @@map("salary_advances")
+}
+
+model SalaryAdvanceRepayment {
+  id            String                       @id @default(uuid())
+  companyId     String                       @map("company_id")
+  advanceId     String                       @map("advance_id")
+  payrollRecordId String?                    @map("payroll_record_id")
+  amount        Decimal                      @db.Decimal(15, 2)
+  method        SalaryAdvanceRepaymentMethod @default(PAYROLL)
+  /** False = scheduled on unpaid payroll; true = balance reduced & GL posted. */
+  isApplied     Boolean                      @default(false) @map("is_applied")
+  paidAt        DateTime?                    @map("paid_at")
+  notes         String?                      @db.Text
+  recordedById  String?                      @map("recorded_by_id")
+  createdAt     DateTime                     @default(now()) @map("created_at")
+
+  advance       SalaryAdvance  @relation(fields: [advanceId], references: [id], onDelete: Cascade)
+  payrollRecord PayrollRecord? @relation(fields: [payrollRecordId], references: [id], onDelete: SetNull)
+  recordedBy    User?          @relation("SalaryAdvanceRepaymentRecordedBy", fields: [recordedById], references: [id])
+
+  @@unique([payrollRecordId, advanceId])
+  @@index([companyId, advanceId])
+  @@index([payrollRecordId])
+  @@map("salary_advance_repayments")
 }
 
 // ==================== MAINTENANCE ====================

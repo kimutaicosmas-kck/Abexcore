@@ -193,6 +193,16 @@ export async function deleteCompanyCompletely(companyId: string) {
             await tx.attendance.deleteMany({ where: { employeeId: { in: ids.employeeIds } } });
             await tx.leaveBalance.deleteMany({ where: { employeeId: { in: ids.employeeIds } } });
             await tx.leaveRequest.deleteMany({ where: { employeeId: { in: ids.employeeIds } } });
+            const advanceIds = (
+              await tx.salaryAdvance.findMany({
+                where: { employeeId: { in: ids.employeeIds } },
+                select: { id: true },
+              })
+            ).map((a) => a.id);
+            if (advanceIds.length) {
+              await tx.salaryAdvanceRepayment.deleteMany({ where: { advanceId: { in: advanceIds } } });
+              await tx.salaryAdvance.deleteMany({ where: { id: { in: advanceIds } } });
+            }
             await tx.payrollRecord.deleteMany({ where: { employeeId: { in: ids.employeeIds } } });
           }
           if (ids.bankStatementIds.length) {

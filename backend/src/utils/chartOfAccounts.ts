@@ -6,6 +6,7 @@ export const DEFAULT_CHART_OF_ACCOUNTS = [
   { code: '1110', name: 'M-Pesa Float', type: 'ASSET' as const },
   { code: '1120', name: 'Bank Accounts', type: 'ASSET' as const },
   { code: '1200', name: 'Accounts Receivable', type: 'ASSET' as const },
+  { code: '1210', name: 'Staff Salary Advances', type: 'ASSET' as const },
   { code: '1250', name: 'VAT Input Recoverable', type: 'ASSET' as const },
   { code: '1300', name: 'Inventory', type: 'ASSET' as const },
   { code: '2000', name: 'Liabilities', type: 'LIABILITY' as const },

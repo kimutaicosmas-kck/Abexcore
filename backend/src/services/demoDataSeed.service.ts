@@ -1021,6 +1021,49 @@ export async function seedDemoDataForCompany(
       });
     }
     track('payrollRecords', payrollBefore, Math.max(0, MIN_RECORDS - payrollBefore));
+
+    // --- Salary advances ---
+    const advBefore = await tx.salaryAdvance.count({ where: { companyId: cid } });
+    for (let i = advBefore; i < Math.min(MIN_RECORDS, 6); i++) {
+      const emp = employees[i % employees.length];
+      const amount = 10000 + i * 2500;
+      const monthly = Math.round(amount / (3 + (i % 3)));
+      const repaid = i % 3 === 0 ? monthly : i % 3 === 1 ? 0 : monthly * 2;
+      const remaining = Math.max(0, amount - repaid);
+      const status =
+        i % 5 === 0 ? 'PENDING' : remaining <= 0 ? 'COMPLETED' : 'ACTIVE';
+      const advance = await tx.salaryAdvance.create({
+        data: {
+          companyId: cid,
+          employeeId: emp.id,
+          advanceNo: yearCode('ADV-D', i + 1),
+          amount,
+          monthlyDeduction: monthly,
+          remainingBalance: status === 'PENDING' ? amount : remaining,
+          totalRepaid: status === 'PENDING' ? 0 : repaid,
+          installments: Math.ceil(amount / monthly),
+          reason: 'Demo salary advance for testing monthly recovery',
+          status,
+          deductionStartDate: subDays(new Date(), 60),
+          approvedAt: status === 'PENDING' ? undefined : subDays(new Date(), 45),
+          disbursedAt: status === 'PENDING' ? undefined : subDays(new Date(), 45),
+        },
+      });
+      if (status !== 'PENDING' && repaid > 0) {
+        await tx.salaryAdvanceRepayment.create({
+          data: {
+            companyId: cid,
+            advanceId: advance.id,
+            amount: repaid,
+            method: 'PAYROLL',
+            isApplied: true,
+            paidAt: subDays(new Date(), 15),
+            notes: 'Demo payroll recovery',
+          },
+        });
+      }
+    }
+    track('salaryAdvances', advBefore, Math.max(0, Math.min(MIN_RECORDS, 6) - advBefore));
   }, { timeout: 300_000 });
 
   return summary;

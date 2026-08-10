@@ -364,7 +364,19 @@ export const hrApi = {
     api.patch(`/hr/leave/${id}/approve`, { status, decisionNote }),
   payroll: (params?: object) => api.get('/hr/payroll', { params }),
   createPayroll: (data: object) => api.post('/hr/payroll', data),
+  calculatePayroll: (data: object) => api.post('/hr/payroll/calculate', data),
   payPayroll: (id: string) => api.patch(`/hr/payroll/${id}/pay`),
+  advanceStats: () => api.get('/hr/advances/stats'),
+  advances: (params?: object) => api.get('/hr/advances', { params }),
+  getAdvance: (id: string) => api.get(`/hr/advances/${id}`),
+  createAdvance: (data: object) => api.post('/hr/advances', data),
+  updateAdvance: (id: string, data: object) => api.patch(`/hr/advances/${id}`, data),
+  approveAdvance: (id: string, data?: object) => api.patch(`/hr/advances/${id}/approve`, data || {}),
+  rejectAdvance: (id: string, data?: object) => api.patch(`/hr/advances/${id}/reject`, data || {}),
+  disburseAdvance: (id: string, data?: object) => api.patch(`/hr/advances/${id}/disburse`, data || {}),
+  repayAdvance: (id: string, data: object) => api.post(`/hr/advances/${id}/repay`, data),
+  cancelAdvance: (id: string, data?: object) => api.patch(`/hr/advances/${id}/cancel`, data || {}),
+  writeOffAdvance: (id: string, data?: object) => api.patch(`/hr/advances/${id}/write-off`, data || {}),
 };
 
 export const maintenanceApi = {
