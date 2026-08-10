@@ -92,8 +92,12 @@ export function resolveTenantSlugFromQuery(search: string): string | null {
 /** True when running as an installed PWA / Add to Home Screen app. */
 export function isStandalonePwa(): boolean {
   if (typeof window === 'undefined') return false;
+  const standaloneMedia =
+    typeof window.matchMedia === 'function'
+      ? window.matchMedia('(display-mode: standalone)').matches
+      : false;
   return (
-    window.matchMedia('(display-mode: standalone)').matches ||
+    standaloneMedia ||
     (navigator as Navigator & { standalone?: boolean }).standalone === true
   );
 }
