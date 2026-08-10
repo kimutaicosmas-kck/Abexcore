@@ -25,7 +25,10 @@ import {
 } from '../services/delivery-trip.service';
 import { NotificationService } from '../services/notification.service';
 import { Prisma } from '@prisma/client';
-import { isLogisticsDeliveryRole } from '../config/rolePermissions';
+import {
+  isLogisticsDeliveryRole,
+  LOGISTICS_DELIVERY_ROLE_NAMES,
+} from '../config/rolePermissions';
 
 const router = Router();
 
@@ -73,32 +76,13 @@ async function assertActiveDriver(driverId: string) {
       id: driverId,
       deletedAt: null,
       status: 'ACTIVE',
+      role: { name: { in: [...LOGISTICS_DELIVERY_ROLE_NAMES] } },
     },
-    select: {
-      id: true,
-      allowedModules: true,
-      role: {
-        select: {
-          name: true,
-          permissions: { select: { permission: { select: { module: true } } } },
-        },
-      },
-    },
+    select: { id: true, role: { select: { name: true } } },
   });
-  if (!driver) throw new AppError('Selected delivery person was not found or is inactive', 400);
-
-  const modules = Array.isArray(driver.allowedModules)
-    ? (driver.allowedModules as string[])
-    : [];
-  const roleModules = driver.role.permissions.map((p) => p.permission.module);
-  const canDeliver =
-    isLogisticsDeliveryRole(driver.role.name) ||
-    modules.includes('delivery') ||
-    roleModules.includes('delivery');
-
-  if (!canDeliver) {
+  if (!driver || !isLogisticsDeliveryRole(driver.role.name)) {
     throw new AppError(
-      'Selected delivery person must have the Logistics & Delivery role or delivery module access',
+      'Selected delivery person must have the Logistics & Delivery role and be active',
       400
     );
   }
@@ -117,42 +101,21 @@ router.get(
   '/drivers/list',
   authorize('delivery:read'),
   asyncHandler(async (_req: AuthRequest, res: Response) => {
-    const candidates = await prisma.user.findMany({
-      where: { deletedAt: null, status: 'ACTIVE' },
+    const drivers = await prisma.user.findMany({
+      where: {
+        deletedAt: null,
+        status: 'ACTIVE',
+        role: { name: { in: [...LOGISTICS_DELIVERY_ROLE_NAMES] } },
+      },
       select: {
         id: true,
         firstName: true,
         lastName: true,
         email: true,
-        allowedModules: true,
-        role: {
-          select: {
-            name: true,
-            permissions: { select: { permission: { select: { module: true } } } },
-          },
-        },
       },
       orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
     });
-    const drivers = candidates.filter((user) => {
-      const modules = Array.isArray(user.allowedModules)
-        ? (user.allowedModules as string[])
-        : [];
-      return (
-        isLogisticsDeliveryRole(user.role.name) ||
-        modules.includes('delivery') ||
-        user.role.permissions.some((p) => p.permission.module === 'delivery')
-      );
-    });
-    res.json({
-      success: true,
-      data: drivers.map(({ id, firstName, lastName, email }) => ({
-        id,
-        firstName,
-        lastName,
-        email,
-      })),
-    });
+    res.json({ success: true, data: drivers });
   })
 );
 
