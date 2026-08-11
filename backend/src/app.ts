@@ -30,6 +30,7 @@ import searchRoutes from './routes/search.routes';
 import mpesaRoutes from './routes/mpesa.routes';
 import realtimeRoutes from './routes/realtime.routes';
 import tenantRoutes from './routes/tenant.routes';
+import trashRoutes from './routes/trash.routes';
 
 export function createApp() {
   const app = express();
@@ -211,6 +212,7 @@ export function createApp() {
   apiRouter.use('/search', searchRoutes);
   apiRouter.use('/realtime', realtimeRoutes);
   apiRouter.use('/tenant', tenantRoutes);
+  apiRouter.use('/trash', trashRoutes);
 
   app.use('/api/v1', apiRouter);
   app.use(notFound);

@@ -471,7 +471,7 @@ router.delete(
       data: { deletedAt: new Date(), status: 'INACTIVE' },
     });
     await prisma.refreshToken.deleteMany({ where: { userId: id } });
-    res.json({ success: true, message: 'User deactivated' });
+    res.json({ success: true, message: 'User moved to trash' });
   })
 );
 

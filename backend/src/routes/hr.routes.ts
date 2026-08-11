@@ -203,6 +203,22 @@ router.post(
   })
 );
 
+router.delete(
+  '/employees/:id',
+  authorize('hr:delete'),
+  auditLog('hr', 'delete', 'employee'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const id = getParam(req.params.id);
+    const existing = await prisma.employee.findFirst({ where: { id, deletedAt: null } });
+    if (!existing) throw new AppError('Employee not found', 404);
+    const data = await prisma.employee.update({
+      where: { id },
+      data: { deletedAt: new Date(), isActive: false },
+    });
+    res.json({ success: true, message: 'Employee moved to trash', data });
+  })
+);
+
 router.put(
   '/employees/:id',
   authorize('hr:update'),

@@ -575,7 +575,7 @@ router.delete(
   asyncHandler(async (req: AuthRequest, res: Response) => {
     await productService.update(getParam(req.params.id), { isActive: false });
     await productService.softDelete(getParam(req.params.id));
-    res.json({ success: true, message: 'Product deactivated' });
+    res.json({ success: true, message: 'Product moved to trash' });
   })
 );
 

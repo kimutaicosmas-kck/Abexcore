@@ -614,7 +614,7 @@ export function UsersPage() {
         size="md"
       >
         <p className="text-sm text-slate-600 mb-4">
-          Deactivate <strong>{selectedUser?.firstName} {selectedUser?.lastName}</strong>? They will lose access immediately.
+          Move <strong>{selectedUser?.firstName} {selectedUser?.lastName}</strong> to the Recycle Bin? They will lose access immediately and can be restored later.
         </p>
         {deactivateMutation.isError && (
           <Alert variant="error" className="mb-4">

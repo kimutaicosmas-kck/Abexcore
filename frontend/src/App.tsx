@@ -64,6 +64,9 @@ const ChangePasswordPage = lazy(() =>
 const AccountPage = lazy(() =>
   import('./pages/AccountPage').then((m) => ({ default: m.AccountPage }))
 );
+const RecycleBinPage = lazy(() =>
+  import('./pages/RecycleBinPage').then((m) => ({ default: m.RecycleBinPage }))
+);
 const NotFoundPage = lazy(() =>
   import('./pages/NotFoundPage').then((m) => ({ default: m.NotFoundPage }))
 );
@@ -171,6 +174,7 @@ function AppRoutes() {
           <Route path="maintenance" element={<PermissionRoute><MaintenancePage /></PermissionRoute>} />
           <Route path="reports" element={<PermissionRoute><ReportsPage /></PermissionRoute>} />
           <Route path="settings" element={<Navigate to="/account?tab=settings" replace />} />
+          <Route path="recycle-bin" element={<PermissionRoute><RecycleBinPage /></PermissionRoute>} />
           <Route path="account" element={<AccountPage />} />
           <Route
             path="admin/register-company"

@@ -1104,7 +1104,7 @@ export function CustomersPage() {
 
       <Modal open={deactivateModalOpen} onClose={() => setDeactivateModalOpen(false)} title="Deactivate Customer" size="md">
         <p className="text-sm text-slate-600 mb-4">
-          Deactivate <strong>{selectedCustomer?.name || customerDetail?.name}</strong>? They will move to Inactive and can be activated again later.
+          Move <strong>{selectedCustomer?.name || customerDetail?.name}</strong> to the Recycle Bin? They leave active lists and can be restored later.
         </p>
         {deactivateMutation.isError && <Alert variant="error" className="mb-4">Failed to deactivate customer.</Alert>}
         <div className="flex justify-end gap-3">

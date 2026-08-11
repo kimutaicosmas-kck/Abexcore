@@ -21,6 +21,7 @@ import {
   CalendarDays,
   CircleUser,
   Settings,
+  Trash2,
 } from 'lucide-react';
 import clsx from 'clsx';
 import { useAuth } from '../../contexts/AuthContext';
@@ -83,7 +84,23 @@ const navigationGroups: NavGroup[] = [
   },
   {
     label: 'System',
-    items: [{ name: 'Account', href: '/account', icon: CircleUser }],
+    items: [
+      {
+        name: 'Recycle Bin',
+        href: '/recycle-bin',
+        icon: Trash2,
+        permissions: [
+          'users:delete',
+          'customers:delete',
+          'products:delete',
+          'hr:delete',
+          'procurement:delete',
+          'inventory:delete',
+          'settings:read',
+        ],
+      },
+      { name: 'Account', href: '/account', icon: CircleUser },
+    ],
   },
 ];
 

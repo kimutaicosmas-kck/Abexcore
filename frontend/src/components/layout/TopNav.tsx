@@ -33,6 +33,7 @@ const routeTitles: Record<string, string> = {
   '/hr': 'HR',
   '/maintenance': 'Maintenance',
   '/reports': 'Reports',
+  '/recycle-bin': 'Recycle Bin',
 };
 
 export function TopNav({ onMenuClick, sidebarOffset }: TopNavProps) {

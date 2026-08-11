@@ -227,6 +227,17 @@ router.put('/materials/:id', authorize('inventory:update'), validate(createRawMa
   res.json({ success: true, data });
 }));
 
+router.delete(
+  '/materials/:id',
+  authorize('inventory:delete'),
+  auditLog('inventory', 'delete', 'raw_material'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    await materialService.update(getParam(req.params.id), { isActive: false });
+    const data = await materialService.softDelete(getParam(req.params.id));
+    res.json({ success: true, message: 'Raw material moved to trash', data });
+  })
+);
+
 // Suppliers
 const supplierService = createCrudService('supplier', ['name', 'code', 'email'], {
   _count: { select: { purchaseOrders: true, rawMaterials: true } },
@@ -246,6 +257,17 @@ router.put('/suppliers/:id', authorize('procurement:update'), validate(createSup
   const data = await supplierService.update(getParam(req.params.id), req.body);
   res.json({ success: true, data });
 }));
+
+router.delete(
+  '/suppliers/:id',
+  authorize('procurement:delete'),
+  auditLog('procurement', 'delete', 'supplier'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    await supplierService.update(getParam(req.params.id), { isActive: false });
+    const data = await supplierService.softDelete(getParam(req.params.id));
+    res.json({ success: true, message: 'Supplier moved to trash', data });
+  })
+);
 
 router.get(
   '/suppliers/:id/statement',

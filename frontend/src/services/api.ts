@@ -262,9 +262,11 @@ export const inventoryApi = {
   reorderMaterialTypes: (ids: string[]) => api.put('/inventory/materials/types/reorder', { ids }),
   createMaterial: (data: object) => api.post('/inventory/materials', data),
   updateMaterial: (id: string, data: object) => api.put(`/inventory/materials/${id}`, data),
+  deleteMaterial: (id: string) => api.delete(`/inventory/materials/${id}`),
   suppliers: (params?: object) => api.get('/inventory/suppliers', { params }),
   createSupplier: (data: object) => api.post('/inventory/suppliers', data),
   updateSupplier: (id: string, data: object) => api.put(`/inventory/suppliers/${id}`, data),
+  deleteSupplier: (id: string) => api.delete(`/inventory/suppliers/${id}`),
   vendorStatement: (id: string, params?: object) =>
     api.get(`/inventory/suppliers/${id}/statement`, { params }),
   warehouses: () => api.get('/inventory/warehouses'),
@@ -343,6 +345,7 @@ export const hrApi = {
   getEmployee: (id: string) => api.get(`/hr/employees/${id}`),
   createEmployee: (data: object) => api.post('/hr/employees', data),
   updateEmployee: (id: string, data: object) => api.put(`/hr/employees/${id}`, data),
+  deleteEmployee: (id: string) => api.delete(`/hr/employees/${id}`),
   linkableUsers: () => api.get('/hr/linkable-users'),
   linkEmployeeUser: (id: string, userId: string | null) =>
     api.patch(`/hr/employees/${id}/link-user`, { userId }),
@@ -445,6 +448,12 @@ export const reportsApi = {
 export const settingsApi = {
   company: () => api.get('/finance/company'),
   updateCompany: (data: object) => api.put('/finance/company', data),
+};
+
+export const trashApi = {
+  list: (params?: object) => api.get('/trash', { params }),
+  restore: (resource: string, id: string) => api.post(`/trash/${resource}/${id}/restore`),
+  purge: (resource: string, id: string) => api.delete(`/trash/${resource}/${id}`),
 };
 
 export const tenantApi = {

@@ -90,14 +90,13 @@ router.get(
         : [{ salesPersonId }];
     }
 
-    // Include historically soft-deleted inactive customers so they can be reactivated.
-    // Active / default lists still hide truly removed (soft-deleted) active rows.
+    // Soft-deleted customers live in Recycle Bin only.
     const visibility =
       isActive === false
-        ? {}
+        ? { deletedAt: null, isActive: false }
         : isActive === true
-          ? { deletedAt: null }
-          : { OR: [{ deletedAt: null }, { isActive: false }] };
+          ? { deletedAt: null, isActive: true }
+          : { deletedAt: null };
 
     const searchFilter = search
       ? {
@@ -350,13 +349,13 @@ router.delete(
   authorize('customers:delete'),
   auditLog('customers', 'delete', 'customer'),
   asyncHandler(async (req: AuthRequest, res: Response) => {
-    // Deactivate only — keep the record listable under Inactive so it can be restored.
+    // Soft delete — hidden from active lists; restore/purge via Recycle Bin.
     const id = getParam(req.params.id);
-    const existing = await prisma.customer.findFirst({ where: { id } });
+    const existing = await prisma.customer.findFirst({ where: { id, deletedAt: null } });
     if (!existing) throw new AppError('Customer not found', 404);
     const data = await prisma.customer.update({
       where: { id },
-      data: { isActive: false },
+      data: { isActive: false, deletedAt: new Date() },
       include: {
         contacts: true,
         salesPerson: { select: { id: true, firstName: true, lastName: true } },
@@ -365,7 +364,7 @@ router.delete(
         },
       },
     });
-    res.json({ success: true, message: 'Customer deactivated', data });
+    res.json({ success: true, message: 'Customer moved to trash', data });
   })
 );
 
