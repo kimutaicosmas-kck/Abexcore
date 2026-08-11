@@ -262,11 +262,6 @@ export function LoginPage() {
                   )}
                   {tenantError && <Alert variant="error">{tenantError}</Alert>}
                   {error && <Alert variant="error">{error}</Alert>}
-                  {installedPwa && !tenantLocked && (
-                    <Alert variant="info">
-                      Enter your <strong>company code</strong> (same as in the browser), then email and password.
-                    </Alert>
-                  )}
 
                   {tenantLocked ? (
                     <input type="hidden" {...register('companySlug')} />
