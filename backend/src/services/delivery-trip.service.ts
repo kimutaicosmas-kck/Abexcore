@@ -288,6 +288,20 @@ export async function applyDeliveryNoteStatus(
     include: STOP_INCLUDE,
   });
 
+  // Keep trip + stop driver assignment in sync so both admin and driver lists match.
+  if (updated.deliveryTripId && options?.driverId) {
+    const trip = await tx.deliveryTrip.findUnique({
+      where: { id: updated.deliveryTripId },
+      select: { driverId: true },
+    });
+    if (trip && !trip.driverId) {
+      await tx.deliveryTrip.update({
+        where: { id: updated.deliveryTripId },
+        data: { driverId: options.driverId },
+      });
+    }
+  }
+
   if (status === 'DELIVERED') {
     await SalesOrderService.syncOrderDeliveryStatus(tx, updated.salesOrderId);
     await syncCustomerCreditUsed(updated.salesOrder.customerId, tx);
@@ -344,6 +358,18 @@ export async function applyDeliveryTripStatus(
     options?.driverId !== undefined ||
     options?.vehicleId !== undefined ||
     options?.scheduledDate !== undefined;
+
+  // Propagate trip driver onto stops that have none, so driver "My Deliveries" matches.
+  if (options?.driverId) {
+    await tx.deliveryNote.updateMany({
+      where: {
+        deliveryTripId: tripId,
+        OR: [{ driverId: null }, { driverId: { not: options.driverId } }],
+        status: { notIn: ['DELIVERED', 'FAILED', 'RETURNED'] },
+      },
+      data: { driverId: options.driverId },
+    });
+  }
 
   for (const stop of trip.stops) {
     if (status === 'DELIVERED') {

@@ -206,10 +206,12 @@ export class SalesOrderService {
     return currentStatus as OrderStatus;
   }
 
+  /**
+   * Keep sales-order status aligned with delivery outcomes system-wide.
+   * When every delivery note is closed and at least one was delivered (including shortfalls),
+   * the order becomes DELIVERED so admin, driver, and sales all see the same completion.
+   */
   static async syncOrderDeliveryStatus(tx: TxClient, salesOrderId: string): Promise<void> {
-    const fullyDelivered = await this.isFullyDelivered(tx, salesOrderId);
-    if (!fullyDelivered) return;
-
     const order = await tx.salesOrder.findUnique({ where: { id: salesOrderId } });
     if (!order || ['DELIVERED', 'COMPLETED', 'CANCELLED'].includes(order.status)) return;
 

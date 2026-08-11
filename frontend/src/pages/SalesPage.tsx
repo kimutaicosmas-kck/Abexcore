@@ -85,6 +85,7 @@ const CANCELLABLE_ORDER_STATUSES = ['PENDING', 'CONFIRMED', 'IN_PRODUCTION', 'RE
 
 const NEXT_STATUS: Record<string, { status: string; label: string }> = {
   PENDING: { status: 'CONFIRMED', label: 'Confirm' },
+  DISPATCHED: { status: 'COMPLETED', label: 'Complete' },
   DELIVERED: { status: 'COMPLETED', label: 'Complete' },
 };
 

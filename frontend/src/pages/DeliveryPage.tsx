@@ -111,14 +111,8 @@ export function DeliveryPage() {
   const [vehSearch, setVehSearch] = useState('');
   const [vehType, setVehType] = useState('');
   const [status, setStatus] = useState('');
-  /** Empty string = all dates; defaults to today. */
-  const [deliveryDate, setDeliveryDate] = useState(() => {
-    const now = new Date();
-    const y = now.getFullYear();
-    const m = String(now.getMonth() + 1).padStart(2, '0');
-    const d = String(now.getDate()).padStart(2, '0');
-    return `${y}-${m}-${d}`;
-  });
+  /** Empty string = all dates (keeps completions visible for admin and driver). */
+  const [deliveryDate, setDeliveryDate] = useState('');
   const [deliveryModalOpen, setDeliveryModalOpen] = useState(false);
   const [prefillOrderIds, setPrefillOrderIds] = useState<string[]>([]);
   const [vehicleModalOpen, setVehicleModalOpen] = useState(false);

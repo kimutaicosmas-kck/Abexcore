@@ -251,7 +251,11 @@ router.get(
     const skip = (page - 1) * limit;
     const where: Prisma.DeliveryTripWhereInput = {};
     if (isDriverUser(req)) {
-      where.driverId = req.user!.id;
+      // Match trip-level or stop-level assignment so completion stays visible both ways.
+      where.OR = [
+        { driverId: req.user!.id },
+        { stops: { some: { driverId: req.user!.id } } },
+      ];
     }
     if (status) where.status = status as Prisma.EnumDeliveryStatusFilter['equals'];
     if (date) {
@@ -262,6 +266,8 @@ router.get(
             OR: [
               { scheduledDate: range },
               { scheduledDate: null, createdAt: range },
+              // Completions marked today stay visible even if scheduled earlier.
+              { stops: { some: { deliveredAt: range } } },
             ],
           },
         ];
@@ -412,6 +418,8 @@ const listDeliveryNotes = asyncHandler(async (req: AuthRequest, res: Response) =
           OR: [
             { scheduledDate: range },
             { scheduledDate: null, createdAt: range },
+            // Completions marked today stay visible for admin and driver alike.
+            { deliveredAt: range },
           ],
         },
       ];

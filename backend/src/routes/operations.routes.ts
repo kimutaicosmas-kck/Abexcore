@@ -1081,6 +1081,11 @@ router.post(
         include: { product: true, batches: true },
       });
 
+      // When all linked production is done, advance the sales order so Delivery/Sales see READY.
+      if (order.salesOrderId) {
+        await SalesOrderService.maybeAdvanceToReady(tx, order.salesOrderId);
+      }
+
       return productionResult;
     });
 
