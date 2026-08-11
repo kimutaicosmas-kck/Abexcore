@@ -23,15 +23,6 @@ export const ROUTE_PERMISSIONS: Record<string, string | string[] | undefined> = 
   '/maintenance': 'maintenance:read',
   '/reports': 'reports:read',
   '/settings': 'settings:read',
-  '/recycle-bin': [
-    'users:delete',
-    'customers:delete',
-    'products:delete',
-    'hr:delete',
-    'procurement:delete',
-    'inventory:delete',
-    'settings:read',
-  ],
   '/account': undefined,
 };
 

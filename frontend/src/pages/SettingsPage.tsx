@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Copy, Check, Upload } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { settingsApi, authApi, tenantApi, usersApi, productsApi, inventoryApi } from '../services/api';
 import { Card, Button, Input, Textarea, Alert, PageToolbar, EmptyState, Select, formatDate, formatDateTime } from '../components/ui';
 import { useAuth } from '../contexts/AuthContext';
@@ -20,8 +20,26 @@ import {
   resolveDepartmentIdFromModules,
 } from '../utils/roleModules';
 import { getApiErrorMessage } from '../utils/apiError';
+import { RecycleBinPanel } from './RecycleBinPage';
 
-const baseTabs = ['Company Profile', 'Email', 'Workspace', 'Team', 'Catalog', 'Branches & Tax', 'Security'];
+const TRASH_ACCESS_PERMISSIONS = [
+  'users:delete',
+  'customers:delete',
+  'products:delete',
+  'hr:delete',
+  'procurement:delete',
+  'inventory:delete',
+  'settings:read',
+] as const;
+
+const coreSettingsTabs = [
+  'Company Profile',
+  'Email',
+  'Workspace',
+  'Team',
+  'Catalog',
+  'Branches & Tax',
+] as const;
 
 interface CompanyFormData {
   name: string;
@@ -49,7 +67,9 @@ interface InviteFormData {
 export function SettingsPage() {
   const queryClient = useQueryClient();
   const { hasPermission, user, isPlatformOwner, isSuperAdmin, company: authCompany, setCompany } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
   const canAssignSuperAdmin = canAssignCompanySuperAdmin(user?.role?.name);
+  const canAccessTrash = TRASH_ACCESS_PERMISSIONS.some((permission) => hasPermission(permission));
   const [activeTab, setActiveTab] = useState(0);
   const [successMessage, setSuccessMessage] = useState('');
   const [twoFaQr, setTwoFaQr] = useState<string | null>(null);
@@ -66,10 +86,29 @@ export function SettingsPage() {
   const [inviteModules, setInviteModules] = useState<string[]>(['dashboard']);
   const [inviteModuleError, setInviteModuleError] = useState('');
 
-  const tabs = isPlatformOwner
-    ? ['Company Profile', 'Email', 'Workspace', 'Companies', 'Team', 'Catalog', 'Branches & Tax', 'Security']
-    : baseTabs;
+  const tabs = useMemo(() => {
+    const items = isPlatformOwner
+      ? ['Company Profile', 'Email', 'Workspace', 'Companies', ...coreSettingsTabs.slice(3)]
+      : [...coreSettingsTabs];
+    if (canAccessTrash) items.push('Recycle Bin');
+    items.push('Security');
+    return items;
+  }, [isPlatformOwner, canAccessTrash]);
   const activeTabName = tabs[activeTab] ?? tabs[0];
+
+  useEffect(() => {
+    if (searchParams.get('panel') !== 'recycle-bin') return;
+    const idx = tabs.indexOf('Recycle Bin');
+    if (idx >= 0) setActiveTab(idx);
+  }, [searchParams, tabs]);
+
+  const handleSettingsTabChange = (index: number) => {
+    setActiveTab(index);
+    const next = new URLSearchParams(searchParams);
+    if (tabs[index] === 'Recycle Bin') next.set('panel', 'recycle-bin');
+    else next.delete('panel');
+    setSearchParams(next, { replace: true });
+  };
 
   const canUpdate = hasPermission('settings:update');
   const canInvite = hasPermission('users:create');
@@ -403,7 +442,7 @@ export function SettingsPage() {
 
   return (
     <div className="space-y-4">
-      <PageToolbar tabs={tabs} activeTab={activeTab} onTabChange={setActiveTab} />
+      <PageToolbar tabs={tabs} activeTab={activeTab} onTabChange={handleSettingsTabChange} />
 
       {activeTabName === 'Company Profile' && (
         <Card title="Company Profile">
@@ -1113,6 +1152,8 @@ export function SettingsPage() {
           )}
         </Card>
       )}
+
+      {activeTabName === 'Recycle Bin' && canAccessTrash && <RecycleBinPanel />}
 
       {activeTabName === 'Security' && (
         <Card title="Two-Factor Authentication">

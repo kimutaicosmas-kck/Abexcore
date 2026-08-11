@@ -47,7 +47,7 @@ const RESOURCE_MODULE: Record<TrashResource, string> = {
   'raw-materials': 'inventory',
 };
 
-export function RecycleBinPage() {
+export function RecycleBinPanel() {
   const queryClient = useQueryClient();
   const { hasPermission, isSuperAdmin } = useAuth();
   const [page, setPage] = useState(1);
@@ -280,4 +280,9 @@ export function RecycleBinPage() {
       />
     </div>
   );
+}
+
+/** @deprecated Use RecycleBinPanel inside Settings. */
+export function RecycleBinPage() {
+  return <RecycleBinPanel />;
 }
