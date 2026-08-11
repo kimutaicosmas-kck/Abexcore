@@ -12,9 +12,11 @@ import {
 } from '../components/ui';
 import { SalesTargetRow } from '../types';
 import { useAuth } from '../contexts/AuthContext';
+import { canManageSalesTargets } from '../utils/salesTargets';
 
 export function SalesTargetsPanel() {
-  const { isSuperAdmin } = useAuth();
+  const { user, hasPermission } = useAuth();
+  const canManage = canManageSalesTargets(user?.role?.name, hasPermission);
   const queryClient = useQueryClient();
   const now = new Date();
   const [year, setYear] = useState(String(now.getFullYear()));
@@ -27,7 +29,7 @@ export function SalesTargetsPanel() {
       financeApi
         .salesTargets({ year: Number(year), month: Number(month) })
         .then((r) => r.data.data as SalesTargetRow[]),
-    enabled: isSuperAdmin,
+    enabled: canManage,
   });
 
   const saveMutation = useMutation({
@@ -45,9 +47,11 @@ export function SalesTargetsPanel() {
     },
   });
 
-  if (!isSuperAdmin) {
+  if (!canManage) {
     return (
-      <Alert variant="warning">Only Super Admin can assign sales targets.</Alert>
+      <Alert variant="warning">
+        Only company admins, directors, or Sales Managers can assign sales targets.
+      </Alert>
     );
   }
 
