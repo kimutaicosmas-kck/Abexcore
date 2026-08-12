@@ -24,7 +24,7 @@ import type { VendorStatementResult } from './vendorStatement.service';
 
 type InvoiceWithRelations = Awaited<ReturnType<typeof ExportService.getInvoice>>;
 
-const LOGO_EXCEL_SIZE = 64;
+const LOGO_EXCEL_SIZE = 88;
 
 function addExcelCompanyLetterhead(
   workbook: ExcelJS.Workbook,
@@ -59,8 +59,8 @@ function addExcelCompanyLetterhead(
       tl: { col: 0, row: 0 },
       ext: { width: LOGO_EXCEL_SIZE, height: LOGO_EXCEL_SIZE },
     });
-    sheet.getRow(1).height = 48;
-    sheet.getCell('A1').alignment = { vertical: 'middle', indent: 10 };
+    sheet.getRow(1).height = 66;
+    sheet.getCell('A1').alignment = { vertical: 'middle', indent: 12 };
   }
 
   return showPaybill ? 6 : 5;

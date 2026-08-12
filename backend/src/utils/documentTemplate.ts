@@ -40,7 +40,7 @@ async function buildPlatformLogoPng(): Promise<Buffer> {
   for (const candidate of faviconCandidates) {
     if (fs.existsSync(candidate)) {
       return sharp(candidate)
-        .resize(256, 256, { fit: 'contain', background: { r: 255, g: 255, b: 255, alpha: 1 } })
+        .resize(384, 384, { fit: 'contain', background: { r: 255, g: 255, b: 255, alpha: 1 } })
         .png()
         .toBuffer();
     }
@@ -69,7 +69,7 @@ async function resolveCompanyLogoPng(company: {
   if (diskPath && fs.existsSync(diskPath)) {
     try {
       return await sharp(diskPath)
-        .resize(256, 256, { fit: 'contain', background: { r: 255, g: 255, b: 255, alpha: 1 } })
+        .resize(384, 384, { fit: 'contain', background: { r: 255, g: 255, b: 255, alpha: 1 } })
         .png()
         .toBuffer();
     } catch {
@@ -127,6 +127,23 @@ export async function resolveCompanyDocHeader(companyId: string): Promise<Compan
 
 export type DocRefField = { label: string; value: string };
 
+const DOC_LOGO_SIZE = 72;
+const DOC_BADGE_MIN_W = 118;
+const DOC_BADGE_MAX_W = 150;
+
+/** Split long doc-type labels so they fit inside the header badge (e.g. PURCHASE / ORDER). */
+function docTypeBadgeLines(label: string): string[] {
+  const upper = label.toUpperCase().trim();
+  if (!upper.includes(' ')) return [upper];
+  const parts = upper.split(/\s+/).filter(Boolean);
+  if (parts.length === 2) return parts;
+  if (parts.length > 2) {
+    const mid = Math.ceil(parts.length / 2);
+    return [parts.slice(0, mid).join(' '), parts.slice(mid).join(' ')];
+  }
+  return [upper];
+}
+
 /**
  * Classic stationery letterhead:
  * logo + company name, contact strip, optional Lipa na M-Pesa block, blue doc-type badge.
@@ -139,7 +156,7 @@ export function drawAmazonStyleHeader(
   options?: { showPaybill?: boolean }
 ): number {
   const top = 40;
-  const logoSize = 48;
+  const logoSize = DOC_LOGO_SIZE;
 
   if (company.logoPng) {
     try {
@@ -153,14 +170,14 @@ export function drawAmazonStyleHeader(
     }
   }
 
-  const nameX = company.logoPng ? PAGE_LEFT + logoSize + 10 : PAGE_LEFT;
-  const nameWidth = 320;
+  const nameX = company.logoPng ? PAGE_LEFT + logoSize + 12 : PAGE_LEFT;
+  const nameWidth = PAGE_RIGHT - nameX - DOC_BADGE_MAX_W - 8;
 
   doc
     .font('Helvetica-Bold')
     .fontSize(16)
     .fillColor(DOC_BLUE)
-    .text(company.name.toUpperCase(), nameX, top + 4, { width: nameWidth, align: 'left' });
+    .text(company.name.toUpperCase(), nameX, top + 6, { width: Math.max(nameWidth, 180), align: 'left' });
 
   let y = doc.y + 2;
   if (company.contactLine) {
@@ -168,21 +185,32 @@ export function drawAmazonStyleHeader(
       .font('Helvetica')
       .fontSize(8)
       .fillColor(DOC_MUTED)
-      .text(company.contactLine, nameX, y, { width: nameWidth, align: 'left' });
+      .text(company.contactLine, nameX, y, { width: Math.max(nameWidth, 180), align: 'left' });
     y = doc.y;
   }
 
-  // Document type badge (top-right blue box)
-  const badgeW = 110;
-  const badgeH = 28;
+  // Document type badge (top-right blue box) — supports two-line labels.
+  const badgeLines = docTypeBadgeLines(docTypeBadge);
+  const badgeFontSize = badgeLines.length > 1 ? 10 : 12;
+  const badgeLineHeight = badgeLines.length > 1 ? 12 : 14;
+  const badgePadY = 7;
+  const badgeH = badgePadY * 2 + badgeLines.length * badgeLineHeight;
+  const longestLine = badgeLines.reduce((max, line) => Math.max(max, line.length), 0);
+  const badgeW = Math.min(DOC_BADGE_MAX_W, Math.max(DOC_BADGE_MIN_W, longestLine * 7.2));
   const badgeX = PAGE_RIGHT - badgeW;
-  const badgeY = top + 6;
+  const badgeY = top + 4;
   doc.rect(badgeX, badgeY, badgeW, badgeH).fill(DOC_BLUE);
-  doc
-    .font('Helvetica-Bold')
-    .fontSize(12)
-    .fillColor('#ffffff')
-    .text(docTypeBadge.toUpperCase(), badgeX, badgeY + 8, { width: badgeW, align: 'center' });
+  badgeLines.forEach((line, index) => {
+    doc
+      .font('Helvetica-Bold')
+      .fontSize(badgeFontSize)
+      .fillColor('#ffffff')
+      .text(line, badgeX, badgeY + badgePadY + index * badgeLineHeight, {
+        width: badgeW,
+        align: 'center',
+        lineBreak: false,
+      });
+  });
 
   // Payment / M-Pesa block — customer-facing docs only (invoices, delivery notes, customer statements).
   y = Math.max(y, top + logoSize) + 10;
