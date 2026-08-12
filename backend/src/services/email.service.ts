@@ -101,17 +101,28 @@ async function companySmtp(companyId: string): Promise<SmtpRuntime | null> {
   };
 }
 
+async function companyEmailConfigRow(companyId: string) {
+  return prisma.emailConfig.findFirst({ where: { companyId } });
+}
+
 async function resolveSmtp(companyId?: string | null): Promise<SmtpRuntime | null> {
   const cid = companyId || getTenantId();
   if (cid) {
-    const company = await companySmtp(cid);
-    if (company) return company;
+    const row = await companyEmailConfigRow(cid);
+    if (row?.isActive) {
+      const company = await companySmtp(cid);
+      if (company) return company;
+      logger.warn(
+        `Company SMTP is active but could not be loaded for ${cid} — not using server env fallback`
+      );
+      return null;
+    }
   }
   return envSmtp();
 }
 
 function cacheKey(smtp: SmtpRuntime, companyId?: string | null) {
-  return `${smtp.source}:${companyId || 'env'}:${smtp.host}:${smtp.port}:${smtp.user}`;
+  return `${smtp.source}:${companyId || 'env'}:${smtp.host}:${smtp.port}:${smtp.user}:${smtp.from}`;
 }
 
 export class EmailService {
@@ -125,24 +136,16 @@ export class EmailService {
   }
 
   static async getCompanyEmailStatus(companyId: string) {
-    const row = await prisma.emailConfig.findFirst({
-      where: { companyId },
-      select: {
-        host: true,
-        port: true,
-        secure: true,
-        username: true,
-        fromEmail: true,
-        fromName: true,
-        isActive: true,
-        updatedAt: true,
-      },
-    });
+    const row = await companyEmailConfigRow(companyId);
     const companyReady = !!(row?.isActive && row.username && row.host);
     const envReady = this.isConfigured();
+    const resolved = await resolveSmtp(companyId);
     return {
       configured: companyReady || envReady,
       source: companyReady ? ('company' as const) : envReady ? ('env' as const) : ('none' as const),
+      effectiveSource: resolved?.source ?? ('none' as const),
+      effectiveFrom: resolved?.from ?? null,
+      effectiveUsername: resolved?.user ?? null,
       hasPassword: !!row,
       config: row
         ? {
@@ -157,6 +160,8 @@ export class EmailService {
           }
         : null,
       envFallback: envReady,
+      usingEnvDespiteCompanyConfig:
+        !!row?.isActive && companyReady && resolved?.source === 'env',
     };
   }
 
@@ -249,21 +254,31 @@ export class EmailService {
     if (!existing && !password) {
       throw new Error('SMTP password is required');
     }
+    if (
+      existing &&
+      data.username.trim().toLowerCase() !== existing.username.trim().toLowerCase() &&
+      !password
+    ) {
+      throw new Error('Enter the App Password again when changing SMTP username.');
+    }
+
+    const fromEmail = data.fromEmail.trim();
+    const username = data.username.trim();
 
     const encryptedPassword = password ? encryptSecret(password) : existing!.password;
     const payload = {
       host: data.host.trim(),
       port: data.port,
       secure: data.secure ?? data.port === 465,
-      username: data.username.trim(),
+      username,
       password: encryptedPassword,
-      fromEmail: data.fromEmail.trim(),
+      fromEmail,
       fromName: data.fromName.trim(),
       isActive: data.isActive ?? true,
     };
 
     for (const key of [...transporterCache.keys()]) {
-      if (key.includes(companyId)) transporterCache.delete(key);
+      transporterCache.delete(key);
     }
 
     if (existing) {
@@ -273,6 +288,10 @@ export class EmailService {
   }
 
   static async sendTestEmail(companyId: string, to: string) {
+    const smtp = await resolveSmtp(companyId);
+    if (!smtp) {
+      throw new Error('SMTP is not configured. Save email settings first.');
+    }
     const html = `
       <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
         <div style="background:#2563eb;color:white;padding:20px;border-radius:8px 8px 0 0">
@@ -284,6 +303,7 @@ export class EmailService {
             SMTP is configured correctly. Notification emails (low stock, delivery, leave, invites, etc.)
             will be sent to users when events occur.
           </p>
+          <p style="color:#64748b;font-size:13px">Sent from: <strong>${smtp.from}</strong> (${smtp.source === 'company' ? 'company settings' : 'server .env'})</p>
           <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0"/>
           <p style="color:#9ca3af;font-size:12px">Designed by AbexCore Technologies</p>
         </div>

@@ -157,8 +157,12 @@ export function SettingsPage() {
   type EmailConfigStatus = {
     configured: boolean;
     source: 'company' | 'env' | 'none';
+    effectiveSource?: 'company' | 'env' | 'none';
+    effectiveFrom?: string | null;
+    effectiveUsername?: string | null;
     hasPassword: boolean;
     envFallback: boolean;
+    usingEnvDespiteCompanyConfig?: boolean;
     config: {
       host: string;
       port: number;
@@ -1017,12 +1021,30 @@ export function SettingsPage() {
                   Status:{' '}
                   {emailStatus?.configured ? (
                     <span className="text-emerald-700">
-                      Ready ({emailStatus.source === 'company' ? 'company SMTP' : 'server env fallback'})
+                      Ready ({emailStatus.effectiveSource === 'company' ? 'company SMTP' : 'server .env on server'})
                     </span>
                   ) : (
                     <span className="text-amber-700">Not configured — notifications stay in-app only</span>
                   )}
                 </p>
+                {emailStatus?.effectiveFrom && (
+                  <p className="text-xs text-slate-600 mt-1">
+                    Currently sending as: <strong>{emailStatus.effectiveFrom}</strong>
+                  </p>
+                )}
+                {emailStatus?.usingEnvDespiteCompanyConfig && (
+                  <p className="text-xs text-amber-800 mt-1">
+                    Company SMTP is saved but not in use. Re-save with the App Password, or update{' '}
+                    <code className="text-[11px]">SMTP_*</code> in the server <code className="text-[11px]">.env</code>.
+                  </p>
+                )}
+                {emailStatus?.envFallback && emailStatus.effectiveSource === 'env' && (
+                  <p className="text-xs text-amber-800 mt-1">
+                    Using server <code className="text-[11px]">.env</code> SMTP — change{' '}
+                    <code className="text-[11px]">SMTP_USER</code> /{' '}
+                    <code className="text-[11px]">SMTP_FROM</code> on Contabo, or save company SMTP below.
+                  </p>
+                )}
                 <p className="text-xs text-slate-500 mt-1">
                   When configured, low stock, delivery, leave, invites, and other alerts are emailed to users
                   in addition to the bell notifications.
@@ -1069,7 +1091,16 @@ export function SettingsPage() {
               <Input
                 label="SMTP username"
                 value={emailUsername}
-                onChange={(e) => setEmailUsername(e.target.value)}
+                onChange={(e) => {
+                  const next = e.target.value;
+                  setEmailUsername(next);
+                  if (
+                    !emailFromEmail ||
+                    emailFromEmail.toLowerCase() === emailUsername.toLowerCase()
+                  ) {
+                    setEmailFromEmail(next);
+                  }
+                }}
                 placeholder="you@company.com"
                 disabled={!canUpdate}
                 required
@@ -1119,6 +1150,10 @@ export function SettingsPage() {
                 Send email notifications (active)
               </label>
 
+              <p className="text-xs text-slate-500">
+                For Gmail, <strong>SMTP username</strong> and <strong>From email</strong> should match the same
+                account. Change the username only together with a new App Password.
+              </p>
               <p className="text-xs text-slate-500">
                 Gmail: enable 2FA, then create an App Password at Google Account → Security → App passwords.
                 Use port <strong>587</strong> (not SSL). Contabo/VPS must allow outbound SMTP.
