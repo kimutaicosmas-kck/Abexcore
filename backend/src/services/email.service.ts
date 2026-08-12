@@ -317,4 +317,46 @@ export class EmailService {
       </div>`;
     return this.send(to, `[AbexCore ERP] ${title}`, html, undefined, cid);
   }
+
+  static async sendInviteEmail(input: {
+    to: string;
+    firstName: string;
+    companyName: string;
+    companySlug: string;
+    temporaryPassword: string;
+    companyId: string;
+  }): Promise<boolean> {
+    const baseUrl = (config.frontendUrl || '').replace(/\/$/, '');
+    const loginUrl = baseUrl ? `${baseUrl}/login` : '/login';
+    const html = `
+      <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
+        <div style="background:#2563eb;color:white;padding:20px;border-radius:8px 8px 0 0">
+          <h2 style="margin:0">${input.companyName}</h2>
+          <p style="margin:8px 0 0;opacity:0.9;font-size:14px">AbexCore ERP workspace invite</p>
+        </div>
+        <div style="border:1px solid #e5e7eb;padding:24px;border-radius:0 0 8px 8px">
+          <p style="color:#374151">Hi ${input.firstName},</p>
+          <p style="color:#374151">
+            Your account for <strong>${input.companyName}</strong> is ready. Use the details below to sign in.
+            You will be asked to change your password on first login.
+          </p>
+          <table style="width:100%;border-collapse:collapse;margin:20px 0;font-size:14px">
+            <tr><td style="padding:8px 0;color:#64748b;width:140px">Sign-in URL</td><td style="padding:8px 0"><a href="${loginUrl}" style="color:#2563eb">${loginUrl}</a></td></tr>
+            <tr><td style="padding:8px 0;color:#64748b">Company code</td><td style="padding:8px 0;font-weight:600">${input.companySlug}</td></tr>
+            <tr><td style="padding:8px 0;color:#64748b">Email</td><td style="padding:8px 0;font-weight:600">${input.to}</td></tr>
+            <tr><td style="padding:8px 0;color:#64748b">Temporary password</td><td style="padding:8px 0;font-family:monospace;font-weight:600">${input.temporaryPassword}</td></tr>
+          </table>
+          <p style="color:#64748b;font-size:13px">If you did not expect this invite, contact your company administrator.</p>
+          <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0"/>
+          <p style="color:#9ca3af;font-size:12px">Designed by AbexCore Technologies</p>
+        </div>
+      </div>`;
+    return this.send(
+      input.to,
+      `[AbexCore ERP] Welcome to ${input.companyName}`,
+      html,
+      undefined,
+      input.companyId
+    );
+  }
 }

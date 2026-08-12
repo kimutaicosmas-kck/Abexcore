@@ -299,7 +299,8 @@ export function SettingsPage() {
       setInviteModules(['dashboard', 'sales']);
       setInviteModuleError('');
       setSuccessMessage(res.data.message || 'User invited successfully.');
-      setTimeout(() => setSuccessMessage(''), 5000);
+      setEmailError(res.data.emailSent === false ? 'Invite saved, but email was not delivered. Configure Settings → Email (SMTP) or share login details manually.' : '');
+      setTimeout(() => setSuccessMessage(''), 8000);
     },
   });
 
@@ -862,6 +863,9 @@ export function SettingsPage() {
                   error={inviteErrors.password?.message}
                 />
                 <p className="text-xs text-slate-500">The user must change this password on first login.</p>
+                <p className="text-xs text-slate-500">
+                  A welcome email with sign-in details is sent when SMTP is configured under Settings → Email.
+                </p>
                 <Button type="submit" loading={inviteMutation.isPending}>Send invite</Button>
               </form>
             </Card>

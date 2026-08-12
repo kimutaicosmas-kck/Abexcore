@@ -212,11 +212,24 @@ router.post(
       '/login'
     );
 
+    const { EmailService } = await import('../services/email.service');
+    const emailSent = await EmailService.sendInviteEmail({
+      to: email,
+      firstName: data.firstName,
+      companyName: company?.name || 'your workspace',
+      companySlug: company?.slug || '',
+      temporaryPassword: password,
+      companyId,
+    });
+
     const { passwordHash: _, twoFactorSecret, ...safeUser } = user;
     res.status(201).json({
       success: true,
       data: safeUser,
-      message: `User invited. They can sign in with company code "${company?.slug}".`,
+      emailSent,
+      message: emailSent
+        ? `User invited and welcome email sent to ${email}.`
+        : `User invited, but email was not sent. Configure SMTP under Settings → Email, then share the company code "${company?.slug}" and temporary password manually.`,
     });
   })
 );
