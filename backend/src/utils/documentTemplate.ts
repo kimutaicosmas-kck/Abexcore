@@ -135,7 +135,8 @@ export type DocRefField = { label: string; value: string };
 export function drawAmazonStyleHeader(
   doc: PDFKit.PDFDocument,
   company: CompanyDocHeader,
-  docTypeBadge: string
+  docTypeBadge: string,
+  options?: { showPaybill?: boolean }
 ): number {
   const top = 40;
   const logoSize = 48;
@@ -183,9 +184,10 @@ export function drawAmazonStyleHeader(
     .fillColor('#ffffff')
     .text(docTypeBadge.toUpperCase(), badgeX, badgeY + 8, { width: badgeW, align: 'center' });
 
-  // Payment / M-Pesa block (left under logo)
+  // Payment / M-Pesa block — customer-facing docs only (invoices, delivery notes, customer statements).
   y = Math.max(y, top + logoSize) + 10;
-  if (company.paybillNumber) {
+  const showPaybill = options?.showPaybill === true && !!company.paybillNumber;
+  if (showPaybill) {
     doc.font('Helvetica-Bold').fontSize(8).fillColor(DOC_BLUE).text('LIPA NA MPESA', PAGE_LEFT, y);
     y = doc.y + 1;
     doc.font('Helvetica').fontSize(8).fillColor(DOC_BLUE);

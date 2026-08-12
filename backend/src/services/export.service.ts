@@ -31,7 +31,8 @@ function addExcelCompanyLetterhead(
   sheet: ExcelJS.Worksheet,
   company: CompanyDocHeader,
   title: string,
-  mergeToCol = 'G'
+  mergeToCol = 'G',
+  options?: { showPaybill?: boolean }
 ): number {
   workbook.creator = company.name;
   sheet.mergeCells(`A1:${mergeToCol}1`);
@@ -39,7 +40,8 @@ function addExcelCompanyLetterhead(
   sheet.getCell('A1').font = { bold: true, size: 14, color: { argb: 'FF1E6BB8' } };
   sheet.getCell('A2').value = company.addressLine || '';
   sheet.getCell('A3').value = company.contactLine || '';
-  if (company.paybillNumber) {
+  const showPaybill = options?.showPaybill === true && !!company.paybillNumber;
+  if (showPaybill) {
     sheet.getCell('A4').value = `Lipa na M-Pesa Paybill: ${company.paybillNumber}${
       company.accountNumber ? ` · Acc: ${company.accountNumber}` : ''
     }`;
@@ -61,7 +63,7 @@ function addExcelCompanyLetterhead(
     sheet.getCell('A1').alignment = { vertical: 'middle', indent: 10 };
   }
 
-  return company.paybillNumber ? 6 : 5;
+  return showPaybill ? 6 : 5;
 }
 
 export class ExportService {
@@ -97,7 +99,9 @@ export class ExportService {
         .filter(Boolean)
         .join(', ');
 
-      let y = drawAmazonStyleHeader(doc, company, 'INVOICE');
+      let y = drawAmazonStyleHeader(doc, company, 'INVOICE', {
+        showPaybill: invoice.type !== 'PURCHASE',
+      });
       y = drawPartyAndRefs(doc, y, party?.name || 'N/A', partyAddress, [
         { label: 'Date', value: invoice.invoiceDate.toLocaleDateString('en-KE') },
         { label: 'Invoice No.', value: invoice.invoiceNumber },
@@ -218,7 +222,7 @@ export class ExportService {
         .filter(Boolean)
         .join(', ');
 
-      let y = drawAmazonStyleHeader(doc, company, 'DELIVERY');
+      let y = drawAmazonStyleHeader(doc, company, 'DELIVERY', { showPaybill: true });
       y = drawPartyAndRefs(doc, y, customer?.name || 'N/A', partyAddress, [
         { label: 'Date', value: delivery.createdAt.toLocaleDateString('en-KE') },
         { label: 'Delivery No.', value: delivery.deliveryNo },
@@ -331,7 +335,7 @@ export class ExportService {
         .filter(Boolean)
         .join(', ');
 
-      let y = drawAmazonStyleHeader(doc, company, 'PURCHASE ORDER');
+      let y = drawAmazonStyleHeader(doc, company, 'PURCHASE ORDER', { showPaybill: false });
       y = drawPartyAndRefs(doc, y, supplier?.name || 'N/A', partyAddress, [
         { label: 'Date', value: po.orderDate.toLocaleDateString('en-KE') },
         { label: 'PO No.', value: po.poNumber },
@@ -404,7 +408,8 @@ export class ExportService {
       sheet,
       company,
       `${company.name} — Tax Invoice`,
-      'E'
+      'E',
+      { showPaybill: invoice.type !== 'PURCHASE' }
     );
 
     sheet.getCell(`A${startRow}`).value = 'Invoice #';
@@ -815,7 +820,7 @@ export class ExportService {
 
   static async generateCustomerStatementPDF(
     statement: CustomerStatementResult,
-    opts?: { documentTitle?: string; partyLabel?: string; footerLabel?: string }
+    opts?: { documentTitle?: string; partyLabel?: string; footerLabel?: string; showPaybill?: boolean }
   ): Promise<Buffer> {
     const companyId = requireTenantId();
     const company = await resolveCompanyDocHeader(companyId);
@@ -823,6 +828,7 @@ export class ExportService {
     const documentTitle = opts?.documentTitle || 'CUSTOMER STATEMENT';
     const partyLabel = opts?.partyLabel || 'CUSTOMER';
     const footerLabel = opts?.footerLabel || 'Customer statement';
+    const showPaybill = opts?.showPaybill !== false;
     const fmt = (n: number) =>
       Math.round(n).toLocaleString('en-KE', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
     const fmtKes = (n: number) => `KES ${fmt(n)}`;
@@ -876,7 +882,7 @@ export class ExportService {
         : documentTitle.includes('OUTSTANDING')
           ? 'OUTSTANDING'
           : 'STATEMENT';
-      let y = drawAmazonStyleHeader(doc, company, badgeLabel);
+      let y = drawAmazonStyleHeader(doc, company, badgeLabel, { showPaybill });
       const partyAddress = [
         statement.customer.code ? `Code: ${statement.customer.code}` : null,
         statement.customer.address,
@@ -1065,7 +1071,7 @@ export class ExportService {
 
   static async generateCustomerStatementExcel(
     statement: CustomerStatementResult,
-    opts?: { documentTitle?: string; partyLabel?: string; sheetName?: string }
+    opts?: { documentTitle?: string; partyLabel?: string; sheetName?: string; showPaybill?: boolean }
   ): Promise<Buffer> {
     const companyId = requireTenantId();
     const company = await resolveCompanyDocHeader(companyId);
@@ -1073,6 +1079,7 @@ export class ExportService {
     const documentTitle = opts?.documentTitle || 'CUSTOMER STATEMENT';
     const partyLabel = opts?.partyLabel || 'Customer';
     const sheetName = opts?.sheetName || 'Customer Statement';
+    const showPaybill = opts?.showPaybill !== false;
     const aging = statement.aging || {
       current: 0,
       days1_30: 0,
@@ -1101,7 +1108,8 @@ export class ExportService {
       sheet,
       company,
       `${company.name} — ${documentTitle}`,
-      'G'
+      'G',
+      { showPaybill }
     );
 
     sheet.getCell(`A${startRow}`).value = `${partyLabel}: ${statement.customer.name}`;
@@ -1210,6 +1218,7 @@ export class ExportService {
       documentTitle: 'VENDOR STATEMENT',
       partyLabel: 'VENDOR',
       footerLabel: 'Vendor statement',
+      showPaybill: false,
     });
   }
 
@@ -1218,6 +1227,7 @@ export class ExportService {
       documentTitle: 'VENDOR STATEMENT',
       partyLabel: 'Vendor',
       sheetName: 'Vendor Statement',
+      showPaybill: false,
     });
   }
 

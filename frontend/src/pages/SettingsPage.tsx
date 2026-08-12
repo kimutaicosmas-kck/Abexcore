@@ -505,7 +505,7 @@ export function SettingsPage() {
               <div className="rounded-xl border border-sky-100 bg-sky-50/50 p-4 space-y-3">
                 <p className="text-sm font-semibold text-slate-800">Document payment block (Lipa na M-Pesa)</p>
                 <p className="text-xs text-slate-500">
-                  Printed on delivery notes, invoices, statements, and purchase orders when paybill is set.
+                  Printed on sales invoices, delivery notes, and customer statements when paybill is set.
                 </p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <Input
