@@ -17,11 +17,14 @@ function isStandaloneMode() {
 /** Phones only — never suggest install on laptop/desktop (or iPad). */
 function isPhoneDevice(): boolean {
   const ua = navigator.userAgent || '';
-  if (/iPhone|iPod/i.test(ua)) return true;
-  if (/Android/i.test(ua) && /Mobile/i.test(ua)) return true;
-  if (/Windows Phone/i.test(ua)) return true;
-  return false;
+  const mobileUa = /iPhone|iPod|Android.*Mobile|Windows Phone/i.test(ua);
+  if (!mobileUa) return false;
+  // Desktop Chrome DevTools mobile emulation can fire install prompts — skip on fine pointer + wide screens.
+  if (window.matchMedia('(pointer: fine)').matches && window.innerWidth > 768) return false;
+  return true;
 }
+
+const PWA_INSTALL_DISMISSED_KEY = 'abexcore-pwa-install-dismissed';
 
 function detectPlatform(): 'ios' | 'android' | 'other' {
   const ua = navigator.userAgent;
@@ -55,8 +58,9 @@ export function PwaShell() {
     const onOffline = () => setIsOnline(false);
     const onInstallPrompt = (event: Event) => {
       // Desktop Chrome also fires this — ignore unless on a phone.
-      // Only preventDefault when we will show our own Install button (avoids console noise).
+      // Do not preventDefault if the user dismissed our banner this session (avoids Chrome console noise).
       if (!isPhoneDevice() || isStandaloneMode()) return;
+      if (sessionStorage.getItem(PWA_INSTALL_DISMISSED_KEY) === '1') return;
       event.preventDefault();
       setInstallPrompt(event as BeforeInstallPromptEvent);
     };
@@ -72,14 +76,23 @@ export function PwaShell() {
     };
   }, []);
 
+  const dismissInstall = () => {
+    sessionStorage.setItem(PWA_INSTALL_DISMISSED_KEY, '1');
+    setInstallDismissed(true);
+    setInstallPrompt(null);
+  };
+
   const handleInstall = async () => {
     if (!installPrompt) return;
     await installPrompt.prompt();
     const choice = await installPrompt.userChoice;
-    if (choice.outcome === 'accepted') {
-      setInstallPrompt(null);
-    }
+    setInstallPrompt(null);
     setInstallDismissed(true);
+    if (choice.outcome === 'accepted') {
+      sessionStorage.removeItem(PWA_INSTALL_DISMISSED_KEY);
+    } else {
+      sessionStorage.setItem(PWA_INSTALL_DISMISSED_KEY, '1');
+    }
   };
 
   const manualInstallText =
@@ -120,7 +133,7 @@ export function PwaShell() {
               <span>Install AbexCore ERP on this device for quick access from your home screen.</span>
             </div>
             <div className="flex items-center gap-2 shrink-0">
-              <Button variant="secondary" size="sm" onClick={() => setInstallDismissed(true)}>
+              <Button variant="secondary" size="sm" onClick={dismissInstall}>
                 Not now
               </Button>
               <Button size="sm" onClick={handleInstall}>
@@ -151,7 +164,7 @@ export function PwaShell() {
               </div>
             </div>
             <div className="mt-3 flex justify-end">
-              <Button variant="secondary" size="sm" onClick={() => setInstallDismissed(true)}>
+              <Button variant="secondary" size="sm" onClick={dismissInstall}>
                 Got it
               </Button>
             </div>

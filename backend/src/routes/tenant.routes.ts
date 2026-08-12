@@ -164,7 +164,14 @@ router.post(
     const existing = await prisma.user.findFirst({
       where: { companyId, email },
     });
-    if (existing) throw new AppError('A user with this email already exists in your company', 409);
+    if (existing && !existing.deletedAt) {
+      throw new AppError(
+        existing.status === 'INACTIVE'
+          ? 'This email belongs to an inactive user. Reactivate them from Users, or restore from Recycle Bin if they were deleted.'
+          : 'A user with this email already exists in your company. Use a different email or update the existing user under Users.',
+        409
+      );
+    }
 
     const role = await prisma.role.findUnique({ where: { id: data.roleId }, select: { name: true } });
     if (!role) throw new AppError('Role not found', 400);
@@ -191,18 +198,40 @@ router.post(
     });
 
     const passwordHash = await AuthService.hashPassword(password);
-    const user = await prisma.user.create({
-      data: {
-        ...data,
-        companyId,
-        email,
-        passwordHash,
-        passwordChangedAt: new Date(),
-        mustChangePassword: true,
-        allowedModules: allowedModules ?? modulesForRoleName(role.name),
-      },
-      include: { role: true, department: true, branch: true },
-    });
+    const user = existing?.deletedAt
+      ? await prisma.user.update({
+          where: { id: existing.id },
+          data: {
+            firstName: data.firstName,
+            lastName: data.lastName,
+            phone: data.phone,
+            roleId: data.roleId,
+            departmentId: data.departmentId,
+            branchId: data.branchId,
+            email,
+            passwordHash,
+            passwordChangedAt: new Date(),
+            mustChangePassword: true,
+            status: 'ACTIVE',
+            deletedAt: null,
+            allowedModules: allowedModules ?? modulesForRoleName(role.name),
+          },
+          include: { role: true, department: true, branch: true },
+        })
+      : await prisma.user.create({
+          data: {
+            ...data,
+            companyId,
+            email,
+            passwordHash,
+            passwordChangedAt: new Date(),
+            mustChangePassword: true,
+            allowedModules: allowedModules ?? modulesForRoleName(role.name),
+          },
+          include: { role: true, department: true, branch: true },
+        });
+
+    const restored = !!existing?.deletedAt;
 
     await NotificationService.notifyUser(
       user.id,
@@ -228,8 +257,12 @@ router.post(
       data: safeUser,
       emailSent,
       message: emailSent
-        ? `User invited and welcome email sent to ${email}.`
-        : `User invited, but email was not sent. Configure SMTP under Settings → Email, then share the company code "${company?.slug}" and temporary password manually.`,
+        ? restored
+          ? `User restored from Recycle Bin and welcome email sent to ${email}.`
+          : `User invited and welcome email sent to ${email}.`
+        : restored
+          ? `User restored, but email was not sent. Configure SMTP under Settings → Email, then share login details manually.`
+          : `User invited, but email was not sent. Configure SMTP under Settings → Email, then share the company code "${company?.slug}" and temporary password manually.`,
     });
   })
 );
