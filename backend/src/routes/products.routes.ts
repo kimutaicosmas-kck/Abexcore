@@ -222,9 +222,36 @@ router.get(
       warehouseId = null;
     }
 
+    if (!warehouseId) {
+      res.json({
+        success: true,
+        data: [],
+        pagination: { page, limit, total: 0, totalPages: 0 },
+      });
+      return;
+    }
+
+    const stockLevels = await prisma.stockLevel.findMany({
+      where: { warehouseId, productId: { not: null } },
+      select: { productId: true, quantity: true, reservedQty: true },
+    });
+    const inStockProductIds = stockLevels
+      .filter((level) => level.productId && Number(level.quantity) - Number(level.reservedQty) > 0)
+      .map((level) => level.productId as string);
+
+    if (inStockProductIds.length === 0) {
+      res.json({
+        success: true,
+        data: [],
+        pagination: { page, limit, total: 0, totalPages: 0 },
+      });
+      return;
+    }
+
     const where = {
       isActive: true,
       deletedAt: null,
+      id: { in: inStockProductIds },
       ...(category ? { categoryId: category } : {}),
       ...(search
         ? {

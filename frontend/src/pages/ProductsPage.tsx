@@ -253,7 +253,7 @@ export function ProductsPage() {
 
   const subtitle =
     activeTabName === 'Available'
-      ? 'Finished goods you can sell — live available quantity after reservations.'
+      ? 'Products currently in stock — available quantity after reservations.'
       : 'Manage the full product catalog, prices, and status.';
 
   return (

@@ -40,7 +40,6 @@ export function AvailableProductsPanel() {
   const [search, setSearch] = useState('');
   const [searchInput, setSearchInput] = useState('');
   const [category, setCategory] = useState('');
-  const [stockFilter, setStockFilter] = useState('');
 
   const { data: categoriesData } = useQuery({
     queryKey: ['product-categories'],
@@ -60,11 +59,7 @@ export function AvailableProductsPanel() {
         .then((r) => r.data),
   });
 
-  const rows = ((data?.data as AvailableProduct[]) || []).filter((p) => {
-    if (stockFilter === 'in') return p.inStock;
-    if (stockFilter === 'out') return !p.inStock;
-    return true;
-  });
+  const rows = (data?.data as AvailableProduct[]) || [];
 
   const columns = [
     {
@@ -94,7 +89,7 @@ export function AvailableProductsPanel() {
         const qty = Number(val);
         return (
           <div>
-            <Badge variant={qty > 0 ? 'success' : 'danger'}>{qty} available</Badge>
+            <Badge variant="success">{qty} available</Badge>
             <p className="mt-1 text-xs text-slate-500">
               On hand {p.onHand} · Reserved {p.reservedQty}
             </p>
@@ -147,16 +142,6 @@ export function AvailableProductsPanel() {
                 ...(categoriesData || []).map((c) => ({ value: c.id, label: c.name })),
               ]}
             />
-            <Select
-              label="Stock"
-              value={stockFilter}
-              onChange={(e) => setStockFilter(e.target.value)}
-              options={[
-                { value: '', label: 'All' },
-                { value: 'in', label: 'In stock' },
-                { value: 'out', label: 'Out of stock' },
-              ]}
-            />
             <Button
               size="sm"
               onClick={() => {
@@ -174,8 +159,8 @@ export function AvailableProductsPanel() {
       <DataPanel>
         {rows.length === 0 && !isLoading ? (
           <EmptyState
-            title="No products found"
-            description="Try another search, or check with warehouse if stock looks empty."
+            title="No products in stock"
+            description="Only products with available finished-goods quantity are shown here. Check the catalog or warehouse when stock is replenished."
           />
         ) : (
           <Table columns={columns} data={rows} loading={isLoading} embedded />
