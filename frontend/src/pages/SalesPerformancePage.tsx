@@ -199,7 +199,6 @@ export function SalesPerformancePanel() {
               columns={columns}
               data={(data?.performers || []) as unknown as Record<string, unknown>[]}
               loading={isLoading}
-              responsive
               embedded
             />
           </>

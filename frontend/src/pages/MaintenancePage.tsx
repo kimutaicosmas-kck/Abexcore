@@ -166,7 +166,7 @@ export function MaintenancePage() {
 
       {activeTab === 0 && (
         <DataPanel>
-          <div className="p-4 pb-0">
+          <div className="panel-filters">
             <Input
               placeholder="Search machines…"
               className="sm:max-w-md"
@@ -212,7 +212,7 @@ export function MaintenancePage() {
 
       {activeTab === 1 && (
         <DataPanel>
-          <div className="p-4 pb-0 flex flex-col sm:flex-row gap-3">
+          <div className="panel-filters">
             <Input
               placeholder="Search requests…"
               className="sm:max-w-md"

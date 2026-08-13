@@ -707,7 +707,7 @@ export function PageToolbar({ tabs, activeTab = 0, onTabChange, actions, classNa
       {tabs && onTabChange && (
         <TabGroup tabs={tabs} activeIndex={activeTab} onChange={onTabChange} className="!mb-0 w-full md:w-auto" />
       )}
-      {actions && <div className="flex flex-wrap items-center gap-2 shrink-0">{actions}</div>}
+      {actions && <div className="page-toolbar-filters shrink-0">{actions}</div>}
     </div>
   );
 }

@@ -633,7 +633,7 @@ export function ProcurementPage() {
 
       {activeTab === 0 && (
         <DataPanel>
-          <div className="p-4 pb-0 sm:max-w-md">
+          <div className="panel-filters sm:max-w-md">
             <Input placeholder="Search purchase orders…" value={poSearch} onChange={(e) => { setPoSearch(e.target.value); setPoPage(1); }} />
           </div>
           {(purchaseOrders?.data?.length || 0) === 0 && !poLoading ? (
@@ -668,7 +668,7 @@ export function ProcurementPage() {
 
       {activeTab === 1 && (
         <DataPanel>
-          <div className="p-4 pb-0 flex flex-wrap gap-3">
+          <div className="panel-filters">
             <Input placeholder="Search requisitions…" className="sm:max-w-md" value={reqSearch} onChange={(e) => { setReqSearch(e.target.value); setReqPage(1); }} />
             <Select options={STATUS_FILTER} value={reqStatus} onChange={(e) => { setReqStatus(e.target.value); setReqPage(1); }} className="w-40" />
           </div>
@@ -698,7 +698,7 @@ export function ProcurementPage() {
 
       {activeTab === 2 && (
         <DataPanel>
-          <div className="p-4 pb-0 sm:max-w-md">
+          <div className="panel-filters sm:max-w-md">
             <Input placeholder="Search RFQs…" value={rfqSearch} onChange={(e) => { setRfqSearch(e.target.value); setRfqPage(1); }} />
           </div>
           {(rfqs?.data?.length || 0) === 0 && !rfqLoading ? (
@@ -716,7 +716,7 @@ export function ProcurementPage() {
 
       {activeTab === 3 && (
         <DataPanel>
-          <div className="p-4 pb-0 sm:max-w-md">
+          <div className="panel-filters sm:max-w-md">
             <Input placeholder="Search goods receipts…" value={grSearch} onChange={(e) => { setGrSearch(e.target.value); setGrPage(1); }} />
           </div>
           {(goodsReceipts?.data?.length || 0) === 0 && !grLoading ? (
@@ -755,7 +755,7 @@ export function ProcurementPage() {
 
       {activeTab === 4 && (
         <DataPanel>
-          <div className="p-4 pb-0 sm:max-w-md">
+          <div className="panel-filters sm:max-w-md">
             <Input placeholder="Search suppliers…" value={supSearch} onChange={(e) => { setSupSearch(e.target.value); setSupPage(1); }} />
           </div>
           {(suppliers?.data?.length || 0) === 0 && !supLoading ? (
@@ -955,7 +955,7 @@ export function ProcurementPage() {
         size="xl"
       >
         <div className="space-y-4">
-          <div className="flex flex-wrap items-end gap-3">
+          <div className="panel-filters !px-0 pt-0">
             <Select
               label="Statement type"
               options={STATEMENT_MODE_OPTIONS}

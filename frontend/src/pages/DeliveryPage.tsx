@@ -637,7 +637,7 @@ export function DeliveryPage() {
 
       {showDeliveries && (
         <DataPanel>
-          <div className="p-4 pb-0 flex flex-col sm:flex-row gap-3 sm:items-end">
+          <div className="panel-filters">
             <Input
               placeholder="Search deliveries…"
               className="sm:max-w-md"
@@ -741,7 +741,7 @@ export function DeliveryPage() {
 
       {showVehicles && (
         <DataPanel>
-          <div className="p-4 pb-0 flex flex-col sm:flex-row gap-3">
+          <div className="panel-filters">
             <Input
               placeholder="Search vehicles…"
               className="sm:max-w-md"

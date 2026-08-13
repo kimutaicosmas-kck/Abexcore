@@ -315,7 +315,7 @@ export function UsersPage() {
 
       {activeTab === 0 && (
         <DataPanel>
-          <div className="p-4 pb-0 flex flex-wrap items-end gap-3">
+          <div className="panel-filters">
             <form onSubmit={handleSearch} className="flex-1 min-w-[200px] sm:max-w-md">
               <Input
                 placeholder="Search name or email…"
@@ -372,7 +372,6 @@ export function UsersPage() {
               columns={userColumns}
               data={(usersRes?.data as User[]) || []}
               loading={isLoading}
-              responsive
               onRowClick={(row) => openDetail(row as unknown as User)}
               embedded
             />
@@ -414,7 +413,7 @@ export function UsersPage() {
 
       {activeTab === 2 && (
         <DataPanel>
-          <div className="p-4 pb-0 sm:max-w-md">
+          <div className="panel-filters sm:max-w-md">
             <Input
               placeholder="Search audit logs…"
               value={auditSearch}
@@ -430,7 +429,6 @@ export function UsersPage() {
               columns={auditColumns}
               data={(auditRes?.data as AuditLogEntry[]) || []}
               loading={auditLoading}
-              responsive
               embedded
             />
           )}

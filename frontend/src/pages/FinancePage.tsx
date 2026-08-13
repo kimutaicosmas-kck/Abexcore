@@ -613,7 +613,7 @@ export function FinancePage() {
       {/* Invoices */}
       {activeTab === 0 && (
         <DataPanel>
-          <div className="p-4 pb-0 flex flex-wrap items-end gap-3">
+          <div className="panel-filters">
             <form
               className="flex-1 min-w-[200px] max-w-sm"
               onSubmit={(e) => { e.preventDefault(); setSearch(searchInput); setPage(1); }}
@@ -653,7 +653,6 @@ export function FinancePage() {
               columns={invoiceColumns}
               data={(invoices?.data as Invoice[]) || []}
               loading={invLoading}
-              responsive
               onRowClick={(row) => openInvoiceDetail(row as unknown as Invoice)}
               embedded
             />
@@ -667,7 +666,7 @@ export function FinancePage() {
       {/* Payments */}
       {activeTab === 1 && (
         <DataPanel>
-          <div className="p-4 pb-0 flex flex-wrap items-end gap-3">
+          <div className="panel-filters">
             <Input
               placeholder="Search payments…"
               value={paySearch}
@@ -766,7 +765,7 @@ export function FinancePage() {
               />
             </div>
           ) : (
-            <Table columns={paymentColumns} data={payments?.data || []} loading={payLoading} responsive embedded />
+            <Table columns={paymentColumns} data={payments?.data || []} loading={payLoading} embedded />
           )}
           <div className="px-4 pb-4">
             <TablePagination pagination={payments?.pagination} page={payPage} onPageChange={setPayPage} label="payments" />
@@ -777,7 +776,7 @@ export function FinancePage() {
       {/* Journals */}
       {activeTab === 2 && (
         <DataPanel>
-          <div className="p-4 pb-0 max-w-sm">
+          <div className="panel-filters max-w-sm">
             <Input placeholder="Search journals…" value={journalSearch} onChange={(e) => { setJournalSearch(e.target.value); setJournalPage(1); }} />
           </div>
           {(journalEntries?.data?.length || 0) === 0 && !journalLoading ? (
@@ -815,7 +814,6 @@ export function FinancePage() {
               ]}
               data={journalEntries?.data || []}
               loading={journalLoading}
-              responsive
               onRowClick={(row) => { setSelectedJournal(row); setJournalDetailOpen(true); }}
               embedded
             />

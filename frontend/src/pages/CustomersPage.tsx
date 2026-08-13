@@ -39,6 +39,8 @@ import {
   getStatusBadge,
   PageToolbar,
   ConfirmDialog,
+  FilterBar,
+  FilterField,
 } from '../components/ui';
 import { Modal } from '../components/ui/Modal';
 import { CustomerForm } from '../components/forms/CustomerForm';
@@ -669,40 +671,50 @@ export function CustomersPage() {
 
       {activeTab === 0 && (
         <DataPanel>
-          <div className="p-4 pb-0 flex flex-wrap items-end gap-3">
-            <form
-              className="flex-1 min-w-[200px] sm:max-w-md"
-              onSubmit={(e) => { e.preventDefault(); setCustSearch(custSearchInput); setCustPage(1); }}
-            >
-              <Input placeholder="Search customers…" value={custSearchInput} onChange={(e) => setCustSearchInput(e.target.value)} />
-            </form>
-            <Select options={CUSTOMER_TYPE_OPTIONS} value={custType} onChange={(e) => { setCustType(e.target.value); setCustPage(1); }} className="w-40" />
-            <Select options={CUSTOMER_VAT_OPTIONS} value={custVatStatus} onChange={(e) => { setCustVatStatus(e.target.value); setCustPage(1); }} className="w-40" />
-            <Select options={CUSTOMER_STATUS_OPTIONS} value={custActive} onChange={(e) => { setCustActive(e.target.value); setCustPage(1); }} className="w-36" />
+          <FilterBar>
+            <FilterField span="full">
+              <form
+                onSubmit={(e) => { e.preventDefault(); setCustSearch(custSearchInput); setCustPage(1); }}
+              >
+                <Input placeholder="Search customers…" value={custSearchInput} onChange={(e) => setCustSearchInput(e.target.value)} />
+              </form>
+            </FilterField>
+            <FilterField>
+              <Select options={CUSTOMER_TYPE_OPTIONS} value={custType} onChange={(e) => { setCustType(e.target.value); setCustPage(1); }} />
+            </FilterField>
+            <FilterField>
+              <Select options={CUSTOMER_VAT_OPTIONS} value={custVatStatus} onChange={(e) => { setCustVatStatus(e.target.value); setCustPage(1); }} />
+            </FilterField>
+            <FilterField>
+              <Select options={CUSTOMER_STATUS_OPTIONS} value={custActive} onChange={(e) => { setCustActive(e.target.value); setCustPage(1); }} />
+            </FilterField>
             {!isSalesOfficer && (
-              <Select
-                options={salesPersonFilterOptions}
-                value={custSalesPerson}
-                onChange={(e) => { setCustSalesPerson(e.target.value); setCustPage(1); }}
-                className="w-48"
-              />
+              <FilterField span="full" className="sm:max-w-xs">
+                <Select
+                  options={salesPersonFilterOptions}
+                  value={custSalesPerson}
+                  onChange={(e) => { setCustSalesPerson(e.target.value); setCustPage(1); }}
+                />
+              </FilterField>
             )}
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => {
-                setCustSearchInput('');
-                setCustSearch('');
-                setCustType('');
-                setCustVatStatus('');
-                setCustActive('');
-                setCustSalesPerson('');
-                setCustPage(1);
-              }}
-            >
-              Clear
-            </Button>
-          </div>
+            <FilterField>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => {
+                  setCustSearchInput('');
+                  setCustSearch('');
+                  setCustType('');
+                  setCustVatStatus('');
+                  setCustActive('');
+                  setCustSalesPerson('');
+                  setCustPage(1);
+                }}
+              >
+                Clear
+              </Button>
+            </FilterField>
+          </FilterBar>
           {custError && (
             <div className="px-4">
               <Alert variant="error" className="mb-4">
@@ -732,7 +744,6 @@ export function CustomersPage() {
               data={(customersRes?.data as Customer[]) || []}
               loading={custLoading}
               onRowClick={(row) => openDetail(row as unknown as Customer)}
-              responsive
               embedded
             />
           )}
@@ -744,10 +755,14 @@ export function CustomersPage() {
 
       {activeTab === 1 && (
         <DataPanel>
-          <div className="p-4 pb-0 flex flex-wrap gap-3">
-            <Input placeholder="Search complaints…" className="sm:max-w-md" value={compSearch} onChange={(e) => { setCompSearch(e.target.value); setCompPage(1); }} />
-            <Select options={COMPLAINT_STATUS_OPTIONS} value={compStatus} onChange={(e) => { setCompStatus(e.target.value); setCompPage(1); }} className="w-40" />
-          </div>
+          <FilterBar>
+            <FilterField span="full">
+              <Input placeholder="Search complaints…" value={compSearch} onChange={(e) => { setCompSearch(e.target.value); setCompPage(1); }} />
+            </FilterField>
+            <FilterField>
+              <Select options={COMPLAINT_STATUS_OPTIONS} value={compStatus} onChange={(e) => { setCompStatus(e.target.value); setCompPage(1); }} />
+            </FilterField>
+          </FilterBar>
           {(complaintsRes?.data?.length || 0) === 0 && !compLoading ? (
             <div className="p-6">
               <EmptyState
@@ -768,7 +783,6 @@ export function CustomersPage() {
               columns={complaintColumns}
               data={(complaintsRes?.data as Complaint[]) || []}
               loading={compLoading}
-              responsive
               onRowClick={(row) => { setSelectedComplaint(row as unknown as Complaint); setComplaintDetailOpen(true); }}
               embedded
             />
@@ -781,10 +795,14 @@ export function CustomersPage() {
 
       {activeTab === 2 && (
         <DataPanel>
-          <div className="p-4 pb-0 flex flex-wrap gap-3">
-            <Input placeholder="Search opportunities…" className="sm:max-w-md" value={oppSearch} onChange={(e) => { setOppSearch(e.target.value); setOppPage(1); }} />
-            <Select options={OPPORTUNITY_STATUS_OPTIONS} value={oppStatus} onChange={(e) => { setOppStatus(e.target.value); setOppPage(1); }} className="w-44" />
-          </div>
+          <FilterBar>
+            <FilterField span="full">
+              <Input placeholder="Search opportunities…" value={oppSearch} onChange={(e) => { setOppSearch(e.target.value); setOppPage(1); }} />
+            </FilterField>
+            <FilterField>
+              <Select options={OPPORTUNITY_STATUS_OPTIONS} value={oppStatus} onChange={(e) => { setOppStatus(e.target.value); setOppPage(1); }} />
+            </FilterField>
+          </FilterBar>
           {(opportunitiesRes?.data?.length || 0) === 0 && !oppLoading ? (
             <div className="p-6">
               <EmptyState
@@ -801,7 +819,7 @@ export function CustomersPage() {
               />
             </div>
           ) : (
-            <Table columns={opportunityColumns} data={(opportunitiesRes?.data as Opportunity[]) || []} loading={oppLoading} responsive embedded />
+            <Table columns={opportunityColumns} data={(opportunitiesRes?.data as Opportunity[]) || []} loading={oppLoading} embedded />
           )}
           <div className="px-4 pb-4">
             <TablePagination pagination={opportunitiesRes?.pagination} page={oppPage} onPageChange={setOppPage} label="opportunities" />
@@ -811,9 +829,11 @@ export function CustomersPage() {
 
       {activeTab === 3 && (
         <DataPanel>
-          <div className="p-4 pb-0 sm:max-w-md">
-            <Input placeholder="Search warranties…" value={warrSearch} onChange={(e) => { setWarrSearch(e.target.value); setWarrPage(1); }} />
-          </div>
+          <FilterBar>
+            <FilterField span="full">
+              <Input placeholder="Search warranties…" value={warrSearch} onChange={(e) => { setWarrSearch(e.target.value); setWarrPage(1); }} />
+            </FilterField>
+          </FilterBar>
           {(warrantiesRes?.data?.length || 0) === 0 && !warrLoading ? (
             <div className="p-6">
               <EmptyState
@@ -830,7 +850,7 @@ export function CustomersPage() {
               />
             </div>
           ) : (
-            <Table columns={warrantyColumns} data={(warrantiesRes?.data as Warranty[]) || []} loading={warrLoading} responsive embedded />
+            <Table columns={warrantyColumns} data={(warrantiesRes?.data as Warranty[]) || []} loading={warrLoading} embedded />
           )}
           <div className="px-4 pb-4">
             <TablePagination pagination={warrantiesRes?.pagination} page={warrPage} onPageChange={setWarrPage} label="warranties" />
@@ -1043,7 +1063,7 @@ export function CustomersPage() {
         size="xl"
       >
         <div className="space-y-4">
-          <div className="flex flex-wrap items-end gap-3">
+          <div className="panel-filters !px-0 pt-0">
             <Select
               label="Statement type"
               options={STATEMENT_MODE_OPTIONS}

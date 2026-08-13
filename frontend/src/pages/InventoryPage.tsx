@@ -384,7 +384,7 @@ export function InventoryPage() {
       {/* Stock levels */}
       {activeTab === 0 && (
         <DataPanel>
-          <div className="flex flex-col sm:flex-row gap-3 mb-4">
+          <div className="panel-filters mb-4">
             <Input
               placeholder="Search by item, warehouse, batch…"
               value={stockSearch}
@@ -412,7 +412,7 @@ export function InventoryPage() {
       {/* Materials */}
       {activeTab === 1 && (
         <DataPanel>
-          <div className="flex flex-col sm:flex-row gap-3 mb-4">
+          <div className="panel-filters mb-4">
             <Input
               placeholder="Search materials…"
               className="sm:max-w-md"
@@ -591,7 +591,7 @@ export function InventoryPage() {
       {/* Movements */}
       {activeTab === 4 && (
         <DataPanel>
-          <div className="flex flex-col sm:flex-row gap-3 mb-4">
+          <div className="panel-filters mb-4">
             <Input
               placeholder="Search movements…"
               value={txSearch}

@@ -640,6 +640,23 @@ body {
   align-items: end;
 }
 
+/* Shared compact filter row for all list pages */
+.panel-filters {
+  @apply px-4 pt-3 sm:pt-4 pb-0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+  align-items: end;
+}
+
+.page-toolbar-filters {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+  align-items: end;
+  width: 100%;
+}
+
 .filter-field-full {
   grid-column: 1 / -1;
 }
@@ -649,11 +666,20 @@ body {
 }
 
 @media (min-width: 640px) {
-  .filter-bar-controls {
+  .filter-bar-controls,
+  .panel-filters {
     display: flex;
     flex-wrap: wrap;
     align-items: flex-end;
     gap: 0.75rem;
+  }
+
+  .page-toolbar-filters {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    width: auto;
   }
 
   .filter-field-full,
@@ -668,25 +694,45 @@ body {
 }
 
 @media (max-width: 639px) {
-  .filter-bar .space-y-1\.5 > label {
+  .panel-filters > form,
+  .panel-filters > .flex-1,
+  .panel-filters > .min-w-\[200px\],
+  .panel-filters > .sm\:max-w-md,
+  .panel-filters > .relative,
+  .page-toolbar-filters > .relative,
+  .page-toolbar-filters > form {
+    grid-column: 1 / -1;
+  }
+
+  .filter-bar .space-y-1\.5 > label,
+  .panel-filters .space-y-1\.5 > label,
+  .page-toolbar-filters .space-y-1\.5 > label {
     font-size: 0.6875rem;
     line-height: 1.1;
     margin-bottom: 0.125rem;
   }
 
   .filter-bar input,
-  .filter-bar select {
+  .filter-bar select,
+  .panel-filters input,
+  .panel-filters select,
+  .page-toolbar-filters input,
+  .page-toolbar-filters select {
     padding-top: 0.4rem;
     padding-bottom: 0.4rem;
     font-size: 0.8125rem;
     min-height: 2.25rem;
   }
 
-  .filter-bar .space-y-1\.5 {
+  .filter-bar .space-y-1\.5,
+  .panel-filters .space-y-1\.5,
+  .page-toolbar-filters .space-y-1\.5 {
     gap: 0.125rem;
   }
 
-  .filter-bar button {
+  .filter-bar button,
+  .panel-filters button,
+  .page-toolbar-filters button {
     width: 100%;
     min-height: 2.25rem;
   }

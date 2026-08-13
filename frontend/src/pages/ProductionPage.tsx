@@ -217,7 +217,7 @@ export function ProductionPage() {
 
       {activeTab === 0 && (
         <DataPanel>
-          <div className="p-4 pb-0 flex flex-col sm:flex-row gap-3">
+          <div className="panel-filters">
             <Input
               placeholder="Search orders…"
               value={search}

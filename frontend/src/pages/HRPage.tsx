@@ -536,7 +536,7 @@ export function HRPage() {
 
       {activeTab === 0 && (
         <DataPanel>
-          <div className="p-4 pb-0">
+          <div className="panel-filters">
             <Input
               placeholder="Search employees…"
               className="sm:max-w-md"
@@ -576,7 +576,7 @@ export function HRPage() {
 
       {activeTab === 1 && (
         <DataPanel>
-          <div className="p-4 pb-0">
+          <div className="panel-filters">
             <Input
               placeholder="Search attendance…"
               className="sm:max-w-md"
@@ -726,7 +726,7 @@ export function HRPage() {
           </Card>
 
           <DataPanel>
-            <div className="p-4 pb-0 flex flex-col sm:flex-row gap-3">
+            <div className="panel-filters">
               <Input
                 placeholder="Search leave…"
                 className="sm:max-w-md"
@@ -805,7 +805,7 @@ export function HRPage() {
       {activeTab === 3 && (
         <div className="space-y-4">
           <DataPanel>
-            <div className="p-4 pb-0 flex flex-col sm:flex-row gap-3">
+            <div className="panel-filters">
               <Input
                 placeholder="Search advances…"
                 className="sm:max-w-md"
@@ -852,7 +852,7 @@ export function HRPage() {
 
       {activeTab === 4 && (
         <DataPanel>
-          <div className="p-4 pb-0">
+          <div className="panel-filters">
             <Input
               placeholder="Search payroll…"
               className="sm:max-w-md"
