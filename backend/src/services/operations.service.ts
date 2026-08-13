@@ -61,47 +61,65 @@ export class QualityService {
 
 export class SalesService {
   static async getStats(salesPersonId?: string) {
+    const { salesOrderInDateRange } = await import('../utils/salesDate');
+    const personFilter = salesPersonId ? salesPersonOrderFilter(salesPersonId) : {};
     const openWhere: Prisma.SalesOrderWhereInput = {
       status: { notIn: ['COMPLETED', 'CANCELLED'] },
-      ...(salesPersonId ? salesPersonOrderFilter(salesPersonId) : {}),
+      ...personFilter,
     };
     const quoteWhere = { status: { in: ['DRAFT', 'PENDING'] as ('DRAFT' | 'PENDING')[] } };
     const now = new Date();
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const monthStart = startOfDay(new Date(now.getFullYear(), now.getMonth(), 1));
     const todayStart = startOfDay(now);
     const todayEnd = endOfDay(now);
-    const monthOrderWhere: Prisma.SalesOrderWhereInput = {
-      createdAt: { gte: monthStart },
-      ...(salesPersonId ? salesPersonOrderFilter(salesPersonId) : {}),
+    const monthEnd = endOfDay(now);
+
+    const todayWhere: Prisma.SalesOrderWhereInput = {
+      ...personFilter,
+      AND: [salesOrderInDateRange({ gte: todayStart, lte: todayEnd })],
+    };
+    const monthWhere: Prisma.SalesOrderWhereInput = {
+      ...personFilter,
+      AND: [salesOrderInDateRange({ gte: monthStart, lte: monthEnd })],
+    };
+    const pendingWhere: Prisma.SalesOrderWhereInput = {
+      ...personFilter,
+      status: 'PENDING',
+    };
+    const successfulMonthWhere: Prisma.SalesOrderWhereInput = {
+      ...personFilter,
+      status: { in: ['COMPLETED', 'DELIVERED'] },
+      AND: [salesOrderInDateRange({ gte: monthStart, lte: monthEnd })],
     };
 
-    const todayWherePromise = salesPersonId
-      ? (async () => {
-          const { salesOrderInDateRange } = await import('../utils/salesDate');
-          const todayOrderWhere: Prisma.SalesOrderWhereInput = {
-            ...salesPersonOrderFilter(salesPersonId),
-            AND: [salesOrderInDateRange({ gte: todayStart, lte: todayEnd })],
-          };
-          return Promise.all([
-            prisma.salesOrder.aggregate({ where: todayOrderWhere, _sum: { totalAmount: true } }),
-            prisma.salesOrder.count({ where: todayOrderWhere }),
-          ]);
-        })()
-      : Promise.resolve([{ _sum: { totalAmount: null } }, 0] as const);
-
-    const [openOrders, pipelineAgg, pendingQuotations, quoteAgg, ordersThisMonth, monthlyRevenue, todayResult] =
-      await Promise.all([
-        prisma.salesOrder.count({ where: openWhere }),
-        prisma.salesOrder.aggregate({ where: openWhere, _sum: { totalAmount: true } }),
-        salesPersonId
-          ? Promise.resolve(0)
-          : prisma.salesQuotation.count({ where: quoteWhere }),
-        salesPersonId
-          ? Promise.resolve({ _sum: { totalAmount: null } })
-          : prisma.salesQuotation.aggregate({ where: quoteWhere, _sum: { totalAmount: true } }),
-        prisma.salesOrder.count({ where: monthOrderWhere }),
-        salesPersonId
-          ? prisma.invoice.aggregate({
+    const [
+      todayOrders,
+      todayAgg,
+      pendingOrders,
+      ordersThisMonth,
+      successfulOrders,
+      monthOrderAgg,
+      openOrders,
+      pipelineAgg,
+      pendingQuotations,
+      quoteAgg,
+      monthlyRevenue,
+    ] = await Promise.all([
+      prisma.salesOrder.count({ where: todayWhere }),
+      prisma.salesOrder.aggregate({ where: todayWhere, _sum: { totalAmount: true } }),
+      prisma.salesOrder.count({ where: pendingWhere }),
+      prisma.salesOrder.count({ where: monthWhere }),
+      prisma.salesOrder.count({ where: successfulMonthWhere }),
+      prisma.salesOrder.aggregate({ where: monthWhere, _sum: { totalAmount: true } }),
+      prisma.salesOrder.count({ where: openWhere }),
+      prisma.salesOrder.aggregate({ where: openWhere, _sum: { totalAmount: true } }),
+      salesPersonId ? Promise.resolve(0) : prisma.salesQuotation.count({ where: quoteWhere }),
+      salesPersonId
+        ? Promise.resolve({ _sum: { totalAmount: null } })
+        : prisma.salesQuotation.aggregate({ where: quoteWhere, _sum: { totalAmount: true } }),
+      salesPersonId
+        ? prisma.invoice
+            .aggregate({
               where: {
                 type: 'SALES',
                 status: { not: 'REFUNDED' },
@@ -109,22 +127,23 @@ export class SalesService {
                 salesOrder: salesPersonOrderFilter(salesPersonId),
               },
               _sum: { totalAmount: true },
-            }).then((r) => Number(r._sum.totalAmount || 0))
-          : getMonthlySalesRevenue(monthStart),
-        todayWherePromise,
-      ]);
-
-    const [todayAgg, todayOrders] = todayResult;
+            })
+            .then((r) => Number(r._sum.totalAmount || 0))
+        : getMonthlySalesRevenue(monthStart),
+    ]);
 
     return {
+      todayOrders,
+      pendingOrders,
+      ordersThisMonth,
+      successfulOrders,
+      monthlyOrderValue: Number(monthOrderAgg._sum?.totalAmount || 0),
       openOrders,
       pipelineValue: Number(pipelineAgg._sum?.totalAmount || 0),
       pendingQuotations,
       quotationValue: Number(quoteAgg._sum?.totalAmount || 0),
-      ordersThisMonth,
       monthlyRevenue,
-      todaySales: salesPersonId ? Number(todayAgg._sum?.totalAmount || 0) : undefined,
-      todayOrders: salesPersonId ? todayOrders : undefined,
+      todaySales: Number(todayAgg._sum?.totalAmount || 0),
     };
   }
 }

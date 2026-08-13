@@ -558,14 +558,17 @@ export interface QualityInspection {
 }
 
 export interface SalesStats {
+  todayOrders: number;
+  pendingOrders: number;
+  ordersThisMonth: number;
+  successfulOrders: number;
+  monthlyOrderValue: number;
   openOrders: number;
   pipelineValue: number;
   pendingQuotations: number;
   quotationValue: number;
-  ordersThisMonth: number;
   monthlyRevenue: number;
-  todaySales?: number;
-  todayOrders?: number;
+  todaySales: number;
 }
 
 export interface SalesQuotation {

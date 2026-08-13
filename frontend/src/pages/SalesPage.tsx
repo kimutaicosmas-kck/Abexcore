@@ -5,7 +5,6 @@ import {
   Plus,
   ShoppingCart,
   FileText,
-  TrendingUp,
   CalendarDays,
   Receipt,
   AlertTriangle,
@@ -15,6 +14,8 @@ import {
   Pencil,
   XCircle,
   Truck,
+  Clock,
+  CircleCheck,
 } from 'lucide-react';
 import { operationsApi } from '../services/api';
 import { downloadFile } from '../utils/download';
@@ -89,6 +90,13 @@ const NEXT_STATUS: Record<string, { status: string; label: string }> = {
   DELIVERED: { status: 'COMPLETED', label: 'Complete' },
 };
 
+function todayDateInput(date = new Date()) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
 function canCancelOrder(status: string, isSalesOfficer: boolean): boolean {
   if (!CANCELLABLE_ORDER_STATUSES.includes(status)) return false;
   if (isSalesOfficer) return ['PENDING', 'CONFIRMED'].includes(status);
@@ -124,8 +132,7 @@ export function SalesPage() {
   const [quoteSearch, setQuoteSearch] = useState('');
   const [orderStatus, setOrderStatus] = useState('');
   const [quoteStatus, setQuoteStatus] = useState('');
-  /** Empty string = all dates. Sales officers see all their orders by default. */
-  const [orderDate, setOrderDate] = useState('');
+  const [orderDate, setOrderDate] = useState(() => todayDateInput());
   const [orderModalOpen, setOrderModalOpen] = useState(false);
   const [quotationModalOpen, setQuotationModalOpen] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<SalesOrder | null>(null);
@@ -290,6 +297,16 @@ export function SalesPage() {
   };
 
   const goToTab = (index: number) => setActiveTab(index);
+
+  const applyOrderFilters = (opts: { date?: string; status?: string }) => {
+    setActiveTab(0);
+    if (opts.date !== undefined) setOrderDate(opts.date);
+    if (opts.status !== undefined) setOrderStatus(opts.status);
+    setOrderPage(1);
+  };
+
+  const todayStr = todayDateInput();
+  const statPrefix = myBook ? 'My ' : '';
 
   const openOrderDetail = (order: SalesOrder) => {
     setStatusFeedback(null);
@@ -498,51 +515,39 @@ export function SalesPage() {
       {stats && (
         <StatGrid>
           <StatCard
-            title={myBook ? "Today's sales" : 'Open Orders'}
-            value={myBook ? formatCurrency(stats.todaySales ?? 0) : stats.openOrders}
-            icon={<TrendingUp className="h-5 w-5 text-white" />}
+            title={`${statPrefix}Today's orders`}
+            value={stats.todayOrders}
+            icon={<CalendarDays className="h-5 w-5 text-white" />}
             color="from-teal-500 to-teal-700"
-            to={myBook ? '/my-sales' : undefined}
-            onClick={myBook ? undefined : () => goToTab(0)}
+            onClick={() => applyOrderFilters({ date: todayStr, status: '' })}
           />
           <StatCard
-            title={myBook ? 'My Open Orders' : 'Pipeline Value'}
-            value={myBook ? stats.openOrders : formatCurrency(stats.pipelineValue)}
+            title={`${statPrefix}Pending`}
+            value={stats.pendingOrders}
+            icon={<Clock className="h-5 w-5 text-white" />}
+            color="from-amber-500 to-amber-700"
+            onClick={() => applyOrderFilters({ date: '', status: 'PENDING' })}
+          />
+          <StatCard
+            title={`${statPrefix}Orders this month`}
+            value={stats.ordersThisMonth}
             icon={<ShoppingCart className="h-5 w-5 text-white" />}
             color="from-indigo-500 to-indigo-700"
-            onClick={() => goToTab(0)}
-          />
-          {!myBook && (
-            <StatCard
-              title="Pending Quotes"
-              value={stats.pendingQuotations}
-              icon={<FileText className="h-5 w-5 text-white" />}
-              color="from-orange-500 to-orange-700"
-              onClick={() => goToTab(1)}
-            />
-          )}
-          {myBook && (
-            <StatCard
-              title="My Pipeline Value"
-              value={formatCurrency(stats.pipelineValue)}
-              icon={<FileText className="h-5 w-5 text-white" />}
-              color="from-orange-500 to-orange-700"
-              onClick={() => goToTab(0)}
-            />
-          )}
-          <StatCard
-            title={myBook ? 'My Orders This Month' : 'Orders This Month'}
-            value={stats.ordersThisMonth}
-            icon={<CalendarDays className="h-5 w-5 text-white" />}
-            color="from-fuchsia-500 to-fuchsia-700"
-            onClick={() => goToTab(0)}
+            onClick={() => applyOrderFilters({ date: '', status: '' })}
           />
           <StatCard
-            title={myBook ? 'My Monthly Revenue' : 'Monthly Revenue'}
-            value={formatCurrency(stats.monthlyRevenue)}
+            title={`${statPrefix}Successful orders`}
+            value={stats.successfulOrders}
+            icon={<CircleCheck className="h-5 w-5 text-white" />}
+            color="from-emerald-500 to-emerald-700"
+            onClick={() => applyOrderFilters({ date: '', status: 'COMPLETED' })}
+          />
+          <StatCard
+            title={`${statPrefix}Monthly orders`}
+            value={formatCurrency(stats.monthlyOrderValue)}
             icon={<Receipt className="h-5 w-5 text-white" />}
-            color="from-cyan-500 to-cyan-700"
-            to={myBook ? '/my-sales' : '/finance'}
+            color="from-fuchsia-500 to-fuchsia-700"
+            onClick={() => applyOrderFilters({ date: '', status: '' })}
           />
         </StatGrid>
       )}
@@ -605,7 +610,12 @@ export function SalesPage() {
           <div className="px-4 pt-4 pb-0 flex flex-col sm:flex-row gap-3 sm:items-end">
             {myBook && (
               <p className="text-sm text-slate-600 sm:mr-auto sm:mb-2">
-                Showing <strong>your orders</strong>. Filter by date or status below.
+                Showing <strong>today&apos;s orders</strong> by default. Use filters below to change the view.
+              </p>
+            )}
+            {!myBook && (
+              <p className="text-sm text-slate-600 sm:mr-auto sm:mb-2">
+                Showing <strong>today&apos;s orders</strong> by default.
               </p>
             )}
             <Input
@@ -629,7 +639,18 @@ export function SalesPage() {
             />
             <Button
               type="button"
-              variant="secondary"
+              variant={orderDate === todayStr ? 'primary' : 'secondary'}
+              className="sm:mb-0.5"
+              onClick={() => {
+                setOrderDate(todayStr);
+                setOrderPage(1);
+              }}
+            >
+              Today
+            </Button>
+            <Button
+              type="button"
+              variant={!orderDate ? 'primary' : 'secondary'}
               className="sm:mb-0.5"
               onClick={() => {
                 setOrderDate('');
@@ -638,23 +659,6 @@ export function SalesPage() {
             >
               All dates
             </Button>
-            {!orderDate && (
-              <Button
-                type="button"
-                variant="secondary"
-                className="sm:mb-0.5"
-                onClick={() => {
-                  const now = new Date();
-                  const y = now.getFullYear();
-                  const m = String(now.getMonth() + 1).padStart(2, '0');
-                  const d = String(now.getDate()).padStart(2, '0');
-                  setOrderDate(`${y}-${m}-${d}`);
-                  setOrderPage(1);
-                }}
-              >
-                Today
-              </Button>
-            )}
           </div>
           {statusFeedback && (
             <div className="px-4 pt-3">
