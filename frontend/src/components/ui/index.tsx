@@ -548,7 +548,6 @@ export function Table({
             className={clsx('table-scroll-x', embedded && 'px-4 sm:px-0')}
             role="region"
             aria-label="Scrollable table"
-            tabIndex={0}
           >
             <table className="border-collapse">
               <thead>

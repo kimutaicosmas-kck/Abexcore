@@ -130,6 +130,14 @@ body {
     overflow: visible;
   }
 
+  html {
+    scroll-padding-bottom: calc(5.5rem + env(safe-area-inset-bottom));
+  }
+
+  .mobile-app-shell main {
+    overflow: visible;
+  }
+
   .mobile-top-bar {
     padding-top: env(safe-area-inset-top);
     background: rgba(255, 255, 255, 0.92);
@@ -192,6 +200,7 @@ body {
   .app-content {
     font-size: 0.8125rem; /* 13px */
     line-height: 1.35;
+    padding-bottom: 0.75rem;
   }
 
   .app-content :where(h1) {
@@ -610,17 +619,20 @@ body {
   @apply bg-white rounded-xl border border-primary-100 shadow-soft overflow-hidden;
 }
 
-/* List panels: allow nested tables to scroll horizontally on mobile */
+/* List panels: horizontal scroll lives on .table-scroll-x only (not the panel wrapper) */
 .data-panel-table {
-  overflow-x: auto;
-  overflow-y: visible;
-  -webkit-overflow-scrolling: touch;
+  overflow: visible;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .table-scroll-x {
-  @apply w-full max-w-full min-w-0 overflow-x-auto overscroll-x-contain;
+  @apply w-full max-w-full min-w-0 overflow-x-auto;
+  overflow-y: visible;
   -webkit-overflow-scrolling: touch;
-  touch-action: pan-x;
+  /* Allow both vertical page scroll and horizontal table scroll */
+  touch-action: pan-x pan-y;
+  overscroll-behavior: auto;
   scrollbar-width: thin;
 }
 

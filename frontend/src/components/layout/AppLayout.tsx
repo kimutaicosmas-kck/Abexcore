@@ -5,6 +5,7 @@ import { TopNav } from './TopNav';
 import { MobileBottomNav } from './MobileBottomNav';
 import { RealtimeSync } from './RealtimeSync';
 import { LoginWelcomeToast } from './LoginWelcomeToast';
+import { TableScrollTouchFix } from './TableScrollTouchFix';
 
 const SIDEBAR_WIDTH = '16rem';
 const SIDEBAR_COLLAPSED = '4.5rem';
@@ -45,6 +46,7 @@ export function AppLayout() {
   return (
     <div className="mobile-app-shell min-h-dvh">
       <RealtimeSync />
+      <TableScrollTouchFix />
       {isMobileOverlay && (
         <button
           type="button"
@@ -68,7 +70,7 @@ export function AppLayout() {
       <LoginWelcomeToast />
 
       <main
-        className="pt-[calc(3.5rem+env(safe-area-inset-top))] pb-[calc(4.75rem+env(safe-area-inset-bottom))] lg:pt-14 lg:pb-[max(1rem,env(safe-area-inset-bottom))] transition-all duration-300 min-w-0 lg:ml-[var(--sidebar-w)]"
+        className="pt-[calc(3.5rem+env(safe-area-inset-top))] pb-[calc(5.5rem+env(safe-area-inset-bottom))] lg:pt-14 lg:pb-[max(1rem,env(safe-area-inset-bottom))] transition-all duration-300 min-w-0 lg:ml-[var(--sidebar-w)]"
         style={{ '--sidebar-w': sidebarOffset } as React.CSSProperties}
       >
         <div className="px-2.5 py-2.5 sm:px-5 sm:py-4 max-w-[1600px] mx-auto min-w-0 app-content">
