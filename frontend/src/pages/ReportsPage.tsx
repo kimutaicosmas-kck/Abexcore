@@ -161,8 +161,53 @@ export function ReportsPage() {
     </div>
   );
 
+  const summaryCards = summary ? (
+    <StatGrid>
+      <StatCard
+        title="Total sales"
+        value={formatCurrency(summary.totalSales)}
+        icon={<TrendingUp className="h-5 w-5 text-white" />}
+        color="from-teal-500 to-teal-700"
+        to="/sales"
+      />
+      <StatCard
+        title="Total purchases"
+        value={formatCurrency(summary.totalPurchases)}
+        icon={<Truck className="h-5 w-5 text-white" />}
+        color="from-indigo-500 to-indigo-700"
+        to="/procurement"
+      />
+      <StatCard
+        title="Customers"
+        value={summary.totalCustomers}
+        icon={<Users className="h-5 w-5 text-white" />}
+        color="from-orange-500 to-orange-700"
+        to="/customers"
+      />
+      <StatCard
+        title="Production completed"
+        value={summary.completedProduction}
+        icon={<Factory className="h-5 w-5 text-white" />}
+        color="from-fuchsia-500 to-fuchsia-700"
+        to="/production"
+      />
+      <StatCard
+        title="Unpaid invoices"
+        value={summary.unpaidInvoices}
+        icon={<AlertCircle className="h-5 w-5 text-white" />}
+        color="from-cyan-500 to-cyan-700"
+        to="/finance"
+      />
+    </StatGrid>
+  ) : null;
+
   return (
     <div className="space-y-5">
+      {summaryCards}
+
+      <QueryErrorAlert error={isError ? error : null} onRetry={() => refetch()} />
+      {exportError && <Alert variant="error">{exportError}</Alert>}
+
       {activeSection === 0 ? (
         <SalesByPersonPanel toolbar={sectionToolbar} />
       ) : activeSection === 1 ? (
@@ -220,49 +265,6 @@ export function ReportsPage() {
               </button>
             ))}
           </div>
-
-          <QueryErrorAlert error={isError ? error : null} onRetry={() => refetch()} />
-          {exportError && <Alert variant="error">{exportError}</Alert>}
-
-          {summary && (
-            <StatGrid>
-              <StatCard
-                title="Total sales"
-                value={formatCurrency(summary.totalSales)}
-                icon={<TrendingUp className="h-5 w-5 text-white" />}
-                color="from-teal-500 to-teal-700"
-                to="/sales"
-              />
-              <StatCard
-                title="Total purchases"
-                value={formatCurrency(summary.totalPurchases)}
-                icon={<Truck className="h-5 w-5 text-white" />}
-                color="from-indigo-500 to-indigo-700"
-                to="/procurement"
-              />
-              <StatCard
-                title="Customers"
-                value={summary.totalCustomers}
-                icon={<Users className="h-5 w-5 text-white" />}
-                color="from-orange-500 to-orange-700"
-                to="/customers"
-              />
-              <StatCard
-                title="Production completed"
-                value={summary.completedProduction}
-                icon={<Factory className="h-5 w-5 text-white" />}
-                color="from-fuchsia-500 to-fuchsia-700"
-                to="/production"
-              />
-              <StatCard
-                title="Unpaid invoices"
-                value={summary.unpaidInvoices}
-                icon={<AlertCircle className="h-5 w-5 text-white" />}
-                color="from-cyan-500 to-cyan-700"
-                to="/finance"
-              />
-            </StatGrid>
-          )}
 
           {!summary && !isLoading ? (
             <EmptyState title="No report data available" description="Summary metrics will appear once your business has activity." />
