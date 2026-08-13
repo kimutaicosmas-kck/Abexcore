@@ -610,13 +610,23 @@ body {
   @apply bg-white rounded-xl border border-primary-100 shadow-soft overflow-hidden;
 }
 
-.table-scroll-x {
-  @apply w-full max-w-full min-w-0 overflow-x-auto overscroll-x-contain;
+/* List panels: allow nested tables to scroll horizontally on mobile */
+.data-panel-table {
+  overflow-x: auto;
+  overflow-y: visible;
   -webkit-overflow-scrolling: touch;
 }
 
+.table-scroll-x {
+  @apply w-full max-w-full min-w-0 overflow-x-auto overscroll-x-contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-x;
+  scrollbar-width: thin;
+}
+
 .table-scroll-x > table {
-  @apply min-w-max w-full;
+  width: max-content;
+  min-width: 100%;
 }
 
 .panel-header {

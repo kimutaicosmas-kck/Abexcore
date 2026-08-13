@@ -543,9 +543,14 @@ export function Table({
           </div>
         )}
 
-        <div className={clsx(responsive && 'hidden md:block', 'min-w-0 w-full')}>
-          <div className={clsx('table-scroll-x', embedded ? 'px-4 sm:px-0' : undefined)}>
-            <table className="w-full min-w-max">
+        <div className={clsx(responsive && 'hidden md:block', 'min-w-0 w-full max-w-full')}>
+          <div
+            className={clsx('table-scroll-x', embedded && 'px-4 sm:px-0')}
+            role="region"
+            aria-label="Scrollable table"
+            tabIndex={0}
+          >
+            <table className="border-collapse">
               <thead>
                 <tr className="border-b border-primary-100 bg-primary-50/80">
                   {columns.map((col) => (
@@ -600,7 +605,7 @@ export function Table({
 
 export function DataPanel({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
-    <div className={clsx('panel-surface min-w-0', className)}>
+    <div className={clsx('panel-surface data-panel-table min-w-0 max-w-full', className)}>
       {children}
     </div>
   );

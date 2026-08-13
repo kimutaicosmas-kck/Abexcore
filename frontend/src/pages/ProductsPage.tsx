@@ -388,7 +388,6 @@ export function ProductsPage() {
               columns={columns}
               data={products}
               loading={isLoading}
-              responsive
               onRowClick={(row) => openDetail(row as unknown as Product)}
               embedded
             />

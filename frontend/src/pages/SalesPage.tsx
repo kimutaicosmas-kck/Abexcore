@@ -606,7 +606,7 @@ export function SalesPage() {
       />
 
       {activeTab === 0 && (
-        <DataPanel className="min-w-0 overflow-hidden">
+        <DataPanel className="min-w-0 max-w-full">
           <div className="px-4 pt-4 pb-0 flex flex-col sm:flex-row gap-3 sm:items-end">
             {myBook && (
               <p className="text-sm text-slate-600 sm:mr-auto sm:mb-2">
@@ -729,7 +729,6 @@ export function SalesPage() {
               loading={ordersLoading}
               onRowClick={(row) => openOrderDetail(row as unknown as SalesOrder)}
               embedded
-              responsive
             />
           )}
           <div className="px-4 pb-4">
@@ -739,7 +738,7 @@ export function SalesPage() {
       )}
 
       {activeTab === 1 && (
-        <DataPanel className="min-w-0 overflow-hidden">
+        <DataPanel className="min-w-0 max-w-full">
           <div className="p-4 pb-0 flex flex-col sm:flex-row gap-3">
             <Input
               placeholder="Search quotations…"
@@ -776,7 +775,6 @@ export function SalesPage() {
               loading={quotesLoading}
               onRowClick={(row) => openQuoteDetail(row as unknown as SalesQuotation)}
               embedded
-              responsive
             />
           )}
           <div className="px-4 pb-4">
