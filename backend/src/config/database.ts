@@ -1,10 +1,15 @@
 import { Prisma, PrismaClient } from '@prisma/client';
+import { config } from './index';
 import { isTenantScopedModel } from './tenantModels';
 import { getTenantId } from '../utils/tenant';
+import { applyDatabasePoolParams } from '../utils/databaseUrl';
 
 const globalForPrisma = globalThis as unknown as { prisma: PrismaClient };
 
+const databaseUrl = applyDatabasePoolParams(process.env.DATABASE_URL || '', config.dbPool);
+
 const basePrisma = new PrismaClient({
+  datasources: databaseUrl ? { db: { url: databaseUrl } } : undefined,
   log: process.env.NODE_ENV === 'development' ? ['error', 'warn'] : ['error'],
 });
 

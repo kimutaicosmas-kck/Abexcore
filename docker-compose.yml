@@ -24,6 +24,9 @@ services:
       - --default-authentication-plugin=mysql_native_password
       - --character-set-server=utf8mb4
       - --collation-server=utf8mb4_unicode_ci
+      - --max-connections=200
+      - --innodb-buffer-pool-size=128M
+      - --thread-cache-size=16
 
   backend:
     build:
@@ -35,7 +38,13 @@ services:
     expose:
       - '3001'
     environment:
-      DATABASE_URL: mysql://${MYSQL_USER:-erp_user}:${MYSQL_PASSWORD:-erp_password}@mysql:3306/${MYSQL_DATABASE:-filter_erp}
+      DATABASE_URL: mysql://${MYSQL_USER:-erp_user}:${MYSQL_PASSWORD:-erp_password}@mysql:3306/${MYSQL_DATABASE:-filter_erp}?connection_limit=10&pool_timeout=20&connect_timeout=10
+      CLUSTER_WORKERS: ${CLUSTER_WORKERS:-2}
+      DB_POOL_CONNECTION_LIMIT: ${DB_POOL_CONNECTION_LIMIT:-10}
+      DB_POOL_TIMEOUT: ${DB_POOL_TIMEOUT:-20}
+      DB_CONNECT_TIMEOUT: ${DB_CONNECT_TIMEOUT:-10}
+      RATE_LIMIT_AUTH_MAX: ${RATE_LIMIT_AUTH_MAX:-10000}
+      RATE_LIMIT_ANON_MAX: ${RATE_LIMIT_ANON_MAX:-3000}
       JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-change-me-refresh-in-production}
       DATA_ENCRYPTION_KEY: ${DATA_ENCRYPTION_KEY:-dev-encryption-key-change-in-production-32b}

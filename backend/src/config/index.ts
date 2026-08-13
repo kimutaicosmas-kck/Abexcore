@@ -52,4 +52,16 @@ export const config = {
       'dev-encryption-key-change-in-production-32b'
     ),
   },
+  /** 0 = auto (production: min(cpus, 4)). Set CLUSTER_WORKERS=1 to disable cluster mode. */
+  clusterWorkers: parseInt(process.env.CLUSTER_WORKERS || '0', 10) || 0,
+  dbPool: {
+    connectionLimit: parseInt(process.env.DB_POOL_CONNECTION_LIMIT || '10', 10),
+    poolTimeout: parseInt(process.env.DB_POOL_TIMEOUT || '20', 10),
+    connectTimeout: parseInt(process.env.DB_CONNECT_TIMEOUT || '10', 10),
+  },
+  rateLimit: {
+    /** Authenticated API traffic — keyed per Bearer token, not shared office IP. */
+    authenticatedMax: parseInt(process.env.RATE_LIMIT_AUTH_MAX || '10000', 10),
+    anonymousMax: parseInt(process.env.RATE_LIMIT_ANON_MAX || '3000', 10),
+  },
 };

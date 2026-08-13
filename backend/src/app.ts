@@ -3,11 +3,11 @@ import cors from 'cors';
 import helmet from 'helmet';
 import compression from 'compression';
 import cookieParser from 'cookie-parser';
-import rateLimit from 'express-rate-limit';
 import path from 'path';
 import swaggerUi from 'swagger-ui-express';
 import swaggerJsdoc from 'swagger-jsdoc';
 import { config } from './config';
+import { createGlobalRateLimiter } from './middleware/globalRateLimiter';
 import { errorHandler, notFound } from './middleware/errorHandler';
 import { isCorsOriginAllowed } from './utils/corsOrigins';
 import { authenticate, requireSuperAdmin } from './middleware/auth';
@@ -65,28 +65,10 @@ export function createApp() {
   app.use(express.urlencoded({ extended: true }));
   app.use(cookieParser());
 
-  // Global limiter (per client IP). Auth login has its own stricter limiter.
-  // Skip long-lived SSE + health so polling/reconnects do not lock users out of login.
+  // Global limiter: authenticated users get their own bucket (Bearer token key).
+  // Auth login routes use dedicated limiters in auth.routes.
   if (config.nodeEnv !== 'test') {
-    app.use(
-      rateLimit({
-        windowMs: 15 * 60 * 1000,
-        max: config.nodeEnv === 'production' ? 3000 : 5000,
-        standardHeaders: true,
-        legacyHeaders: false,
-        validate: false,
-        message: { success: false, message: 'Too many requests' },
-        skip: (req) => {
-          const p = req.path || '';
-          return (
-            p.startsWith('/api/health') ||
-            p.includes('/realtime/events') ||
-            // Auth has its own limiters; never block sign-in via the global bucket.
-            p.startsWith('/api/v1/auth/')
-          );
-        },
-      })
-    );
+    app.use(createGlobalRateLimiter());
   }
 
   // Uploads require auth (Bearer or ?access_token=). No directory listing.
