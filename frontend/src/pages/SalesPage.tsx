@@ -39,6 +39,8 @@ import {
   PageToolbar,
   ConfirmDialog,
   getApiErrorMessage,
+  FilterBar,
+  FilterField,
 } from '../components/ui';
 import { Modal } from '../components/ui/Modal';
 import { SalesOrderForm } from '../components/forms/SalesOrderForm';
@@ -607,59 +609,63 @@ export function SalesPage() {
 
       {activeTab === 0 && (
         <DataPanel className="min-w-0 max-w-full">
-          <div className="px-4 pt-4 pb-0 flex flex-col sm:flex-row gap-3 sm:items-end">
-            {myBook && (
-              <p className="text-sm text-slate-600 sm:mr-auto sm:mb-2">
-                Showing <strong>today&apos;s orders</strong> by default. Use filters below to change the view.
-              </p>
-            )}
-            {!myBook && (
-              <p className="text-sm text-slate-600 sm:mr-auto sm:mb-2">
+          <FilterBar
+            hint={
+              <>
                 Showing <strong>today&apos;s orders</strong> by default.
-              </p>
-            )}
-            <Input
-              placeholder={myBook ? 'Search my orders…' : 'Search orders…'}
-              className="sm:max-w-md"
-              value={orderSearch}
-              onChange={(e) => { setOrderSearch(e.target.value); setOrderPage(1); }}
-            />
-            <Select
-              options={ORDER_STATUS_OPTIONS}
-              value={orderStatus}
-              onChange={(e) => { setOrderStatus(e.target.value); setOrderPage(1); }}
-              className="sm:w-44"
-            />
-            <Input
-              type="date"
-              label="Sale date"
-              value={orderDate}
-              onChange={(e) => { setOrderDate(e.target.value); setOrderPage(1); }}
-              className="sm:w-44"
-            />
-            <Button
-              type="button"
-              variant={orderDate === todayStr ? 'primary' : 'secondary'}
-              className="sm:mb-0.5"
-              onClick={() => {
-                setOrderDate(todayStr);
-                setOrderPage(1);
-              }}
-            >
-              Today
-            </Button>
-            <Button
-              type="button"
-              variant={!orderDate ? 'primary' : 'secondary'}
-              className="sm:mb-0.5"
-              onClick={() => {
-                setOrderDate('');
-                setOrderPage(1);
-              }}
-            >
-              All dates
-            </Button>
-          </div>
+                {myBook ? ' Filter below to change the view.' : null}
+              </>
+            }
+          >
+            <FilterField span="full">
+              <Input
+                placeholder={myBook ? 'Search my orders…' : 'Search orders…'}
+                value={orderSearch}
+                onChange={(e) => { setOrderSearch(e.target.value); setOrderPage(1); }}
+              />
+            </FilterField>
+            <FilterField>
+              <Select
+                options={ORDER_STATUS_OPTIONS}
+                value={orderStatus}
+                onChange={(e) => { setOrderStatus(e.target.value); setOrderPage(1); }}
+              />
+            </FilterField>
+            <FilterField>
+              <Input
+                type="date"
+                aria-label="Sale date"
+                value={orderDate}
+                onChange={(e) => { setOrderDate(e.target.value); setOrderPage(1); }}
+              />
+            </FilterField>
+            <FilterField>
+              <Button
+                type="button"
+                size="sm"
+                variant={orderDate === todayStr ? 'primary' : 'secondary'}
+                onClick={() => {
+                  setOrderDate(todayStr);
+                  setOrderPage(1);
+                }}
+              >
+                Today
+              </Button>
+            </FilterField>
+            <FilterField>
+              <Button
+                type="button"
+                size="sm"
+                variant={!orderDate ? 'primary' : 'secondary'}
+                onClick={() => {
+                  setOrderDate('');
+                  setOrderPage(1);
+                }}
+              >
+                All dates
+              </Button>
+            </FilterField>
+          </FilterBar>
           {statusFeedback && (
             <div className="px-4 pt-3">
               <Alert variant={statusFeedback.variant}>{statusFeedback.text}</Alert>
@@ -739,20 +745,22 @@ export function SalesPage() {
 
       {activeTab === 1 && (
         <DataPanel className="min-w-0 max-w-full">
-          <div className="p-4 pb-0 flex flex-col sm:flex-row gap-3">
-            <Input
-              placeholder="Search quotations…"
-              className="sm:max-w-md"
-              value={quoteSearch}
-              onChange={(e) => { setQuoteSearch(e.target.value); setQuotePage(1); }}
-            />
-            <Select
-              options={QUOTE_STATUS_OPTIONS}
-              value={quoteStatus}
-              onChange={(e) => { setQuoteStatus(e.target.value); setQuotePage(1); }}
-              className="sm:w-44"
-            />
-          </div>
+          <FilterBar>
+            <FilterField span="full">
+              <Input
+                placeholder="Search quotations…"
+                value={quoteSearch}
+                onChange={(e) => { setQuoteSearch(e.target.value); setQuotePage(1); }}
+              />
+            </FilterField>
+            <FilterField span="full" className="sm:max-w-xs">
+              <Select
+                options={QUOTE_STATUS_OPTIONS}
+                value={quoteStatus}
+                onChange={(e) => { setQuoteStatus(e.target.value); setQuotePage(1); }}
+              />
+            </FilterField>
+          </FilterBar>
           {(quotations?.data?.length || 0) === 0 && !quotesLoading ? (
             <div className="p-6">
               <EmptyState

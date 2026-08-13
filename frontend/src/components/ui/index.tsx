@@ -611,6 +611,47 @@ export function DataPanel({ children, className }: { children: React.ReactNode; 
   );
 }
 
+/** Compact filter row — 2-column grid on mobile, inline on desktop. */
+export function FilterBar({
+  children,
+  className,
+  hint,
+}: {
+  children: React.ReactNode;
+  className?: string;
+  hint?: React.ReactNode;
+}) {
+  return (
+    <div className={clsx('filter-bar px-4 pt-3 sm:pt-4 pb-0', className)}>
+      {hint && <p className="filter-bar-hint">{hint}</p>}
+      <div className="filter-bar-controls">{children}</div>
+    </div>
+  );
+}
+
+export function FilterField({
+  children,
+  className,
+  span = 1,
+}: {
+  children: React.ReactNode;
+  className?: string;
+  span?: 1 | 2 | 'full';
+}) {
+  return (
+    <div
+      className={clsx(
+        'filter-field min-w-0',
+        span === 'full' && 'filter-field-full',
+        span === 2 && 'filter-field-double',
+        className
+      )}
+    >
+      {children}
+    </div>
+  );
+}
+
 interface TabGroupProps {
   tabs: string[];
   activeIndex: number;

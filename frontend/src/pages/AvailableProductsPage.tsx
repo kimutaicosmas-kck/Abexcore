@@ -12,8 +12,9 @@ import {
   DataPanel,
   TablePagination,
   formatCurrency,
-  PageToolbar,
   QueryErrorAlert,
+  FilterBar,
+  FilterField,
 } from '../components/ui';
 import { ProductCategoryOption } from '../types';
 import { formatPartNumberLine } from '../utils/productDisplay';
@@ -113,25 +114,24 @@ export function AvailableProductsPanel() {
     <div className="space-y-4">
       {isError && <QueryErrorAlert error={error} onRetry={() => refetch()} />}
 
-      <PageToolbar
-        actions={
-          <div className="flex flex-wrap items-end gap-3 w-full">
-            <div className="min-w-[180px] flex-1">
-              <Input
-                label="Search"
-                placeholder="Name or part number…"
-                value={searchInput}
-                onChange={(e) => setSearchInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    setSearch(searchInput.trim());
-                    setPage(1);
-                  }
-                }}
-              />
-            </div>
+      <DataPanel>
+        <FilterBar>
+          <FilterField span="full">
+            <Input
+              placeholder="Name or part number…"
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  setSearch(searchInput.trim());
+                  setPage(1);
+                }
+              }}
+            />
+          </FilterField>
+          <FilterField>
             <Select
-              label="Category"
+              aria-label="Category"
               value={category}
               onChange={(e) => {
                 setCategory(e.target.value);
@@ -142,6 +142,8 @@ export function AvailableProductsPanel() {
                 ...(categoriesData || []).map((c) => ({ value: c.id, label: c.name })),
               ]}
             />
+          </FilterField>
+          <FilterField>
             <Button
               size="sm"
               onClick={() => {
@@ -152,11 +154,9 @@ export function AvailableProductsPanel() {
               <Search className="h-4 w-4 mr-1.5" />
               Search
             </Button>
-          </div>
-        }
-      />
+          </FilterField>
+        </FilterBar>
 
-      <DataPanel>
         {rows.length === 0 && !isLoading ? (
           <EmptyState
             title="No products in stock"

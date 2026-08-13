@@ -29,6 +29,8 @@ import {
   TablePagination,
   formatCurrency,
   PageToolbar,
+  FilterBar,
+  FilterField,
 } from '../components/ui';
 import { Modal } from '../components/ui/Modal';
 import { ProductForm } from '../components/forms/ProductForm';
@@ -309,53 +311,59 @@ export function ProductsPage() {
 
       {activeTabName === 'Catalog' && canManageProducts && (
         <DataPanel>
-          <div className="p-4 pb-0 flex flex-col sm:flex-row flex-wrap items-end gap-3">
-            <form
-              className="flex-1 min-w-[200px] sm:max-w-md"
-              onSubmit={(e) => {
-                e.preventDefault();
-                setSearch(searchInput);
-                setPage(1);
-              }}
-            >
-              <Input
-                placeholder="Search part number or name…"
-                value={searchInput}
-                onChange={(e) => setSearchInput(e.target.value)}
+          <FilterBar>
+            <FilterField span="full">
+              <form
+                className="min-w-0"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  setSearch(searchInput);
+                  setPage(1);
+                }}
+              >
+                <Input
+                  placeholder="Search part number or name…"
+                  value={searchInput}
+                  onChange={(e) => setSearchInput(e.target.value)}
+                />
+              </form>
+            </FilterField>
+            <FilterField>
+              <Select
+                options={categoryOptions}
+                value={category}
+                onChange={(e) => {
+                  setCategory(e.target.value);
+                  setPage(1);
+                }}
               />
-            </form>
-            <Select
-              options={categoryOptions}
-              value={category}
-              onChange={(e) => {
-                setCategory(e.target.value);
-                setPage(1);
-              }}
-              className="sm:w-44"
-            />
-            <Select
-              options={STATUS_OPTIONS}
-              value={isActive}
-              onChange={(e) => {
-                setIsActive(e.target.value);
-                setPage(1);
-              }}
-              className="sm:w-36"
-            />
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => {
-                setSearchInput('');
-                setSearch('');
-                setCategory('');
-                setIsActive('');
-                setPage(1);
-              }}
-            >
-              Clear
-            </Button>
-          </div>
+            </FilterField>
+            <FilterField>
+              <Select
+                options={STATUS_OPTIONS}
+                value={isActive}
+                onChange={(e) => {
+                  setIsActive(e.target.value);
+                  setPage(1);
+                }}
+              />
+            </FilterField>
+            <FilterField>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => {
+                  setSearchInput('');
+                  setSearch('');
+                  setCategory('');
+                  setIsActive('');
+                  setPage(1);
+                }}
+              >
+                Clear
+              </Button>
+            </FilterField>
+          </FilterBar>
 
           {isError && (
             <div className="px-4 pt-4">
