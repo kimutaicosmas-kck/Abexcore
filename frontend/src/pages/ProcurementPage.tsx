@@ -3,22 +3,30 @@ import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Plus,
+  ClipboardList,
   FileText,
   FileSpreadsheet,
   Download,
   Mail,
+  Users,
+  ShoppingCart,
   PackageCheck,
   ShieldCheck,
+  ChevronRight,
+  Truck,
 } from 'lucide-react';
 import { inventoryApi, financeApi } from '../services/api';
 import { downloadFile } from '../utils/download';
 import { getApiErrorMessage } from '../utils/apiError';
 import {
+  PageHeader,
   Table,
   Badge,
   Button,
   Input,
   Select,
+  StatCard,
+  StatGrid,
   Card,
   Alert,
   EmptyState,
@@ -39,9 +47,9 @@ import { SupplierForm } from '../components/forms/SupplierForm';
 import { RfqForm } from '../components/forms/RfqForm';
 import { RfqDetailPanel } from '../components/forms/RfqDetailPanel';
 import { useAuth } from '../contexts/AuthContext';
-import { PurchaseOrder, Supplier, GoodsReceipt } from '../types';
+import { ProcurementStats, PurchaseOrder, Supplier, GoodsReceipt } from '../types';
 
-const tabs = ['Purchase Orders', 'Requisitions', 'RFQs', 'Goods Receipts', 'Suppliers'];
+const tabs = ['Overview', 'Purchase Orders', 'Requisitions', 'RFQs', 'Goods Receipts', 'Suppliers'];
 
 const STATUS_FILTER = [
   { value: '', label: 'All statuses' },
@@ -138,36 +146,40 @@ export function ProcurementPage() {
   const canCreate = hasPermission('procurement:create');
   const canUpdate = hasPermission('procurement:update');
   const canInvoice = hasPermission('finance:create');
+  const { data: stats } = useQuery({
+    queryKey: ['procurement-stats'],
+    queryFn: () => inventoryApi.procurementStats().then((r) => r.data.data as ProcurementStats),
+  });
 
   const { data: purchaseOrders, isLoading: poLoading, isError: poError, error: poErr, refetch: refetchPo } = useQuery({
     queryKey: ['purchase-orders', poPage, poSearch],
     queryFn: () => inventoryApi.purchaseOrders({ page: poPage, limit: 15, search: poSearch || undefined }).then((r) => r.data),
-    enabled: activeTab === 0,
+    enabled: activeTab === 0 || activeTab === 1,
   });
 
   const { data: requisitions, isLoading: reqLoading, isError: reqError, error: reqErr, refetch: refetchReq } = useQuery({
     queryKey: ['requisitions', reqPage, reqSearch, reqStatus],
     queryFn: () =>
       inventoryApi.requisitions({ page: reqPage, limit: 15, search: reqSearch || undefined, status: reqStatus || undefined }).then((r) => r.data),
-    enabled: activeTab === 1,
+    enabled: activeTab === 0 || activeTab === 2,
   });
 
   const { data: rfqs, isLoading: rfqLoading, isError: rfqError, error: rfqErr, refetch: refetchRfq } = useQuery({
     queryKey: ['rfqs', rfqPage, rfqSearch],
     queryFn: () => inventoryApi.rfqs({ page: rfqPage, limit: 15, search: rfqSearch || undefined }).then((r) => r.data),
-    enabled: activeTab === 2,
+    enabled: activeTab === 0 || activeTab === 3,
   });
 
   const { data: goodsReceipts, isLoading: grLoading, isError: grError, error: grErr, refetch: refetchGr } = useQuery({
     queryKey: ['goods-receipts', grPage, grSearch],
     queryFn: () => inventoryApi.goodsReceipts({ page: grPage, limit: 15, search: grSearch || undefined }).then((r) => r.data),
-    enabled: activeTab === 3,
+    enabled: activeTab === 0 || activeTab === 4,
   });
 
   const { data: suppliers, isLoading: supLoading, isError: supError, error: supErr, refetch: refetchSup } = useQuery({
     queryKey: ['suppliers', supPage, supSearch],
     queryFn: () => inventoryApi.suppliers({ page: supPage, limit: 15, search: supSearch || undefined }).then((r) => r.data),
-    enabled: activeTab === 4,
+    enabled: activeTab === 0 || activeTab === 5,
   });
 
   const {
@@ -245,6 +257,8 @@ export function ProcurementPage() {
     },
   });
 
+  const goToTab = (index: number) => setActiveTab(index);
+
   const downloadPoPdf = async (po: PurchaseOrder) => {
     setPoActionError(null);
     setPoActionSuccess(null);
@@ -318,11 +332,17 @@ export function ProcurementPage() {
   };
 
   const tabActions: Record<number, { label: string; type: ModalType }> = {
-    0: { label: 'New Purchase Order', type: 'po' },
-    1: { label: 'New Requisition', type: 'requisition' },
-    3: { label: 'New Goods Receipt', type: 'gr' },
-    4: { label: 'Add Supplier', type: 'supplier' },
+    1: { label: 'New Purchase Order', type: 'po' },
+    2: { label: 'New Requisition', type: 'requisition' },
+    4: { label: 'New Goods Receipt', type: 'gr' },
+    5: { label: 'Add Supplier', type: 'supplier' },
   };
+
+  const recentPos = activeTab === 0 ? ((purchaseOrders?.data as PurchaseOrder[]) || []).slice(0, 6) : [];
+  const pendingReqs = activeTab === 0
+    ? (requisitions?.data || []).filter((r: { status: string }) => r.status === 'PENDING' || r.status === 'DRAFT').slice(0, 5)
+    : [];
+  const openRfqs = activeTab === 0 ? (rfqs?.data || []).slice(0, 5) : [];
 
   const poColumns = [
     { key: 'poNumber', label: 'PO Number' },
@@ -553,7 +573,7 @@ export function ProcurementPage() {
 
   const toolbarActions =
     canCreate &&
-    (activeTab === 0
+    (activeTab === 0 || activeTab === 1
       ? (
           <Button size="sm" onClick={() => openModal('po')}>
             <Plus className="h-4 w-4 mr-1.5" />
@@ -582,6 +602,27 @@ export function ProcurementPage() {
           void refetchSup();
         }}
       />
+      {stats && (
+        <StatGrid>
+          <StatCard title="Pending Requisitions" value={stats.pendingRequisitions} icon={<ClipboardList className="h-5 w-5 text-white" />} color="from-teal-500 to-teal-700" onClick={() => goToTab(2)} />
+          <StatCard title="Open RFQs" value={stats.openRfqs} icon={<FileText className="h-5 w-5 text-white" />} color="from-indigo-500 to-indigo-700" onClick={() => goToTab(3)} />
+          <StatCard title="Active PO Value" value={formatCurrency(stats.activePoValue)} icon={<ShoppingCart className="h-5 w-5 text-white" />} color="from-orange-500 to-orange-700" onClick={() => goToTab(1)} />
+          <StatCard title="Suppliers" value={stats.suppliers} icon={<Users className="h-5 w-5 text-white" />} color="from-fuchsia-500 to-fuchsia-700" onClick={() => goToTab(5)} />
+          <StatCard title="Active POs" value={stats.activePurchaseOrders} icon={<PackageCheck className="h-5 w-5 text-white" />} color="from-cyan-500 to-cyan-700" onClick={() => goToTab(1)} />
+        </StatGrid>
+      )}
+
+      <PageHeader
+        action={
+          stats && stats.pendingRequisitions > 0 ? (
+            <Button variant="secondary" size="sm" onClick={() => goToTab(2)}>
+              <ClipboardList className="h-4 w-4 mr-1.5 text-amber-500" />
+              {stats.pendingRequisitions} pending requisitions
+            </Button>
+          ) : undefined
+        }
+      />
+
       <PageToolbar
         tabs={tabs}
         activeTab={activeTab}
@@ -597,6 +638,76 @@ export function ProcurementPage() {
       />
 
       {activeTab === 0 && (
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+            <Card
+              title="Pending requisitions"
+              action={
+                pendingReqs.length > 0 ? (
+                  <Button variant="ghost" size="sm" onClick={() => goToTab(2)}>
+                    View all
+                  </Button>
+                ) : undefined
+              }
+              padding={false}
+            >
+              {pendingReqs.length === 0 ? (
+                <div className="p-6">
+                  <EmptyState title="No pending requisitions" description="All requisitions have been processed." />
+                </div>
+              ) : (
+                <ul className="divide-y divide-slate-100">
+                  {pendingReqs.map((req: { id: string; requisitionNo: string; department: string; priority: string; status: string }) => (
+                    <li key={req.id} className="flex items-center gap-3 px-4 py-3 hover:bg-amber-50/30">
+                      <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-100 text-amber-600">
+                        <ClipboardList className="h-4 w-4" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-slate-900 truncate">{req.requisitionNo}</p>
+                        <p className="text-xs text-slate-500">{req.department} · {req.priority} priority</p>
+                      </div>
+                      <Badge variant={getStatusBadge(req.status)}>{req.status.replace(/_/g, ' ')}</Badge>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Card>
+
+            <Card
+              title="Open RFQs"
+              action={
+                <Button variant="ghost" size="sm" onClick={() => goToTab(3)}>
+                  View all
+                  <ChevronRight className="h-4 w-4 ml-1" />
+                </Button>
+              }
+              padding={false}
+            >
+              {openRfqs.length === 0 ? (
+                <div className="p-6">
+                  <EmptyState title="No open RFQs" description="Create an RFQ from an approved requisition." />
+                </div>
+              ) : (
+                <ul className="divide-y divide-slate-100">
+                  {openRfqs.map((rfq: { id: string; rfqNo: string; status: string; dueDate?: string; quotations?: unknown[] }) => (
+                    <li key={rfq.id} className="flex items-center gap-3 px-4 py-3">
+                      <Badge variant={getStatusBadge(rfq.status)}>{rfq.status.replace(/_/g, ' ')}</Badge>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-slate-800 truncate">{rfq.rfqNo}</p>
+                        <p className="text-xs text-slate-400">
+                          {rfq.dueDate ? `Due ${formatDate(rfq.dueDate)}` : '—'} · {rfq.quotations?.length || 0} quote(s)
+                        </p>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Card>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 1 && (
         <DataPanel>
           <div className="p-4 pb-0 sm:max-w-md">
             <Input placeholder="Search purchase orders…" value={poSearch} onChange={(e) => { setPoSearch(e.target.value); setPoPage(1); }} />
@@ -631,7 +742,7 @@ export function ProcurementPage() {
         </DataPanel>
       )}
 
-      {activeTab === 1 && (
+      {activeTab === 2 && (
         <DataPanel>
           <div className="p-4 pb-0 flex flex-wrap gap-3">
             <Input placeholder="Search requisitions…" className="sm:max-w-md" value={reqSearch} onChange={(e) => { setReqSearch(e.target.value); setReqPage(1); }} />
@@ -661,7 +772,7 @@ export function ProcurementPage() {
         </DataPanel>
       )}
 
-      {activeTab === 2 && (
+      {activeTab === 3 && (
         <DataPanel>
           <div className="p-4 pb-0 sm:max-w-md">
             <Input placeholder="Search RFQs…" value={rfqSearch} onChange={(e) => { setRfqSearch(e.target.value); setRfqPage(1); }} />
@@ -679,7 +790,7 @@ export function ProcurementPage() {
         </DataPanel>
       )}
 
-      {activeTab === 3 && (
+      {activeTab === 4 && (
         <DataPanel>
           <div className="p-4 pb-0 sm:max-w-md">
             <Input placeholder="Search goods receipts…" value={grSearch} onChange={(e) => { setGrSearch(e.target.value); setGrPage(1); }} />
@@ -718,7 +829,7 @@ export function ProcurementPage() {
         </DataPanel>
       )}
 
-      {activeTab === 4 && (
+      {activeTab === 5 && (
         <DataPanel>
           <div className="p-4 pb-0 sm:max-w-md">
             <Input placeholder="Search suppliers…" value={supSearch} onChange={(e) => { setSupSearch(e.target.value); setSupPage(1); }} />

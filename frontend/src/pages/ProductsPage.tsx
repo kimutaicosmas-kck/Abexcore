@@ -6,6 +6,11 @@ import {
   Pencil,
   Trash2,
   Upload,
+  Package,
+  Box,
+  FileText,
+  ChevronRight,
+  Boxes,
 } from 'lucide-react';
 import { productsApi } from '../services/api';
 import {
@@ -16,6 +21,8 @@ import {
   Input,
   Select,
   Card,
+  StatCard,
+  StatGrid,
   Alert,
   EmptyState,
   DataPanel,
@@ -26,9 +33,10 @@ import {
 import { Modal } from '../components/ui/Modal';
 import { ProductForm } from '../components/forms/ProductForm';
 import { useAuth } from '../contexts/AuthContext';
-import { Product, ProductCategoryOption } from '../types';
-import { PART_NUMBER_LABEL } from '../utils/productDisplay';
+import { Product, ProductCategoryOption, ProductStats } from '../types';
+import { PART_NUMBER_LABEL, formatPartNumberLine } from '../utils/productDisplay';
 import { AvailableProductsPanel } from './AvailableProductsPage';
+import { STAT_ROW_5 } from '../constants/statCardTones';
 
 const STATUS_OPTIONS = [
   { value: '', label: 'All statuses' },
@@ -50,7 +58,7 @@ export function ProductsPage() {
   const tabs = useMemo(() => {
     const items: string[] = [];
     if (canManageProducts) {
-      items.push('Catalog');
+      items.push('Overview', 'Catalog');
     }
     if (canViewAvailable) items.push('Available');
     return items;
@@ -63,7 +71,7 @@ export function ProductsPage() {
     ? 'Available'
     : wantCatalog
       ? 'Catalog'
-      : tabs[0] || 'Catalog';
+      : tabs[0] || 'Overview';
 
   const [activeTabName, setActiveTabName] = useState(initialTab);
   const activeTab = Math.max(0, tabs.indexOf(activeTabName));
@@ -98,7 +106,13 @@ export function ProductsPage() {
   const [editing, setEditing] = useState<Product | null>(null);
   const [selected, setSelected] = useState<Product | null>(null);
 
-  const showCatalogQueries = canManageProducts && activeTabName === 'Catalog';
+  const showCatalogQueries = canManageProducts && (activeTabName === 'Overview' || activeTabName === 'Catalog');
+
+  const { data: stats } = useQuery({
+    queryKey: ['product-stats'],
+    queryFn: () => productsApi.stats().then((r) => r.data.data as ProductStats),
+    enabled: canManageProducts,
+  });
 
   const { data: categoriesData } = useQuery({
     queryKey: ['product-categories'],
@@ -160,6 +174,7 @@ export function ProductsPage() {
   };
 
   const products = (productsRes?.data as Product[]) || [];
+  const recentProducts = activeTabName === 'Overview' ? products.slice(0, 6) : [];
 
   const columns = [
     {
@@ -230,7 +245,7 @@ export function ProductsPage() {
   }
 
   const toolbarActions =
-    canCreate && activeTabName === 'Catalog' ? (
+    canCreate && (activeTabName === 'Overview' || activeTabName === 'Catalog') ? (
       <Button size="sm" onClick={openAddProduct}>
         <Plus className="h-4 w-4 mr-1.5" />
         Add Product
@@ -240,11 +255,53 @@ export function ProductsPage() {
   const subtitle =
     activeTabName === 'Available'
       ? 'Finished goods you can sell — live available quantity after reservations.'
-      : 'Manage the full product catalog, prices, and status.';
+      : activeTabName === 'Catalog'
+        ? 'Manage the full product catalog, prices, and status.'
+        : 'Catalog health and sellable stock in one place.';
 
   return (
     <div className="space-y-4">
       <PageHeader subtitle={subtitle} />
+
+      {canManageProducts && stats && activeTabName !== 'Available' && (
+        <StatGrid>
+          <StatCard
+            title="Total Products"
+            value={stats.total}
+            icon={<Package className="h-5 w-5 text-white" />}
+            color={STAT_ROW_5[0]}
+            onClick={() => setTab('Catalog')}
+          />
+          <StatCard
+            title="Active"
+            value={stats.active}
+            icon={<Box className="h-5 w-5 text-white" />}
+            color={STAT_ROW_5[1]}
+            onClick={() => setTab('Catalog')}
+          />
+          <StatCard
+            title="Inactive"
+            value={stats.inactive}
+            icon={<FileText className="h-5 w-5 text-white" />}
+            color={STAT_ROW_5[2]}
+            onClick={() => setTab('Catalog')}
+          />
+          <StatCard
+            title="FG in Stock"
+            value={stats.finishedGoodsQty.toLocaleString()}
+            icon={<Package className="h-5 w-5 text-white" />}
+            color={STAT_ROW_5[3]}
+            to="/inventory"
+          />
+          <StatCard
+            title={canViewAvailable ? 'Sellable view' : 'Categories'}
+            value={canViewAvailable ? 'Available' : stats.byCategory.length}
+            icon={<Boxes className="h-5 w-5 text-white" />}
+            color={STAT_ROW_5[4]}
+            onClick={() => (canViewAvailable ? setTab('Available') : setTab('Catalog'))}
+          />
+        </StatGrid>
+      )}
 
       <PageToolbar
         tabs={tabs}
@@ -252,6 +309,87 @@ export function ProductsPage() {
         onTabChange={(index) => setTab(tabs[index])}
         actions={toolbarActions}
       />
+
+      {activeTabName === 'Overview' && canManageProducts && (
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+          <Card
+            title="Recent products"
+            action={
+              recentProducts.length > 0 ? (
+                <Button variant="ghost" size="sm" onClick={() => setTab('Catalog')}>
+                  View catalog
+                </Button>
+              ) : undefined
+            }
+            padding={false}
+          >
+            {recentProducts.length === 0 ? (
+              <div className="p-6">
+                <EmptyState title="No products yet" description="Add products to populate your catalog." />
+              </div>
+            ) : (
+              <ul className="divide-y divide-slate-100">
+                {recentProducts.map((product) => (
+                  <li
+                    key={product.id}
+                    className="flex items-center gap-3 px-4 py-3 hover:bg-primary-50/50 cursor-pointer"
+                    onClick={() => openDetail(product)}
+                  >
+                    <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary-100 text-primary-600">
+                      <Package className="h-4 w-4" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-slate-900 truncate">{product.name}</p>
+                      <p className="text-xs text-slate-500">{formatPartNumberLine(product.sku)}</p>
+                    </div>
+                    <ChevronRight className="h-4 w-4 text-slate-400 shrink-0" />
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Card>
+
+          <Card
+            title="By category"
+            action={
+              canViewAvailable ? (
+                <Button variant="ghost" size="sm" onClick={() => setTab('Available')}>
+                  Sellable stock
+                </Button>
+              ) : undefined
+            }
+            padding={false}
+          >
+            {(stats?.byCategory?.length || 0) === 0 ? (
+              <div className="p-6">
+                <EmptyState title="No category data" description="Product categories will appear here once the catalog is populated." />
+              </div>
+            ) : (
+              <ul className="divide-y divide-slate-100">
+                {(stats?.byCategory || []).slice(0, 6).map((item) => (
+                  <li
+                    key={item.categoryId}
+                    className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 cursor-pointer"
+                    onClick={() => {
+                      setCategory(item.categoryId);
+                      setPage(1);
+                      setTab('Catalog');
+                    }}
+                  >
+                    <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary-100 text-primary-600">
+                      <Package className="h-4 w-4" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-slate-900">{item.category}</p>
+                    </div>
+                    <span className="text-sm font-semibold tabular-nums text-slate-700">{item.count}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Card>
+        </div>
+      )}
 
       {activeTabName === 'Catalog' && canManageProducts && (
         <DataPanel>

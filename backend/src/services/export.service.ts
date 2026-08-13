@@ -464,25 +464,23 @@ export class ExportService {
     return Buffer.from(buffer);
   }
 
-  static async generateSalesReportExcel(): Promise<Buffer> {
+  static async generateSalesReportExcel(query: {
+    startDate?: string;
+    endDate?: string;
+    salesPersonId?: string;
+    status?: string;
+  } = {}): Promise<Buffer> {
     const companyId = requireTenantId();
     const company = await resolveCompanyDocHeader(companyId);
-    const invoices = await prisma.invoice.findMany({
-      where: { type: 'SALES', companyId },
-      include: {
-        customer: true,
-        salesOrder: {
-          include: {
-            createdBy: { select: { firstName: true, lastName: true } },
-          },
-        },
-      },
-      orderBy: { invoiceDate: 'desc' },
-    });
+    const invoices = await this.fetchSalesInvoicesForReport(query);
 
     const workbook = new ExcelJS.Workbook();
     const sheet = workbook.addWorksheet('Sales Report');
-    addExcelCompanyLetterhead(workbook, sheet, company, `${company.name} — Sales Report`, 'H');
+    const nextRow = addExcelCompanyLetterhead(workbook, sheet, company, `${company.name} — Sales Report`, 'H');
+    if (query.startDate || query.endDate) {
+      sheet.getCell(`A${nextRow}`).value =
+        `Period: ${query.startDate || 'start'} to ${query.endDate || 'today'}`;
+    }
 
     const headerRow = sheet.addRow([
       'Invoice #',
@@ -530,6 +528,92 @@ export class ExportService {
 
     const buffer = await workbook.xlsx.writeBuffer();
     return Buffer.from(buffer);
+  }
+
+  private static async fetchSalesInvoicesForReport(query: {
+    startDate?: string;
+    endDate?: string;
+    salesPersonId?: string;
+    status?: string;
+  }) {
+    const companyId = requireTenantId();
+    const { startOfDay, endOfDay } = await import('../utils/date');
+    const { salesPersonOrderFilter } = await import('./my-sales.service');
+    const where: Record<string, unknown> = {
+      companyId,
+      type: 'SALES',
+    };
+    if (query.status) where.status = query.status;
+    if (query.salesPersonId) {
+      where.salesOrder = salesPersonOrderFilter(query.salesPersonId);
+    }
+    if (query.startDate || query.endDate) {
+      const invoiceDate: Record<string, Date> = {};
+      if (query.startDate) invoiceDate.gte = startOfDay(new Date(query.startDate));
+      if (query.endDate) invoiceDate.lte = endOfDay(new Date(query.endDate));
+      where.invoiceDate = invoiceDate;
+    }
+    return prisma.invoice.findMany({
+      where,
+      include: {
+        customer: true,
+        salesOrder: {
+          include: {
+            createdBy: { select: { firstName: true, lastName: true } },
+          },
+        },
+      },
+      orderBy: { invoiceDate: 'desc' },
+    });
+  }
+
+  static async generateSalesReportPDF(query: {
+    startDate?: string;
+    endDate?: string;
+    salesPersonId?: string;
+    status?: string;
+  } = {}): Promise<Buffer> {
+    const company = await resolveCompanyDocHeader(requireTenantId());
+    const invoices = await this.fetchSalesInvoicesForReport(query);
+    const fmt = (n: number) =>
+      Math.round(n).toLocaleString('en-KE', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+    const period =
+      query.startDate || query.endDate
+        ? `${query.startDate || 'start'} to ${query.endDate || 'today'}`
+        : 'All time';
+    let total = 0;
+    const rows = invoices.map((inv) => {
+      total += Number(inv.totalAmount);
+      const salesPerson = inv.salesOrder?.createdBy
+        ? `${inv.salesOrder.createdBy.firstName} ${inv.salesOrder.createdBy.lastName}`.trim()
+        : '';
+      return {
+        invoice: inv.invoiceNumber,
+        order: inv.salesOrder?.orderNumber || '',
+        person: salesPerson,
+        customer: inv.customer?.name || '',
+        date: new Date(inv.invoiceDate).toLocaleDateString('en-KE'),
+        amount: fmt(Number(inv.totalAmount)),
+        status: inv.status,
+      };
+    });
+    return this.generateTabularReportPDF({
+      company,
+      docType: 'SALES REPORT',
+      title: `${company.name} — Sales Report`,
+      subtitle: `Period: ${period}${query.status ? ` · Status: ${query.status}` : ''}`,
+      columns: [
+        { key: 'invoice', label: 'Invoice', width: 72 },
+        { key: 'order', label: 'Order', width: 58 },
+        { key: 'person', label: 'Sales Person', width: 88 },
+        { key: 'customer', label: 'Customer', width: 110 },
+        { key: 'date', label: 'Date', width: 58 },
+        { key: 'amount', label: 'Amount', width: 62, align: 'right' as const },
+        { key: 'status', label: 'Status', width: 52 },
+      ],
+      rows,
+      footer: `Total sales: KES ${fmt(total)} · ${rows.length} invoices`,
+    });
   }
 
   static async generatePaymentsExcel(
@@ -696,6 +780,84 @@ export class ExportService {
     return Buffer.from(buffer);
   }
 
+  static async generateSalesByPersonPDF(query: {
+    salesPersonId?: string;
+    startDate?: string;
+    endDate?: string;
+  }): Promise<Buffer> {
+    const company = await resolveCompanyDocHeader(requireTenantId());
+    const { SalespersonReportService } = await import('./salesperson-report.service');
+    const rows = await SalespersonReportService.getRowsForExport(query);
+    const fmt = (n: number) =>
+      Math.round(n).toLocaleString('en-KE', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+    let total = 0;
+    const tableRows = rows.map((row) => {
+      total += row.totalAmount;
+      return {
+        invoice: row.invoiceNumber,
+        date: new Date(row.invoiceDate).toLocaleDateString('en-KE'),
+        person: row.salesPersonName,
+        customer: row.customerName,
+        amount: fmt(row.totalAmount),
+        balance: fmt(row.balance),
+        status: row.status,
+      };
+    });
+    return this.generateTabularReportPDF({
+      company,
+      docType: 'SALES BY PERSON',
+      title: `${company.name} — Sales by Salesperson`,
+      subtitle: `Period: ${query.startDate || 'start'} to ${query.endDate || 'today'}`,
+      columns: [
+        { key: 'invoice', label: 'Invoice', width: 72 },
+        { key: 'date', label: 'Date', width: 58 },
+        { key: 'person', label: 'Sales Person', width: 90 },
+        { key: 'customer', label: 'Customer', width: 120 },
+        { key: 'amount', label: 'Amount', width: 68, align: 'right' as const },
+        { key: 'balance', label: 'Balance', width: 68, align: 'right' as const },
+        { key: 'status', label: 'Status', width: 54 },
+      ],
+      rows: tableRows,
+      footer: `Total: KES ${fmt(total)} · ${tableRows.length} invoices`,
+    });
+  }
+
+  static async generateProductsSoldPDF(query: {
+    startDate?: string;
+    endDate?: string;
+    search?: string;
+    productId?: string;
+    needsRestockOnly?: boolean;
+  }): Promise<Buffer> {
+    const company = await resolveCompanyDocHeader(requireTenantId());
+    const { ProductsSoldReportService } = await import('./products-sold-report.service');
+    const { period, summary, rows } = await ProductsSoldReportService.getRowsForExport(query);
+    const tableRows = rows.map((row) => ({
+      sku: row.sku,
+      name: row.name,
+      category: row.category,
+      qtySold: String(row.qtySold),
+      available: String(row.availableQty),
+      restock: row.needsRestock ? 'Yes' : 'No',
+    }));
+    return this.generateTabularReportPDF({
+      company,
+      docType: 'PRODUCTS SOLD',
+      title: `${company.name} — Products Sold Statement`,
+      subtitle: `Period: ${period.startDate || 'start'} to ${period.endDate || 'today'} · Products: ${summary.productCount} · Qty sold: ${summary.totalQtySold}`,
+      columns: [
+        { key: 'sku', label: 'Part No.', width: 72 },
+        { key: 'name', label: 'Product', width: 130 },
+        { key: 'category', label: 'Category', width: 80 },
+        { key: 'qtySold', label: 'Qty Sold', width: 58, align: 'right' as const },
+        { key: 'available', label: 'Available', width: 62, align: 'right' as const },
+        { key: 'restock', label: 'Restock', width: 58 },
+      ],
+      rows: tableRows,
+      footer: `Need restock: ${summary.needsRestockCount} products`,
+    });
+  }
+
   static async generateProductsSoldExcel(query: {
     startDate?: string;
     endDate?: string;
@@ -766,18 +928,27 @@ export class ExportService {
     return Buffer.from(buffer);
   }
 
-  static async generateInventoryReportExcel(): Promise<Buffer> {
+  static async generateInventoryReportExcel(query: {
+    warehouseId?: string;
+    itemType?: 'ALL' | 'PRODUCT' | 'RAW_MATERIAL';
+    lowStockOnly?: boolean;
+  } = {}): Promise<Buffer> {
     const companyId = requireTenantId();
     const company = await resolveCompanyDocHeader(companyId);
-    const stockLevels = await prisma.stockLevel.findMany({
-      where: { warehouse: { companyId } },
-      include: { warehouse: true, product: true, rawMaterial: true },
-      orderBy: { updatedAt: 'desc' },
-    });
+    const stockLevels = await this.fetchInventoryRows(query, companyId);
 
     const workbook = new ExcelJS.Workbook();
     const sheet = workbook.addWorksheet('Inventory Report');
-    addExcelCompanyLetterhead(workbook, sheet, company, `${company.name} — Inventory Report`, 'F');
+    const nextRow = addExcelCompanyLetterhead(workbook, sheet, company, `${company.name} — Inventory Report`, 'F');
+    if (query.warehouseId || query.itemType || query.lowStockOnly) {
+      sheet.getCell(`A${nextRow}`).value = [
+        query.warehouseId ? 'Filtered warehouse' : null,
+        query.itemType && query.itemType !== 'ALL' ? `Type: ${query.itemType}` : null,
+        query.lowStockOnly ? 'Low stock only' : null,
+      ]
+        .filter(Boolean)
+        .join(' · ');
+    }
 
     const headerRow = sheet.addRow(['Warehouse', 'Item', 'Type', 'Quantity', 'Unit Cost', 'Value']);
     headerRow.font = { bold: true };
@@ -803,6 +974,223 @@ export class ExportService {
 
     const buffer = await workbook.xlsx.writeBuffer();
     return Buffer.from(buffer);
+  }
+
+  private static async fetchInventoryRows(
+    query: {
+      warehouseId?: string;
+      itemType?: 'ALL' | 'PRODUCT' | 'RAW_MATERIAL';
+      lowStockOnly?: boolean;
+    },
+    companyId: string
+  ) {
+    const where: Record<string, unknown> = {
+      warehouse: { companyId },
+    };
+    if (query.warehouseId) where.warehouseId = query.warehouseId;
+    if (query.itemType === 'PRODUCT') where.productId = { not: null };
+    if (query.itemType === 'RAW_MATERIAL') where.rawMaterialId = { not: null };
+
+    const stockLevels = await prisma.stockLevel.findMany({
+      where,
+      include: { warehouse: true, product: true, rawMaterial: true },
+      orderBy: { updatedAt: 'desc' },
+    });
+
+    if (!query.lowStockOnly) return stockLevels;
+
+    return stockLevels.filter((sl) => {
+      const min = sl.product?.minStockLevel ?? sl.rawMaterial?.minStockLevel ?? 0;
+      return Number(sl.quantity) <= Number(min);
+    });
+  }
+
+  static async generateInventoryReportPDF(query: {
+    warehouseId?: string;
+    itemType?: 'ALL' | 'PRODUCT' | 'RAW_MATERIAL';
+    lowStockOnly?: boolean;
+  } = {}): Promise<Buffer> {
+    const companyId = requireTenantId();
+    const company = await resolveCompanyDocHeader(companyId);
+    const stockLevels = await this.fetchInventoryRows(query, companyId);
+    const fmt = (n: number) =>
+      Math.round(n).toLocaleString('en-KE', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+    let totalValue = 0;
+    const rows = stockLevels.map((sl) => {
+      const value = Number(sl.quantity) * Number(sl.unitCost);
+      totalValue += value;
+      return {
+        warehouse: sl.warehouse.name,
+        item: sl.product?.name || sl.rawMaterial?.name || '',
+        type: sl.product ? 'Finished Good' : 'Raw Material',
+        qty: String(Number(sl.quantity)),
+        value: fmt(value),
+      };
+    });
+    return this.generateTabularReportPDF({
+      company,
+      docType: 'INVENTORY REPORT',
+      title: `${company.name} — Inventory Report`,
+      subtitle: [
+        query.warehouseId ? 'Filtered warehouse' : 'All warehouses',
+        query.itemType && query.itemType !== 'ALL' ? query.itemType.replace('_', ' ') : null,
+        query.lowStockOnly ? 'Low stock only' : null,
+      ]
+        .filter(Boolean)
+        .join(' · '),
+      columns: [
+        { key: 'warehouse', label: 'Warehouse', width: 100 },
+        { key: 'item', label: 'Item', width: 150 },
+        { key: 'type', label: 'Type', width: 80 },
+        { key: 'qty', label: 'Qty', width: 50, align: 'right' as const },
+        { key: 'value', label: 'Value (KES)', width: 80, align: 'right' as const },
+      ],
+      rows,
+      footer: `Total inventory value: KES ${fmt(totalValue)} · ${rows.length} items`,
+    });
+  }
+
+  static async generateSummaryReportExcel(
+    reportType: 'purchase' | 'production' | 'customer' | 'quality',
+    summary: Record<string, unknown>
+  ): Promise<Buffer> {
+    const company = await resolveCompanyDocHeader(requireTenantId());
+    const workbook = new ExcelJS.Workbook();
+    const titles: Record<string, string> = {
+      purchase: 'Purchase Report',
+      production: 'Production Report',
+      customer: 'Customer Report',
+      quality: 'Quality Report',
+    };
+    const sheet = workbook.addWorksheet(titles[reportType]);
+    addExcelCompanyLetterhead(workbook, sheet, company, `${company.name} — ${titles[reportType]}`, 'C');
+    for (const [key, value] of Object.entries(summary)) {
+      if (key === 'topCustomers' && Array.isArray(value)) {
+        sheet.addRow(['Top Customers']);
+        sheet.addRow(['Name', 'Code', 'Orders']);
+        for (const c of value as Array<{ name: string; code: string; orderCount: number }>) {
+          sheet.addRow([c.name, c.code, c.orderCount]);
+        }
+      } else if (typeof value !== 'object') {
+        sheet.addRow([key.replace(/([A-Z])/g, ' $1').replace(/^./, (s) => s.toUpperCase()), value]);
+      }
+    }
+    const buffer = await workbook.xlsx.writeBuffer();
+    return Buffer.from(buffer);
+  }
+
+  static async generateSummaryReportPDF(
+    reportType: 'purchase' | 'production' | 'customer' | 'quality',
+    summary: Record<string, unknown>,
+    periodLabel?: string
+  ): Promise<Buffer> {
+    const company = await resolveCompanyDocHeader(requireTenantId());
+    const titles: Record<string, string> = {
+      purchase: 'Purchase Report',
+      production: 'Production Report',
+      customer: 'Customer Report',
+      quality: 'Quality Report',
+    };
+    const lines: Array<{ label: string; value: string }> = [];
+    const push = (label: string, value: unknown) => lines.push({ label, value: String(value ?? '—') });
+
+    if (reportType === 'purchase') {
+      push('POs in period', summary.purchaseOrdersMonth);
+      push('Purchase value', summary.purchaseValueMonth);
+      push('Total purchases (all time)', summary.totalPurchases);
+      push('Suppliers', summary.totalSuppliers);
+    } else if (reportType === 'production') {
+      push('Completed orders', summary.completedProduction);
+      push('Output in period', `${summary.productionOutputMonth} units`);
+    } else if (reportType === 'customer') {
+      push('Active customers', summary.totalCustomers);
+      push('Unpaid invoices', summary.unpaidInvoices);
+    } else {
+      push('Passed inspections', summary.qualityPassed);
+      push('Failed inspections', summary.qualityFailed);
+    }
+
+    const topCustomers = summary.topCustomers as Array<{ name: string; code: string; orderCount: number }> | undefined;
+    const rows = lines.map((line) => ({ metric: line.label, value: line.value }));
+    if (reportType === 'customer' && topCustomers?.length) {
+      for (const c of topCustomers) {
+        rows.push({ metric: `Customer: ${c.name}`, value: `${c.orderCount} orders (${c.code})` });
+      }
+    }
+
+    return this.generateTabularReportPDF({
+      company,
+      docType: titles[reportType].toUpperCase(),
+      title: `${company.name} — ${titles[reportType]}`,
+      subtitle: periodLabel || 'Summary',
+      columns: [
+        { key: 'metric', label: 'Metric', width: 220 },
+        { key: 'value', label: 'Value', width: 240 },
+      ],
+      rows,
+      footer: `Generated ${new Date().toLocaleString('en-KE')}`,
+    });
+  }
+
+  static generateTabularReportPDF(opts: {
+    company: CompanyDocHeader;
+    docType: string;
+    title: string;
+    subtitle?: string;
+    columns: Array<{ key: string; label: string; width: number; align?: 'left' | 'right' | 'center' }>;
+    rows: Array<Record<string, string>>;
+    footer?: string;
+  }): Promise<Buffer> {
+    const { company, docType, title, subtitle, columns, rows, footer } = opts;
+    return new Promise((resolve, reject) => {
+      const doc = new PDFDocument({ margin: 48, size: 'A4', bufferPages: true });
+      const chunks: Buffer[] = [];
+      doc.on('data', (chunk) => chunks.push(chunk));
+      doc.on('end', () => resolve(Buffer.concat(chunks)));
+      doc.on('error', reject);
+
+      let y = drawAmazonStyleHeader(doc, company, docType);
+      doc.font('Helvetica-Bold').fontSize(12).fillColor('#0f172a').text(title, PAGE_LEFT, y);
+      y += 18;
+      if (subtitle) {
+        doc.font('Helvetica').fontSize(9).fillColor('#64748b').text(subtitle, PAGE_LEFT, y);
+        y += 16;
+      }
+
+      const tableCols = columns.map((c) => ({
+        key: c.key,
+        label: c.label,
+        width: c.width,
+        align: c.align,
+      }));
+      let tableY = y + 8;
+      const pageRows = rows.map((row) => {
+        const out: Record<string, string> = {};
+        for (const col of columns) out[col.key] = row[col.key] || '';
+        return out;
+      });
+
+      for (let i = 0; i < pageRows.length; i += 28) {
+        if (i > 0) {
+          doc.addPage();
+          tableY = 50;
+        }
+        const chunk = pageRows.slice(i, i + 28);
+        tableY = drawDocTable(
+          doc,
+          tableY,
+          tableCols,
+          chunk,
+          { minBodyRows: Math.min(chunk.length, 8), footerLeft: footer }
+        );
+      }
+
+      if (footer && pageRows.length <= 28) {
+        doc.font('Helvetica').fontSize(8).fillColor('#64748b').text(footer, PAGE_LEFT, tableY + 8);
+      }
+
+      doc.end();
+    });
   }
 
   static ensureReportDir() {

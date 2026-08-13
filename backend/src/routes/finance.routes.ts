@@ -13,6 +13,9 @@ import {
   createJournalEntrySchema,
   salesByPersonQuerySchema,
   productsSoldQuerySchema,
+  salesReportQuerySchema,
+  inventoryReportQuerySchema,
+  summaryReportQuerySchema,
   mySalesQuerySchema,
   salesPerformanceQuerySchema,
   upsertSalesTargetSchema,
@@ -776,8 +779,14 @@ router.patch(
 router.get(
   '/reports/summary',
   authorize('reports:read'),
-  asyncHandler(async (_req: AuthRequest, res: Response) => {
-    const data = await ReportsService.getOverview();
+  validate(summaryReportQuerySchema, 'query'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const query = getQuery<{
+      startDate?: string;
+      endDate?: string;
+      qualityStatus?: 'ALL' | 'PASSED' | 'FAILED';
+    }>(req.query);
+    const data = await ReportsService.getSummaryReport(query);
     res.json({ success: true, data });
   })
 );
@@ -785,12 +794,38 @@ router.get(
 router.get(
   '/reports/sales/excel',
   authorize('reports:read'),
-  asyncHandler(async (_req: AuthRequest, res: Response) => {
+  validate(salesReportQuerySchema, 'query'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const query = getQuery<{
+      startDate?: string;
+      endDate?: string;
+      salesPersonId?: string;
+      status?: string;
+    }>(req.query);
     const { ExportService } = await import('../services/export.service');
-    const excel = await ExportService.generateSalesReportExcel();
+    const excel = await ExportService.generateSalesReportExcel(query);
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', 'attachment; filename="sales-report.xlsx"');
     res.send(excel);
+  })
+);
+
+router.get(
+  '/reports/sales/pdf',
+  authorize('reports:read'),
+  validate(salesReportQuerySchema, 'query'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const query = getQuery<{
+      startDate?: string;
+      endDate?: string;
+      salesPersonId?: string;
+      status?: string;
+    }>(req.query);
+    const { ExportService } = await import('../services/export.service');
+    const pdf = await ExportService.generateSalesReportPDF(query);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', 'attachment; filename="sales-report.pdf"');
+    res.send(pdf);
   })
 );
 
@@ -844,6 +879,24 @@ router.get(
 );
 
 router.get(
+  '/reports/sales-by-person/pdf',
+  authorize('reports:read'),
+  validate(salesByPersonQuerySchema.omit({ page: true, limit: true }), 'query'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const query = getQuery<{
+      salesPersonId?: string;
+      startDate?: string;
+      endDate?: string;
+    }>(req.query);
+    const { ExportService } = await import('../services/export.service');
+    const pdf = await ExportService.generateSalesByPersonPDF(query);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', 'attachment; filename="sales-by-salesperson.pdf"');
+    res.send(pdf);
+  })
+);
+
+router.get(
   '/reports/products-sold',
   authorize('reports:read'),
   validate(productsSoldQuerySchema, 'query'),
@@ -880,6 +933,26 @@ router.get(
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', 'attachment; filename="products-sold-statement.xlsx"');
     res.send(excel);
+  })
+);
+
+router.get(
+  '/reports/products-sold/pdf',
+  authorize('reports:read'),
+  validate(productsSoldQuerySchema.omit({ page: true, limit: true }), 'query'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const query = getQuery<{
+      startDate?: string;
+      endDate?: string;
+      search?: string;
+      productId?: string;
+      needsRestockOnly?: boolean;
+    }>(req.query);
+    const { ExportService } = await import('../services/export.service');
+    const pdf = await ExportService.generateProductsSoldPDF(query);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', 'attachment; filename="products-sold-statement.pdf"');
+    res.send(pdf);
   })
 );
 
@@ -985,14 +1058,71 @@ router.put(
 router.get(
   '/reports/inventory/excel',
   authorize('reports:read'),
-  asyncHandler(async (_req: AuthRequest, res: Response) => {
+  validate(inventoryReportQuerySchema, 'query'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const query = getQuery<{
+      warehouseId?: string;
+      itemType?: 'ALL' | 'PRODUCT' | 'RAW_MATERIAL';
+      lowStockOnly?: boolean;
+    }>(req.query);
     const { ExportService } = await import('../services/export.service');
-    const excel = await ExportService.generateInventoryReportExcel();
+    const excel = await ExportService.generateInventoryReportExcel(query);
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', 'attachment; filename="inventory-report.xlsx"');
     res.send(excel);
   })
 );
+
+router.get(
+  '/reports/inventory/pdf',
+  authorize('reports:read'),
+  validate(inventoryReportQuerySchema, 'query'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const query = getQuery<{
+      warehouseId?: string;
+      itemType?: 'ALL' | 'PRODUCT' | 'RAW_MATERIAL';
+      lowStockOnly?: boolean;
+    }>(req.query);
+    const { ExportService } = await import('../services/export.service');
+    const pdf = await ExportService.generateInventoryReportPDF(query);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', 'attachment; filename="inventory-report.pdf"');
+    res.send(pdf);
+  })
+);
+
+const summaryExportHandler =
+  (reportType: 'purchase' | 'production' | 'customer' | 'quality', format: 'pdf' | 'excel') =>
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const query = getQuery<{
+      startDate?: string;
+      endDate?: string;
+      qualityStatus?: 'ALL' | 'PASSED' | 'FAILED';
+    }>(req.query);
+    const summary = await ReportsService.getSummaryReport(query);
+    const { ExportService } = await import('../services/export.service');
+    const periodLabel = `Period: ${query.startDate || 'start'} to ${query.endDate || 'today'}`;
+    if (format === 'pdf') {
+      const pdf = await ExportService.generateSummaryReportPDF(reportType, summary, periodLabel);
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="${reportType}-report.pdf"`);
+      res.send(pdf);
+    } else {
+      const excel = await ExportService.generateSummaryReportExcel(reportType, summary);
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', `attachment; filename="${reportType}-report.xlsx"`);
+      res.send(excel);
+    }
+  });
+
+router.get('/reports/purchase/pdf', authorize('reports:read'), validate(summaryReportQuerySchema, 'query'), summaryExportHandler('purchase', 'pdf'));
+router.get('/reports/purchase/excel', authorize('reports:read'), validate(summaryReportQuerySchema, 'query'), summaryExportHandler('purchase', 'excel'));
+router.get('/reports/production/pdf', authorize('reports:read'), validate(summaryReportQuerySchema, 'query'), summaryExportHandler('production', 'pdf'));
+router.get('/reports/production/excel', authorize('reports:read'), validate(summaryReportQuerySchema, 'query'), summaryExportHandler('production', 'excel'));
+router.get('/reports/customer/pdf', authorize('reports:read'), validate(summaryReportQuerySchema, 'query'), summaryExportHandler('customer', 'pdf'));
+router.get('/reports/customer/excel', authorize('reports:read'), validate(summaryReportQuerySchema, 'query'), summaryExportHandler('customer', 'excel'));
+router.get('/reports/quality/pdf', authorize('reports:read'), validate(summaryReportQuerySchema, 'query'), summaryExportHandler('quality', 'pdf'));
+router.get('/reports/quality/excel', authorize('reports:read'), validate(summaryReportQuerySchema, 'query'), summaryExportHandler('quality', 'excel'));
 
 router.get(
   '/journal-entries',

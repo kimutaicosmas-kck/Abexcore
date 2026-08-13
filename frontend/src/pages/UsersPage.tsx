@@ -4,16 +4,26 @@ import {
   Plus,
   Pencil,
   Trash2,
+  Users,
+  UserCheck,
+  UserX,
+  Shield,
   Search,
+  ChevronRight,
+  UserPlus,
+  ScrollText,
 } from 'lucide-react';
 import { usersApi } from '../services/api';
 import {
+  PageHeader,
   Table,
   Badge,
   Button,
   Input,
   Select,
   Card,
+  StatCard,
+  StatGrid,
   Alert,
   EmptyState,
   DataPanel,
@@ -25,9 +35,9 @@ import {
 import { Modal } from '../components/ui/Modal';
 import { UserForm } from '../components/forms/UserForm';
 import { useAuth } from '../contexts/AuthContext';
-import { AuditLogEntry, RoleWithPermissions, User } from '../types';
+import { AuditLogEntry, RoleWithPermissions, User, UserStats } from '../types';
 
-const tabs = ['Users', 'Roles & Permissions', 'Audit Log'];
+const tabs = ['Overview', 'Users', 'Roles & Permissions', 'Audit Log'];
 
 const STATUS_OPTIONS = [
   { value: '', label: 'All statuses' },
@@ -64,6 +74,11 @@ export function UsersPage() {
   const canUpdate = hasPermission('users:update');
   const canDelete = hasPermission('users:delete');
 
+  const { data: stats } = useQuery({
+    queryKey: ['user-stats'],
+    queryFn: () => usersApi.stats().then((r) => r.data.data as UserStats),
+  });
+
   const { data: rolesResponse } = useQuery({
     queryKey: ['user-roles'],
     queryFn: () =>
@@ -71,7 +86,7 @@ export function UsersPage() {
         roles: r.data.data as RoleWithPermissions[],
         superAdminQuota: r.data.meta?.superAdminQuota ?? null,
       })),
-    enabled: activeTab <= 1,
+    enabled: activeTab === 0 || activeTab <= 2,
   });
   const rolesData = rolesResponse?.roles;
 
@@ -92,7 +107,7 @@ export function UsersPage() {
           roleId: roleFilter || undefined,
         })
         .then((r) => r.data),
-    enabled: activeTab === 0,
+    enabled: activeTab === 0 || activeTab === 1,
   });
 
   const { data: userDetail, isLoading: detailLoading } = useQuery({
@@ -107,7 +122,7 @@ export function UsersPage() {
       usersApi
         .auditLogs({ page: auditPage, limit: 20, search: auditSearch || undefined })
         .then((r) => r.data),
-    enabled: activeTab === 2,
+    enabled: activeTab === 0 || activeTab === 3,
   });
 
   const deactivateMutation = useMutation({
@@ -120,6 +135,8 @@ export function UsersPage() {
       setSelectedUser(null);
     },
   });
+
+  const goToTab = (index: number) => setActiveTab(index);
 
   const openCreate = () => {
     setEditing(null);
@@ -147,6 +164,10 @@ export function UsersPage() {
     setSearch(searchInput);
     setPage(1);
   };
+
+  const recentUsers = activeTab === 0 ? ((usersRes?.data as User[]) || []).slice(0, 6) : [];
+  const recentAudit = activeTab === 0 ? ((auditRes?.data as AuditLogEntry[]) || []).slice(0, 5) : [];
+  const topRoles = activeTab === 0 ? (stats?.byRole || []).slice(0, 5) : [];
 
   const userColumns = [
     {
@@ -254,15 +275,37 @@ export function UsersPage() {
   ];
 
   const toolbarActions =
-    canCreate && activeTab === 0 ? (
+    canCreate &&
+    (activeTab === 0 || activeTab === 1 ? (
       <Button size="sm" onClick={openCreate}>
         <Plus className="h-4 w-4 mr-1.5" />
         Add User
       </Button>
-    ) : undefined;
+    ) : undefined);
 
   return (
     <div className="space-y-4">
+      {stats && (
+        <StatGrid>
+          <StatCard title="Total Users" value={stats.total} icon={<Users className="h-5 w-5 text-white" />} color="from-blue-500 to-blue-700" onClick={() => goToTab(1)} />
+          <StatCard title="Active" value={stats.active} icon={<UserCheck className="h-5 w-5 text-white" />} color="from-lime-500 to-lime-700" onClick={() => { setStatusFilter('ACTIVE'); setPage(1); goToTab(1); }} />
+          <StatCard title="Inactive / Suspended" value={stats.inactive + stats.suspended} icon={<UserX className="h-5 w-5 text-white" />} color="from-pink-500 to-pink-700" onClick={() => { setStatusFilter('INACTIVE'); setPage(1); goToTab(1); }} />
+          <StatCard title="Logged In (7d)" value={stats.recentLogins} icon={<Shield className="h-5 w-5 text-white" />} color="from-amber-500 to-amber-700" onClick={() => goToTab(1)} />
+          <StatCard title="Roles" value={stats.byRole.length} icon={<ScrollText className="h-5 w-5 text-white" />} color="from-slate-500 to-slate-700" onClick={() => goToTab(2)} />
+        </StatGrid>
+      )}
+
+      <PageHeader
+        action={
+          stats && stats.inactive + stats.suspended > 0 ? (
+            <Button variant="secondary" size="sm" onClick={() => { setStatusFilter('INACTIVE'); setPage(1); goToTab(1); }}>
+              <UserX className="h-4 w-4 mr-1.5 text-red-500" />
+              {stats.inactive + stats.suspended} inactive
+            </Button>
+          ) : undefined
+        }
+      />
+
       <PageToolbar
         tabs={tabs}
         activeTab={activeTab}
@@ -275,6 +318,73 @@ export function UsersPage() {
       />
 
       {activeTab === 0 && (
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+            <Card
+              title="Users by role"
+              action={
+                topRoles.length > 0 ? (
+                  <Button variant="ghost" size="sm" onClick={() => goToTab(2)}>
+                    View roles
+                  </Button>
+                ) : undefined
+              }
+              padding={false}
+            >
+              {topRoles.length === 0 ? (
+                <div className="p-6">
+                  <EmptyState title="No role data" description="User counts by role will appear here." />
+                </div>
+              ) : (
+                <ul className="divide-y divide-slate-100">
+                  {topRoles.map((r) => (
+                    <li key={r.roleId} className="flex items-center gap-3 px-4 py-3">
+                      <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary-100 text-primary-600">
+                        <Shield className="h-4 w-4" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-slate-900 truncate">{r.roleName}</p>
+                        <p className="text-xs text-slate-500">{r.count} user{r.count !== 1 ? 's' : ''}</p>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Card>
+
+            <Card
+              title="Recent audit activity"
+              action={
+                <Button variant="ghost" size="sm" onClick={() => goToTab(3)}>
+                  Full log
+                  <ChevronRight className="h-4 w-4 ml-1" />
+                </Button>
+              }
+              padding={false}
+            >
+              {recentAudit.length === 0 ? (
+                <div className="p-6">
+                  <EmptyState title="No audit entries" description="System actions will be logged here." />
+                </div>
+              ) : (
+                <ul className="divide-y divide-slate-100">
+                  {recentAudit.map((entry) => (
+                    <li key={entry.id} className="flex items-center gap-3 px-4 py-3">
+                      <Badge variant="info">{entry.module}</Badge>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-slate-800 truncate">{entry.action} · {entry.entityType}</p>
+                        <p className="text-xs text-slate-400">{formatDateTime(entry.createdAt)}</p>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Card>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 1 && (
         <DataPanel>
           <div className="p-4 pb-0 flex flex-wrap items-end gap-3">
             <form onSubmit={handleSearch} className="flex-1 min-w-[200px] sm:max-w-md">
@@ -344,7 +454,7 @@ export function UsersPage() {
         </DataPanel>
       )}
 
-      {activeTab === 1 && (
+      {activeTab === 2 && (
         <>
           {(rolesData?.length || 0) === 0 ? (
             <EmptyState title="No roles configured" description="Roles are set up during system seeding or in Settings." />
@@ -373,7 +483,7 @@ export function UsersPage() {
         </>
       )}
 
-      {activeTab === 2 && (
+      {activeTab === 3 && (
         <DataPanel>
           <div className="p-4 pb-0 sm:max-w-md">
             <Input

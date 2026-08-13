@@ -251,7 +251,34 @@ export class MaintenanceService {
 
 export class ReportsService {
   static async getOverview() {
+    return this.getSummaryReport({});
+  }
+
+  static async getSummaryReport(query: {
+    startDate?: string;
+    endDate?: string;
+    qualityStatus?: 'ALL' | 'PASSED' | 'FAILED';
+  }) {
+    const { startOfDay, endOfDay } = await import('../utils/date');
     const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+
+    const rangeFilter = (field: 'createdAt' | 'actualEnd' | 'inspectedAt') => {
+      if (!query.startDate && !query.endDate) return undefined;
+      const filter: { gte?: Date; lte?: Date } = {};
+      if (query.startDate) filter.gte = startOfDay(new Date(query.startDate));
+      if (query.endDate) filter.lte = endOfDay(new Date(query.endDate));
+      return { [field]: filter };
+    };
+
+    const purchaseOrderWhere =
+      query.startDate || query.endDate
+        ? rangeFilter('createdAt')
+        : { createdAt: { gte: monthStart } };
+
+    const productionOutputWhere =
+      query.startDate || query.endDate
+        ? { status: 'COMPLETED' as const, ...rangeFilter('actualEnd') }
+        : { status: 'COMPLETED' as const, actualEnd: { gte: monthStart } };
 
     const [
       salesTotal,
@@ -265,29 +292,42 @@ export class ReportsService {
       qualityPassed,
       qualityFailed,
     ] = await Promise.all([
-      prisma.invoice.aggregate({ where: { type: 'SALES' }, _sum: { totalAmount: true } }),
-      prisma.invoice.aggregate({ where: { type: 'PURCHASE' }, _sum: { totalAmount: true } }),
-      prisma.productionOrder.count({ where: { status: 'COMPLETED' } }),
+      prisma.invoice.aggregate({
+        where: { type: 'SALES', ...rangeFilter('createdAt') },
+        _sum: { totalAmount: true },
+      }),
+      prisma.invoice.aggregate({
+        where: { type: 'PURCHASE', ...rangeFilter('createdAt') },
+        _sum: { totalAmount: true },
+      }),
+      prisma.productionOrder.count({
+        where: { status: 'COMPLETED', ...rangeFilter('actualEnd') },
+      }),
       prisma.customer.count({ where: { deletedAt: null } }),
       prisma.supplier.count({ where: { deletedAt: null } }),
       prisma.purchaseOrder.aggregate({
-        where: { createdAt: { gte: monthStart } },
+        where: purchaseOrderWhere,
         _sum: { totalAmount: true },
         _count: { id: true },
       }),
       prisma.productionOrder.aggregate({
-        where: { status: 'COMPLETED', actualEnd: { gte: monthStart } },
+        where: productionOutputWhere,
         _sum: { completedQty: true },
       }),
       prisma.invoice.count({ where: { status: { in: ['UNPAID', 'PARTIAL', 'OVERDUE'] } } }),
-      prisma.qualityInspection.count({ where: { status: 'PASSED' } }),
-      prisma.qualityInspection.count({ where: { status: 'FAILED' } }),
+      prisma.qualityInspection.count({
+        where: { status: 'PASSED', ...rangeFilter('inspectedAt') },
+      }),
+      prisma.qualityInspection.count({
+        where: { status: 'FAILED', ...rangeFilter('inspectedAt') },
+      }),
     ]);
 
     const topCustomers = await prisma.customer.findMany({
       where: { deletedAt: null, isActive: true },
       take: 5,
       include: { _count: { select: { salesOrders: true } } },
+      orderBy: { salesOrders: { _count: 'desc' } },
     });
 
     return {

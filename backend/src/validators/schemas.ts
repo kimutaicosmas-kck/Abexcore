@@ -833,6 +833,43 @@ export const productsSoldQuerySchema = paginationSchema.extend({
   ),
 });
 
+export const salesReportQuerySchema = z.object({
+  startDate: optionalDateString,
+  endDate: optionalDateString,
+  salesPersonId: z.preprocess(
+    (v) => (v === '' || v === undefined ? undefined : v),
+    z.string().uuid().optional()
+  ),
+  status: z.preprocess(
+    (v) => (v === '' || v === undefined ? undefined : v),
+    z.enum(['PAID', 'UNPAID', 'PARTIAL', 'OVERDUE', 'DRAFT', 'CANCELLED']).optional()
+  ),
+});
+
+export const inventoryReportQuerySchema = z.object({
+  warehouseId: z.preprocess(
+    (v) => (v === '' || v === undefined ? undefined : v),
+    z.string().uuid().optional()
+  ),
+  itemType: z.preprocess(
+    (v) => (v === '' || v === undefined ? undefined : v),
+    z.enum(['ALL', 'PRODUCT', 'RAW_MATERIAL']).optional()
+  ),
+  lowStockOnly: z.preprocess(
+    (v) => (v === '' || v === undefined ? undefined : v === 'true' || v === true),
+    z.boolean().optional()
+  ),
+});
+
+export const summaryReportQuerySchema = z.object({
+  startDate: optionalDateString,
+  endDate: optionalDateString,
+  qualityStatus: z.preprocess(
+    (v) => (v === '' || v === undefined ? undefined : v),
+    z.enum(['ALL', 'PASSED', 'FAILED']).optional()
+  ),
+});
+
 export const updateDeliveryStatusSchema = z.object({
   status: z.enum(['PENDING', 'ASSIGNED', 'IN_TRANSIT', 'DELIVERED', 'FAILED', 'RETURNED']),
   proofOfDelivery: z.string().optional(),

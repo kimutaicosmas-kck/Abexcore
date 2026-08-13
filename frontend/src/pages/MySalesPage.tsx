@@ -1,10 +1,13 @@
 import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
+import { Target, TrendingUp, Wallet, Receipt, AlertCircle } from 'lucide-react';
 import { financeApi } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import { getApiErrorMessage } from '../utils/apiError';
 import {
+  StatCard,
+  StatGrid,
   Card,
   Badge,
   Table,
@@ -165,6 +168,46 @@ export function MySalesPage() {
 
   return (
     <div className="space-y-4">
+      {summary && (
+        <StatGrid>
+          <StatCard
+            title={showingToday ? "Today's sales" : 'Total sales'}
+            value={formatCurrency(summary.totalSales)}
+            icon={<TrendingUp className="h-5 w-5 text-white" />}
+            color="from-blue-500 to-blue-700"
+            to="/sales"
+          />
+          <StatCard
+            title="Invoiced"
+            value={formatCurrency(summary.totalInvoiced)}
+            icon={<Receipt className="h-5 w-5 text-white" />}
+            color="from-lime-500 to-lime-700"
+            to="/finance"
+          />
+          <StatCard
+            title="Collected"
+            value={formatCurrency(summary.totalPaid)}
+            icon={<Wallet className="h-5 w-5 text-white" />}
+            color="from-pink-500 to-pink-700"
+            to="/finance"
+          />
+          <StatCard
+            title="Monthly target"
+            value={summary.monthlyTarget > 0 ? `${achievement ?? 0}%` : 'Not set'}
+            icon={<Target className="h-5 w-5 text-white" />}
+            color="from-amber-500 to-amber-700"
+            to="/sales-performance?tab=targets"
+          />
+          <StatCard
+            title="Outstanding"
+            value={formatCurrency(summary.outstanding)}
+            icon={<AlertCircle className="h-5 w-5 text-white" />}
+            color="from-slate-500 to-slate-700"
+            to="/finance"
+          />
+        </StatGrid>
+      )}
+
       {!canLoadDashboard && !authLoading && (
         <Alert variant="warning">
           Open <strong>My Sales</strong> as a Sales Officer, or use <strong>Details</strong> on Sales Performance to

@@ -1,13 +1,17 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plus, Play, CheckCircle } from 'lucide-react';
+import { Plus, Play, CheckCircle, Factory, Calendar, Clock, ChevronRight, Package } from 'lucide-react';
 import { operationsApi } from '../services/api';
 import {
+  PageHeader,
   Table,
   Badge,
   Button,
+  Card,
   Input,
   Select,
+  StatCard,
+  StatGrid,
   EmptyState,
   DataPanel,
   TablePagination,
@@ -21,6 +25,15 @@ import { Modal } from '../components/ui/Modal';
 import { ProductionOrderForm } from '../components/forms/ProductionOrderForm';
 import { CompleteProductionForm } from '../components/forms/CompleteProductionForm';
 import { useAuth } from '../contexts/AuthContext';
+type ProductionStats = {
+  activeOrders: number;
+  inProgress: number;
+  scheduled: number;
+  completedInPeriod: number;
+  awaitingProduction: number;
+};
+
+const tabs = ['Overview', 'Production Orders'];
 
 const STATUS_OPTIONS = [
   { value: '', label: 'All statuses' },
@@ -50,13 +63,18 @@ export function ProductionPage() {
 
   const canCreate = hasPermission('production:create');
 
+  const { data: stats } = useQuery({
+    queryKey: ['production-stats'],
+    queryFn: () => operationsApi.productionStats().then((r) => r.data.data as ProductionStats),
+  });
+
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['production', page, search, statusFilter],
     queryFn: () =>
       operationsApi
         .production({ page, limit: 15, search: search || undefined, status: statusFilter || undefined })
         .then((r) => r.data),
-    enabled: activeTab === 0,
+    enabled: activeTab === 0 || activeTab === 1,
   });
 
   const startMutation = useMutation({
@@ -66,6 +84,11 @@ export function ProductionPage() {
       queryClient.invalidateQueries({ queryKey: ['production-stats'] });
     },
   });
+
+  const goToTab = (index: number) => setActiveTab(index);
+
+  const recentOrders = activeTab === 0 ? (data?.data || []).slice(0, 6) : [];
+  const inProgressOrders = (data?.data || []).filter((o: { status: string }) => o.status === 'IN_PROGRESS').slice(0, 5);
 
   const columns = [
     { key: 'orderNumber', label: 'Order #' },
@@ -132,19 +155,141 @@ export function ProductionPage() {
   ];
 
   const toolbarActions =
-    canCreate && (
+    canCreate &&
+    (activeTab === 0 || activeTab === 1 ? (
       <Button size="sm" onClick={() => setCreateModalOpen(true)}>
         <Plus className="h-4 w-4 mr-1.5" />
         New Order
       </Button>
-    );
+    ) : undefined);
 
   return (
     <div className="space-y-4">
       <PageQueryStatus isError={isError} error={error} onRetry={() => refetch()} />
-      <PageToolbar actions={toolbarActions} />
+      {stats && (
+        <StatGrid>
+          <StatCard
+            title="Active orders"
+            value={stats.activeOrders}
+            icon={<Factory className="h-5 w-5 text-white" />}
+            color="from-blue-500 to-blue-700"
+            onClick={() => goToTab(1)}
+          />
+          <StatCard
+            title="In progress"
+            value={stats.inProgress}
+            icon={<Clock className="h-5 w-5 text-white" />}
+            color="from-lime-500 to-lime-700"
+            onClick={() => { setStatusFilter('IN_PROGRESS'); goToTab(1); }}
+          />
+          <StatCard
+            title="Scheduled"
+            value={stats.scheduled}
+            icon={<Calendar className="h-5 w-5 text-white" />}
+            color="from-pink-500 to-pink-700"
+            onClick={() => { setStatusFilter('SCHEDULED'); goToTab(1); }}
+          />
+          <StatCard
+            title="Awaiting production"
+            value={stats.awaitingProduction}
+            icon={<Package className="h-5 w-5 text-white" />}
+            color="from-amber-500 to-amber-700"
+            onClick={() => { setStatusFilter('PLANNED'); goToTab(1); }}
+          />
+          <StatCard
+            title="Completed (Month)"
+            value={stats.completedInPeriod}
+            icon={<CheckCircle className="h-5 w-5 text-white" />}
+            color="from-slate-500 to-slate-700"
+            onClick={() => { setStatusFilter('COMPLETED'); goToTab(1); }}
+          />
+        </StatGrid>
+      )}
+
+      <PageHeader
+        action={
+          stats && stats.inProgress > 0 ? (
+            <Button variant="secondary" size="sm" onClick={() => goToTab(1)}>
+              <Factory className="h-4 w-4 mr-1.5 text-orange-500" />
+              {stats.inProgress} in progress
+            </Button>
+          ) : undefined
+        }
+      />
+
+      <PageToolbar tabs={tabs} activeTab={activeTab} onTabChange={setActiveTab} actions={toolbarActions} />
 
       {activeTab === 0 && (
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+            <Card
+              title="In progress"
+              action={
+                inProgressOrders.length > 0 ? (
+                  <Button variant="ghost" size="sm" onClick={() => { setStatusFilter('IN_PROGRESS'); goToTab(1); }}>
+                    View all
+                  </Button>
+                ) : undefined
+              }
+              padding={false}
+            >
+              {inProgressOrders.length === 0 ? (
+                <div className="p-6">
+                  <EmptyState title="No active production" description="Start a planned order to begin manufacturing." />
+                </div>
+              ) : (
+                <ul className="divide-y divide-slate-100">
+                  {inProgressOrders.map((order: { id: string; orderNumber: string; product?: { name: string }; quantity: number; completedQty: number }) => (
+                    <li key={order.id} className="flex items-center gap-3 px-4 py-3">
+                      <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-orange-100 text-orange-600">
+                        <Factory className="h-4 w-4" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-slate-900 truncate">{order.orderNumber}</p>
+                        <p className="text-xs text-slate-500">{order.product?.name || '—'}</p>
+                      </div>
+                      <span className="text-sm font-semibold tabular-nums text-slate-700">
+                        {order.completedQty}/{order.quantity}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Card>
+
+            <Card
+              title="Recent orders"
+              action={
+                <Button variant="ghost" size="sm" onClick={() => goToTab(1)}>
+                  Full schedule
+                  <ChevronRight className="h-4 w-4 ml-1" />
+                </Button>
+              }
+              padding={false}
+            >
+              {recentOrders.length === 0 ? (
+                <div className="p-6">
+                  <EmptyState title="No production orders" description="Create an order to start manufacturing." />
+                </div>
+              ) : (
+                <ul className="divide-y divide-slate-100">
+                  {recentOrders.map((order: { id: string; orderNumber: string; status: string; product?: { name: string } }) => (
+                    <li key={order.id} className="flex items-center gap-3 px-4 py-3">
+                      <Badge variant={getStatusBadge(order.status)}>{order.status.replace(/_/g, ' ')}</Badge>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-slate-800 truncate">{order.orderNumber}</p>
+                        <p className="text-xs text-slate-400">{order.product?.name || '—'}</p>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Card>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 1 && (
         <DataPanel>
           <div className="p-4 pb-0 flex flex-col sm:flex-row gap-3">
             <Input
