@@ -82,7 +82,7 @@ const AGING_BUCKETS = [
   { key: 'days90Plus' as const, label: '90+ days', sub: 'Critical', color: 'bg-rose-700', variant: 'danger' as const },
 ];
 
-const tabs = ['Overview', 'Invoices', 'Payments', 'Journals', 'Accounts', 'Reconciliation'];
+const tabs = ['Invoices', 'Payments', 'Journals', 'Accounts', 'Reconciliation'];
 
 const TYPE_FILTER = [
   { value: '', label: 'All types' },
@@ -159,7 +159,7 @@ export function FinancePage() {
   const { data: overview, isLoading: overviewLoading } = useQuery({
     queryKey: ['finance-overview', cashFlowDays],
     queryFn: () => financeApi.overview(Number(cashFlowDays)).then((r) => r.data.data as FinanceOverview),
-    enabled: activeTab === 0,
+    enabled: false,
   });
 
   const { data: invoices, isLoading: invLoading, isError: invError, refetch: refetchInvoices } = useQuery({
@@ -168,7 +168,7 @@ export function FinancePage() {
       financeApi
         .invoices({ page, limit: 15, search: search || undefined, type: type || undefined, status: status || undefined })
         .then((r) => r.data),
-    enabled: activeTab === 0 || activeTab === 1,
+    enabled: activeTab === 0,
   });
 
   const { data: invoiceDetail, isLoading: detailLoading } = useQuery({
@@ -194,26 +194,26 @@ export function FinancePage() {
           to: !payPeriodPreset && payTo ? payTo : undefined,
         })
         .then((r) => r.data),
-    enabled: activeTab === 2,
+    enabled: activeTab === 1,
   });
 
   const { data: accounts } = useQuery({
     queryKey: ['accounts'],
     queryFn: () => financeApi.accounts().then((r) => r.data.data as { id: string; code: string; name: string; type: string; balance: number }[]),
-    enabled: activeTab === 0 || activeTab === 4,
+    enabled: activeTab === 3,
   });
 
   const { data: journalEntries, isLoading: journalLoading } = useQuery({
     queryKey: ['journal-entries', journalPage, journalSearch],
     queryFn: () =>
       financeApi.journalEntries({ page: journalPage, limit: 15, search: journalSearch || undefined }).then((r) => r.data),
-    enabled: activeTab === 3,
+    enabled: activeTab === 2,
   });
 
   const { data: reconciliation } = useQuery({
     queryKey: ['bank-reconciliation'],
     queryFn: () => financeApi.bankReconciliation().then((r) => r.data.data),
-    enabled: activeTab === 5,
+    enabled: activeTab === 4,
   });
 
   const reconcileMutation = useMutation({
@@ -552,7 +552,7 @@ export function FinancePage() {
 
   const toolbarActions = canCreate ? (
     <div className="flex flex-wrap gap-2">
-      {activeTab === 1 && (
+      {activeTab === 0 && (
         <>
           <Button size="sm" variant="secondary" onClick={() => openPaymentModal()}>
             <CreditCard className="h-4 w-4 mr-1.5" /> Record Payment
@@ -562,12 +562,12 @@ export function FinancePage() {
           </Button>
         </>
       )}
-      {activeTab === 2 && (
+      {activeTab === 1 && (
         <Button size="sm" onClick={() => openPaymentModal()}>
           <Plus className="h-4 w-4 mr-1.5" /> Record Payment
         </Button>
       )}
-      {activeTab === 3 && (
+      {activeTab === 2 && (
         <Button size="sm" onClick={() => setJournalModalOpen(true)}>
           <Plus className="h-4 w-4 mr-1.5" /> Post Journal
         </Button>
@@ -579,18 +579,18 @@ export function FinancePage() {
     <div className="space-y-4">
       {stats && (
         <StatGrid>
-          <StatCard title="Monthly Revenue" value={formatCurrency(stats.monthlyRevenue)} icon={<TrendingUp className="h-5 w-5 text-white" />} color="from-blue-500 to-blue-700" onClick={() => goToTab(1)} />
-          <StatCard title="Receivable" value={formatCurrency(stats.accountsReceivable)} icon={<Wallet className="h-5 w-5 text-white" />} color="from-lime-500 to-lime-700" onClick={() => goToTab(1)} />
-          <StatCard title="Payable" value={formatCurrency(stats.accountsPayable)} icon={<TrendingDown className="h-5 w-5 text-white" />} color="from-pink-500 to-pink-700" onClick={() => goToTab(1)} />
-          <StatCard title="Overdue" value={stats.overdueInvoices} icon={<AlertCircle className="h-5 w-5 text-white" />} color="from-amber-500 to-amber-700" onClick={() => goToTab(1)} />
-          <StatCard title="Total Sales" value={formatCurrency(stats.totalSales)} icon={<Receipt className="h-5 w-5 text-white" />} color="from-slate-500 to-slate-700" onClick={() => goToTab(1)} />
+          <StatCard title="Monthly Revenue" value={formatCurrency(stats.monthlyRevenue)} icon={<TrendingUp className="h-5 w-5 text-white" />} color="from-blue-500 to-blue-700" onClick={() => goToTab(0)} />
+          <StatCard title="Receivable" value={formatCurrency(stats.accountsReceivable)} icon={<Wallet className="h-5 w-5 text-white" />} color="from-lime-500 to-lime-700" onClick={() => goToTab(0)} />
+          <StatCard title="Payable" value={formatCurrency(stats.accountsPayable)} icon={<TrendingDown className="h-5 w-5 text-white" />} color="from-pink-500 to-pink-700" onClick={() => goToTab(0)} />
+          <StatCard title="Overdue" value={stats.overdueInvoices} icon={<AlertCircle className="h-5 w-5 text-white" />} color="from-amber-500 to-amber-700" onClick={() => goToTab(0)} />
+          <StatCard title="Total Sales" value={formatCurrency(stats.totalSales)} icon={<Receipt className="h-5 w-5 text-white" />} color="from-slate-500 to-slate-700" onClick={() => goToTab(0)} />
         </StatGrid>
       )}
 
       <PageHeader
         action={
           stats && stats.overdueInvoices > 0 ? (
-            <Button variant="secondary" size="sm" onClick={() => goToTab(1)}>
+            <Button variant="secondary" size="sm" onClick={() => goToTab(0)}>
               <AlertCircle className="h-4 w-4 mr-1.5 text-amber-500" />
               {stats.overdueInvoices} overdue
             </Button>
@@ -610,189 +610,8 @@ export function FinancePage() {
         actions={toolbarActions}
       />
 
-      {/* Overview */}
-      {activeTab === 0 && stats && (
-        <div className="space-y-4">
-          <div className="space-y-4">
-            {/* Cash flow */}
-            <Card
-              title="Cash flow"
-              action={
-                <Select
-                  options={CASH_FLOW_DAYS}
-                  value={cashFlowDays}
-                  onChange={(e) => setCashFlowDays(e.target.value)}
-                  className="w-28 text-sm"
-                />
-              }
-              padding
-            >
-              {overviewLoading ? (
-                <div className="h-48 flex items-center justify-center text-sm text-slate-500">Loading chart…</div>
-              ) : overview && cashFlowChartData ? (
-                <>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
-                    <div className="rounded-xl bg-emerald-50 border border-emerald-100 px-3 py-2.5 min-w-0">
-                      <p className="text-xs text-emerald-700">Cash in</p>
-                      <p className="mt-1 text-sm sm:text-base font-bold text-emerald-800 tabular-nums break-words">{formatCurrency(overview.cashFlow.totalInflow)}</p>
-                    </div>
-                    <div className="rounded-xl bg-red-50 border border-red-100 px-3 py-2.5 min-w-0">
-                      <p className="text-xs text-red-700">Cash out</p>
-                      <p className="mt-1 text-sm sm:text-base font-bold text-red-800 tabular-nums break-words">{formatCurrency(overview.cashFlow.totalOutflow)}</p>
-                    </div>
-                    <div className={`rounded-xl border px-3 py-2.5 min-w-0 ${overview.cashFlow.net >= 0 ? 'bg-primary-50 border-primary-100' : 'bg-amber-50 border-amber-100'}`}>
-                      <p className={`text-xs ${overview.cashFlow.net >= 0 ? 'text-primary-700' : 'text-amber-700'}`}>Net</p>
-                      <p className={`mt-1 text-sm sm:text-base font-bold tabular-nums break-words ${overview.cashFlow.net >= 0 ? 'text-primary-800' : 'text-amber-800'}`}>
-                        {formatCurrency(overview.cashFlow.net)}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="h-44 mb-3">
-                    <Bar
-                      data={cashFlowChartData}
-                      options={{
-                        ...chartDefaults,
-                        scales: {
-                          x: { grid: { display: false }, ticks: { maxTicksLimit: 10, font: { size: 10, family: 'Plus Jakarta Sans' } } },
-                          y: { beginAtZero: true, ticks: { font: { size: 10, family: 'Plus Jakarta Sans' } } },
-                        },
-                        plugins: { ...chartDefaults.plugins, legend: { position: 'top' } },
-                      }}
-                    />
-                  </div>
-                  <div className="h-28">
-                    <Line
-                      data={netCashFlowChartData!}
-                      options={{
-                        ...chartDefaults,
-                        scales: {
-                          x: { display: false },
-                          y: { ticks: { font: { size: 10, family: 'Plus Jakarta Sans' } } },
-                        },
-                        plugins: { ...chartDefaults.plugins, legend: { display: false } },
-                      }}
-                    />
-                  </div>
-                </>
-              ) : (
-                <EmptyState title="No payment activity" description="Record payments to see cash flow trends." />
-              )}
-            </Card>
-
-            {/* AR Aging */}
-            <Card title="Accounts receivable aging" padding>
-              {overviewLoading ? (
-                <div className="h-32 flex items-center justify-center text-sm text-slate-500">Loading aging…</div>
-              ) : overview ? (
-                <>
-                  <div className="flex items-center justify-between mb-4">
-                    <p className="text-sm text-slate-600">
-                      Total outstanding:{' '}
-                      <span className="font-bold text-slate-900">{formatCurrency(overview.arAging.totalOutstanding)}</span>
-                    </p>
-                  </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 mb-4">
-                    {AGING_BUCKETS.map((b) => {
-                      const bucket = overview.arAging.buckets[b.key];
-                      const pct = overview.arAging.totalOutstanding
-                        ? (bucket.amount / overview.arAging.totalOutstanding) * 100
-                        : 0;
-                      return (
-                        <div key={b.key} className="rounded-xl border border-slate-100 bg-slate-50/80 p-3 min-w-0">
-                          <div className={`h-1 w-full rounded-full ${b.color} mb-2`} style={{ opacity: Math.max(0.25, pct / 100) }} />
-                          <p className="text-xs font-medium text-slate-700 line-clamp-2">{b.label}</p>
-                          <p className="text-xs text-slate-400 mb-1">{b.sub}</p>
-                          <p className="text-xs sm:text-sm font-bold text-slate-900 tabular-nums break-words">{formatCurrency(bucket.amount)}</p>
-                          <p className="text-xs text-slate-500">{bucket.count} invoice{bucket.count !== 1 ? 's' : ''}</p>
-                        </div>
-                      );
-                    })}
-                  </div>
-                  {agingChartData && overview.arAging.totalOutstanding > 0 && (
-                    <div className="h-40">
-                      <Bar
-                        data={agingChartData}
-                        options={{
-                          indexAxis: 'y' as const,
-                          ...chartDefaults,
-                          scales: {
-                            x: { beginAtZero: true, ticks: { font: { size: 10, family: 'Plus Jakarta Sans' } } },
-                            y: { grid: { display: false }, ticks: { font: { size: 10, family: 'Plus Jakarta Sans' } } },
-                          },
-                          plugins: { ...chartDefaults.plugins, legend: { display: false } },
-                        }}
-                      />
-                    </div>
-                  )}
-                  {overview.arAging.topOverdue.length > 0 && (
-                    <div className="mt-4 pt-4 border-t border-slate-100">
-                      <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Top overdue</p>
-                      <div className="space-y-1">
-                        {overview.arAging.topOverdue.slice(0, 5).map((row) => (
-                          <button
-                            key={row.id}
-                            type="button"
-                            className="w-full flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between py-2 text-sm hover:bg-slate-50 rounded-lg px-2 -mx-2 min-w-0"
-                            onClick={() => {
-                              setSelectedInvoiceId(row.id);
-                              setDetailOpen(true);
-                            }}
-                          >
-                            <span className="text-slate-800 truncate min-w-0">{row.invoiceNumber} · {row.customerName}</span>
-                            <span className="flex items-center gap-2 shrink-0">
-                              <Badge variant="danger">{row.daysPastDue}d</Badge>
-                              <span className="font-semibold text-red-700 tabular-nums">{formatCurrency(row.balance)}</span>
-                            </span>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </>
-              ) : null}
-            </Card>
-
-            <Card
-              title="Outstanding invoices"
-              action={
-                <Button size="sm" variant="ghost" onClick={() => setActiveTab(1)}>
-                  View all <ArrowRight className="h-3.5 w-3.5 ml-1" />
-                </Button>
-              }
-            >
-              {unpaidInvoices.length === 0 ? (
-                <EmptyState title="All caught up" description="No outstanding invoices in the current view." />
-              ) : (
-                <div className="divide-y divide-slate-100">
-                  {unpaidInvoices.slice(0, 6).map((inv) => (
-                    <button
-                      key={inv.id}
-                      type="button"
-                      className="w-full flex items-start justify-between gap-3 py-3 text-left hover:bg-slate-50/80 px-2 -mx-2 rounded-lg transition-colors min-w-0"
-                      onClick={() => openInvoiceDetail(inv)}
-                    >
-                      <div className="min-w-0 flex-1">
-                        <p className="font-medium text-sm text-slate-900 truncate">{inv.invoiceNumber}</p>
-                        <p className="text-xs text-slate-500 truncate">
-                          {inv.customer?.name || inv.supplier?.name || '—'}
-                          {inv.dueDate && ` · Due ${formatDate(inv.dueDate)}`}
-                        </p>
-                      </div>
-                      <div className="text-right shrink-0">
-                        <p className="font-semibold text-sm text-amber-700 tabular-nums">{formatCurrency(invoiceBalance(inv))}</p>
-                        <Badge variant={getStatusBadge(inv.status)}>{inv.status}</Badge>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </Card>
-          </div>
-        </div>
-      )}
-
       {/* Invoices */}
-      {activeTab === 1 && (
+      {activeTab === 0 && (
         <DataPanel>
           <div className="p-4 pb-0 flex flex-wrap items-end gap-3">
             <form
@@ -846,7 +665,7 @@ export function FinancePage() {
       )}
 
       {/* Payments */}
-      {activeTab === 2 && (
+      {activeTab === 1 && (
         <DataPanel>
           <div className="p-4 pb-0 flex flex-wrap items-end gap-3">
             <Input
@@ -956,7 +775,7 @@ export function FinancePage() {
       )}
 
       {/* Journals */}
-      {activeTab === 3 && (
+      {activeTab === 2 && (
         <DataPanel>
           <div className="p-4 pb-0 max-w-sm">
             <Input placeholder="Search journals…" value={journalSearch} onChange={(e) => { setJournalSearch(e.target.value); setJournalPage(1); }} />
@@ -1008,7 +827,7 @@ export function FinancePage() {
       )}
 
       {/* Accounts */}
-      {activeTab === 4 && (
+      {activeTab === 3 && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {Object.entries(accountsByType).map(([typeKey, accs]) => (
             <Card key={typeKey} title={ACCOUNT_TYPE_LABELS[typeKey] || typeKey} padding>
@@ -1034,7 +853,7 @@ export function FinancePage() {
       )}
 
       {/* Reconciliation */}
-      {activeTab === 5 && reconciliation && (
+      {activeTab === 4 && reconciliation && (
         <>
           <StatGrid>
             <StatCard title="Bank Balance (GL)" value={formatCurrency(reconciliation.bankBalance)} icon={<Landmark className="h-5 w-5 text-white" />} color="from-teal-500 to-teal-700" />

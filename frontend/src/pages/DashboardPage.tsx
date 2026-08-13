@@ -16,15 +16,10 @@ import {
 import { Line, Doughnut } from 'react-chartjs-2';
 import {
   DollarSign,
-  ShoppingCart,
   Package,
   AlertTriangle,
   TrendingUp,
   RefreshCw,
-  Plus,
-  FileText,
-  Truck,
-  Bell,
   Factory,
 } from 'lucide-react';
 import { dashboardApi } from '../services/api';
@@ -32,26 +27,20 @@ import {
   StatCard,
   StatGrid,
   Card,
-  Badge,
   Button,
   Alert,
   EmptyState,
-  QuickActionCard,
-  QuickActionGrid,
   Select,
   LoadingSpinner,
   PageToolbar,
   formatCurrency,
-  getStatusBadge,
 } from '../components/ui';
 import { DashboardCharts, DashboardKPIs } from '../types';
-import { useDashboardNavigation } from '../components/dashboard/DashboardNav';
-import { OverviewLayout, OverviewPreviewCard } from '../components/layout/ModuleOverview';
 import { formatPartNumberLine } from '../utils/productDisplay';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, ArcElement, Filler);
 
-const TABS = ['Overview', 'Analytics'];
+const TABS = ['Analytics'];
 
 const CHART_DAYS_OPTIONS = [
   { value: '7', label: 'Last 7 days' },
@@ -66,16 +55,8 @@ const chartDefaults = {
   },
 };
 
-const QUICK_ACTIONS = [
-  { label: 'New sales order', desc: 'Create a customer order', icon: Plus, color: 'border-primary-100 hover:border-primary-300', href: '/sales' },
-  { label: 'Invoices & payments', desc: 'Bill customers and record paybill', icon: FileText, color: 'border-primary-100 hover:border-primary-300', href: '/finance' },
-  { label: 'Delivery', desc: 'Dispatch confirmed orders', icon: Truck, color: 'border-primary-100 hover:border-primary-300', href: '/delivery' },
-  { label: 'Inventory', desc: 'Check stock levels', icon: Package, color: 'border-primary-100 hover:border-primary-300', href: '/inventory' },
-] as const;
-
 export function DashboardPage() {
   const location = useLocation();
-  const { canOpen, openModule } = useDashboardNavigation();
   const accessDenied = (location.state as { accessDenied?: boolean } | null)?.accessDenied;
   const [activeTab, setActiveTab] = useState(0);
   const [chartDays, setChartDays] = useState('1');
@@ -94,7 +75,7 @@ export function DashboardPage() {
   } = useQuery({
     queryKey: ['dashboard-charts', chartDays],
     queryFn: () => dashboardApi.getCharts(Number(chartDays)).then((r) => r.data.data as DashboardCharts),
-    enabled: activeTab === 1,
+    enabled: activeTab === 0,
   });
 
   if (isLoading) {
@@ -117,9 +98,6 @@ export function DashboardPage() {
       </div>
     );
   }
-
-  const lowStockCount = kpis.lowStockItems?.length ?? kpis.rawMaterialsLow ?? 0;
-  const pendingActions = kpis.pendingActions?.filter((a) => canOpen(a.path)) || [];
 
   const salesTotal = charts?.salesTrend?.reduce((s, d) => s + d.amount, 0) || 0;
   const hasSalesTrend = salesTotal > 0;
@@ -157,12 +135,12 @@ export function DashboardPage() {
 
   const handleRefresh = () => {
     refetch();
-    if (activeTab === 1) refetchCharts();
+    if (activeTab === 0) refetchCharts();
   };
 
   const toolbarActions = (
     <div className="flex flex-wrap items-center gap-2">
-      {activeTab === 1 && (
+      {activeTab === 0 && (
         <Select
           options={CHART_DAYS_OPTIONS}
           value={chartDays}
@@ -196,93 +174,6 @@ export function DashboardPage() {
       )}
 
       {activeTab === 0 && (
-        <>
-          <QuickActionGrid>
-            {QUICK_ACTIONS.map((action) => (
-              <QuickActionCard
-                key={action.href}
-                label={action.label}
-                desc={action.desc}
-                icon={action.icon}
-                color={action.color}
-                disabled={!canOpen(action.href)}
-                onClick={() => openModule(action.href)}
-              />
-            ))}
-          </QuickActionGrid>
-
-          <OverviewLayout>
-            <OverviewPreviewCard
-              title="Needs attention"
-              isEmpty={pendingActions.length === 0}
-              emptyTitle="All caught up"
-              emptyDescription="Nothing requires your action right now."
-            >
-              <ul className="divide-y divide-slate-100">
-                {pendingActions.map((action) => (
-                  <li key={action.type}>
-                    <button
-                      type="button"
-                      onClick={() => openModule(action.path)}
-                      className="flex w-full items-center justify-between px-4 py-3 text-left hover:bg-amber-50/50 transition-colors"
-                    >
-                      <span className="flex items-center gap-2 text-sm font-medium text-slate-800">
-                        <Bell className="h-4 w-4 text-amber-500" />
-                        {action.label}
-                      </span>
-                      <Badge variant="warning">{action.count}</Badge>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </OverviewPreviewCard>
-
-            <OverviewPreviewCard
-              title="Recent sales orders"
-              onViewAll={canOpen('/sales') ? () => openModule('/sales') : undefined}
-              isEmpty={!kpis.recentOrders?.length}
-              emptyTitle="No orders yet"
-              emptyDescription="New sales orders will appear here."
-            >
-              <ul className="divide-y divide-slate-100">
-                {kpis.recentOrders?.slice(0, 6).map((order) => (
-                  <li key={order.id} className="flex items-center gap-3 px-4 py-3">
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary-50 text-primary-600">
-                      <ShoppingCart className="h-4 w-4" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-slate-900 truncate">{order.orderNumber}</p>
-                      <p className="text-xs text-slate-500">{order.customer}</p>
-                    </div>
-                    <div className="text-right shrink-0">
-                      <p className="text-sm font-semibold tabular-nums">{formatCurrency(order.total)}</p>
-                      <Badge variant={getStatusBadge(order.status)}>{order.status.replace(/_/g, ' ')}</Badge>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            </OverviewPreviewCard>
-
-            {lowStockCount > 0 && kpis.lowStockItems && (
-              <Card title="Low stock" padding={false}>
-                <ul className="divide-y divide-slate-100">
-                  {kpis.lowStockItems.slice(0, 5).map((item) => (
-                    <li key={item.id} className="flex items-center justify-between px-4 py-3 text-sm">
-                      <div>
-                        <p className="font-medium text-slate-900">{item.name}</p>
-                        <p className="text-xs text-slate-500">{item.code}</p>
-                      </div>
-                      <span className="font-semibold text-red-600">{item.currentStock} left</span>
-                    </li>
-                  ))}
-                </ul>
-              </Card>
-            )}
-          </OverviewLayout>
-        </>
-      )}
-
-      {activeTab === 1 && (
         <div className="space-y-4">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             <Card title={`Sales trend (${chartDays} days)`} className="lg:col-span-2">

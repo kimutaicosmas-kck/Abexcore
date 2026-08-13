@@ -29,7 +29,7 @@ import { MachineForm } from '../components/forms/MachineForm';
 import { useAuth } from '../contexts/AuthContext';
 import { Machine, MaintenanceRequest, MaintenanceStats } from '../types';
 
-const tabs = ['Overview', 'Machines', 'Requests'];
+const tabs = ['Machines', 'Requests'];
 
 const STATUS_FILTER = [
   { value: '', label: 'All statuses' },
@@ -62,14 +62,14 @@ export function MaintenancePage() {
   const { data: machines, isLoading: machLoading, isError: machError, error: machErr, refetch: refetchMachines } = useQuery({
     queryKey: ['maintenance-machines', page, search],
     queryFn: () => maintenanceApi.machines({ page, limit: 12, search: search || undefined }).then((r) => r.data),
-    enabled: activeTab === 0 || activeTab === 1,
+    enabled: activeTab === 0,
   });
 
   const { data: requests, isLoading: reqLoading, isError: reqError, error: reqErr, refetch: refetchRequests } = useQuery({
     queryKey: ['maintenance-requests', page, search, status],
     queryFn: () =>
       maintenanceApi.requests({ page, limit: 15, search: search || undefined, status: status || undefined }).then((r) => r.data),
-    enabled: activeTab === 0 || activeTab === 2,
+    enabled: activeTab === 1,
   });
 
   const completeMutation = useMutation({
@@ -88,11 +88,6 @@ export function MaintenancePage() {
     setSelected(request);
     setDetailOpen(true);
   };
-
-  const recentRequests = activeTab === 0 ? ((requests?.data as MaintenanceRequest[]) || []).slice(0, 6) : [];
-  const openRequests = activeTab === 0
-    ? ((requests?.data as MaintenanceRequest[]) || []).filter((r) => r.status !== 'COMPLETED').slice(0, 5)
-    : [];
 
   const requestColumns = [
     { key: 'machine', label: 'Machine', render: (_: unknown, row: Record<string, unknown>) => (row.machine as { name: string })?.name || '-' },
@@ -115,12 +110,12 @@ export function MaintenancePage() {
 
   const toolbarActions =
     canCreate &&
-    (activeTab === 1 ? (
+    (activeTab === 0 ? (
       <Button size="sm" onClick={() => setMachineModalOpen(true)}>
         <Plus className="h-4 w-4 mr-1.5" />
         Add Machine
       </Button>
-    ) : activeTab === 2 ? (
+    ) : activeTab === 1 ? (
       <Button size="sm" onClick={() => setRequestModalOpen(true)}>
         <Plus className="h-4 w-4 mr-1.5" />
         Schedule Maintenance
@@ -139,22 +134,22 @@ export function MaintenancePage() {
       />
       {stats && (
         <StatGrid>
-          <StatCard title="Machines" value={stats.totalMachines} icon={<Cog className="h-5 w-5 text-white" />} color="from-cyan-500 to-cyan-700" onClick={() => goToTab(1)} />
-          <StatCard title="Operational" value={stats.operational} icon={<CheckCircle2 className="h-5 w-5 text-white" />} color="from-violet-500 to-violet-700" onClick={() => goToTab(1)} />
-          <StatCard title="Open Requests" value={stats.openRequests} icon={<Wrench className="h-5 w-5 text-white" />} color="from-emerald-500 to-emerald-700" onClick={() => goToTab(2)} />
-          <StatCard title="Overdue" value={stats.overdueRequests} icon={<AlertTriangle className="h-5 w-5 text-white" />} color="from-orange-500 to-orange-700" onClick={() => { setStatus('OVERDUE'); setPage(1); goToTab(2); }} />
-          <StatCard title="Completed (Month)" value={stats.completedMonth} icon={<Calendar className="h-5 w-5 text-white" />} color="from-rose-500 to-rose-700" onClick={() => goToTab(2)} />
+          <StatCard title="Machines" value={stats.totalMachines} icon={<Cog className="h-5 w-5 text-white" />} color="from-cyan-500 to-cyan-700" onClick={() => goToTab(0)} />
+          <StatCard title="Operational" value={stats.operational} icon={<CheckCircle2 className="h-5 w-5 text-white" />} color="from-violet-500 to-violet-700" onClick={() => goToTab(0)} />
+          <StatCard title="Open Requests" value={stats.openRequests} icon={<Wrench className="h-5 w-5 text-white" />} color="from-emerald-500 to-emerald-700" onClick={() => goToTab(1)} />
+          <StatCard title="Overdue" value={stats.overdueRequests} icon={<AlertTriangle className="h-5 w-5 text-white" />} color="from-orange-500 to-orange-700" onClick={() => { setStatus('OVERDUE'); setPage(1); goToTab(1); }} />
+          <StatCard title="Completed (Month)" value={stats.completedMonth} icon={<Calendar className="h-5 w-5 text-white" />} color="from-rose-500 to-rose-700" onClick={() => goToTab(1)} />
         </StatGrid>
       )}
 
       <PageHeader action={
           stats && stats.overdueRequests > 0 ? (
-            <Button variant="secondary" size="sm" onClick={() => { setStatus('OVERDUE'); setPage(1); goToTab(2); }}>
+            <Button variant="secondary" size="sm" onClick={() => { setStatus('OVERDUE'); setPage(1); goToTab(1); }}>
               <AlertTriangle className="h-4 w-4 mr-1.5 text-red-500" />
               {stats.overdueRequests} overdue
             </Button>
           ) : stats && stats.openRequests > 0 ? (
-            <Button variant="secondary" size="sm" onClick={() => goToTab(2)}>
+            <Button variant="secondary" size="sm" onClick={() => goToTab(1)}>
               <Wrench className="h-4 w-4 mr-1.5 text-amber-500" />
               {stats.openRequests} open requests
             </Button>
@@ -170,85 +165,6 @@ export function MaintenancePage() {
       />
 
       {activeTab === 0 && (
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-            <Card
-              title="Overdue & open requests"
-              action={
-                openRequests.length > 0 ? (
-                  <Button variant="ghost" size="sm" onClick={() => goToTab(2)}>
-                    View all
-                  </Button>
-                ) : undefined
-              }
-              padding={false}
-            >
-              {openRequests.length === 0 ? (
-                <div className="p-6">
-                  <EmptyState title="No open requests" description="All maintenance work is completed." />
-                </div>
-              ) : (
-                <ul className="divide-y divide-slate-100">
-                  {openRequests.map((req) => (
-                    <li
-                      key={req.id}
-                      className="flex items-center gap-3 px-4 py-3 hover:bg-red-50/30 cursor-pointer"
-                      onClick={() => openDetail(req)}
-                    >
-                      <div className={`flex h-9 w-9 items-center justify-center rounded-lg ${req.status === 'OVERDUE' ? 'bg-red-100 text-red-600' : 'bg-amber-100 text-amber-600'}`}>
-                        <AlertTriangle className="h-4 w-4" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-slate-900 truncate">{req.machine?.name || '—'}</p>
-                        <p className="text-xs text-slate-500 truncate">{req.description}</p>
-                      </div>
-                      <Badge variant={getStatusBadge(req.status)}>{req.status.replace(/_/g, ' ')}</Badge>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </Card>
-
-            <Card
-              title="Recent requests"
-              action={
-                <Button variant="ghost" size="sm" onClick={() => goToTab(2)}>
-                  Full list
-                  <ChevronRight className="h-4 w-4 ml-1" />
-                </Button>
-              }
-              padding={false}
-            >
-              {recentRequests.length === 0 ? (
-                <div className="p-6">
-                  <EmptyState title="No maintenance requests" description="Schedule maintenance to track repairs and service." />
-                </div>
-              ) : (
-                <ul className="divide-y divide-slate-100">
-                  {recentRequests.map((req) => (
-                    <li
-                      key={req.id}
-                      className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 cursor-pointer"
-                      onClick={() => openDetail(req)}
-                    >
-                      <Badge variant={getStatusBadge(req.status)}>{req.status.replace(/_/g, ' ')}</Badge>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm text-slate-800 truncate">{req.machine?.name || '—'}</p>
-                        <p className="text-xs text-slate-400">{req.type}</p>
-                      </div>
-                      <span className="text-xs text-slate-500 shrink-0">
-                        {req.scheduledDate ? formatDate(req.scheduledDate) : '—'}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </Card>
-          </div>
-        </div>
-      )}
-
-      {activeTab === 1 && (
         <DataPanel>
           <div className="p-4 pb-0">
             <Input
@@ -294,7 +210,7 @@ export function MaintenancePage() {
         </DataPanel>
       )}
 
-      {activeTab === 2 && (
+      {activeTab === 1 && (
         <DataPanel>
           <div className="p-4 pb-0 flex flex-col sm:flex-row gap-3">
             <Input

@@ -58,7 +58,7 @@ export function ProductsPage() {
   const tabs = useMemo(() => {
     const items: string[] = [];
     if (canManageProducts) {
-      items.push('Overview', 'Catalog');
+      items.push('Catalog');
     }
     if (canViewAvailable) items.push('Available');
     return items;
@@ -71,7 +71,7 @@ export function ProductsPage() {
     ? 'Available'
     : wantCatalog
       ? 'Catalog'
-      : tabs[0] || 'Overview';
+      : tabs[0] || 'Catalog';
 
   const [activeTabName, setActiveTabName] = useState(initialTab);
   const activeTab = Math.max(0, tabs.indexOf(activeTabName));
@@ -106,7 +106,7 @@ export function ProductsPage() {
   const [editing, setEditing] = useState<Product | null>(null);
   const [selected, setSelected] = useState<Product | null>(null);
 
-  const showCatalogQueries = canManageProducts && (activeTabName === 'Overview' || activeTabName === 'Catalog');
+  const showCatalogQueries = canManageProducts && activeTabName === 'Catalog';
 
   const { data: stats } = useQuery({
     queryKey: ['product-stats'],
@@ -174,7 +174,6 @@ export function ProductsPage() {
   };
 
   const products = (productsRes?.data as Product[]) || [];
-  const recentProducts = activeTabName === 'Overview' ? products.slice(0, 6) : [];
 
   const columns = [
     {
@@ -245,7 +244,7 @@ export function ProductsPage() {
   }
 
   const toolbarActions =
-    canCreate && (activeTabName === 'Overview' || activeTabName === 'Catalog') ? (
+    canCreate && activeTabName === 'Catalog' ? (
       <Button size="sm" onClick={openAddProduct}>
         <Plus className="h-4 w-4 mr-1.5" />
         Add Product
@@ -255,9 +254,7 @@ export function ProductsPage() {
   const subtitle =
     activeTabName === 'Available'
       ? 'Finished goods you can sell — live available quantity after reservations.'
-      : activeTabName === 'Catalog'
-        ? 'Manage the full product catalog, prices, and status.'
-        : 'Catalog health and sellable stock in one place.';
+      : 'Manage the full product catalog, prices, and status.';
 
   return (
     <div className="space-y-4">
@@ -309,87 +306,6 @@ export function ProductsPage() {
         onTabChange={(index) => setTab(tabs[index])}
         actions={toolbarActions}
       />
-
-      {activeTabName === 'Overview' && canManageProducts && (
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-          <Card
-            title="Recent products"
-            action={
-              recentProducts.length > 0 ? (
-                <Button variant="ghost" size="sm" onClick={() => setTab('Catalog')}>
-                  View catalog
-                </Button>
-              ) : undefined
-            }
-            padding={false}
-          >
-            {recentProducts.length === 0 ? (
-              <div className="p-6">
-                <EmptyState title="No products yet" description="Add products to populate your catalog." />
-              </div>
-            ) : (
-              <ul className="divide-y divide-slate-100">
-                {recentProducts.map((product) => (
-                  <li
-                    key={product.id}
-                    className="flex items-center gap-3 px-4 py-3 hover:bg-primary-50/50 cursor-pointer"
-                    onClick={() => openDetail(product)}
-                  >
-                    <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary-100 text-primary-600">
-                      <Package className="h-4 w-4" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-slate-900 truncate">{product.name}</p>
-                      <p className="text-xs text-slate-500">{formatPartNumberLine(product.sku)}</p>
-                    </div>
-                    <ChevronRight className="h-4 w-4 text-slate-400 shrink-0" />
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Card>
-
-          <Card
-            title="By category"
-            action={
-              canViewAvailable ? (
-                <Button variant="ghost" size="sm" onClick={() => setTab('Available')}>
-                  Sellable stock
-                </Button>
-              ) : undefined
-            }
-            padding={false}
-          >
-            {(stats?.byCategory?.length || 0) === 0 ? (
-              <div className="p-6">
-                <EmptyState title="No category data" description="Product categories will appear here once the catalog is populated." />
-              </div>
-            ) : (
-              <ul className="divide-y divide-slate-100">
-                {(stats?.byCategory || []).slice(0, 6).map((item) => (
-                  <li
-                    key={item.categoryId}
-                    className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 cursor-pointer"
-                    onClick={() => {
-                      setCategory(item.categoryId);
-                      setPage(1);
-                      setTab('Catalog');
-                    }}
-                  >
-                    <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary-100 text-primary-600">
-                      <Package className="h-4 w-4" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-slate-900">{item.category}</p>
-                    </div>
-                    <span className="text-sm font-semibold tabular-nums text-slate-700">{item.count}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Card>
-        </div>
-      )}
 
       {activeTabName === 'Catalog' && canManageProducts && (
         <DataPanel>

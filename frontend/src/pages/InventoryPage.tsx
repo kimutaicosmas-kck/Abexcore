@@ -43,7 +43,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { InventoryStats, InventoryTransaction, MaterialTypeOption, RawMaterial } from '../types';
 import { formatPartNumberLine } from '../utils/productDisplay';
 
-const tabs = ['Overview', 'Stock Levels', 'Materials', 'Warehouses', 'Low Stock', 'Movements'];
+const tabs = ['Stock Levels', 'Materials', 'Warehouses', 'Low Stock', 'Movements'];
 
 const TX_TYPE_FILTER = [
   { value: '', label: 'All movement types' },
@@ -97,7 +97,7 @@ export function InventoryPage() {
   const { data: materialTypesData } = useQuery({
     queryKey: ['material-types'],
     queryFn: () => inventoryApi.materialTypes().then((r) => r.data.data as MaterialTypeOption[]),
-    enabled: activeTab === 2,
+    enabled: activeTab === 1,
   });
 
   const materialTypeOptions = [
@@ -109,7 +109,7 @@ export function InventoryPage() {
     queryKey: ['stock-levels', stockPage, stockSearch],
     queryFn: () =>
       inventoryApi.stockLevels({ page: stockPage, limit: 15, search: stockSearch || undefined }).then((r) => r.data),
-    enabled: activeTab === 0 || activeTab === 1,
+    enabled: activeTab === 0,
   });
 
   const { data: materials, isLoading: matLoading } = useQuery({
@@ -118,26 +118,26 @@ export function InventoryPage() {
       inventoryApi
         .materials({ page: matPage, limit: 15, search: matSearch || undefined, type: matType || undefined })
         .then((r) => r.data),
-    enabled: activeTab === 2,
+    enabled: activeTab === 1,
   });
 
   const { data: warehouses } = useQuery({
     queryKey: ['warehouses'],
     queryFn: () => inventoryApi.warehouses().then((r) => r.data.data),
-    enabled: activeTab === 0 || activeTab === 3,
+    enabled: activeTab === 2,
   });
 
   const { data: lowStock } = useQuery({
     queryKey: ['low-stock'],
     queryFn: () => inventoryApi.lowStock().then((r) => r.data.data),
-    enabled: activeTab === 0 || activeTab === 4,
+    enabled: activeTab === 3,
   });
 
   const { data: transactions, isLoading: txLoading } = useQuery({
     queryKey: ['inventory-transactions', txPage, txSearch],
     queryFn: () =>
       inventoryApi.transactions({ page: txPage, limit: 20, search: txSearch || undefined }).then((r) => r.data),
-    enabled: activeTab === 0 || activeTab === 5,
+    enabled: activeTab === 4,
   });
 
   const openEditMaterial = (material: RawMaterial) => {
@@ -152,9 +152,6 @@ export function InventoryPage() {
   const filteredTransactions = (transactions?.data as InventoryTransaction[] | undefined)?.filter((tx) =>
     txType ? tx.type === txType : true
   );
-
-  const recentStock = activeTab === 0 ? (stockLevels?.data || []).slice(0, 6) : [];
-  const recentTx = activeTab === 0 ? (transactions?.data as InventoryTransaction[] | undefined)?.slice(0, 6) || [] : [];
 
   const stockColumns = [
     {
@@ -305,7 +302,7 @@ export function InventoryPage() {
 
   const toolbarActions =
     canCreate &&
-    (activeTab === 0 || activeTab === 5 ? (
+    (activeTab === 4 ? (
       <div className="flex flex-wrap gap-2">
         <Button variant="secondary" size="sm" onClick={() => setAdjustModalOpen(true)}>
           <SlidersHorizontal className="h-4 w-4 mr-1.5" />
@@ -315,14 +312,14 @@ export function InventoryPage() {
           <ArrowLeftRight className="h-4 w-4 mr-1.5" />
           Transfer
         </Button>
-        {activeTab === 0 && (
+        {activeTab === 4 && (
           <Button size="sm" onClick={() => { setEditingMaterial(null); setMaterialModalOpen(true); }}>
             <Plus className="h-4 w-4 mr-1.5" />
             Material
           </Button>
         )}
       </div>
-    ) : activeTab === 2 ? (
+    ) : activeTab === 1 ? (
       <Button onClick={() => { setEditingMaterial(null); setMaterialModalOpen(true); }}>
         <Plus className="h-4 w-4 mr-2" />
         Add Material
@@ -338,35 +335,35 @@ export function InventoryPage() {
             value={formatCurrency(stats.inventoryValue)}
             icon={<Boxes className="h-5 w-5 text-white" />}
             color="from-cyan-500 to-cyan-700"
-            onClick={() => goToTab(1)}
+            onClick={() => goToTab(0)}
           />
           <StatCard
             title="Raw materials"
             value={stats.materialsCount}
             icon={<Package className="h-5 w-5 text-white" />}
             color="from-violet-500 to-violet-700"
-            onClick={() => goToTab(2)}
+            onClick={() => goToTab(1)}
           />
           <StatCard
             title="Warehouses"
             value={stats.warehouses}
             icon={<Warehouse className="h-5 w-5 text-white" />}
             color="from-emerald-500 to-emerald-700"
-            onClick={() => goToTab(3)}
+            onClick={() => goToTab(2)}
           />
           <StatCard
             title="Low stock"
             value={stats.lowStockCount}
             icon={<TrendingDown className="h-5 w-5 text-white" />}
             color="from-orange-500 to-orange-700"
-            onClick={() => goToTab(4)}
+            onClick={() => goToTab(3)}
           />
           <StatCard
             title="Movements today"
             value={stats.transfersToday}
             icon={<Activity className="h-5 w-5 text-white" />}
             color="from-rose-500 to-rose-700"
-            onClick={() => goToTab(5)}
+            onClick={() => goToTab(4)}
           />
         </StatGrid>
       )}
@@ -374,7 +371,7 @@ export function InventoryPage() {
       <PageHeader
         action={
           stats && stats.lowStockCount > 0 ? (
-            <Button variant="secondary" size="sm" onClick={() => goToTab(4)}>
+            <Button variant="secondary" size="sm" onClick={() => goToTab(3)}>
               <AlertTriangle className="h-4 w-4 mr-1.5 text-amber-500" />
               {stats.lowStockCount} low stock
             </Button>
@@ -384,91 +381,8 @@ export function InventoryPage() {
 
       <PageToolbar tabs={tabs} activeTab={activeTab} onTabChange={setActiveTab} actions={toolbarActions} />
 
-      {/* Overview */}
-      {activeTab === 0 && (
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-            <Card
-              title="Low stock alerts"
-              action={
-                (lowStock?.length || 0) > 0 ? (
-                  <Button variant="ghost" size="sm" onClick={() => goToTab(4)}>
-                    View all
-                  </Button>
-                ) : undefined
-              }
-              padding={false}
-            >
-              {(lowStock?.length || 0) === 0 ? (
-                <div className="p-6">
-                  <EmptyState title="All materials above minimum" description="No replenishment needed right now." />
-                </div>
-              ) : (
-                <ul className="divide-y divide-slate-100">
-                  {(lowStock as RawMaterial[]).slice(0, 5).map((item) => {
-                    const onHand = item.stockLevels?.reduce((s, l) => s + Number(l.quantity), 0) ?? 0;
-                    const min = Number(item.minStockLevel);
-                    const deficit = Math.max(0, min - onHand);
-                    return (
-                      <li key={item.id} className="flex items-center gap-3 px-4 py-3 hover:bg-red-50/30">
-                        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-red-100 text-red-600">
-                          <AlertTriangle className="h-4 w-4" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium text-slate-900 truncate">{item.name}</p>
-                          <p className="text-xs text-slate-500">{item.code} · min {min.toLocaleString()} {item.unit}</p>
-                        </div>
-                        <div className="text-right shrink-0">
-                          <p className="text-sm font-bold text-red-600 tabular-nums">{onHand.toLocaleString()}</p>
-                          <p className="text-xs text-red-500">−{deficit.toLocaleString()} short</p>
-                        </div>
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
-            </Card>
-
-            <Card
-              title="Recent movements"
-              action={
-                <Button variant="ghost" size="sm" onClick={() => goToTab(5)}>
-                  Full ledger
-                </Button>
-              }
-              padding={false}
-            >
-              {recentTx.length === 0 ? (
-                <div className="p-6">
-                  <EmptyState title="No movements yet" description="Receipts, transfers, and adjustments appear here." />
-                </div>
-              ) : (
-                <ul className="divide-y divide-slate-100">
-                  {recentTx.map((tx) => (
-                    <li key={tx.id} className="flex items-center gap-3 px-4 py-3">
-                      <Badge variant={txTypeVariant(tx.type)}>{tx.type.replace(/_/g, ' ')}</Badge>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm text-slate-800 truncate">{tx.notes || tx.referenceType || 'Movement'}</p>
-                        <p className="text-xs text-slate-400">{formatDate(tx.createdAt)}</p>
-                      </div>
-                      <span
-                        className={`text-sm font-semibold tabular-nums ${
-                          Number(tx.quantity) < 0 ? 'text-red-600' : 'text-emerald-600'
-                        }`}
-                      >
-                        {Number(tx.quantity).toLocaleString()}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </Card>
-          </div>
-        </div>
-      )}
-
       {/* Stock levels */}
-      {activeTab === 1 && (
+      {activeTab === 0 && (
         <DataPanel>
           <div className="flex flex-col sm:flex-row gap-3 mb-4">
             <Input
@@ -496,7 +410,7 @@ export function InventoryPage() {
       )}
 
       {/* Materials */}
-      {activeTab === 2 && (
+      {activeTab === 1 && (
         <DataPanel>
           <div className="flex flex-col sm:flex-row gap-3 mb-4">
             <Input
@@ -539,7 +453,7 @@ export function InventoryPage() {
       )}
 
       {/* Warehouses */}
-      {activeTab === 3 && (
+      {activeTab === 2 && (
         <>
           {(warehouses?.length || 0) === 0 ? (
             <EmptyState title="No warehouses configured" description="Warehouses are set up during system seeding or in Settings." />
@@ -582,7 +496,7 @@ export function InventoryPage() {
                             <p className="text-2xl font-bold text-slate-900 tabular-nums">{itemCount}</p>
                             <p className="text-xs text-slate-500">stock lines</p>
                           </div>
-                          <Button variant="secondary" size="sm" onClick={() => goToTab(1)}>
+                          <Button variant="secondary" size="sm" onClick={() => goToTab(0)}>
                             View stock
                           </Button>
                         </div>
@@ -597,7 +511,7 @@ export function InventoryPage() {
       )}
 
       {/* Low stock */}
-      {activeTab === 4 && (
+      {activeTab === 3 && (
         <>
           {(lowStock?.length || 0) === 0 ? (
             <EmptyState
@@ -675,7 +589,7 @@ export function InventoryPage() {
       )}
 
       {/* Movements */}
-      {activeTab === 5 && (
+      {activeTab === 4 && (
         <DataPanel>
           <div className="flex flex-col sm:flex-row gap-3 mb-4">
             <Input

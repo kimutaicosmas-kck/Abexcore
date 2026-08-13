@@ -52,8 +52,8 @@ import { Complaint, CrmStats, Customer, Opportunity, Warranty } from '../types';
 import { formatProductOptionLabel } from '../utils/productDisplay';
 import { isSalesBookOwner } from '../utils/salesTargets';
 
-const COMPANY_TABS = ['Overview', 'Customers', 'Complaints', 'Opportunities', 'Warranties'];
-const MY_BOOK_TABS = ['Overview', 'My Customers', 'My Complaints', 'My Opportunities', 'My Warranties'];
+const COMPANY_TABS = ['Customers', 'Complaints', 'Opportunities', 'Warranties'];
+const MY_BOOK_TABS = ['My Customers', 'My Complaints', 'My Opportunities', 'My Warranties'];
 
 const CUSTOMER_TYPE_OPTIONS = [
   { value: '', label: 'All types' },
@@ -189,7 +189,7 @@ export function CustomersPage() {
           salesPersonId: custSalesPerson || undefined,
         })
         .then((r) => r.data),
-    enabled: activeTab === 0 || activeTab === 1,
+    enabled: activeTab === 0,
   });
 
   const { data: statementData, isLoading: statementLoading, isError: statementError, refetch: refetchStatement } = useQuery({
@@ -248,7 +248,7 @@ export function CustomersPage() {
           status: compStatus || undefined,
         })
         .then((r) => r.data),
-    enabled: activeTab === 0 || activeTab === 2,
+    enabled: activeTab === 1,
   });
 
   const { data: opportunitiesRes, isLoading: oppLoading } = useQuery({
@@ -262,7 +262,7 @@ export function CustomersPage() {
           status: oppStatus || undefined,
         })
         .then((r) => r.data),
-    enabled: activeTab === 0 || activeTab === 3,
+    enabled: activeTab === 2,
   });
 
   const { data: warrantiesRes, isLoading: warrLoading } = useQuery({
@@ -271,7 +271,7 @@ export function CustomersPage() {
       crmApi
         .warranties({ page: warrPage, limit: 15, search: warrSearch || undefined })
         .then((r) => r.data),
-    enabled: activeTab === 0 || activeTab === 4,
+    enabled: activeTab === 3,
   });
 
   const { data: customerDetail, isLoading: detailLoading } = useQuery({
@@ -361,14 +361,6 @@ export function CustomersPage() {
     }
   };
   const openEditOpportunity = (opp: Opportunity) => { setEditingOpportunity(opp); setOpportunityModalOpen(true); };
-
-  const recentCustomers = activeTab === 0 ? ((customersRes?.data as Customer[]) || []).slice(0, 6) : [];
-  const openComplaints = activeTab === 0
-    ? ((complaintsRes?.data as Complaint[]) || []).filter((c) => !c.resolvedAt).slice(0, 5)
-    : [];
-  const pipelineOpps = activeTab === 0
-    ? ((opportunitiesRes?.data as Opportunity[]) || []).filter((o) => !isClosedStage(o.stage)).slice(0, 5)
-    : [];
 
   const salesPersonFilterOptions = [
     { value: '', label: 'All sales people' },
@@ -586,22 +578,22 @@ export function CustomersPage() {
   ];
 
   const toolbarActions = canCreate
-    ? activeTab === 0 || activeTab === 1 ? (
+    ? activeTab === 0 ? (
         <Button size="sm" onClick={openCreate}>
           <Plus className="h-4 w-4 mr-1.5" />
           Add Customer
         </Button>
-      ) : activeTab === 2 ? (
+      ) : activeTab === 1 ? (
         <Button size="sm" onClick={() => setComplaintModalOpen(true)}>
           <Plus className="h-4 w-4 mr-1.5" />
           Add Complaint
         </Button>
-      ) : activeTab === 3 ? (
+      ) : activeTab === 2 ? (
         <Button size="sm" onClick={() => { setEditingOpportunity(null); setOpportunityModalOpen(true); }}>
           <Plus className="h-4 w-4 mr-1.5" />
           Add Opportunity
         </Button>
-      ) : activeTab === 4 ? (
+      ) : activeTab === 3 ? (
         <Button size="sm" onClick={() => setWarrantyModalOpen(true)}>
           <Plus className="h-4 w-4 mr-1.5" />
           Register Warranty
@@ -618,35 +610,35 @@ export function CustomersPage() {
             value={stats.customers.active}
             icon={<Users className="h-5 w-5 text-white" />}
             color="from-emerald-500 to-emerald-700"
-            onClick={() => goToTab(1)}
+            onClick={() => goToTab(0)}
           />
           <StatCard
             title={myBook ? 'My Open Complaints' : 'Open Complaints'}
             value={stats.complaints.open}
             icon={<AlertCircle className="h-5 w-5 text-white" />}
             color="from-sky-500 to-sky-700"
-            onClick={() => goToTab(2)}
+            onClick={() => goToTab(1)}
           />
           <StatCard
             title={myBook ? 'My Pipeline' : 'Pipeline Value'}
             value={formatCurrency(stats.opportunities.pipelineValue)}
             icon={<TrendingUp className="h-5 w-5 text-white" />}
             color="from-violet-500 to-violet-700"
-            onClick={() => goToTab(3)}
+            onClick={() => goToTab(2)}
           />
           <StatCard
             title={myBook ? 'My Warranties Expiring' : 'Warranties Expiring'}
             value={stats.warranties.expiringSoon}
             icon={<Shield className="h-5 w-5 text-white" />}
             color="from-amber-500 to-amber-700"
-            onClick={() => goToTab(4)}
+            onClick={() => goToTab(3)}
           />
           <StatCard
             title={myBook ? 'My Open Opportunities' : 'Open Opportunities'}
             value={stats.opportunities.open}
             icon={<Target className="h-5 w-5 text-white" />}
             color="from-rose-500 to-rose-700"
-            onClick={() => goToTab(3)}
+            onClick={() => goToTab(2)}
           />
         </StatGrid>
       )}
@@ -654,7 +646,7 @@ export function CustomersPage() {
       <PageHeader
         action={
           stats && stats.complaints.open > 0 ? (
-            <Button variant="secondary" size="sm" onClick={() => goToTab(2)}>
+            <Button variant="secondary" size="sm" onClick={() => goToTab(1)}>
               <AlertCircle className="h-4 w-4 mr-1.5 text-red-500" />
               {stats.complaints.open} {myBook ? 'my open complaints' : 'open complaints'}
             </Button>
@@ -676,93 +668,6 @@ export function CustomersPage() {
       />
 
       {activeTab === 0 && (
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-            <Card
-              title={myBook ? 'My open complaints' : 'Open complaints'}
-              action={
-                openComplaints.length > 0 ? (
-                  <Button variant="ghost" size="sm" onClick={() => goToTab(2)}>
-                    View all
-                  </Button>
-                ) : undefined
-              }
-              padding={false}
-            >
-              {openComplaints.length === 0 ? (
-                <div className="p-6">
-                  <EmptyState
-                    title={myBook ? 'No open complaints on your customers' : 'No open complaints'}
-                    description={
-                      myBook
-                        ? 'Issues logged against your assigned customers will appear here.'
-                        : 'Customer issues will appear here for resolution.'
-                    }
-                  />
-                </div>
-              ) : (
-                <ul className="divide-y divide-slate-100">
-                  {openComplaints.map((c) => (
-                    <li key={c.id} className="flex items-center gap-3 px-4 py-3 hover:bg-red-50/30">
-                      <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-red-100 text-red-600">
-                        <AlertCircle className="h-4 w-4" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-slate-900 truncate">{c.subject}</p>
-                        <p className="text-xs text-slate-500">{c.customer?.name || '—'} · {formatDate(c.createdAt)}</p>
-                      </div>
-                      <Badge variant={c.priority === 'high' || c.priority === 'urgent' ? 'danger' : 'info'}>
-                        {c.priority}
-                      </Badge>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </Card>
-
-            <Card
-              title={myBook ? 'My pipeline opportunities' : 'Pipeline opportunities'}
-              action={
-                <Button variant="ghost" size="sm" onClick={() => goToTab(3)}>
-                  Full pipeline
-                  <ChevronRight className="h-4 w-4 ml-1" />
-                </Button>
-              }
-              padding={false}
-            >
-              {pipelineOpps.length === 0 ? (
-                <div className="p-6">
-                  <EmptyState
-                    title={myBook ? 'No open opportunities in your book' : 'No open opportunities'}
-                    description={
-                      myBook
-                        ? 'Add deals for your customers to track your personal pipeline.'
-                        : 'Add deals to track your sales pipeline.'
-                    }
-                  />
-                </div>
-              ) : (
-                <ul className="divide-y divide-slate-100">
-                  {pipelineOpps.map((o) => (
-                    <li key={o.id} className="flex items-center gap-3 px-4 py-3">
-                      <Badge variant="info">{o.stage.replace(/_/g, ' ')}</Badge>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm text-slate-800 truncate">{o.title}</p>
-                        <p className="text-xs text-slate-400">{o.customer?.name || '—'}</p>
-                      </div>
-                      <span className="text-sm font-semibold tabular-nums text-emerald-600">
-                        {formatCurrency(Number(o.value))}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </Card>
-          </div>
-        </div>
-      )}
-
-      {activeTab === 1 && (
         <DataPanel>
           <div className="p-4 pb-0 flex flex-wrap items-end gap-3">
             <form
@@ -837,7 +742,7 @@ export function CustomersPage() {
         </DataPanel>
       )}
 
-      {activeTab === 2 && (
+      {activeTab === 1 && (
         <DataPanel>
           <div className="p-4 pb-0 flex flex-wrap gap-3">
             <Input placeholder="Search complaints…" className="sm:max-w-md" value={compSearch} onChange={(e) => { setCompSearch(e.target.value); setCompPage(1); }} />
@@ -874,7 +779,7 @@ export function CustomersPage() {
         </DataPanel>
       )}
 
-      {activeTab === 3 && (
+      {activeTab === 2 && (
         <DataPanel>
           <div className="p-4 pb-0 flex flex-wrap gap-3">
             <Input placeholder="Search opportunities…" className="sm:max-w-md" value={oppSearch} onChange={(e) => { setOppSearch(e.target.value); setOppPage(1); }} />
@@ -904,7 +809,7 @@ export function CustomersPage() {
         </DataPanel>
       )}
 
-      {activeTab === 4 && (
+      {activeTab === 3 && (
         <DataPanel>
           <div className="p-4 pb-0 sm:max-w-md">
             <Input placeholder="Search warranties…" value={warrSearch} onChange={(e) => { setWarrSearch(e.target.value); setWarrPage(1); }} />

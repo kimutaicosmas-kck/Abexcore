@@ -33,7 +33,7 @@ import { getApiErrorMessage } from '../utils/apiError';
 
 type DriverOption = { id: string; firstName: string; lastName: string; email: string };
 
-const tabs = ['Overview', 'Deliveries', 'Vehicles'];
+const tabs = ['Deliveries', 'Vehicles'];
 
 type DeliveryListRow =
   | { kind: 'trip'; id: string; createdAt: string; trip: DeliveryTrip }
@@ -160,9 +160,8 @@ export function DeliveryPage() {
   const canCreate = hasPermission('delivery:create') && !isDriver;
   const canUpdate = hasPermission('delivery:update');
   const visibleTabs = isDriver ? ['My Deliveries'] : tabs;
-  const showOverview = !isDriver && activeTab === 0;
-  const showDeliveries = isDriver ? activeTab === 0 : activeTab === 1;
-  const showVehicles = !isDriver && activeTab === 2;
+  const showDeliveries = activeTab === 0;
+  const showVehicles = !isDriver && activeTab === 1;
 
   useEffect(() => {
     if (!canCreate) return;
@@ -175,7 +174,7 @@ export function DeliveryPage() {
 
     setPrefillOrderIds(orderIdsFromQuery);
     setDeliveryModalOpen(true);
-    if (!isDriver) setActiveTab(1);
+    if (!isDriver) setActiveTab(0);
     // Keep query until modal open is applied; clear on next tick so Strict Mode remount still sees it once.
   }, [canCreate, isDriver, searchParams]);
 
@@ -207,7 +206,7 @@ export function DeliveryPage() {
           date: deliveryDate || undefined,
         })
         .then((r) => r.data),
-    enabled: isDriver ? activeTab === 0 : activeTab === 0 || activeTab === 1,
+    enabled: activeTab === 0,
   });
 
   const { data: trips, isLoading: tripsLoading, isError: tripsError, error: tripsErr, refetch: refetchTrips } = useQuery({
@@ -222,7 +221,7 @@ export function DeliveryPage() {
           date: deliveryDate || undefined,
         })
         .then((r) => r.data),
-    enabled: isDriver ? activeTab === 0 : activeTab === 0 || activeTab === 1,
+    enabled: activeTab === 0,
   });
 
   const listRows: DeliveryListRow[] = sortDeliveryRows([
@@ -248,7 +247,7 @@ export function DeliveryPage() {
       deliveryApi
         .vehicles({ page: vehPage, limit: 15, search: vehSearch || undefined, type: vehType || undefined })
         .then((r) => r.data),
-    enabled: !isDriver && (activeTab === 0 || activeTab === 2),
+    enabled: !isDriver && activeTab === 1,
   });
 
   const { data: assignDrivers } = useQuery({
@@ -440,16 +439,6 @@ export function DeliveryPage() {
     setDetailOpen(true);
   };
 
-  const recentDeliveries = showOverview ? listRows.slice(0, 6) : [];
-  const activeDeliveries = showOverview
-    ? sortDeliveryRows(
-        listRows.filter((row) => {
-          const st = row.kind === 'trip' ? row.trip.status : row.note.status;
-          return ['PENDING', 'ASSIGNED', 'IN_TRANSIT'].includes(st);
-        })
-      ).slice(0, 5)
-    : [];
-
   const deliveryColumns = [
     {
       key: 'deliveryNo',
@@ -609,11 +598,11 @@ export function DeliveryPage() {
       />
       {stats && (
         <StatGrid>
-          <StatCard title="Pending" value={stats.pending} icon={<Package className="h-5 w-5 text-white" />} color="from-emerald-500 to-emerald-700" onClick={() => { setStatus('PENDING'); setPage(1); goToTab(1); }} />
-          <StatCard title="In Transit" value={stats.inTransit} icon={<Truck className="h-5 w-5 text-white" />} color="from-sky-500 to-sky-700" onClick={() => { setStatus('IN_TRANSIT'); setPage(1); goToTab(1); }} />
-          <StatCard title="Delivered Today" value={stats.deliveredToday} icon={<MapPin className="h-5 w-5 text-white" />} color="from-violet-500 to-violet-700" onClick={() => { setStatus('DELIVERED'); setPage(1); goToTab(1); }} />
-          <StatCard title="Motorcycles" value={stats.motorcycles ?? 0} icon={<Bike className="h-5 w-5 text-white" />} color="from-amber-500 to-amber-700" onClick={() => goToTab(2)} />
-          <StatCard title="Trucks" value={stats.trucks ?? 0} icon={<Truck className="h-5 w-5 text-white" />} color="from-rose-500 to-rose-700" onClick={() => goToTab(2)} />
+          <StatCard title="Pending" value={stats.pending} icon={<Package className="h-5 w-5 text-white" />} color="from-emerald-500 to-emerald-700" onClick={() => { setStatus('PENDING'); setPage(1); goToTab(0); }} />
+          <StatCard title="In Transit" value={stats.inTransit} icon={<Truck className="h-5 w-5 text-white" />} color="from-sky-500 to-sky-700" onClick={() => { setStatus('IN_TRANSIT'); setPage(1); goToTab(0); }} />
+          <StatCard title="Delivered Today" value={stats.deliveredToday} icon={<MapPin className="h-5 w-5 text-white" />} color="from-violet-500 to-violet-700" onClick={() => { setStatus('DELIVERED'); setPage(1); goToTab(0); }} />
+          <StatCard title="Motorcycles" value={stats.motorcycles ?? 0} icon={<Bike className="h-5 w-5 text-white" />} color="from-amber-500 to-amber-700" onClick={() => goToTab(1)} />
+          <StatCard title="Trucks" value={stats.trucks ?? 0} icon={<Truck className="h-5 w-5 text-white" />} color="from-rose-500 to-rose-700" onClick={() => goToTab(1)} />
         </StatGrid>
       )}
 
@@ -626,12 +615,12 @@ export function DeliveryPage() {
       <PageHeader
         action={
           stats && stats.inTransit > 0 ? (
-            <Button variant="secondary" size="sm" onClick={() => { setStatus('IN_TRANSIT'); setPage(1); goToTab(1); }}>
+            <Button variant="secondary" size="sm" onClick={() => { setStatus('IN_TRANSIT'); setPage(1); goToTab(0); }}>
               <Truck className="h-4 w-4 mr-1.5 text-primary-500" />
               {stats.inTransit} in transit
             </Button>
           ) : stats && stats.pending > 0 ? (
-            <Button variant="secondary" size="sm" onClick={() => { setStatus('PENDING'); setPage(1); goToTab(1); }}>
+            <Button variant="secondary" size="sm" onClick={() => { setStatus('PENDING'); setPage(1); goToTab(0); }}>
               <Package className="h-4 w-4 mr-1.5 text-amber-500" />
               {stats.pending} pending
             </Button>
@@ -645,132 +634,6 @@ export function DeliveryPage() {
         onTabChange={(tab) => { setActiveTab(tab); setPage(1); setVehPage(1); }}
         actions={toolbarActions}
       />
-
-      {showOverview && (
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-            <Card
-              title="Active deliveries"
-              action={
-                activeDeliveries.length > 0 ? (
-                  <Button variant="ghost" size="sm" onClick={() => goToTab(1)}>
-                    View all
-                  </Button>
-                ) : undefined
-              }
-              padding={false}
-            >
-              {activeDeliveries.length === 0 ? (
-                <div className="p-6">
-                  <EmptyState title="No active deliveries" description="Pending and in-transit notes appear here." />
-                </div>
-              ) : (
-                <ul className="divide-y divide-slate-100">
-                  {activeDeliveries.map((row) => {
-                    const label = row.kind === 'trip' ? row.trip.tripNo : row.note.deliveryNo;
-                    const subtitle =
-                      row.kind === 'trip'
-                        ? `${row.trip.stops.length} orders`
-                        : row.note.salesOrder?.customer?.name || '—';
-                    const st = row.kind === 'trip' ? row.trip.status : row.note.status;
-                    return (
-                    <li
-                      key={row.id}
-                      className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 cursor-pointer"
-                      onClick={() => openDetail(row)}
-                    >
-                      <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-100 text-amber-600">
-                        <AlertTriangle className="h-4 w-4" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-slate-900 truncate">{label}</p>
-                        <p className="text-xs text-slate-500">{subtitle}</p>
-                      </div>
-                      <Badge variant={getStatusBadge(st)}>{st.replace(/_/g, ' ')}</Badge>
-                    </li>
-                    );
-                  })}
-                </ul>
-              )}
-            </Card>
-
-            <Card
-              title="Recent deliveries"
-              action={
-                <Button variant="ghost" size="sm" onClick={() => goToTab(1)}>
-                  Full list
-                  <ChevronRight className="h-4 w-4 ml-1" />
-                </Button>
-              }
-              padding={false}
-            >
-              {recentDeliveries.length === 0 ? (
-                <div className="p-6">
-                  <EmptyState title="No deliveries yet" description="Create a delivery note from a ready sales order." />
-                </div>
-              ) : (
-                <ul className="divide-y divide-slate-100">
-                  {recentDeliveries.map((row) => {
-                    const label = row.kind === 'trip' ? row.trip.tripNo : row.note.deliveryNo;
-                    const subtitle =
-                      row.kind === 'trip'
-                        ? `${row.trip.stops.length} orders`
-                        : row.note.salesOrder?.orderNumber || '—';
-                    const date =
-                      row.kind === 'trip' ? row.trip.scheduledDate : row.note.scheduledDate;
-                    const st = row.kind === 'trip' ? row.trip.status : row.note.status;
-                    return (
-                    <li
-                      key={row.id}
-                      className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 cursor-pointer"
-                      onClick={() => openDetail(row)}
-                    >
-                      <Badge variant={getStatusBadge(st)}>{st.replace(/_/g, ' ')}</Badge>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm text-slate-800 truncate">{label}</p>
-                        <p className="text-xs text-slate-400">{subtitle}</p>
-                      </div>
-                      <span className="text-xs text-slate-500 shrink-0">
-                        {date ? formatDate(date) : '—'}
-                      </span>
-                    </li>
-                    );
-                  })}
-                </ul>
-              )}
-            </Card>
-          </div>
-
-          {stats && (
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              {([
-                { type: 'MOTORCYCLE' as VehicleType, label: 'Motorcycles', count: stats.motorcycles ?? 0, icon: Bike, desc: 'City & express runs' },
-                { type: 'TRUCK' as VehicleType, label: 'Trucks', count: stats.trucks ?? 0, icon: Truck, desc: 'Medium regional loads' },
-                { type: 'LORRY' as VehicleType, label: 'Lorries', count: stats.lorries ?? 0, icon: Container, desc: 'Bulk & long haul' },
-              ]).map((fleet) => (
-                <button
-                  key={fleet.type}
-                  type="button"
-                  onClick={() => { setVehType(fleet.type); setVehPage(1); goToTab(2); }}
-                  className="rounded-2xl border border-slate-200 bg-white overflow-hidden shadow-sm hover:shadow-md transition-shadow text-left"
-                >
-                  <div className={`h-1.5 bg-gradient-to-r ${VEHICLE_TYPE_COLORS[fleet.type]}`} />
-                  <div className="p-4 flex items-start gap-3">
-                    <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br ${VEHICLE_TYPE_COLORS[fleet.type]} text-white`}>
-                      <fleet.icon className="h-5 w-5" />
-                    </div>
-                    <div>
-                      <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">{fleet.label}</p>
-                      <p className="text-2xl font-bold text-slate-900 tabular-nums">{fleet.count}</p>
-                      <p className="text-xs text-slate-500 mt-0.5">{fleet.desc}</p>
-                    </div>
-                  </div>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
 
       {showDeliveries && (
         <DataPanel>

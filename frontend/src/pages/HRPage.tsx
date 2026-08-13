@@ -44,7 +44,7 @@ import {
 import { downloadFile } from '../utils/download';
 import { getApiErrorMessage } from '../utils/apiError';
 
-const tabs = ['Overview', 'Employees', 'Attendance', 'Leave', 'Advances', 'Payroll'];
+const tabs = ['Employees', 'Attendance', 'Leave', 'Advances', 'Payroll'];
 
 const LEAVE_STATUS = [
   { value: '', label: 'All statuses' },
@@ -114,32 +114,32 @@ export function HRPage() {
   const { data: employees, isLoading: empLoading } = useQuery({
     queryKey: ['employees', empPage, empSearch],
     queryFn: () => hrApi.employees({ page: empPage, limit: 15, search: empSearch || undefined }).then((r) => r.data),
-    enabled: activeTab === 0 || activeTab === 1,
+    enabled: activeTab === 0,
   });
 
   const { data: attendance, isLoading: attLoading } = useQuery({
     queryKey: ['attendance', attPage, attSearch],
     queryFn: () => hrApi.attendance({ page: attPage, limit: 15, search: attSearch || undefined }).then((r) => r.data),
-    enabled: activeTab === 0 || activeTab === 2,
+    enabled: activeTab === 1,
   });
 
   const { data: leave, isLoading: leaveLoading } = useQuery({
     queryKey: ['leave', leavePage, leaveSearch, leaveStatus],
     queryFn: () =>
       hrApi.leave({ page: leavePage, limit: 15, search: leaveSearch || undefined, status: leaveStatus || undefined }).then((r) => r.data),
-    enabled: activeTab === 0 || activeTab === 3,
+    enabled: activeTab === 2,
   });
 
   const { data: onLeaveToday } = useQuery({
     queryKey: ['leave-on-leave'],
     queryFn: () => hrApi.onLeave().then((r) => r.data.data as StaffOnLeaveRow[]),
-    enabled: activeTab === 3,
+    enabled: activeTab === 2,
   });
 
   const { data: balanceEmployees } = useQuery({
     queryKey: ['employees-for-leave-balances'],
     queryFn: () => hrApi.employees({ page: 1, limit: 100, isActive: true }).then((r) => r.data.data as Employee[]),
-    enabled: activeTab === 3,
+    enabled: activeTab === 2,
   });
 
   const { data: selectedBalances } = useQuery({
@@ -148,19 +148,19 @@ export function HRPage() {
       hrApi
         .leaveBalances({ employeeId: balanceEmployeeId, year: leaveYear })
         .then((r) => r.data.data as LeaveBalancesPayload),
-    enabled: activeTab === 3 && !!balanceEmployeeId,
+    enabled: activeTab === 2 && !!balanceEmployeeId,
   });
 
   const { data: payroll, isLoading: payrollLoading } = useQuery({
     queryKey: ['payroll', payPage, paySearch],
     queryFn: () => hrApi.payroll({ page: payPage, limit: 15, search: paySearch || undefined }).then((r) => r.data),
-    enabled: activeTab === 0 || activeTab === 5,
+    enabled: activeTab === 4,
   });
 
   const { data: advanceStats } = useQuery({
     queryKey: ['salary-advance-stats'],
     queryFn: () => hrApi.advanceStats().then((r) => r.data.data as SalaryAdvanceStats),
-    enabled: activeTab === 0 || activeTab === 4,
+    enabled: activeTab === 3,
   });
 
   const { data: advances, isLoading: advancesLoading } = useQuery({
@@ -174,7 +174,7 @@ export function HRPage() {
           status: advStatus || undefined,
         })
         .then((r) => r.data),
-    enabled: activeTab === 0 || activeTab === 4,
+    enabled: activeTab === 3,
   });
 
   const { data: advanceDetail, isLoading: advanceDetailLoading } = useQuery({
@@ -264,11 +264,11 @@ export function HRPage() {
   const goToTab = (index: number) => setActiveTab(index);
 
   const tabActions: Record<number, { label: string; modal: HrModal }> = {
-    1: { label: 'Add Employee', modal: 'employee' },
-    2: { label: 'Record Attendance', modal: 'attendance' },
-    3: { label: 'Request Leave', modal: 'leave' },
-    4: { label: 'Add Advance', modal: 'advance' },
-    5: { label: 'Create Payroll', modal: 'payroll' },
+    0: { label: 'Add Employee', modal: 'employee' },
+    1: { label: 'Record Attendance', modal: 'attendance' },
+    2: { label: 'Request Leave', modal: 'leave' },
+    3: { label: 'Add Advance', modal: 'advance' },
+    4: { label: 'Create Payroll', modal: 'payroll' },
   };
 
   const advanceBusy =
@@ -277,15 +277,6 @@ export function HRPage() {
     disburseAdvanceMutation.isPending ||
     cancelAdvanceMutation.isPending ||
     writeOffAdvanceMutation.isPending;
-
-  const recentEmployees = activeTab === 0 ? (employees?.data || []).slice(0, 6) : [];
-  const pendingLeave = activeTab === 0
-    ? ((leave?.data as LeaveRequest[]) || []).filter((l) => l.status === 'PENDING').slice(0, 5)
-    : [];
-  const recentAttendance = activeTab === 0 ? (attendance?.data || []).slice(0, 6) : [];
-  const openAdvances = activeTab === 0
-    ? ((advances?.data as SalaryAdvance[]) || []).filter((a) => a.status === 'ACTIVE' || a.status === 'PENDING').slice(0, 5)
-    : [];
 
   const employeeColumns = [
     { key: 'employeeNo', label: 'Employee #' },
@@ -425,7 +416,7 @@ export function HRPage() {
 
   return (
     <div className="space-y-4">
-      {activeTab === 4 ? (
+      {activeTab === 3 ? (
         <StatGrid>
           <StatCard
             title="Pending Approval"
@@ -464,17 +455,17 @@ export function HRPage() {
       ) : (
         stats && (
           <StatGrid>
-            <StatCard title="Employees" value={stats.activeEmployees} icon={<Users className="h-5 w-5 text-white" />} color="from-teal-500 to-teal-700" onClick={() => goToTab(1)} />
-            <StatCard title="Pending Leave" value={stats.pendingLeave} icon={<Calendar className="h-5 w-5 text-white" />} color="from-indigo-500 to-indigo-700" onClick={() => { setLeaveStatus('PENDING'); setLeavePage(1); goToTab(3); }} />
+            <StatCard title="Employees" value={stats.activeEmployees} icon={<Users className="h-5 w-5 text-white" />} color="from-teal-500 to-teal-700" onClick={() => goToTab(0)} />
+            <StatCard title="Pending Leave" value={stats.pendingLeave} icon={<Calendar className="h-5 w-5 text-white" />} color="from-indigo-500 to-indigo-700" onClick={() => { setLeaveStatus('PENDING'); setLeavePage(1); goToTab(2); }} />
             <StatCard
               title="Advances Outstanding"
               value={formatCurrency(stats.advancesOutstanding || advanceStats?.outstandingBalance || 0)}
               icon={<Wallet className="h-5 w-5 text-white" />}
               color="from-emerald-500 to-emerald-700"
-              onClick={() => { setAdvStatus('ACTIVE'); setAdvPage(1); goToTab(4); }}
+              onClick={() => { setAdvStatus('ACTIVE'); setAdvPage(1); goToTab(3); }}
             />
-            <StatCard title="Payroll Due" value={formatCurrency(stats.payrollDue)} icon={<DollarSign className="h-5 w-5 text-white" />} color="from-orange-500 to-orange-700" onClick={() => goToTab(5)} />
-            <StatCard title="Present Today" value={stats.attendanceToday} icon={<UserCheck className="h-5 w-5 text-white" />} color="from-fuchsia-500 to-fuchsia-700" onClick={() => goToTab(2)} />
+            <StatCard title="Payroll Due" value={formatCurrency(stats.payrollDue)} icon={<DollarSign className="h-5 w-5 text-white" />} color="from-orange-500 to-orange-700" onClick={() => goToTab(4)} />
+            <StatCard title="Present Today" value={stats.attendanceToday} icon={<UserCheck className="h-5 w-5 text-white" />} color="from-fuchsia-500 to-fuchsia-700" onClick={() => goToTab(1)} />
           </StatGrid>
         )
       )}
@@ -482,7 +473,7 @@ export function HRPage() {
       <PageHeader
         action={
           stats && stats.pendingLeave > 0 ? (
-            <Button variant="secondary" size="sm" onClick={() => { setLeaveStatus('PENDING'); setLeavePage(1); goToTab(3); }}>
+            <Button variant="secondary" size="sm" onClick={() => { setLeaveStatus('PENDING'); setLeavePage(1); goToTab(2); }}>
               <Calendar className="h-4 w-4 mr-1.5 text-amber-500" />
               {stats.pendingLeave} pending leave
             </Button>
@@ -498,123 +489,6 @@ export function HRPage() {
       />
 
       {activeTab === 0 && (
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-            <Card
-              title="Pending leave requests"
-              action={
-                pendingLeave.length > 0 ? (
-                  <Button variant="ghost" size="sm" onClick={() => { setLeaveStatus('PENDING'); goToTab(3); }}>
-                    View all
-                  </Button>
-                ) : undefined
-              }
-              padding={false}
-            >
-              {pendingLeave.length === 0 ? (
-                <div className="p-6">
-                  <EmptyState title="No pending leave" description="Leave requests awaiting approval appear here." />
-                </div>
-              ) : (
-                <ul className="divide-y divide-slate-100">
-                  {pendingLeave.map((req) => (
-                    <li key={req.id} className="flex items-center gap-3 px-4 py-3 hover:bg-amber-50/30">
-                      <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-100 text-amber-600">
-                        <Calendar className="h-4 w-4" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-slate-900 truncate">
-                          {req.employee ? `${req.employee.firstName} ${req.employee.lastName}` : '—'}
-                        </p>
-                        <p className="text-xs text-slate-500">{req.type} · {formatDate(req.startDate)} – {formatDate(req.endDate)}</p>
-                      </div>
-                      <Badge variant="warning">Pending</Badge>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </Card>
-
-            <Card
-              title="Today's attendance"
-              action={
-                <Button variant="ghost" size="sm" onClick={() => goToTab(2)}>
-                  Full log
-                  <ChevronRight className="h-4 w-4 ml-1" />
-                </Button>
-              }
-              padding={false}
-            >
-              {recentAttendance.length === 0 ? (
-                <div className="p-6">
-                  <EmptyState title="No attendance records" description="Record check-ins to track daily presence." />
-                </div>
-              ) : (
-                <ul className="divide-y divide-slate-100">
-                  {recentAttendance.map((record: { id: string; employee?: { firstName: string; lastName: string }; status: string; checkIn?: string }) => (
-                    <li key={record.id} className="flex items-center gap-3 px-4 py-3">
-                      <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary-100 text-primary-600">
-                        <Clock className="h-4 w-4" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm text-slate-800 truncate">
-                          {record.employee ? `${record.employee.firstName} ${record.employee.lastName}` : '—'}
-                        </p>
-                        <p className="text-xs text-slate-400">
-                          {record.checkIn ? new Date(record.checkIn).toLocaleTimeString() : 'No check-in'}
-                        </p>
-                      </div>
-                      <Badge variant={record.status === 'present' ? 'success' : 'warning'}>{record.status}</Badge>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </Card>
-
-            <Card
-              title="Salary advances"
-              action={
-                <Button variant="ghost" size="sm" onClick={() => goToTab(4)}>
-                  Manage
-                  <ChevronRight className="h-4 w-4 ml-1" />
-                </Button>
-              }
-              padding={false}
-            >
-              {openAdvances.length === 0 ? (
-                <div className="p-6">
-                  <EmptyState title="No open advances" description="Issue an advance and recover it automatically on payroll." />
-                </div>
-              ) : (
-                <ul className="divide-y divide-slate-100">
-                  {openAdvances.map((adv) => (
-                    <li
-                      key={adv.id}
-                      className="flex items-center gap-3 px-4 py-3 hover:bg-emerald-50/40 cursor-pointer"
-                      onClick={() => { setSelectedAdvanceId(adv.id); goToTab(4); }}
-                    >
-                      <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700">
-                        <Wallet className="h-4 w-4" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-slate-900 truncate">
-                          {adv.employee.firstName} {adv.employee.lastName} · {adv.advanceNo}
-                        </p>
-                        <p className="text-xs text-slate-500">
-                          {formatCurrency(adv.remainingBalance)} left · {formatCurrency(adv.monthlyDeduction)}/mo
-                        </p>
-                      </div>
-                      <Badge variant={advanceStatusVariant(adv.status)}>{adv.status.replace(/_/g, ' ')}</Badge>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </Card>
-          </div>
-        </div>
-      )}
-
-      {activeTab === 1 && (
         <DataPanel>
           <div className="p-4 pb-0">
             <Input
@@ -654,7 +528,7 @@ export function HRPage() {
         </DataPanel>
       )}
 
-      {activeTab === 2 && (
+      {activeTab === 1 && (
         <DataPanel>
           <div className="p-4 pb-0">
             <Input
@@ -688,7 +562,7 @@ export function HRPage() {
         </DataPanel>
       )}
 
-      {activeTab === 3 && (
+      {activeTab === 2 && (
         <div className="space-y-4">
           <Card title={`Staff on leave today (${onLeaveToday?.length || 0})`} padding={false}>
             {!onLeaveToday?.length ? (
@@ -894,7 +768,7 @@ export function HRPage() {
         </div>
       )}
 
-      {activeTab === 4 && (
+      {activeTab === 3 && (
         <div className="space-y-4">
           <DataPanel>
             <div className="p-4 pb-0 flex flex-col sm:flex-row gap-3">
@@ -942,7 +816,7 @@ export function HRPage() {
         </div>
       )}
 
-      {activeTab === 5 && (
+      {activeTab === 4 && (
         <DataPanel>
           <div className="p-4 pb-0">
             <Input
