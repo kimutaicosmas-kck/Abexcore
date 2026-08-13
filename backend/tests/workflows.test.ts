@@ -9,6 +9,45 @@ import {
 import { authReq } from './helpers/testAuth';
 import { testCtx, itWithDb } from './setup';
 
+/** Distinct sale dates so duplicate-order checks do not collide across integration tests. */
+const SALE_DATES = {
+  salesWorkflow: '2026-08-01',
+  orderToCash: '2026-09-15',
+  decoupledProduction: '2026-09-16',
+  partialDelivery: '2026-09-17',
+} as const;
+
+async function produceFinishedStock(productId: string, machineId: string, quantity: number) {
+  const productionRes = await authReq(testCtx.app, testCtx.authToken)
+    .post('/api/v1/operations/production')
+    .send({
+      productId,
+      machineId,
+      quantity,
+      scheduledStart: new Date().toISOString(),
+      notes: 'Workflow test stock build',
+    });
+  expect(productionRes.status).toBe(201);
+  const productionId = productionRes.body.data.id;
+
+  await authReq(testCtx.app, testCtx.authToken).post(
+    `/api/v1/operations/production/${productionId}/start`
+  );
+
+  const qcRes = await authReq(testCtx.app, testCtx.authToken).post('/api/v1/quality').send({
+    type: 'production',
+    productionOrderId: productionId,
+    status: 'PASSED',
+    result: 'Workflow test stock approved',
+  });
+  expect(qcRes.status).toBe(201);
+
+  const completeRes = await authReq(testCtx.app, testCtx.authToken)
+    .post(`/api/v1/operations/production/${productionId}/complete`)
+    .send({ completedQty: quantity, rejectedQty: 0 });
+  expect(completeRes.status).toBe(200);
+}
+
 async function confirmSalesOrder(orderId: string) {
   const res = await authReq(testCtx.app, testCtx.authToken)
     .patch(`/api/v1/operations/orders/${orderId}/status`)
@@ -93,7 +132,7 @@ describe('Sales order workflow (integration)', () => {
       .post('/api/v1/operations/orders')
       .send({
         customerId,
-        requiredDate: '2026-08-01',
+        requiredDate: SALE_DATES.salesWorkflow,
         notes: 'Workflow test order',
         items: [{ productId, quantity: 2, unitPrice: 150 }],
       });
@@ -167,20 +206,29 @@ describe('RFQ workflow (integration)', () => {
 
 describe('Order-to-cash workflow (integration)', () => {
   itWithDb('runs order → confirm → ready → delivery → auto invoice → credit sync', async () => {
-    const customersRes = await authReq(testCtx.app, testCtx.authToken).get('/api/v1/customers?limit=1');
-    const productsRes = await authReq(testCtx.app, testCtx.authToken).get('/api/v1/products?limit=1');
+    const [customersRes, productsRes, machinesRes] = await Promise.all([
+      authReq(testCtx.app, testCtx.authToken).get('/api/v1/customers?limit=1'),
+      authReq(testCtx.app, testCtx.authToken).get('/api/v1/products?limit=1'),
+      authReq(testCtx.app, testCtx.authToken).get('/api/v1/operations/machines'),
+    ]);
     expect(customersRes.status).toBe(200);
     expect(productsRes.status).toBe(200);
+    expect(machinesRes.status).toBe(200);
 
     const customerId = customersRes.body.data[0]?.id;
     const productId = productsRes.body.data[0]?.id;
+    const machineId = machinesRes.body.data[0]?.id;
     expect(customerId).toBeTruthy();
     expect(productId).toBeTruthy();
+    expect(machineId).toBeTruthy();
+
+    await produceFinishedStock(productId, machineId, 1);
 
     const createRes = await authReq(testCtx.app, testCtx.authToken)
       .post('/api/v1/operations/orders')
       .send({
         customerId,
+        requiredDate: SALE_DATES.orderToCash,
         notes: 'Order-to-cash E2E',
         items: [{ productId, quantity: 1, unitPrice: 150 }],
       });
@@ -304,6 +352,7 @@ describe('Decoupled production workflow (integration)', () => {
       .post('/api/v1/operations/orders')
       .send({
         customerId,
+        requiredDate: SALE_DATES.decoupledProduction,
         items: [{ productId, quantity: 1, unitPrice: 150 }],
       });
     expect(orderRes.status).toBe(201);
@@ -406,15 +455,23 @@ describe('Decoupled production workflow (integration)', () => {
 
 describe('Partial delivery workflow (integration)', () => {
   itWithDb('allows multiple delivery notes and partial invoices', async () => {
-    const customersRes = await authReq(testCtx.app, testCtx.authToken).get('/api/v1/customers?limit=1');
-    const productsRes = await authReq(testCtx.app, testCtx.authToken).get('/api/v1/products?limit=1');
+    const [customersRes, productsRes, machinesRes] = await Promise.all([
+      authReq(testCtx.app, testCtx.authToken).get('/api/v1/customers?limit=1'),
+      authReq(testCtx.app, testCtx.authToken).get('/api/v1/products?limit=1'),
+      authReq(testCtx.app, testCtx.authToken).get('/api/v1/operations/machines'),
+    ]);
     const customerId = customersRes.body.data[0]?.id;
     const productId = productsRes.body.data[0]?.id;
+    const machineId = machinesRes.body.data[0]?.id;
+    expect(customerId && productId && machineId).toBeTruthy();
+
+    await produceFinishedStock(productId, machineId, 4);
 
     const createRes = await authReq(testCtx.app, testCtx.authToken)
       .post('/api/v1/operations/orders')
       .send({
         customerId,
+        requiredDate: SALE_DATES.partialDelivery,
         items: [{ productId, quantity: 4, unitPrice: 150 }],
       });
     expect(createRes.status).toBe(201);

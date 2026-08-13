@@ -25,6 +25,19 @@ paths:
           description: Unauthorized
         '403':
           description: Forbidden
+  /auth/avatar:
+    post:
+      tags: [Auth]
+      summary: POST /auth/avatar
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
   /auth/change-password:
     post:
       tags: [Auth]
@@ -385,6 +398,21 @@ paths:
     delete:
       tags: [Customers]
       summary: DELETE /customers/{id}
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /customers/{id}/activate:
+    post:
+      tags: [Customers]
+      summary: POST /customers/{id}/activate
       security:
         - bearerAuth: []
       responses:
@@ -1260,6 +1288,36 @@ paths:
           description: Unauthorized
         '403':
           description: Forbidden
+  /finance/reports/customer/excel:
+    get:
+      tags: [Finance]
+      summary: GET /finance/reports/customer/excel
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /finance/reports/customer/pdf:
+    get:
+      tags: [Finance]
+      summary: GET /finance/reports/customer/pdf
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
   /finance/reports/general-ledger/{accountCode}:
     get:
       tags: [Finance]
@@ -1279,6 +1337,51 @@ paths:
     get:
       tags: [Finance]
       summary: GET /finance/reports/inventory/excel
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /finance/reports/inventory/pdf:
+    get:
+      tags: [Finance]
+      summary: GET /finance/reports/inventory/pdf
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /finance/reports/production/excel:
+    get:
+      tags: [Finance]
+      summary: GET /finance/reports/production/excel
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /finance/reports/production/pdf:
+    get:
+      tags: [Finance]
+      summary: GET /finance/reports/production/pdf
       security:
         - bearerAuth: []
       responses:
@@ -1320,10 +1423,85 @@ paths:
           description: Unauthorized
         '403':
           description: Forbidden
+  /finance/reports/products-sold/pdf:
+    get:
+      tags: [Finance]
+      summary: GET /finance/reports/products-sold/pdf
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
   /finance/reports/profit-loss:
     get:
       tags: [Finance]
       summary: GET /finance/reports/profit-loss
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /finance/reports/purchase/excel:
+    get:
+      tags: [Finance]
+      summary: GET /finance/reports/purchase/excel
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /finance/reports/purchase/pdf:
+    get:
+      tags: [Finance]
+      summary: GET /finance/reports/purchase/pdf
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /finance/reports/quality/excel:
+    get:
+      tags: [Finance]
+      summary: GET /finance/reports/quality/excel
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /finance/reports/quality/pdf:
+    get:
+      tags: [Finance]
+      summary: GET /finance/reports/quality/pdf
       security:
         - bearerAuth: []
       responses:
@@ -1365,6 +1543,21 @@ paths:
           description: Unauthorized
         '403':
           description: Forbidden
+  /finance/reports/sales-by-person/pdf:
+    get:
+      tags: [Finance]
+      summary: GET /finance/reports/sales-by-person/pdf
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
   /finance/reports/sales-by-person/sales-officers:
     get:
       tags: [Finance]
@@ -1384,6 +1577,21 @@ paths:
     get:
       tags: [Finance]
       summary: GET /finance/reports/sales/excel
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /finance/reports/sales/pdf:
+    get:
+      tags: [Finance]
+      summary: GET /finance/reports/sales/pdf
       security:
         - bearerAuth: []
       responses:
@@ -1553,6 +1761,169 @@ paths:
           description: Unauthorized
         '403':
           description: Forbidden
+  /hr/advances:
+    get:
+      tags: [HR]
+      summary: GET /hr/advances
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+    post:
+      tags: [HR]
+      summary: POST /hr/advances
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /hr/advances/stats:
+    get:
+      tags: [HR]
+      summary: GET /hr/advances/stats
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /hr/advances/{id}:
+    get:
+      tags: [HR]
+      summary: GET /hr/advances/{id}
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+    patch:
+      tags: [HR]
+      summary: PATCH /hr/advances/{id}
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /hr/advances/{id}/approve:
+    patch:
+      tags: [HR]
+      summary: PATCH /hr/advances/{id}/approve
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /hr/advances/{id}/cancel:
+    patch:
+      tags: [HR]
+      summary: PATCH /hr/advances/{id}/cancel
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /hr/advances/{id}/disburse:
+    patch:
+      tags: [HR]
+      summary: PATCH /hr/advances/{id}/disburse
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /hr/advances/{id}/reject:
+    patch:
+      tags: [HR]
+      summary: PATCH /hr/advances/{id}/reject
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /hr/advances/{id}/repay:
+    post:
+      tags: [HR]
+      summary: POST /hr/advances/{id}/repay
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /hr/advances/{id}/write-off:
+    patch:
+      tags: [HR]
+      summary: PATCH /hr/advances/{id}/write-off
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
   /hr/attendance:
     get:
       tags: [HR]
@@ -1626,6 +1997,20 @@ paths:
           description: Unauthorized
         '403':
           description: Forbidden
+    delete:
+      tags: [HR]
+      summary: DELETE /hr/employees/{id}
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
     put:
       tags: [HR]
       summary: PUT /hr/employees/{id}
@@ -1684,6 +2069,50 @@ paths:
           description: Unauthorized
         '403':
           description: Forbidden
+  /hr/leave/balances:
+    get:
+      tags: [HR]
+      summary: GET /hr/leave/balances
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+    put:
+      tags: [HR]
+      summary: PUT /hr/leave/balances
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /hr/leave/balances/me:
+    get:
+      tags: [HR]
+      summary: GET /hr/leave/balances/me
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
   /hr/leave/me:
     post:
       tags: [HR]
@@ -1703,6 +2132,51 @@ paths:
     get:
       tags: [HR]
       summary: GET /hr/leave/mine
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /hr/leave/on-leave:
+    get:
+      tags: [HR]
+      summary: GET /hr/leave/on-leave
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /hr/leave/report/excel:
+    get:
+      tags: [HR]
+      summary: GET /hr/leave/report/excel
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /hr/leave/report/pdf:
+    get:
+      tags: [HR]
+      summary: GET /hr/leave/report/pdf
       security:
         - bearerAuth: []
       responses:
@@ -2026,6 +2500,20 @@ paths:
           description: Unauthorized
         '403':
           description: Forbidden
+    delete:
+      tags: [Inventory]
+      summary: DELETE /inventory/materials/{id}
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
   /inventory/procurement-stats:
     get:
       tags: [Inventory]
@@ -2282,6 +2770,20 @@ paths:
     put:
       tags: [Inventory]
       summary: PUT /inventory/suppliers/{id}
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+    delete:
+      tags: [Inventory]
+      summary: DELETE /inventory/suppliers/{id}
       security:
         - bearerAuth: []
       responses:
@@ -3213,6 +3715,50 @@ paths:
     get:
       tags: [Tenant]
       summary: GET /tenant/company
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /tenant/email-config:
+    get:
+      tags: [Tenant]
+      summary: GET /tenant/email-config
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+    put:
+      tags: [Tenant]
+      summary: PUT /tenant/email-config
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /tenant/email-config/test:
+    post:
+      tags: [Tenant]
+      summary: POST /tenant/email-config/test
       security:
         - bearerAuth: []
       responses:
