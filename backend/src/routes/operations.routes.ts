@@ -297,7 +297,16 @@ router.post(
 
     await assertCreditLimit(customerId, totalAmount);
 
+    const businessDate = requiredDate ? new Date(requiredDate) : resolvedOrderDate;
+
     const order = await prisma.$transaction(async (tx) => {
+      await SalesOrderService.assertUniqueSalesOrder(tx, {
+        customerId,
+        businessDate,
+        customerPoNumber,
+        items,
+      });
+
       // Only an admin explicitly choosing an officer claims a free customer.
       // Sales officers may sell to unassigned customers without locking ownership.
       if (!isSalesOfficer && !attributingToCreator && salesPersonId && !customer.salesPersonId) {
@@ -741,6 +750,17 @@ router.post(
     const assignedSalesPersonId = req.user!.id;
 
     const order = await prisma.$transaction(async (tx) => {
+      await SalesOrderService.assertUniqueSalesOrder(tx, {
+        customerId: quotation.customerId,
+        businessDate: new Date(),
+        items: quotation.items.map((item) => ({
+          productId: item.productId,
+          quantity: item.quantity,
+          unitPrice: Number(item.unitPrice),
+          discount: Number(item.discount || 0),
+        })),
+      });
+
       const so = await tx.salesOrder.create({
         data: injectTenantData({
           orderNumber,

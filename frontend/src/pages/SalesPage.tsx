@@ -3,13 +3,6 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Plus,
-  ShoppingCart,
-  FileText,
-  TrendingUp,
-  CalendarDays,
-  Receipt,
-  AlertTriangle,
-  ChevronRight,
   Download,
   Target,
   Pencil,
@@ -25,8 +18,6 @@ import {
   Button,
   Input,
   Select,
-  StatCard,
-  StatGrid,
   Card,
   Alert,
   EmptyState,
@@ -45,10 +36,10 @@ import { SalesOrderEditForm } from '../components/forms/SalesOrderEditForm';
 import { QuotationForm } from '../components/forms/QuotationForm';
 import { useAuth } from '../contexts/AuthContext';
 import { canManageSalesTargets, isSalesBookOwner } from '../utils/salesTargets';
-import { SalesOrder, SalesQuotation, SalesStats } from '../types';
+import { SalesOrder, SalesQuotation } from '../types';
 
-const COMPANY_TABS = ['Overview', 'Sales Orders', 'Quotations'];
-const MY_BOOK_TABS = ['Overview', 'My Orders', 'Quotations'];
+const COMPANY_TABS = ['Sales Orders', 'Quotations'];
+const MY_BOOK_TABS = ['My Orders', 'Quotations'];
 
 const ORDER_STATUS_OPTIONS = [
   { value: '', label: 'All statuses' },
@@ -117,7 +108,7 @@ export function SalesPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const orderIdFromUrl = searchParams.get('orderId');
-  const [activeTab, setActiveTab] = useState(orderIdFromUrl ? 1 : 0);
+  const [activeTab, setActiveTab] = useState(0);
   const [orderPage, setOrderPage] = useState(1);
   const [quotePage, setQuotePage] = useState(1);
   const [orderSearch, setOrderSearch] = useState('');
@@ -179,7 +170,7 @@ export function SalesPage() {
   useEffect(() => {
     if (!orderIdFromUrl) return;
 
-    setActiveTab(1);
+    setActiveTab(0);
     operationsApi
       .getSalesOrder(orderIdFromUrl)
       .then((r) => {
@@ -205,12 +196,6 @@ export function SalesPage() {
 
   const activeOrder = orderDetail ?? selectedOrder;
 
-  const { data: stats } = useQuery({
-    queryKey: ['sales-stats'],
-    queryFn: () => operationsApi.stats().then((r) => r.data.data as SalesStats),
-    enabled: canReadSales,
-  });
-
   const { data: orders, isLoading: ordersLoading } = useQuery({
     queryKey: ['sales-orders', orderPage, orderSearch, orderStatus, orderDate],
     queryFn: () =>
@@ -223,7 +208,7 @@ export function SalesPage() {
           date: orderDate || undefined,
         })
         .then((r) => r.data),
-    enabled: canReadSales && (activeTab === 0 || activeTab === 1),
+    enabled: canReadSales && activeTab === 0,
   });
 
   const { data: quotations, isLoading: quotesLoading } = useQuery({
@@ -232,7 +217,7 @@ export function SalesPage() {
       operationsApi
         .quotations({ page: quotePage, limit: 15, search: quoteSearch || undefined, status: quoteStatus || undefined })
         .then((r) => r.data),
-    enabled: canReadSales && (activeTab === 0 || activeTab === 2),
+    enabled: canReadSales && activeTab === 1,
   });
 
   const convertMutation = useMutation({
@@ -295,8 +280,6 @@ export function SalesPage() {
     }
   };
 
-  const goToTab = (index: number) => setActiveTab(index);
-
   const openOrderDetail = (order: SalesOrder) => {
     setStatusFeedback(null);
     setOrderEditMode(false);
@@ -318,14 +301,6 @@ export function SalesPage() {
     setSelectedQuote(quote);
     setQuoteDetailOpen(true);
   };
-
-  const recentOrders = activeTab === 0 ? ((orders?.data as SalesOrder[]) || []).slice(0, 6) : [];
-  const pendingQuotes = activeTab === 0
-    ? ((quotations?.data as SalesQuotation[]) || []).filter((q) => ['DRAFT', 'PENDING'].includes(q.status)).slice(0, 5)
-    : [];
-  const openOrders = activeTab === 0
-    ? ((orders?.data as SalesOrder[]) || []).filter((o) => !['COMPLETED', 'CANCELLED'].includes(o.status)).slice(0, 5)
-    : [];
 
   const orderColumns = [
     ...(canCreateDelivery
@@ -481,7 +456,7 @@ export function SalesPage() {
   ];
 
   const toolbarActions =
-    activeTab === 1 ? (
+    activeTab === 0 ? (
       <div className="flex flex-wrap items-center gap-2">
         {canCreateDelivery && selectedDeliveryOrderIds.length > 0 && (
           <Button
@@ -500,7 +475,7 @@ export function SalesPage() {
           </Button>
         )}
       </div>
-    ) : activeTab === 2 && canCreate ? (
+    ) : activeTab === 1 && canCreate ? (
       <Button size="sm" onClick={() => setQuotationModalOpen(true)}>
         <Plus className="h-4 w-4 mr-1.5" />
         New Quotation
@@ -509,79 +484,30 @@ export function SalesPage() {
 
   return (
     <div className="space-y-4">
-      {stats && (
-        <StatGrid>
-          <StatCard
-            title={myBook ? 'My Open Orders' : 'Open Orders'}
-            value={stats.openOrders}
-            icon={<ShoppingCart className="h-5 w-5 text-white" />}
-            color="from-teal-500 to-teal-700"
-            onClick={() => goToTab(1)}
-          />
-          <StatCard
-            title={myBook ? 'My Pipeline Value' : 'Pipeline Value'}
-            value={formatCurrency(stats.pipelineValue)}
-            icon={<TrendingUp className="h-5 w-5 text-white" />}
-            color="from-indigo-500 to-indigo-700"
-            onClick={() => goToTab(1)}
-          />
-          <StatCard
-            title={myBook ? 'My Pending Quotes' : 'Pending Quotes'}
-            value={stats.pendingQuotations}
-            icon={<FileText className="h-5 w-5 text-white" />}
-            color="from-orange-500 to-orange-700"
-            onClick={() => goToTab(2)}
-          />
-          <StatCard
-            title={myBook ? 'My Orders This Month' : 'Orders This Month'}
-            value={stats.ordersThisMonth}
-            icon={<CalendarDays className="h-5 w-5 text-white" />}
-            color="from-fuchsia-500 to-fuchsia-700"
-            onClick={() => goToTab(1)}
-          />
-          <StatCard
-            title={myBook ? 'My Monthly Revenue' : 'Monthly Revenue'}
-            value={formatCurrency(stats.monthlyRevenue)}
-            icon={<Receipt className="h-5 w-5 text-white" />}
-            color="from-cyan-500 to-cyan-700"
-            to={myBook ? '/my-sales' : '/finance'}
-          />
-        </StatGrid>
+      {(canViewPerformance || canManageTargets) && (
+        <PageHeader
+          action={
+            <div className="flex flex-wrap items-center gap-2">
+              {canViewPerformance && (
+                <Link to="/sales-performance">
+                  <Button variant="secondary" size="sm">
+                    <Target className="h-4 w-4 mr-1.5" />
+                    Team performance
+                  </Button>
+                </Link>
+              )}
+              {canManageTargets && (
+                <Link to="/sales-performance?tab=targets">
+                  <Button variant="secondary" size="sm">
+                    <Target className="h-4 w-4 mr-1.5" />
+                    Set targets
+                  </Button>
+                </Link>
+              )}
+            </div>
+          }
+        />
       )}
-
-      <PageHeader
-        action={
-          <div className="flex flex-wrap items-center gap-2">
-            {canViewPerformance && (
-              <Link to="/sales-performance">
-                <Button variant="secondary" size="sm">
-                  <Target className="h-4 w-4 mr-1.5" />
-                  Team performance
-                </Button>
-              </Link>
-            )}
-            {canManageTargets && (
-              <Link to="/sales-performance?tab=targets">
-                <Button variant="secondary" size="sm">
-                  <Target className="h-4 w-4 mr-1.5" />
-                  Set targets
-                </Button>
-              </Link>
-            )}
-            {stats && stats.pendingQuotations > 0 ? (
-              <Button variant="secondary" size="sm" onClick={() => goToTab(2)}>
-                <FileText className="h-4 w-4 mr-1.5 text-amber-500" />
-                {stats.pendingQuotations} pending quotes
-              </Button>
-            ) : stats && stats.openOrders > 0 ? (
-              <Button variant="secondary" size="sm" onClick={() => goToTab(1)}>
-                <ShoppingCart className="h-4 w-4 mr-1.5 text-primary-500" />
-                {stats.openOrders} open orders
-              </Button>
-            ) : null}
-          </div>
-        }
-      />
 
       <PageToolbar
         tabs={tabs}
@@ -595,87 +521,6 @@ export function SalesPage() {
       />
 
       {activeTab === 0 && (
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-            <Card
-              title="Open orders"
-              action={
-                openOrders.length > 0 ? (
-                  <Button variant="ghost" size="sm" onClick={() => goToTab(1)}>
-                    View all
-                  </Button>
-                ) : undefined
-              }
-              padding={false}
-            >
-              {openOrders.length === 0 ? (
-                <div className="p-6">
-                  <EmptyState title="No open orders" description="All sales orders are completed or cancelled." />
-                </div>
-              ) : (
-                <ul className="divide-y divide-slate-100">
-                  {openOrders.map((order) => (
-                    <li
-                      key={order.id}
-                      className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 cursor-pointer"
-                      onClick={() => openOrderDetail(order)}
-                    >
-                      <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary-100 text-primary-600">
-                        <ShoppingCart className="h-4 w-4" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-slate-900 truncate">{order.orderNumber}</p>
-                        <p className="text-xs text-slate-500">{order.customer?.name || '—'}</p>
-                      </div>
-                      <Badge variant={getStatusBadge(order.status)}>{order.status.replace(/_/g, ' ')}</Badge>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </Card>
-
-            <Card
-              title="Pending quotations"
-              action={
-                <Button variant="ghost" size="sm" onClick={() => goToTab(2)}>
-                  All quotes
-                  <ChevronRight className="h-4 w-4 ml-1" />
-                </Button>
-              }
-              padding={false}
-            >
-              {pendingQuotes.length === 0 ? (
-                <div className="p-6">
-                  <EmptyState title="No pending quotes" description="Draft and pending quotations appear here." />
-                </div>
-              ) : (
-                <ul className="divide-y divide-slate-100">
-                  {pendingQuotes.map((quote) => (
-                    <li
-                      key={quote.id}
-                      className="flex items-center gap-3 px-4 py-3 hover:bg-amber-50/30 cursor-pointer"
-                      onClick={() => openQuoteDetail(quote)}
-                    >
-                      <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-100 text-amber-600">
-                        <AlertTriangle className="h-4 w-4" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-slate-900 truncate">{quote.quotationNo}</p>
-                        <p className="text-xs text-slate-500">{quote.customer?.name || '—'}</p>
-                      </div>
-                      <span className="text-sm font-semibold tabular-nums text-slate-700">
-                        {formatCurrency(Number(quote.totalAmount))}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </Card>
-          </div>
-        </div>
-      )}
-
-      {activeTab === 1 && (
         <DataPanel className="min-w-0 overflow-hidden">
           <div className="p-4 pb-0 flex flex-col sm:flex-row gap-3 sm:items-end">
             <Input
@@ -800,7 +645,7 @@ export function SalesPage() {
         </DataPanel>
       )}
 
-      {activeTab === 2 && (
+      {activeTab === 1 && (
         <DataPanel className="min-w-0 overflow-hidden">
           <div className="p-4 pb-0 flex flex-col sm:flex-row gap-3">
             <Input

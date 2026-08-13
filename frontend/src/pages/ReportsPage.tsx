@@ -7,14 +7,12 @@ import {
   PageToolbar,
   Alert,
   QueryErrorAlert,
-  StatCard,
-  StatGrid,
   formatCurrency,
   Badge,
   Button,
   Table,
 } from '../components/ui';
-import { BarChart3, Users, Factory, Truck, FileSpreadsheet, ClipboardCheck, TrendingUp, AlertCircle, Receipt, Package, Download, FileText } from 'lucide-react';
+import { BarChart3, Users, Factory, Truck, FileSpreadsheet, ClipboardCheck, Receipt, Package, Download, FileText } from 'lucide-react';
 import { downloadFile } from '../utils/download';
 import { FinancialStatementsPanel } from '../components/reports/FinancialStatementsPanel';
 import { SalesByPersonPanel } from '../components/reports/SalesByPersonPanel';
@@ -57,9 +55,9 @@ type VatReport = {
 
 export function ReportsPage() {
   const { hasPermission } = useAuth();
-  const [activeSection, setActiveSection] = useState(0);
+  const [activeSection, setActiveSection] = useState<number | null>(null);
   const [detailModal, setDetailModal] = useState<string | null>(null);
-  const sections = ['Overview', 'Sales by Person', 'Products Sold', 'Financial Statements'];
+  const sections = ['Sales by Person', 'Products Sold', 'Financial Statements'];
 
   const canExport = hasPermission('reports:read');
 
@@ -120,12 +118,12 @@ export function ReportsPage() {
 
   const reportTypes = [
     { name: 'Sales Report', description: 'Export all sales invoices with salesperson', icon: BarChart3, color: 'bg-emerald-50 text-emerald-600 border-emerald-100', exportType: 'sales' as const, filename: 'sales-report.xlsx' },
-    { name: 'Sales by Person', description: 'Filter, paginate, and export by salesperson', icon: Users, color: 'bg-sky-50 text-sky-600 border-sky-100', onClick: () => setActiveSection(1) },
-    { name: 'Products Sold Statement', description: 'Qty sold by product with stock for restocking', icon: Package, color: 'bg-violet-50 text-violet-700 border-violet-100', onClick: () => setActiveSection(2) },
+    { name: 'Sales by Person', description: 'Filter, paginate, and export by salesperson', icon: Users, color: 'bg-sky-50 text-sky-600 border-sky-100', onClick: () => setActiveSection(0) },
+    { name: 'Products Sold Statement', description: 'Qty sold by product with stock for restocking', icon: Package, color: 'bg-violet-50 text-violet-700 border-violet-100', onClick: () => setActiveSection(1) },
     { name: 'Inventory Report', description: 'Export stock levels and valuation', icon: Factory, color: 'bg-primary-50 text-primary-600 border-primary-100', exportType: 'inventory' as const, filename: 'inventory-report.xlsx' },
     { name: 'Purchase Report', description: 'Purchases by supplier and material', icon: Truck, color: 'bg-red-50 text-red-600 border-red-100', detailKey: 'purchase' },
     { name: 'Production Report', description: 'Output and efficiency summary', icon: Factory, color: 'bg-orange-50 text-orange-600 border-orange-100', detailKey: 'production' },
-    { name: 'Financial Statements', description: 'P&L, Balance Sheet, Cash Flow', icon: FileSpreadsheet, color: 'bg-primary-50 text-primary-600 border-primary-100', onClick: () => setActiveSection(3) },
+    { name: 'Financial Statements', description: 'P&L, Balance Sheet, Cash Flow', icon: FileSpreadsheet, color: 'bg-primary-50 text-primary-600 border-primary-100', onClick: () => setActiveSection(2) },
     { name: 'Customer Report', description: 'Customer activity and credit', icon: Users, color: 'bg-primary-50 text-primary-600 border-primary-100', detailKey: 'customer' },
     { name: 'VAT Customers', description: 'VAT-only report — view and export PDF/Excel', icon: Receipt, color: 'bg-emerald-50 text-emerald-700 border-emerald-100', detailKey: 'vat-customers' },
     { name: 'Non-VAT Customers', description: 'Non-VAT-only report — view and export PDF/Excel', icon: Receipt, color: 'bg-slate-50 text-slate-700 border-slate-200', detailKey: 'non-vat-customers' },
@@ -157,66 +155,27 @@ export function ReportsPage() {
     detailModal === 'non-vat-customers' ||
     detailModal === 'vat-combined';
 
+  const sectionToolbar = (
+    <PageToolbar tabs={sections} activeTab={activeSection ?? 0} onTabChange={setActiveSection} />
+  );
+
   return (
     <div className="space-y-4">
-      {activeSection === 0 && summary && (
-        <StatGrid>
-          <StatCard
-            title="Total sales"
-            value={formatCurrency(summary.totalSales)}
-            icon={<TrendingUp className="h-5 w-5 text-white" />}
-            color="from-teal-500 to-teal-700"
-            to="/sales"
-          />
-          <StatCard
-            title="Total purchases"
-            value={formatCurrency(summary.totalPurchases)}
-            icon={<Truck className="h-5 w-5 text-white" />}
-            color="from-indigo-500 to-indigo-700"
-            to="/procurement"
-          />
-          <StatCard
-            title="Customers"
-            value={summary.totalCustomers}
-            icon={<Users className="h-5 w-5 text-white" />}
-            color="from-orange-500 to-orange-700"
-            to="/customers"
-          />
-          <StatCard
-            title="Production completed"
-            value={summary.completedProduction}
-            icon={<Factory className="h-5 w-5 text-white" />}
-            color="from-fuchsia-500 to-fuchsia-700"
-            to="/production"
-          />
-          <StatCard
-            title="Unpaid invoices"
-            value={summary.unpaidInvoices}
-            icon={<AlertCircle className="h-5 w-5 text-white" />}
-            color="from-cyan-500 to-cyan-700"
-            to="/finance"
-          />
-        </StatGrid>
-      )}
-
-      {activeSection === 1 ? (
-        <SalesByPersonPanel
-          toolbar={<PageToolbar tabs={sections} activeTab={activeSection} onTabChange={setActiveSection} />}
-        />
+      {activeSection === 0 ? (
+        <SalesByPersonPanel toolbar={sectionToolbar} />
+      ) : activeSection === 1 ? (
+        <ProductsSoldPanel toolbar={sectionToolbar} />
       ) : activeSection === 2 ? (
-        <ProductsSoldPanel
-          toolbar={<PageToolbar tabs={sections} activeTab={activeSection} onTabChange={setActiveSection} />}
-        />
+        <>
+          {sectionToolbar}
+          <FinancialStatementsPanel />
+        </>
       ) : (
         <>
-          <PageToolbar tabs={sections} activeTab={activeSection} onTabChange={setActiveSection} />
-
           <QueryErrorAlert error={isError ? error : null} onRetry={() => refetch()} />
           {exportError && <Alert variant="error">{exportError}</Alert>}
 
-          {activeSection === 3 ? (
-            <FinancialStatementsPanel />
-          ) : !summary && !isLoading ? (
+          {!summary && !isLoading ? (
             <EmptyState title="No report data available" description="Summary metrics will appear once your business has activity." />
           ) : (
             <div className="space-y-4">

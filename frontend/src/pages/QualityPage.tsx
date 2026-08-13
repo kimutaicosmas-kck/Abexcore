@@ -2,23 +2,14 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   Plus,
-  ClipboardCheck,
-  CheckCircle,
-  XCircle,
-  Percent,
-  AlertTriangle,
-  ChevronRight,
 } from 'lucide-react';
 import { qualityApi } from '../services/api';
 import {
-  PageHeader,
   Table,
   Badge,
   Button,
   Input,
   Select,
-  StatCard,
-  StatGrid,
   Card,
   Alert,
   EmptyState,
@@ -32,9 +23,7 @@ import { Modal } from '../components/ui/Modal';
 import { QualityForm } from '../components/forms/QualityForm';
 import { QualityUpdatePanel } from '../components/forms/QualityUpdatePanel';
 import { useAuth } from '../contexts/AuthContext';
-import { QualityInspection, QualityStats } from '../types';
-
-const tabs = ['Overview', 'Inspections'];
+import { QualityInspection } from '../types';
 
 const TYPE_OPTIONS = [
   { value: '', label: 'All types' },
@@ -65,10 +54,6 @@ export function QualityPage() {
 
   const canCreate = hasPermission('quality:create');
   const canUpdate = hasPermission('quality:update');
-  const { data: stats } = useQuery({
-    queryKey: ['quality-stats'],
-    queryFn: () => qualityApi.stats().then((r) => r.data.data as QualityStats),
-  });
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['quality', page, search, status, type],
@@ -76,12 +61,8 @@ export function QualityPage() {
       qualityApi
         .list({ page, limit: 15, search: search || undefined, status: status || undefined, type: type || undefined })
         .then((r) => r.data),
-    enabled: activeTab === 0 || activeTab === 1,
+    enabled: activeTab === 0,
   });
-
-  const goToTab = (index: number) => {
-    setActiveTab(index);
-  };
 
   const openDetail = (inspection: QualityInspection) => {
     setSelected(inspection);
@@ -89,9 +70,6 @@ export function QualityPage() {
   };
 
   const inspections = (data?.data as QualityInspection[]) || [];
-  const recentInspections = activeTab === 0 ? inspections.slice(0, 6) : [];
-  const pendingInspections = activeTab === 0 ? inspections.filter((i) => i.status === 'PENDING').slice(0, 5) : [];
-  const failedInspections = activeTab === 0 ? inspections.filter((i) => i.status === 'FAILED').slice(0, 5) : [];
 
   const columns = [
     { key: 'inspectionNo', label: 'Inspection #' },
@@ -129,157 +107,18 @@ export function QualityPage() {
   ];
 
   const toolbarActions =
-    canCreate &&
-    (activeTab === 0 || activeTab === 1 ? (
+    canCreate && (
       <Button size="sm" onClick={() => setModalOpen(true)}>
         <Plus className="h-4 w-4 mr-1.5" />
         Add Inspection
       </Button>
-    ) : undefined);
+    );
 
   return (
     <div className="space-y-4">
-      {stats && (
-        <StatGrid>
-          <StatCard
-            title="Pending"
-            value={stats.pending}
-            icon={<ClipboardCheck className="h-5 w-5 text-white" />}
-            color="from-cyan-500 to-cyan-700"
-            onClick={() => { setStatus('PENDING'); setPage(1); goToTab(1); }}
-          />
-          <StatCard
-            title="Passed"
-            value={stats.passed}
-            icon={<CheckCircle className="h-5 w-5 text-white" />}
-            color="from-violet-500 to-violet-700"
-            onClick={() => { setStatus('PASSED'); setPage(1); goToTab(1); }}
-          />
-          <StatCard
-            title="Failed"
-            value={stats.failed}
-            icon={<XCircle className="h-5 w-5 text-white" />}
-            color="from-emerald-500 to-emerald-700"
-            onClick={() => { setStatus('FAILED'); setPage(1); goToTab(1); }}
-          />
-          <StatCard
-            title="Pass Rate"
-            value={`${stats.passRate}%`}
-            icon={<Percent className="h-5 w-5 text-white" />}
-            color="from-orange-500 to-orange-700"
-            onClick={() => { setStatus(''); setPage(1); goToTab(1); }}
-          />
-          <StatCard
-            title="Total Inspections"
-            value={stats.total}
-            icon={<ClipboardCheck className="h-5 w-5 text-white" />}
-            color="from-rose-500 to-rose-700"
-            onClick={() => { setStatus(''); setPage(1); goToTab(1); }}
-          />
-        </StatGrid>
-      )}
-
-      <PageHeader
-        action={
-          stats && stats.pending > 0 ? (
-            <Button variant="secondary" size="sm" onClick={() => { setStatus('PENDING'); setPage(1); goToTab(1); }}>
-              <ClipboardCheck className="h-4 w-4 mr-1.5 text-amber-500" />
-              {stats.pending} pending
-            </Button>
-          ) : stats && stats.failed > 0 ? (
-            <Button variant="secondary" size="sm" onClick={() => { setStatus('FAILED'); setPage(1); goToTab(1); }}>
-              <XCircle className="h-4 w-4 mr-1.5 text-red-500" />
-              {stats.failed} failed
-            </Button>
-          ) : undefined
-        }
-      />
-
-      <PageToolbar tabs={tabs} activeTab={activeTab} onTabChange={setActiveTab} actions={toolbarActions} />
+      <PageToolbar actions={toolbarActions} />
 
       {activeTab === 0 && (
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-            <Card
-              title="Pending inspections"
-              action={
-                pendingInspections.length > 0 ? (
-                  <Button variant="ghost" size="sm" onClick={() => { setStatus('PENDING'); setPage(1); goToTab(1); }}>
-                    View all
-                  </Button>
-                ) : undefined
-              }
-              padding={false}
-            >
-              {pendingInspections.length === 0 ? (
-                <div className="p-6">
-                  <EmptyState title="No pending inspections" description="All inspections have been completed." />
-                </div>
-              ) : (
-                <ul className="divide-y divide-slate-100">
-                  {pendingInspections.map((item) => (
-                    <li
-                      key={item.id}
-                      className="flex items-center gap-3 px-4 py-3 hover:bg-amber-50/30 cursor-pointer"
-                      onClick={() => openDetail(item)}
-                    >
-                      <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-100 text-amber-600">
-                        <ClipboardCheck className="h-4 w-4" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-slate-900 truncate">{item.inspectionNo}</p>
-                        <p className="text-xs text-slate-500 capitalize">{item.type}</p>
-                      </div>
-                      <Badge variant="warning">Pending</Badge>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </Card>
-
-            <Card
-              title="Failed inspections"
-              action={
-                failedInspections.length > 0 ? (
-                  <Button variant="ghost" size="sm" onClick={() => { setStatus('FAILED'); setPage(1); goToTab(1); }}>
-                    View all
-                  </Button>
-                ) : undefined
-              }
-              padding={false}
-            >
-              {failedInspections.length === 0 ? (
-                <div className="p-6">
-                  <EmptyState title="No failed inspections" description="Quality checks are passing." />
-                </div>
-              ) : (
-                <ul className="divide-y divide-slate-100">
-                  {failedInspections.map((item) => (
-                    <li
-                      key={item.id}
-                      className="flex items-center gap-3 px-4 py-3 hover:bg-red-50/30 cursor-pointer"
-                      onClick={() => openDetail(item)}
-                    >
-                      <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-red-100 text-red-600">
-                        <AlertTriangle className="h-4 w-4" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-slate-900 truncate">{item.inspectionNo}</p>
-                        <p className="text-xs text-slate-500">
-                          {item.defectsFound} defect{item.defectsFound !== 1 ? 's' : ''}
-                        </p>
-                      </div>
-                      <Badge variant="danger">Failed</Badge>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </Card>
-          </div>
-        </div>
-      )}
-
-      {activeTab === 1 && (
         <DataPanel>
           <div className="p-4 pb-0 flex flex-col sm:flex-row gap-3">
             <Input

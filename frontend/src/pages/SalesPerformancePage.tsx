@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useSearchParams } from 'react-router-dom';
-import { Target, TrendingUp, Wallet, ShoppingCart, AlertCircle } from 'lucide-react';
 import { financeApi } from '../services/api';
 import {
   Alert,
@@ -9,8 +8,6 @@ import {
   DataPanel,
   EmptyState,
   PageToolbar,
-  StatCard,
-  StatGrid,
   Table,
   formatCurrency,
   formatDate,
@@ -34,48 +31,6 @@ function startOfMonth(date = new Date()) {
 function useSalesPerformancePeriod() {
   const today = localDateInput();
   return { from: startOfMonth(), to: today };
-}
-
-function SalesPerformanceSummary({ data }: { data: SalesTeamPerformance }) {
-  return (
-    <StatGrid>
-      <StatCard
-        title="Team invoiced"
-        value={formatCurrency(data.summary.invoiced)}
-        icon={<TrendingUp className="h-5 w-5 text-white" />}
-        color="from-cyan-500 to-cyan-700"
-        to="/finance"
-      />
-      <StatCard
-        title="Collected"
-        value={formatCurrency(data.summary.collected)}
-        icon={<Wallet className="h-5 w-5 text-white" />}
-        color="from-violet-500 to-violet-700"
-        to="/finance"
-      />
-      <StatCard
-        title="Orders"
-        value={data.summary.orderCount}
-        icon={<ShoppingCart className="h-5 w-5 text-white" />}
-        color="from-emerald-500 to-emerald-700"
-        to="/sales"
-      />
-      <StatCard
-        title="Avg target hit"
-        value={data.summary.avgAchievement != null ? `${data.summary.avgAchievement}%` : '—'}
-        icon={<Target className="h-5 w-5 text-white" />}
-        color="from-orange-500 to-orange-700"
-        to="/sales-performance?tab=targets"
-      />
-      <StatCard
-        title="Outstanding"
-        value={formatCurrency(data.summary.outstanding)}
-        icon={<AlertCircle className="h-5 w-5 text-white" />}
-        color="from-rose-500 to-rose-700"
-        to="/finance"
-      />
-    </StatGrid>
-  );
 }
 
 export function SalesPerformancePanel() {
@@ -243,14 +198,6 @@ export function SalesPerformancePage() {
   const canViewPerformance = hasPermission('reports:read') || hasPermission('finance:read');
   const canManageTargets =
     isSuperAdmin || canManageSalesTargets(user?.role?.name, hasPermission);
-  const { from, to } = useSalesPerformancePeriod();
-
-  const { data: summaryData } = useQuery({
-    queryKey: ['sales-performance', from, to],
-    queryFn: () =>
-      financeApi.salesPerformance({ from, to }).then((r) => r.data.data as SalesTeamPerformance),
-    enabled: canViewPerformance,
-  });
 
   const tabs = useMemo(() => {
     const items: string[] = [];
@@ -272,7 +219,6 @@ export function SalesPerformancePage() {
 
   return (
     <div className="space-y-4">
-      {canViewPerformance && summaryData && <SalesPerformanceSummary data={summaryData} />}
       <PageToolbar
         tabs={tabs}
         activeTab={activeTab >= 0 ? activeTab : 0}

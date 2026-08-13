@@ -1,11 +1,18 @@
 import { Prisma, OrderStatus } from '@prisma/client';
 import { assertOrderStatusTransition, assertCreditLimit, syncCustomerCreditUsed } from '../utils/credit';
 import { AppError } from '../middleware/errorHandler';
-import { generateNumber } from '../utils/date';
+import { generateNumber, startOfDay, endOfDay } from '../utils/date';
 import { getCustomerVatRate, roundMoney, splitInclusiveAmount } from '../utils/company';
 import { StockMovementService } from './inventory.service';
 
 type TxClient = Prisma.TransactionClient;
+
+export type SalesOrderLineInput = {
+  productId: string;
+  quantity: number;
+  unitPrice: number;
+  discount?: number;
+};
 
 export type StockShortage = {
   productId: string;
@@ -15,6 +22,87 @@ export type StockShortage = {
 };
 
 export class SalesOrderService {
+  /** Stable key for comparing order line items (duplicate detection). */
+  static buildLineFingerprint(items: SalesOrderLineInput[]): string {
+    const lines = items
+      .map((item) => ({
+        p: item.productId,
+        q: item.quantity,
+        u: roundMoney(item.unitPrice),
+        d: item.discount ?? 0,
+      }))
+      .sort((a, b) => a.p.localeCompare(b.p) || a.q - b.q || a.u - b.u);
+    return JSON.stringify(lines);
+  }
+
+  /** Reject duplicate sales orders (same LPO, or same customer + sale date + lines). */
+  static async assertUniqueSalesOrder(
+    tx: TxClient,
+    input: {
+      customerId: string;
+      businessDate: Date;
+      customerPoNumber?: string | null;
+      items: SalesOrderLineInput[];
+    }
+  ): Promise<void> {
+    const po = input.customerPoNumber?.trim();
+    if (po) {
+      const byPo = await tx.salesOrder.findFirst({
+        where: {
+          customerId: input.customerId,
+          customerPoNumber: po,
+          status: { not: 'CANCELLED' },
+        },
+        select: { orderNumber: true },
+      });
+      if (byPo) {
+        throw new AppError(
+          `A sales order already exists for this customer with LPO / PO "${po}" (${byPo.orderNumber}).`,
+          409,
+          'DUPLICATE_SALES_ORDER'
+        );
+      }
+    }
+
+    const fingerprint = this.buildLineFingerprint(input.items);
+    const { salesOrderInDateRange } = await import('../utils/salesDate');
+    const candidates = await tx.salesOrder.findMany({
+      where: {
+        customerId: input.customerId,
+        status: { not: 'CANCELLED' },
+        AND: [
+          salesOrderInDateRange({
+            gte: startOfDay(input.businessDate),
+            lte: endOfDay(input.businessDate),
+          }),
+        ],
+      },
+      include: {
+        items: { select: { productId: true, quantity: true, unitPrice: true, discount: true } },
+      },
+      take: 100,
+      orderBy: { createdAt: 'desc' },
+    });
+
+    for (const order of candidates) {
+      const existingFp = this.buildLineFingerprint(
+        order.items.map((item) => ({
+          productId: item.productId,
+          quantity: item.quantity,
+          unitPrice: Number(item.unitPrice),
+          discount: Number(item.discount || 0),
+        }))
+      );
+      if (existingFp === fingerprint) {
+        throw new AppError(
+          `This sales order already exists as ${order.orderNumber} (same customer, sale date, and products).`,
+          409,
+          'DUPLICATE_SALES_ORDER'
+        );
+      }
+    }
+  }
+
   static async checkStockAvailability(
     tx: TxClient,
     items: { productId: string; quantity: number; product?: { name: string } | null }[]
