@@ -8,10 +8,6 @@ import {
   Wallet,
   Receipt,
   AlertCircle,
-  CalendarDays,
-  ShoppingCart,
-  Plus,
-  Sparkles,
 } from 'lucide-react';
 import { financeApi } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
@@ -54,13 +50,6 @@ function startOfWeek(date: Date) {
 function periodLabel(from: string, to: string) {
   if (from === to) return formatDate(from);
   return `${formatDate(from)} – ${formatDate(to)}`;
-}
-
-function greeting() {
-  const hour = new Date().getHours();
-  if (hour < 12) return 'Good morning';
-  if (hour < 17) return 'Good afternoon';
-  return 'Good evening';
 }
 
 export function MySalesPage() {
@@ -193,41 +182,6 @@ export function MySalesPage() {
 
       {canLoadDashboard && (
         <>
-          <div className="relative overflow-hidden rounded-2xl border border-primary-100 bg-gradient-to-br from-primary-50 via-white to-emerald-50 p-5 sm:p-6">
-            <div className="relative z-10 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <div className="inline-flex items-center gap-2 rounded-full bg-white/80 px-3 py-1 text-xs font-medium text-primary-700 border border-primary-100 mb-2">
-                  <Sparkles className="h-3.5 w-3.5" />
-                  {isOwnBook ? 'My sales dashboard' : 'Salesperson dashboard'}
-                </div>
-                <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">
-                  {greeting()}, {displayName.split(' ')[0]}
-                </h1>
-                <p className="text-sm text-slate-600 mt-1">
-                  {isOwnBook
-                    ? 'Track today, this week, and this month — then jump to your orders on Sales.'
-                    : `Performance snapshot for ${displayName}.`}
-                </p>
-              </div>
-              {isOwnBook && (
-                <div className="flex flex-wrap gap-2">
-                  <Link to="/sales">
-                    <Button variant="secondary" size="sm">
-                      <ShoppingCart className="h-4 w-4 mr-1.5" />
-                      My orders
-                    </Button>
-                  </Link>
-                  <Link to="/sales">
-                    <Button size="sm">
-                      <Plus className="h-4 w-4 mr-1.5" />
-                      New order
-                    </Button>
-                  </Link>
-                </div>
-              )}
-            </div>
-          </div>
-
           {overview && (
             <StatGrid>
               <StatCard
@@ -236,13 +190,6 @@ export function MySalesPage() {
                 icon={<TrendingUp className="h-5 w-5 text-white" />}
                 color="from-emerald-500 to-emerald-700"
                 onClick={() => applyPreset('today')}
-              />
-              <StatCard
-                title="This week"
-                value={formatCurrency(overview.week.sales)}
-                icon={<CalendarDays className="h-5 w-5 text-white" />}
-                color="from-sky-500 to-sky-700"
-                onClick={() => applyPreset('week')}
               />
               <StatCard
                 title="This month"

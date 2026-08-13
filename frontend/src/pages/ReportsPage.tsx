@@ -14,7 +14,7 @@ import {
   Table,
   Input,
 } from '../components/ui';
-import { BarChart3, ChevronRight, Search, Sparkles, TrendingUp, AlertCircle, Users, Factory, Truck } from 'lucide-react';
+import { ChevronRight, Search, TrendingUp, AlertCircle, Users, Factory, Truck } from 'lucide-react';
 import { downloadFile } from '../utils/download';
 import { FinancialStatementsPanel } from '../components/reports/FinancialStatementsPanel';
 import { SalesByPersonPanel } from '../components/reports/SalesByPersonPanel';
@@ -219,34 +219,17 @@ export function ReportsPage() {
         </>
       ) : (
         <>
-          <div className="relative overflow-hidden rounded-2xl border border-primary-100 bg-gradient-to-br from-primary-50 via-white to-sky-50 p-5 sm:p-6">
-            <div className="relative z-10 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-              <div className="space-y-2 max-w-2xl">
-                <div className="inline-flex items-center gap-2 rounded-full bg-white/80 px-3 py-1 text-xs font-medium text-primary-700 border border-primary-100">
-                  <Sparkles className="h-3.5 w-3.5" />
-                  Reports & analytics
-                </div>
-                <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">
-                  Build and export business reports
-                </h1>
-                <p className="text-sm sm:text-base text-slate-600">
-                  Choose a report, set your filters, then download as PDF or Excel. All {REPORT_CATALOG.length} reports remain available.
-                </p>
-              </div>
-              <div className="w-full lg:max-w-sm">
-                <div className="relative">
-                  <Search className="pointer-events-none absolute left-3 top-[2.35rem] h-4 w-4 text-slate-400" />
-                  <Input
-                    label="Search reports"
-                    placeholder="Sales, VAT, inventory, quality…"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="pl-9"
-                  />
-                </div>
-              </div>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div className="relative w-full sm:max-w-md">
+              <Search className="pointer-events-none absolute left-3 top-[2.35rem] h-4 w-4 text-slate-400" />
+              <Input
+                label="Search reports"
+                placeholder="Sales, VAT, inventory, quality…"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-9"
+              />
             </div>
-            <BarChart3 className="absolute -right-4 -bottom-4 h-32 w-32 text-primary-100/70 pointer-events-none" />
           </div>
 
           <div className="flex flex-wrap gap-2">
