@@ -331,6 +331,52 @@ export function HRPage() {
     }},
   ];
 
+  const onLeaveTodayColumns = [
+    {
+      key: 'employee',
+      label: 'Staff',
+      render: (_: unknown, row: Record<string, unknown>) => {
+        const r = row as unknown as StaffOnLeaveRow;
+        return (
+          <div>
+            <p className="font-medium text-slate-900">{r.employee.name}</p>
+            <p className="text-xs text-slate-500">{r.employee.employeeNo}</p>
+          </div>
+        );
+      },
+    },
+    {
+      key: 'type',
+      label: 'Leave type',
+      render: (v: unknown) => (
+        <Badge variant="info">{(v as string).replace(/_/g, ' ')}</Badge>
+      ),
+    },
+    {
+      key: 'startDate',
+      label: 'From',
+      render: (v: unknown) => formatDate(v as string),
+    },
+    {
+      key: 'endDate',
+      label: 'To',
+      render: (v: unknown) => formatDate(v as string),
+    },
+    {
+      key: 'department',
+      label: 'Department',
+      render: (_: unknown, row: Record<string, unknown>) => {
+        const r = row as unknown as StaffOnLeaveRow;
+        return r.employee.department || '—';
+      },
+    },
+    {
+      key: 'days',
+      label: 'Duration',
+      render: (v: unknown) => <Badge variant="success">{v as number}d</Badge>,
+    },
+  ];
+
   const payrollColumns = [
     { key: 'employee', label: 'Employee', render: (_: unknown, row: Record<string, unknown>) => { const e = row.employee as { firstName: string; lastName: string; employeeNo: string }; return e ? `${e.firstName} ${e.lastName} (${e.employeeNo})` : '-'; } },
     { key: 'periodStart', label: 'Period Start', render: (v: unknown) => formatDate(v as string) },
@@ -570,23 +616,11 @@ export function HRPage() {
                 <EmptyState title="No one on leave today" description="Approved leave covering today appears here." />
               </div>
             ) : (
-              <ul className="divide-y divide-slate-100">
-                {onLeaveToday.map((row) => (
-                  <li key={row.id} className="flex items-center gap-3 px-4 py-3">
-                    <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700">
-                      <Calendar className="h-4 w-4" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-slate-900 truncate">{row.employee.name}</p>
-                      <p className="text-xs text-slate-500">
-                        {row.type.replace(/_/g, ' ')} · {formatDate(row.startDate)} – {formatDate(row.endDate)}
-                        {row.employee.department ? ` · ${row.employee.department}` : ''}
-                      </p>
-                    </div>
-                    <Badge variant="success">{row.days}d</Badge>
-                  </li>
-                ))}
-              </ul>
+              <Table
+                columns={onLeaveTodayColumns}
+                data={onLeaveToday as unknown as Record<string, unknown>[]}
+                embedded
+              />
             )}
           </Card>
 
