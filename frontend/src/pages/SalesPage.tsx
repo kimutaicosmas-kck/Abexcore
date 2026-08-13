@@ -124,14 +124,8 @@ export function SalesPage() {
   const [quoteSearch, setQuoteSearch] = useState('');
   const [orderStatus, setOrderStatus] = useState('');
   const [quoteStatus, setQuoteStatus] = useState('');
-  /** Empty string = all dates; defaults to today. */
-  const [orderDate, setOrderDate] = useState(() => {
-    const now = new Date();
-    const y = now.getFullYear();
-    const m = String(now.getMonth() + 1).padStart(2, '0');
-    const d = String(now.getDate()).padStart(2, '0');
-    return `${y}-${m}-${d}`;
-  });
+  /** Empty string = all dates. Sales officers see all their orders by default. */
+  const [orderDate, setOrderDate] = useState('');
   const [orderModalOpen, setOrderModalOpen] = useState(false);
   const [quotationModalOpen, setQuotationModalOpen] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<SalesOrder | null>(null);
@@ -179,7 +173,7 @@ export function SalesPage() {
   useEffect(() => {
     if (!orderIdFromUrl) return;
 
-    setActiveTab(1);
+    setActiveTab(0);
     operationsApi
       .getSalesOrder(orderIdFromUrl)
       .then((r) => {
@@ -504,26 +498,38 @@ export function SalesPage() {
       {stats && (
         <StatGrid>
           <StatCard
-            title={myBook ? 'My Open Orders' : 'Open Orders'}
-            value={stats.openOrders}
-            icon={<ShoppingCart className="h-5 w-5 text-white" />}
+            title={myBook ? "Today's sales" : 'Open Orders'}
+            value={myBook ? formatCurrency(stats.todaySales ?? 0) : stats.openOrders}
+            icon={<TrendingUp className="h-5 w-5 text-white" />}
             color="from-teal-500 to-teal-700"
-            onClick={() => goToTab(0)}
+            to={myBook ? '/my-sales' : undefined}
+            onClick={myBook ? undefined : () => goToTab(0)}
           />
           <StatCard
-            title={myBook ? 'My Pipeline Value' : 'Pipeline Value'}
-            value={formatCurrency(stats.pipelineValue)}
-            icon={<TrendingUp className="h-5 w-5 text-white" />}
+            title={myBook ? 'My Open Orders' : 'Pipeline Value'}
+            value={myBook ? stats.openOrders : formatCurrency(stats.pipelineValue)}
+            icon={<ShoppingCart className="h-5 w-5 text-white" />}
             color="from-indigo-500 to-indigo-700"
             onClick={() => goToTab(0)}
           />
-          <StatCard
-            title={myBook ? 'My Pending Quotes' : 'Pending Quotes'}
-            value={stats.pendingQuotations}
-            icon={<FileText className="h-5 w-5 text-white" />}
-            color="from-orange-500 to-orange-700"
-            onClick={() => goToTab(1)}
-          />
+          {!myBook && (
+            <StatCard
+              title="Pending Quotes"
+              value={stats.pendingQuotations}
+              icon={<FileText className="h-5 w-5 text-white" />}
+              color="from-orange-500 to-orange-700"
+              onClick={() => goToTab(1)}
+            />
+          )}
+          {myBook && (
+            <StatCard
+              title="My Pipeline Value"
+              value={formatCurrency(stats.pipelineValue)}
+              icon={<FileText className="h-5 w-5 text-white" />}
+              color="from-orange-500 to-orange-700"
+              onClick={() => goToTab(0)}
+            />
+          )}
           <StatCard
             title={myBook ? 'My Orders This Month' : 'Orders This Month'}
             value={stats.ordersThisMonth}
@@ -544,6 +550,14 @@ export function SalesPage() {
       <PageHeader
         action={
           <div className="flex flex-wrap items-center gap-2">
+            {myBook && (
+              <Link to="/my-sales">
+                <Button variant="secondary" size="sm">
+                  <Target className="h-4 w-4 mr-1.5" />
+                  My dashboard
+                </Button>
+              </Link>
+            )}
             {canViewPerformance && (
               <Link to="/sales-performance">
                 <Button variant="secondary" size="sm">
@@ -588,9 +602,14 @@ export function SalesPage() {
 
       {activeTab === 0 && (
         <DataPanel className="min-w-0 overflow-hidden">
-          <div className="p-4 pb-0 flex flex-col sm:flex-row gap-3 sm:items-end">
+          <div className="px-4 pt-4 pb-0 flex flex-col sm:flex-row gap-3 sm:items-end">
+            {myBook && (
+              <p className="text-sm text-slate-600 sm:mr-auto sm:mb-2">
+                Showing <strong>your orders</strong>. Filter by date or status below.
+              </p>
+            )}
             <Input
-              placeholder="Search orders…"
+              placeholder={myBook ? 'Search my orders…' : 'Search orders…'}
               className="sm:max-w-md"
               value={orderSearch}
               onChange={(e) => { setOrderSearch(e.target.value); setOrderPage(1); }}
@@ -679,11 +698,15 @@ export function SalesPage() {
           {(orders?.data?.length || 0) === 0 && !ordersLoading ? (
             <div className="p-6">
               <EmptyState
-                title="No sales orders found"
+                title={myBook ? 'No orders in your book yet' : 'No sales orders found'}
                 description={
                   orderDate
-                    ? 'No sales orders for this date. Pick another day or choose All dates.'
-                    : 'Create a sales order or convert an approved quotation.'
+                    ? myBook
+                      ? 'No orders for this date. Pick another day or choose All dates.'
+                      : 'No sales orders for this date. Pick another day or choose All dates.'
+                    : myBook
+                      ? 'Create a sales order to get started — it will appear here automatically.'
+                      : 'Create a sales order or convert an approved quotation.'
                 }
                 action={
                   canCreate ? (

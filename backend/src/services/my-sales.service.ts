@@ -24,6 +24,60 @@ function resolveMySalesPeriod(from?: string, to?: string) {
   };
 }
 
+function startOfWeekMonday(date: Date) {
+  const start = new Date(date);
+  const day = start.getDay();
+  const diff = day === 0 ? 6 : day - 1;
+  start.setDate(start.getDate() - diff);
+  return startOfDay(start);
+}
+
+type PeriodMetrics = {
+  sales: number;
+  invoiced: number;
+  paid: number;
+  outstanding: number;
+  orderCount: number;
+};
+
+async function getPeriodMetrics(
+  salesPersonId: string,
+  from: Date,
+  to: Date
+): Promise<PeriodMetrics> {
+  const { salesOrderInDateRange } = await import('../utils/salesDate');
+  const orderWhere: Prisma.SalesOrderWhereInput = {
+    ...salesPersonOrderFilter(salesPersonId),
+    AND: [salesOrderInDateRange({ gte: from, lte: to })],
+  };
+  const invoiceWhere: Prisma.InvoiceWhereInput = {
+    type: 'SALES',
+    status: { not: 'REFUNDED' },
+    salesOrder: salesPersonOrderFilter(salesPersonId),
+    invoiceDate: { gte: from, lte: to },
+  };
+
+  const [orderAgg, orderCount, invoiceAgg] = await Promise.all([
+    prisma.salesOrder.aggregate({ where: orderWhere, _sum: { totalAmount: true } }),
+    prisma.salesOrder.count({ where: orderWhere }),
+    prisma.invoice.aggregate({
+      where: invoiceWhere,
+      _sum: { totalAmount: true, paidAmount: true },
+    }),
+  ]);
+
+  const invoiced = Number(invoiceAgg._sum.totalAmount || 0);
+  const paid = Number(invoiceAgg._sum.paidAmount || 0);
+
+  return {
+    sales: Number(orderAgg._sum.totalAmount || 0),
+    invoiced,
+    paid,
+    outstanding: invoiced - paid,
+    orderCount,
+  };
+}
+
 export class MySalesService {
   static async assertSalesOfficer(userId: string) {
     const user = await prisma.user.findUnique({
@@ -78,6 +132,9 @@ export class MySalesService {
       invoiceDate: { gte: monthStart, lte: endOfDay(to) },
     };
 
+    const todayEnd = endOfDay(to);
+    const weekStart = startOfWeekMonday(to);
+
     const [
       orders,
       orderTotal,
@@ -86,6 +143,9 @@ export class MySalesService {
       monthInvoiceAgg,
       statusGroups,
       targetAmount,
+      todayMetrics,
+      weekMetrics,
+      monthMetrics,
     ] = await Promise.all([
       prisma.salesOrder.findMany({
         where: orderWhere,
@@ -118,6 +178,9 @@ export class MySalesService {
         _sum: { totalAmount: true },
       }),
       this.getMonthlyTarget(opts.salesPersonId, to.getFullYear(), to.getMonth() + 1),
+      getPeriodMetrics(opts.salesPersonId, startOfDay(to), todayEnd),
+      getPeriodMetrics(opts.salesPersonId, weekStart, todayEnd),
+      getPeriodMetrics(opts.salesPersonId, monthStart, todayEnd),
     ]);
 
     const totalSales = Number(orderAgg._sum.totalAmount || 0);
@@ -134,6 +197,13 @@ export class MySalesService {
         email: user.email,
       },
       period: { from: from.toISOString(), to: to.toISOString() },
+      overview: {
+        today: todayMetrics,
+        week: weekMetrics,
+        month: monthMetrics,
+        monthlyTarget: targetAmount,
+        monthAchievementPercent: achievementPercent,
+      },
       summary: {
         totalSales,
         totalInvoiced,

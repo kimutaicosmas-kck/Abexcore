@@ -564,6 +564,8 @@ export interface SalesStats {
   quotationValue: number;
   ordersThisMonth: number;
   monthlyRevenue: number;
+  todaySales?: number;
+  todayOrders?: number;
 }
 
 export interface SalesQuotation {
@@ -1013,6 +1015,22 @@ export interface PayrollRecord {
   employee: { firstName: string; lastName: string; employeeNo: string };
 }
 
+export interface MySalesPeriodMetrics {
+  sales: number;
+  invoiced: number;
+  paid: number;
+  outstanding: number;
+  orderCount: number;
+}
+
+export interface MySalesOverview {
+  today: MySalesPeriodMetrics;
+  week: MySalesPeriodMetrics;
+  month: MySalesPeriodMetrics;
+  monthlyTarget: number;
+  monthAchievementPercent: number | null;
+}
+
 export interface MySalesSummary {
   totalSales: number;
   totalInvoiced: number;
@@ -1042,6 +1060,7 @@ export interface MySalesOrderRow {
 export interface MySalesDashboard {
   salesPerson: { id: string; name: string; email: string };
   period: { from: string; to: string };
+  overview: MySalesOverview;
   summary: MySalesSummary;
   orders: MySalesOrderRow[];
   pagination: Pagination;

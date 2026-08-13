@@ -1,5 +1,6 @@
 import prisma from '../config/database';
 import { DeliveryStatus } from '@prisma/client';
+import { endOfDay, startOfDay } from '../utils/date';
 import { mergeTenantWhere, requireTenantId } from '../utils/tenant';
 import { getMonthlySalesRevenue } from '../utils/finance-metrics';
 import { salesPersonOrderFilter } from './my-sales.service';
@@ -65,13 +66,30 @@ export class SalesService {
       ...(salesPersonId ? salesPersonOrderFilter(salesPersonId) : {}),
     };
     const quoteWhere = { status: { in: ['DRAFT', 'PENDING'] as ('DRAFT' | 'PENDING')[] } };
-    const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const todayStart = startOfDay(now);
+    const todayEnd = endOfDay(now);
     const monthOrderWhere: Prisma.SalesOrderWhereInput = {
       createdAt: { gte: monthStart },
       ...(salesPersonId ? salesPersonOrderFilter(salesPersonId) : {}),
     };
 
-    const [openOrders, pipelineAgg, pendingQuotations, quoteAgg, ordersThisMonth, monthlyRevenue] =
+    const todayWherePromise = salesPersonId
+      ? (async () => {
+          const { salesOrderInDateRange } = await import('../utils/salesDate');
+          const todayOrderWhere: Prisma.SalesOrderWhereInput = {
+            ...salesPersonOrderFilter(salesPersonId),
+            AND: [salesOrderInDateRange({ gte: todayStart, lte: todayEnd })],
+          };
+          return Promise.all([
+            prisma.salesOrder.aggregate({ where: todayOrderWhere, _sum: { totalAmount: true } }),
+            prisma.salesOrder.count({ where: todayOrderWhere }),
+          ]);
+        })()
+      : Promise.resolve([{ _sum: { totalAmount: null } }, 0] as const);
+
+    const [openOrders, pipelineAgg, pendingQuotations, quoteAgg, ordersThisMonth, monthlyRevenue, todayResult] =
       await Promise.all([
         prisma.salesOrder.count({ where: openWhere }),
         prisma.salesOrder.aggregate({ where: openWhere, _sum: { totalAmount: true } }),
@@ -93,7 +111,10 @@ export class SalesService {
               _sum: { totalAmount: true },
             }).then((r) => Number(r._sum.totalAmount || 0))
           : getMonthlySalesRevenue(monthStart),
+        todayWherePromise,
       ]);
+
+    const [todayAgg, todayOrders] = todayResult;
 
     return {
       openOrders,
@@ -102,6 +123,8 @@ export class SalesService {
       quotationValue: Number(quoteAgg._sum?.totalAmount || 0),
       ordersThisMonth,
       monthlyRevenue,
+      todaySales: salesPersonId ? Number(todayAgg._sum?.totalAmount || 0) : undefined,
+      todayOrders: salesPersonId ? todayOrders : undefined,
     };
   }
 }

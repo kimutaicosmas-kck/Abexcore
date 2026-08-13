@@ -1,7 +1,18 @@
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
-import { Target, TrendingUp, Wallet, Receipt, AlertCircle } from 'lucide-react';
+import {
+  Target,
+  TrendingUp,
+  Wallet,
+  Receipt,
+  AlertCircle,
+  CalendarDays,
+  ShoppingCart,
+  Plus,
+  Sparkles,
+} from 'lucide-react';
 import { financeApi } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import { getApiErrorMessage } from '../utils/apiError';
@@ -45,8 +56,15 @@ function periodLabel(from: string, to: string) {
   return `${formatDate(from)} – ${formatDate(to)}`;
 }
 
+function greeting() {
+  const hour = new Date().getHours();
+  if (hour < 12) return 'Good morning';
+  if (hour < 17) return 'Good afternoon';
+  return 'Good evening';
+}
+
 export function MySalesPage() {
-  const { isAuthenticated, isLoading: authLoading, isSalesOfficer, hasPermission } = useAuth();
+  const { user, isAuthenticated, isLoading: authLoading, isSalesOfficer, hasPermission } = useAuth();
   const [searchParams] = useSearchParams();
   const salesPersonId = searchParams.get('salesPersonId') || undefined;
   const canViewOthers = hasPermission('reports:read') || hasPermission('finance:read');
@@ -56,9 +74,12 @@ export function MySalesPage() {
     (isSalesOfficer || (canViewOthers && !!salesPersonId));
   const today = localDateInput();
   const [page, setPage] = useState(1);
-  const [from, setFrom] = useState(searchParams.get('from') || today);
-  const [to, setTo] = useState(searchParams.get('to') || today);
-  const [periodPreset, setPeriodPreset] = useState<PeriodPreset>('today');
+  const [from, setFrom] = useState(() => {
+    const now = new Date();
+    return localDateInput(new Date(now.getFullYear(), now.getMonth(), 1));
+  });
+  const [to, setTo] = useState(today);
+  const [periodPreset, setPeriodPreset] = useState<PeriodPreset>('month');
 
   useEffect(() => {
     const nextFrom = searchParams.get('from');
@@ -99,9 +120,10 @@ export function MySalesPage() {
     enabled: canLoadDashboard,
   });
 
+  const overview = data?.overview;
   const summary = data?.summary;
-  const achievement = summary?.achievementPercent;
-  const showingToday = from === to && from === today;
+  const displayName = data?.salesPerson?.name || user?.firstName || 'Sales';
+  const isOwnBook = !salesPersonId || salesPersonId === user?.id;
 
   const columns = [
     { key: 'orderNumber', label: 'Order #' },
@@ -130,17 +152,11 @@ export function MySalesPage() {
       label: 'Invoiced',
       render: (val: unknown, row: Record<string, unknown>) => {
         const invoiced = val as number;
-        const orderValue = row.totalAmount as number;
         const over = row.isOverInvoiced as boolean;
         return (
           <div>
             <p className={over ? 'text-amber-700 font-medium' : undefined}>{formatCurrency(invoiced)}</p>
-            {over && (
-              <p className="text-xs text-amber-600">Duplicate invoices — see Finance</p>
-            )}
-            {!over && invoiced > orderValue + 0.01 && (
-              <p className="text-xs text-slate-500">Partial deliveries</p>
-            )}
+            {over && <p className="text-xs text-amber-600">Check Finance</p>}
           </div>
         );
       },
@@ -167,47 +183,7 @@ export function MySalesPage() {
       apiErrorMessage.toLowerCase().includes('token'));
 
   return (
-    <div className="space-y-4">
-      {summary && (
-        <StatGrid>
-          <StatCard
-            title={showingToday ? "Today's sales" : 'Total sales'}
-            value={formatCurrency(summary.totalSales)}
-            icon={<TrendingUp className="h-5 w-5 text-white" />}
-            color="from-blue-500 to-blue-700"
-            to="/sales"
-          />
-          <StatCard
-            title="Invoiced"
-            value={formatCurrency(summary.totalInvoiced)}
-            icon={<Receipt className="h-5 w-5 text-white" />}
-            color="from-lime-500 to-lime-700"
-            to="/finance"
-          />
-          <StatCard
-            title="Collected"
-            value={formatCurrency(summary.totalPaid)}
-            icon={<Wallet className="h-5 w-5 text-white" />}
-            color="from-pink-500 to-pink-700"
-            to="/finance"
-          />
-          <StatCard
-            title="Monthly target"
-            value={summary.monthlyTarget > 0 ? `${achievement ?? 0}%` : 'Not set'}
-            icon={<Target className="h-5 w-5 text-white" />}
-            color="from-amber-500 to-amber-700"
-            to="/sales-performance?tab=targets"
-          />
-          <StatCard
-            title="Outstanding"
-            value={formatCurrency(summary.outstanding)}
-            icon={<AlertCircle className="h-5 w-5 text-white" />}
-            color="from-slate-500 to-slate-700"
-            to="/finance"
-          />
-        </StatGrid>
-      )}
-
+    <div className="space-y-5">
       {!canLoadDashboard && !authLoading && (
         <Alert variant="warning">
           Open <strong>My Sales</strong> as a Sales Officer, or use <strong>Details</strong> on Sales Performance to
@@ -215,77 +191,170 @@ export function MySalesPage() {
         </Alert>
       )}
 
-      {data?.salesPerson && salesPersonId && (
-        <p className="text-sm text-slate-600">
-          Viewing performance for <span className="font-semibold text-slate-900">{data.salesPerson.name}</span>
-        </p>
-      )}
-
-      <Card title="Date range">
-        <div className="flex flex-wrap gap-2 mb-4">
-          {(
-            [
-              { id: 'today' as const, label: 'Today' },
-              { id: 'week' as const, label: 'This week' },
-              { id: 'month' as const, label: 'This month' },
-            ] as const
-          ).map((preset) => (
-            <Button
-              key={preset.id}
-              size="sm"
-              variant={periodPreset === preset.id ? 'primary' : 'secondary'}
-              onClick={() => applyPreset(preset.id)}
-            >
-              {preset.label}
-            </Button>
-          ))}
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <Input
-            label="From"
-            type="date"
-            value={from}
-            onChange={(e) => {
-              setFrom(e.target.value);
-              setPeriodPreset('custom');
-              setPage(1);
-            }}
-          />
-          <Input
-            label="To"
-            type="date"
-            value={to}
-            onChange={(e) => {
-              setTo(e.target.value);
-              setPeriodPreset('custom');
-              setPage(1);
-            }}
-          />
-        </div>
-      </Card>
-
-      {summary && (
+      {canLoadDashboard && (
         <>
-          {summary.monthlyTarget > 0 && (
-            <Card title="Target progress">
+          <div className="relative overflow-hidden rounded-2xl border border-primary-100 bg-gradient-to-br from-primary-50 via-white to-emerald-50 p-5 sm:p-6">
+            <div className="relative z-10 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <div className="inline-flex items-center gap-2 rounded-full bg-white/80 px-3 py-1 text-xs font-medium text-primary-700 border border-primary-100 mb-2">
+                  <Sparkles className="h-3.5 w-3.5" />
+                  {isOwnBook ? 'My sales dashboard' : 'Salesperson dashboard'}
+                </div>
+                <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">
+                  {greeting()}, {displayName.split(' ')[0]}
+                </h1>
+                <p className="text-sm text-slate-600 mt-1">
+                  {isOwnBook
+                    ? 'Track today, this week, and this month — then jump to your orders on Sales.'
+                    : `Performance snapshot for ${displayName}.`}
+                </p>
+              </div>
+              {isOwnBook && (
+                <div className="flex flex-wrap gap-2">
+                  <Link to="/sales">
+                    <Button variant="secondary" size="sm">
+                      <ShoppingCart className="h-4 w-4 mr-1.5" />
+                      My orders
+                    </Button>
+                  </Link>
+                  <Link to="/sales">
+                    <Button size="sm">
+                      <Plus className="h-4 w-4 mr-1.5" />
+                      New order
+                    </Button>
+                  </Link>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {overview && (
+            <StatGrid>
+              <StatCard
+                title="Today's sales"
+                value={formatCurrency(overview.today.sales)}
+                icon={<TrendingUp className="h-5 w-5 text-white" />}
+                color="from-emerald-500 to-emerald-700"
+                onClick={() => applyPreset('today')}
+              />
+              <StatCard
+                title="This week"
+                value={formatCurrency(overview.week.sales)}
+                icon={<CalendarDays className="h-5 w-5 text-white" />}
+                color="from-sky-500 to-sky-700"
+                onClick={() => applyPreset('week')}
+              />
+              <StatCard
+                title="This month"
+                value={formatCurrency(overview.month.sales)}
+                icon={<Receipt className="h-5 w-5 text-white" />}
+                color="from-indigo-500 to-indigo-700"
+                onClick={() => applyPreset('month')}
+              />
+              <StatCard
+                title="Collected (month)"
+                value={formatCurrency(overview.month.paid)}
+                icon={<Wallet className="h-5 w-5 text-white" />}
+                color="from-teal-500 to-teal-700"
+                to="/finance"
+              />
+              <StatCard
+                title="Monthly target"
+                value={
+                  overview.monthlyTarget > 0
+                    ? `${overview.monthAchievementPercent ?? 0}%`
+                    : 'Not set'
+                }
+                icon={<Target className="h-5 w-5 text-white" />}
+                color="from-amber-500 to-amber-700"
+                to="/sales-performance?tab=targets"
+              />
+              <StatCard
+                title="Outstanding"
+                value={formatCurrency(overview.month.outstanding)}
+                icon={<AlertCircle className="h-5 w-5 text-white" />}
+                color="from-rose-500 to-rose-700"
+                to="/finance"
+              />
+            </StatGrid>
+          )}
+
+          {overview && overview.monthlyTarget > 0 && (
+            <Card title="Target progress this month">
               <div className="space-y-2">
-                <div className="flex justify-between text-sm">
+                <div className="flex flex-wrap justify-between gap-2 text-sm">
                   <span className="text-slate-600">
-                    Invoiced {formatCurrency(summary.monthInvoiced ?? summary.totalInvoiced)} of {formatCurrency(summary.monthlyTarget)} this month
+                    Invoiced {formatCurrency(overview.month.invoiced)} of{' '}
+                    {formatCurrency(overview.monthlyTarget)}
                   </span>
-                  <span className="font-semibold text-slate-900">{achievement ?? 0}%</span>
+                  <span className="font-semibold text-slate-900">
+                    {overview.monthAchievementPercent ?? 0}%
+                  </span>
                 </div>
                 <div className="h-3 rounded-full bg-slate-100 overflow-hidden">
                   <div
                     className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-primary-600 transition-all"
-                    style={{ width: `${Math.min(100, achievement ?? 0)}%` }}
+                    style={{ width: `${Math.min(100, overview.monthAchievementPercent ?? 0)}%` }}
                   />
                 </div>
+                <p className="text-xs text-slate-500">
+                  {overview.month.orderCount} orders this month · {overview.today.orderCount} today
+                </p>
               </div>
             </Card>
           )}
 
-          {summary.ordersByStatus.length > 0 && (
+          {data?.salesPerson && salesPersonId && (
+            <p className="text-sm text-slate-600">
+              Viewing performance for{' '}
+              <span className="font-semibold text-slate-900">{data.salesPerson.name}</span>
+            </p>
+          )}
+
+          <Card title="Filter orders">
+            <div className="flex flex-wrap gap-2 mb-4">
+              {(
+                [
+                  { id: 'today' as const, label: 'Today' },
+                  { id: 'week' as const, label: 'This week' },
+                  { id: 'month' as const, label: 'This month' },
+                ] as const
+              ).map((preset) => (
+                <Button
+                  key={preset.id}
+                  size="sm"
+                  variant={periodPreset === preset.id ? 'primary' : 'secondary'}
+                  onClick={() => applyPreset(preset.id)}
+                >
+                  {preset.label}
+                </Button>
+              ))}
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <Input
+                label="From"
+                type="date"
+                value={from}
+                onChange={(e) => {
+                  setFrom(e.target.value);
+                  setPeriodPreset('custom');
+                  setPage(1);
+                }}
+              />
+              <Input
+                label="To"
+                type="date"
+                value={to}
+                onChange={(e) => {
+                  setTo(e.target.value);
+                  setPeriodPreset('custom');
+                  setPage(1);
+                }}
+              />
+            </div>
+          </Card>
+
+          {summary && summary.ordersByStatus.length > 0 && (
             <Card title="Orders by status" padding={false}>
               <ul className="divide-y divide-slate-100">
                 {summary.ordersByStatus.map((row) => (
@@ -303,10 +372,15 @@ export function MySalesPage() {
       )}
 
       <DataPanel>
-        <div className="px-4 pt-4 pb-2 border-b border-border/60">
+        <div className="px-4 pt-4 pb-2 border-b border-border/60 flex flex-wrap items-center justify-between gap-2">
           <h3 className="text-sm font-semibold text-slate-900">
-            {showingToday ? "Today's orders" : `Orders (${periodLabel(from, to)})`}
+            Orders ({periodLabel(from, to)})
           </h3>
+          {isOwnBook && (
+            <Link to="/sales" className="text-xs font-medium text-primary-600 hover:underline">
+              Open full My Orders table →
+            </Link>
+          )}
         </div>
         {isError ? (
           <EmptyState
@@ -316,7 +390,11 @@ export function MySalesPage() {
                 ? 'Your session expired. Sign out and sign in again, then retry.'
                 : apiErrorMessage
             }
-            action={<button type="button" className="text-primary-600 underline" onClick={() => refetch()}>Retry</button>}
+            action={
+              <button type="button" className="text-primary-600 underline" onClick={() => refetch()}>
+                Retry
+              </button>
+            }
           />
         ) : (
           <>
