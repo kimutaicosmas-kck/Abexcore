@@ -389,8 +389,8 @@ interface TableProps {
   onRowClick?: (row: Record<string, unknown>) => void;
   embedded?: boolean;
   /**
-   * Stack rows as mobile cards (Customers/Users style) under `md`.
-   * Default on so all list pages match that mobile layout.
+   * Stack rows as mobile cards under `md` when true.
+   * Default false — tables stay in table form and scroll horizontally on small screens.
    */
   responsive?: boolean;
   /** How many detail fields to show before “View details” (default 2). */
@@ -503,7 +503,7 @@ export function Table({
   loading,
   onRowClick,
   embedded = false,
-  responsive = true,
+  responsive = false,
   mobileSummaryCount = 2,
 }: TableProps) {
   const content = (() => {
@@ -543,9 +543,9 @@ export function Table({
           </div>
         )}
 
-        <div className={clsx(responsive && 'hidden md:block', 'min-w-0')}>
-          <div className={clsx('overflow-x-auto', embedded ? 'px-4 sm:px-0' : undefined)}>
-            <table className="min-w-full">
+        <div className={clsx(responsive && 'hidden md:block', 'min-w-0 w-full')}>
+          <div className={clsx('table-scroll-x', embedded ? 'px-4 sm:px-0' : undefined)}>
+            <table className="w-full min-w-max">
               <thead>
                 <tr className="border-b border-primary-100 bg-primary-50/80">
                   {columns.map((col) => (
@@ -573,7 +573,7 @@ export function Table({
                       {columns.map((col) => (
                         <td
                           key={col.key}
-                          className="px-3 sm:px-4 py-2.5 whitespace-nowrap text-sm text-slate-800 max-w-[12rem] truncate"
+                          className="px-3 sm:px-4 py-2.5 whitespace-nowrap text-sm text-slate-800 align-middle"
                         >
                           {col.render ? col.render(record[col.key], record) : String(record[col.key] ?? '')}
                         </td>
@@ -592,7 +592,7 @@ export function Table({
   if (embedded) return content;
 
   return (
-    <div className="panel-surface ring-1 ring-primary-50">
+    <div className="panel-surface ring-1 ring-primary-50 min-w-0">
       {content}
     </div>
   );
@@ -600,7 +600,7 @@ export function Table({
 
 export function DataPanel({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
-    <div className={clsx('panel-surface', className)}>
+    <div className={clsx('panel-surface min-w-0', className)}>
       {children}
     </div>
   );

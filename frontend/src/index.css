@@ -610,6 +610,15 @@ body {
   @apply bg-white rounded-xl border border-primary-100 shadow-soft overflow-hidden;
 }
 
+.table-scroll-x {
+  @apply w-full max-w-full min-w-0 overflow-x-auto overscroll-x-contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.table-scroll-x > table {
+  @apply min-w-max w-full;
+}
+
 .panel-header {
   @apply border-b border-primary-100 bg-primary-50/90;
 }

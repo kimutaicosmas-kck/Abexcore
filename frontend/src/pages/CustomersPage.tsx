@@ -1136,8 +1136,8 @@ export function CustomersPage() {
                   }
                 />
               ) : (
-                <div className="overflow-x-auto max-h-[50vh] border border-border/60 rounded-xl">
-                  <table className="min-w-full text-sm">
+                <div className="table-scroll-x max-h-[50vh] border border-border/60 rounded-xl">
+                  <table className="min-w-max w-full text-sm">
                     <thead className="bg-surface-muted/80 sticky top-0">
                       {statementMode === 'OUTSTANDING' ? (
                         <tr className="text-left text-xs text-slate-500">

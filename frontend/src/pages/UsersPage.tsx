@@ -489,8 +489,8 @@ export function UsersPage() {
             <div>
               <h4 className="text-sm font-semibold text-slate-900 mb-2">Recent Login History</h4>
               {userDetail.loginHistory?.length ? (
-                <div className="rounded-xl border border-border overflow-x-auto">
-                  <table className="min-w-full text-sm">
+                <div className="rounded-xl border border-border table-scroll-x">
+                  <table className="min-w-max w-full text-sm">
                     <thead className="bg-surface-muted/60">
                       <tr>
                         <th className="px-3 py-2 text-left text-xs font-semibold text-slate-500">Date</th>

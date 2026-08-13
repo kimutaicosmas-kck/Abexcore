@@ -1020,8 +1020,8 @@ export function FinancePage() {
             </div>
 
             <Card title="Line items" padding={false}>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+              <div className="table-scroll-x">
+                <table className="w-full text-sm min-w-max">
                   <thead>
                     <tr className="bg-slate-50 text-left text-slate-500">
                       <th className="px-4 py-2 font-medium">Description</th>
@@ -1133,8 +1133,8 @@ export function FinancePage() {
               <div className="sm:col-span-2"><p className="text-slate-500">Description</p><p>{(selectedJournal.description as string) || '—'}</p></div>
             </div>
             <Card title="Lines" padding={false}>
-              <div className="overflow-x-auto">
-              <table className="w-full text-sm min-w-[20rem]">
+              <div className="table-scroll-x">
+              <table className="w-full text-sm min-w-max">
                 <thead>
                   <tr className="bg-slate-50 text-slate-500 text-left">
                     <th className="px-4 py-2">Account</th>

@@ -60,8 +60,8 @@ export function FinancialStatementsPanel() {
 
       <Card>
         <h3 className="font-semibold text-lg mb-4">Cash Flow (6 months)</h3>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+        <div className="table-scroll-x">
+          <table className="w-full text-sm min-w-max">
             <thead>
               <tr className="border-b text-left text-gray-500">
                 <th className="py-2">Month</th>

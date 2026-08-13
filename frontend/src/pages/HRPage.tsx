@@ -680,8 +680,8 @@ export function HRPage() {
                 <Alert variant="error">{getApiErrorMessage(updateBalanceMutation.error)}</Alert>
               )}
               {selectedBalances && (
-                <div className="overflow-x-auto rounded-xl border border-slate-200">
-                  <table className="min-w-full text-sm">
+                <div className="table-scroll-x rounded-xl border border-slate-200">
+                  <table className="min-w-max w-full text-sm">
                     <thead className="bg-slate-50 text-left text-xs text-slate-500">
                       <tr>
                         <th className="px-3 py-2">Type</th>
@@ -1002,8 +1002,8 @@ export function HRPage() {
             {!!advanceDetail.schedule?.length && advanceDetail.remainingBalance > 0 && (
               <div>
                 <h4 className="text-sm font-semibold text-slate-800 mb-2">Projected recovery schedule</h4>
-                <div className="max-h-40 overflow-auto rounded-xl border border-slate-200">
-                  <table className="w-full text-sm">
+                <div className="table-scroll-x max-h-40 overflow-y-auto rounded-xl border border-slate-200">
+                  <table className="w-full text-sm min-w-max">
                     <thead className="bg-slate-50 text-slate-500">
                       <tr>
                         <th className="px-3 py-2 text-left font-medium">Month</th>

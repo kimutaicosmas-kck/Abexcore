@@ -179,8 +179,8 @@ export function CatalogListManager({
       {loading ? (
         <p className="text-sm text-slate-500">Loading…</p>
       ) : sortedItems.length ? (
-        <div className="overflow-x-auto -mx-1">
-          <table className="min-w-full text-sm">
+        <div className="table-scroll-x -mx-1">
+          <table className="min-w-max w-full text-sm">
             <thead>
               <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-500">
                 <th className="py-2 px-2 font-medium w-16">Order</th>
