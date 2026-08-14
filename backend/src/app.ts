@@ -31,6 +31,7 @@ import mpesaRoutes from './routes/mpesa.routes';
 import realtimeRoutes from './routes/realtime.routes';
 import tenantRoutes from './routes/tenant.routes';
 import trashRoutes from './routes/trash.routes';
+import systemRoutes from './routes/system.routes';
 
 export function createApp() {
   const app = express();
@@ -195,6 +196,7 @@ export function createApp() {
   apiRouter.use('/realtime', realtimeRoutes);
   apiRouter.use('/tenant', tenantRoutes);
   apiRouter.use('/trash', trashRoutes);
+  apiRouter.use('/system', systemRoutes);
 
   app.use('/api/v1', apiRouter);
   app.use(notFound);

@@ -12,6 +12,7 @@ import { AbexCoreLogo } from '../components/brand/AbexCoreLogo';
 import { buildTenantLoginPath, buildTenantLoginUrl } from '../utils/tenant';
 import { PLATFORM_COMPANY_SLUG } from '../constants/platform';
 import { CatalogListManager } from '../components/settings/CatalogListManager';
+import { ServerMetricsPanel } from '../components/settings/ServerMetricsPanel';
 import { ModuleAccessPicker } from '../components/forms/ModuleAccessPicker';
 import { canAssignCompanySuperAdmin } from '../utils/superAdmin';
 import {
@@ -88,7 +89,7 @@ export function SettingsPage() {
 
   const tabs = useMemo(() => {
     const items = isPlatformOwner
-      ? ['Company Profile', 'Email', 'Workspace', 'Companies', ...coreSettingsTabs.slice(3)]
+      ? ['Company Profile', 'Email', 'Workspace', 'Companies', 'Server', ...coreSettingsTabs.slice(3)]
       : [...coreSettingsTabs];
     if (canAccessTrash) items.push('Recycle Bin');
     items.push('Security');
@@ -785,6 +786,8 @@ export function SettingsPage() {
           )}
         </Card>
       )}
+
+      {activeTabName === 'Server' && isPlatformOwner && <ServerMetricsPanel />}
 
       {activeTabName === 'Team' && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

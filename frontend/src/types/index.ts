@@ -1077,3 +1077,45 @@ export interface SalesTargetRow {
   month: number;
   targetAmount: number;
 }
+
+export interface SystemMetrics {
+  capturedAt: string;
+  scope: 'host' | 'container';
+  host: {
+    hostname: string;
+    platform: string;
+    uptimeSeconds: number;
+    cpuCount: number;
+    cpuModel: string;
+    cpuUsagePercent: number | null;
+    loadAverage: { load1: number; load5: number; load15: number };
+  };
+  memory: {
+    totalBytes: number;
+    usedBytes: number;
+    freeBytes: number;
+    usedPercent: number;
+  };
+  disk: {
+    mount: string;
+    totalBytes: number;
+    freeBytes: number;
+    usedBytes: number;
+    usedPercent: number;
+  } | null;
+  process: {
+    pid: number;
+    uptimeSeconds: number;
+    memory: {
+      rssBytes: number;
+      heapUsedBytes: number;
+      heapTotalBytes: number;
+      externalBytes: number;
+    };
+    clusterWorkers: number;
+  };
+  runtime: {
+    nodeVersion: string;
+    environment: string;
+  };
+}

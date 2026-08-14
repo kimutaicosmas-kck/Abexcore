@@ -476,6 +476,10 @@ export const tenantApi = {
   testEmailConfig: (to?: string) => api.post('/tenant/email-config/test', to ? { to } : {}),
 };
 
+export const systemApi = {
+  metrics: () => api.get('/system/metrics'),
+};
+
 export const qualityApi = {
   stats: () => api.get('/quality/stats'),
   list: (params?: object) => api.get('/quality', { params }),
