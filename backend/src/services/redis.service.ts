@@ -3,6 +3,7 @@ import { config } from '../config';
 import { logger } from '../config/logger';
 
 let client: Redis | null = null;
+let connectPromise: Promise<Redis | null> | null = null;
 
 export function isRedisConfigured(): boolean {
   return Boolean(config.redis.url);
@@ -25,19 +26,91 @@ export function getRedis(): Redis | null {
   return client;
 }
 
+async function waitUntilReady(redis: Redis, timeoutMs = 5_000): Promise<void> {
+  if (redis.status === 'ready') return;
+
+  await new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      cleanup();
+      reject(new Error('Redis connect timeout'));
+    }, timeoutMs);
+
+    const onReady = () => {
+      cleanup();
+      resolve();
+    };
+    const onError = (err: Error) => {
+      cleanup();
+      reject(err);
+    };
+    const cleanup = () => {
+      clearTimeout(timer);
+      redis.off('ready', onReady);
+      redis.off('error', onError);
+    };
+
+    redis.once('ready', onReady);
+    redis.once('error', onError);
+
+    if (redis.status === 'ready') {
+      cleanup();
+      resolve();
+    }
+  });
+}
+
 export async function ensureRedisConnected(): Promise<Redis | null> {
   const redis = getRedis();
   if (!redis) return null;
-  try {
-    if (redis.status !== 'ready') {
-      await redis.connect();
+
+  if (redis.status === 'ready') {
+    try {
+      await redis.ping();
+      return redis;
+    } catch (err) {
+      logger.warn('Redis ping failed', err);
+      return null;
     }
-    await redis.ping();
-    return redis;
-  } catch (err) {
-    logger.warn('Redis unavailable', err);
-    return null;
   }
+
+  if (connectPromise) return connectPromise;
+
+  connectPromise = (async () => {
+    try {
+      // Only start connect from idle states — avoid "already connecting/connected".
+      if (redis.status === 'wait' || redis.status === 'end') {
+        await redis.connect();
+      } else if (redis.status === 'connecting' || redis.status === 'connect' || redis.status === 'reconnecting') {
+        await waitUntilReady(redis);
+      }
+
+      if (redis.status !== 'ready') {
+        await waitUntilReady(redis);
+      }
+
+      await redis.ping();
+      return redis;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      // Benign race when another caller already started connect.
+      if (/already connecting|already connected/i.test(message)) {
+        try {
+          await waitUntilReady(redis);
+          await redis.ping();
+          return redis;
+        } catch (waitErr) {
+          logger.warn('Redis unavailable', waitErr);
+          return null;
+        }
+      }
+      logger.warn('Redis unavailable', err);
+      return null;
+    } finally {
+      connectPromise = null;
+    }
+  })();
+
+  return connectPromise;
 }
 
 export interface RedisMemoryStats {
@@ -111,4 +184,5 @@ export async function disconnectRedis(): Promise<void> {
     client.disconnect();
   }
   client = null;
+  connectPromise = null;
 }
