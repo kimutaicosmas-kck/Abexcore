@@ -761,6 +761,11 @@ body {
   --stat-accent-to: #0ea5e9;
 }
 
+.stat-card-dense {
+  @apply py-2.5 px-3 sm:py-2.5 sm:px-3.5;
+  border-top-width: 2px;
+}
+
 .stat-card-interactive {
   text-decoration: none;
   color: inherit;

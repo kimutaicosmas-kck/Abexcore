@@ -307,13 +307,24 @@ interface StatCardProps {
   icon: React.ReactNode;
   trend?: { value: number; label: string };
   color?: string;
+  /** Tighter two-line layout (label + value left, icon right). */
+  dense?: boolean;
   /** Navigate to a route when the card is clicked. */
   to?: string;
   /** Same-page action (e.g. switch tab / apply filter). Ignored when `to` is set. */
   onClick?: () => void;
 }
 
-export function StatCard({ title, value, icon, trend, color = 'bg-primary-600', to, onClick }: StatCardProps) {
+export function StatCard({
+  title,
+  value,
+  icon,
+  trend,
+  color = 'bg-primary-600',
+  dense = false,
+  to,
+  onClick,
+}: StatCardProps) {
   const interactive = Boolean(to || onClick);
   const accent = resolveStatAccent(color);
   const accentStyle = {
@@ -321,34 +332,61 @@ export function StatCard({ title, value, icon, trend, color = 'bg-primary-600', 
     ['--stat-accent-to' as string]: accent.to,
   } as React.CSSProperties;
 
-  const content = (
+  const iconBox = (
+    <div
+      className={clsx(
+        'stat-card-icon shrink-0 flex items-center justify-center text-white shadow-sm',
+        dense
+          ? 'h-8 w-8 rounded-lg [&_svg]:h-3.5 [&_svg]:w-3.5'
+          : 'h-8 w-8 sm:h-10 sm:w-10 rounded-xl sm:rounded-2xl [&_svg]:h-3.5 [&_svg]:w-3.5 sm:[&_svg]:h-5 sm:[&_svg]:w-5',
+        color.includes('from-') ? `bg-gradient-to-br ${color}` : color
+      )}
+    >
+      {icon}
+    </div>
+  );
+
+  const content = dense ? (
+    <div className="flex items-center justify-between gap-2.5">
+      <div className="min-w-0 flex-1 space-y-0.5">
+        <p className="stat-card-title text-[10px] sm:text-[11px] font-medium text-primary-700/70 uppercase tracking-wide leading-none truncate">
+          {title}
+        </p>
+        <p className="stat-card-value text-lg sm:text-xl font-bold tabular-nums text-primary-950 leading-none tracking-tight truncate">
+          {value}
+        </p>
+        {trend && (
+          <p className={clsx('text-[10px] font-medium whitespace-nowrap', trend.value >= 0 ? 'text-emerald-600' : 'text-red-600')}>
+            {trend.value >= 0 ? '+' : ''}
+            {trend.value}% {trend.label}
+          </p>
+        )}
+      </div>
+      {iconBox}
+    </div>
+  ) : (
     <>
       <div className="flex items-start justify-between gap-1.5 sm:gap-2">
         <p className="stat-card-title min-w-0 flex-1 text-[10px] sm:text-xs font-medium text-primary-700/70 uppercase tracking-wide leading-snug line-clamp-2">
           {title}
         </p>
-        <div
-          className={clsx(
-            'stat-card-icon h-8 w-8 sm:h-10 sm:w-10 shrink-0 flex items-center justify-center rounded-xl sm:rounded-2xl text-white shadow-sm [&_svg]:h-3.5 [&_svg]:w-3.5 sm:[&_svg]:h-5 sm:[&_svg]:w-5',
-            color.includes('from-') ? `bg-gradient-to-br ${color}` : color
-          )}
-        >
-          {icon}
-        </div>
+        {iconBox}
       </div>
       <p className="stat-card-value text-base sm:text-xl font-bold tabular-nums text-primary-950 leading-none tracking-tight">
         {value}
       </p>
       {trend && (
         <p className={clsx('text-[10px] sm:text-xs font-medium whitespace-nowrap', trend.value >= 0 ? 'text-emerald-600' : 'text-red-600')}>
-          {trend.value >= 0 ? '+' : ''}{trend.value}% {trend.label}
+          {trend.value >= 0 ? '+' : ''}
+          {trend.value}% {trend.label}
         </p>
       )}
     </>
   );
 
   const className = clsx(
-    'stat-card flex flex-col gap-1.5 sm:gap-2.5 snap-start text-left w-full',
+    'stat-card flex snap-start text-left w-full',
+    dense ? 'stat-card-dense flex-row items-center' : 'flex-col gap-1.5 sm:gap-2.5',
     interactive &&
       'stat-card-interactive cursor-pointer transition-all duration-150 hover:border-primary-300 hover:shadow-md hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2'
   );

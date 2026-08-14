@@ -146,63 +146,70 @@ export function ServerMetricsPanel() {
 
       <StatGrid>
         <StatCard
+          dense
           title="CPU usage"
           value={cpuDisplay}
           icon={<Cpu className="h-5 w-5 text-white" />}
           color="from-emerald-500 to-emerald-700"
         />
         <StatCard
+          dense
           title="Memory used"
           value={`${data.memory.usedPercent}%`}
           icon={<MemoryStick className="h-5 w-5 text-white" />}
           color="from-sky-500 to-sky-700"
         />
         <StatCard
+          dense
           title="Disk used"
           value={data.disk ? `${data.disk.usedPercent}%` : '—'}
           icon={<HardDrive className="h-5 w-5 text-white" />}
           color="from-violet-500 to-violet-700"
         />
         <StatCard
+          dense
           title="Server uptime"
           value={formatUptime(data.host.uptimeSeconds)}
           icon={<Activity className="h-5 w-5 text-white" />}
           color="from-orange-500 to-orange-700"
         />
-      </StatGrid>
-
-      <StatGrid>
         <StatCard
+          dense
           title="MySQL connections"
           value={mysqlConnected != null ? String(mysqlConnected) : '—'}
           icon={<Database className="h-5 w-5 text-white" />}
           color="from-cyan-500 to-cyan-700"
         />
         <StatCard
+          dense
           title="Redis memory"
           value={redisLabel}
           icon={<MemoryStick className="h-5 w-5 text-white" />}
           color="from-rose-500 to-rose-700"
         />
         <StatCard
+          dense
           title="Queue length"
           value={data.queue.configured ? String(data.queue.waiting + data.queue.active) : '—'}
           icon={<Layers className="h-5 w-5 text-white" />}
           color="from-indigo-500 to-indigo-700"
         />
         <StatCard
+          dense
           title="API p95"
           value={data.api.sampleCount ? formatMs(data.api.p95Ms) : 'Sampling…'}
           icon={<Timer className="h-5 w-5 text-white" />}
           color="from-teal-500 to-teal-700"
         />
         <StatCard
+          dense
           title="Failed jobs"
           value={data.queue.configured ? String(data.queue.failed) : '—'}
           icon={<AlertTriangle className="h-5 w-5 text-white" />}
           color="from-amber-500 to-amber-700"
         />
         <StatCard
+          dense
           title="Worker crashes"
           value={data.process.workerCrashes != null ? String(data.process.workerCrashes) : '—'}
           icon={<AlertTriangle className="h-5 w-5 text-white" />}
