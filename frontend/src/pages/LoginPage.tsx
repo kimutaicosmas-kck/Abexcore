@@ -14,11 +14,10 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { authApi } from '../services/api';
-import { Alert, Button, Input } from '../components/ui';
+import { Alert, ApiErrorAlert, Button, Input } from '../components/ui';
 import { AbexCoreLogo } from '../components/brand/AbexCoreLogo';
 import { PoweredBy } from '../components/brand/PoweredBy';
 import { APP_NAME, APP_TAGLINE } from '../constants/brand';
-import { getApiErrorMessage } from '../utils/apiError';
 import {
   resolveTenantSlugFromHost,
   resolveTenantSlugFromQuery,
@@ -70,7 +69,8 @@ export function LoginPage() {
   const [searchParams] = useSearchParams();
   const sessionReason = searchParams.get('reason');
   const sessionExpired = sessionReason === 'inactive' || sessionReason === 'session';
-  const [error, setError] = useState('');
+  const [loginError, setLoginError] = useState<unknown>(null);
+  const [validationError, setValidationError] = useState('');
   const [loading, setLoading] = useState(false);
   const [needs2FA, setNeeds2FA] = useState(false);
   const [savedCredentials, setSavedCredentials] = useState({ companySlug: '', email: '', password: '' });
@@ -134,13 +134,14 @@ export function LoginPage() {
 
   const onSubmit = async (data: LoginForm) => {
     setLoading(true);
-    setError('');
+    setLoginError(null);
+    setValidationError('');
     const email = data.email.trim();
     // Do not trim password — spaces can be intentional; trimming broke some mobile autofills.
     const password = data.password;
     const companySlug = (hostSlug || data.companySlug).trim().toLowerCase();
     if (!companySlug) {
-      setError('Enter your company code, then email and password.');
+      setValidationError('Enter your company code, then email and password.');
       setLoading(false);
       return;
     }
@@ -152,9 +153,10 @@ export function LoginPage() {
       if (axiosErr.response?.data?.code === '2FA_REQUIRED') {
         setNeeds2FA(true);
         setSavedCredentials({ companySlug, email, password });
-        setError('');
+        setLoginError(null);
+    setValidationError('');
       } else {
-        setError(getApiErrorMessage(err));
+        setLoginError(err);
       }
     } finally {
       setLoading(false);
@@ -163,12 +165,13 @@ export function LoginPage() {
 
   const submit2FA = async (totpCode: string) => {
     setLoading(true);
-    setError('');
+    setLoginError(null);
+    setValidationError('');
     try {
       await login(savedCredentials.companySlug, savedCredentials.email, savedCredentials.password, totpCode);
       navigate('/');
     } catch (err: unknown) {
-      setError(getApiErrorMessage(err));
+      setLoginError(err);
     } finally {
       setLoading(false);
     }
@@ -261,7 +264,10 @@ export function LoginPage() {
                     </Alert>
                   )}
                   {tenantError && <Alert variant="error">{tenantError}</Alert>}
-                  {error && <Alert variant="error">{error}</Alert>}
+                  {validationError && <Alert variant="error">{validationError}</Alert>}
+                  {loginError != null && (
+                    <ApiErrorAlert error={loginError} compact onRetry={() => setLoginError(null)} />
+                  )}
 
                   {tenantLocked ? (
                     <input type="hidden" {...register('companySlug')} />
@@ -302,7 +308,10 @@ export function LoginPage() {
                   }}
                   className="space-y-4"
                 >
-                  {error && <Alert variant="error">{error}</Alert>}
+                  {validationError && <Alert variant="error">{validationError}</Alert>}
+                  {loginError != null && (
+                    <ApiErrorAlert error={loginError} compact onRetry={() => setLoginError(null)} />
+                  )}
                   <Input
                     label="Authentication code"
                     name="totp"

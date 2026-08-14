@@ -1,5 +1,6 @@
 import clsx from 'clsx';
 import { Modal } from './Modal';
+import { ApiErrorAlert } from './ConnectionErrorAlert';
 import { getApiErrorMessage } from '../../utils/apiError';
 
 interface ConfirmDialogProps {
@@ -64,13 +65,6 @@ export function QueryErrorAlert({ error, onRetry }: QueryErrorAlertProps) {
   if (!error) return null;
 
   return (
-    <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 flex items-center justify-between gap-3">
-      <span>{getApiErrorMessage(error)}</span>
-      {onRetry && (
-        <button type="button" onClick={onRetry} className="font-medium underline shrink-0">
-          Retry
-        </button>
-      )}
-    </div>
+    <ApiErrorAlert error={error} onRetry={onRetry} />
   );
 }

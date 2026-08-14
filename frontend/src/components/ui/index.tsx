@@ -969,6 +969,7 @@ export function getStatusBadge(status: string) {
 }
 
 export { ConfirmDialog, QueryErrorAlert, getApiErrorMessage } from './ConfirmDialog';
+export { ApiErrorAlert, ConnectionErrorAlert } from './ConnectionErrorAlert';
 export { PageQueryStatus } from './PageQueryStatus';
 export { ErrorBoundary } from './ErrorBoundary';
 export { Modal, ModalFormBody } from './Modal';
