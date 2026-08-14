@@ -128,7 +128,7 @@ export function FinancePage() {
 
   const [payPage, setPayPage] = useState(1);
   const [paySearch, setPaySearch] = useState('');
-  const [payPeriod, setPayPeriod] = useState('this_week_taken_and_paid');
+  const [payPeriod, setPayPeriod] = useState('');
   const [payMethod, setPayMethod] = useState('');
   const [payFrom, setPayFrom] = useState('');
   const [payTo, setPayTo] = useState('');
@@ -462,6 +462,7 @@ export function FinancePage() {
   ];
 
   const PAY_PERIOD_OPTIONS = [
+    { value: '', label: 'All payments' },
     { value: 'this_week_taken_and_paid', label: 'Taken & paid this week' },
     { value: 'this_month_taken_and_paid', label: 'Taken & paid this month' },
     { value: 'same_week_as_invoice', label: 'Paid in week invoice was taken' },
@@ -470,7 +471,6 @@ export function FinancePage() {
     { value: 'last_week', label: 'Paid last week (any invoice)' },
     { value: 'this_month', label: 'Paid this month (any invoice)' },
     { value: 'last_month', label: 'Paid last month (any invoice)' },
-    { value: '', label: 'All payment dates' },
     { value: 'custom', label: 'Custom dates…' },
   ];
 
@@ -724,7 +724,7 @@ export function FinancePage() {
               size="sm"
               onClick={() => {
                 setPaySearch('');
-                setPayPeriod('this_week_taken_and_paid');
+                setPayPeriod('');
                 setPayMethod('');
                 setPayFrom('');
                 setPayTo('');
@@ -747,8 +747,7 @@ export function FinancePage() {
           {(payments?.data?.length || 0) === 0 && !payLoading ? (
             <div className="p-6">
               <EmptyState
-                title="No payments in this period"
-                description="Try another paid period, or record a payment against an open invoice."
+                title={payPeriod || payMethod || paySearch ? 'No payments match these filters' : 'No payments yet'}
                 action={
                   canCreate ? (
                     <Button onClick={() => openPaymentModal()}>
