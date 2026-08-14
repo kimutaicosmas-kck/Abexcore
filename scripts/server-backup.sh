@@ -43,7 +43,7 @@ fi
 
 log "Backing up MySQL to $DEST/database.sql.gz"
 "${COMPOSE[@]}" exec -T mysql sh -c \
-  'mysqldump -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" --single-transaction --routines --triggers "$MYSQL_DATABASE"' \
+  'mysqldump -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" --single-transaction --routines --triggers --no-tablespaces "$MYSQL_DATABASE"' \
   | gzip > "$DEST/database.sql.gz"
 
 if "${COMPOSE[@]}" ps --status running --services 2>/dev/null | grep -qx backend; then

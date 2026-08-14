@@ -217,7 +217,7 @@ Logs: `/var/log/abexcore-backup.log`
 ```bash
 cd ~/Abexcore
 docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env exec -T mysql \
-  sh -c 'mysqldump -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" --single-transaction "$MYSQL_DATABASE"' \
+  sh -c 'mysqldump -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" --single-transaction --no-tablespaces "$MYSQL_DATABASE"' \
   | gzip > ~/erp_backup_$(date +%F).sql.gz
 ```
 
