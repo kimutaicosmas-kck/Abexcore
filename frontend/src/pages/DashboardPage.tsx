@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -12,6 +12,9 @@ import {
   Legend,
   ArcElement,
   Filler,
+  type ChartOptions,
+  type Plugin,
+  type ScriptableContext,
 } from 'chart.js';
 import { Line, Doughnut } from 'react-chartjs-2';
 import {
@@ -48,18 +51,47 @@ const CHART_DAYS_OPTIONS = [
   { value: '90', label: 'Last 90 days' },
 ];
 
+const FONT = 'Plus Jakarta Sans';
+
 const chartDefaults = {
   responsive: true,
   plugins: {
-    legend: { labels: { usePointStyle: true, boxWidth: 8, font: { family: 'Plus Jakarta Sans', size: 11 } } },
+    legend: { labels: { usePointStyle: true, boxWidth: 8, font: { family: FONT, size: 11 } } },
   },
 };
+
+/** Soft vertical guide under the hovered point */
+const salesHoverLine: Plugin<'line'> = {
+  id: 'salesHoverLine',
+  afterDatasetsDraw(chart) {
+    const active = chart.getActiveElements()?.[0];
+    if (!active) return;
+    const { ctx, chartArea } = chart;
+    const x = active.element.x;
+    ctx.save();
+    ctx.beginPath();
+    ctx.setLineDash([4, 4]);
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = 'rgba(14, 165, 233, 0.45)';
+    ctx.moveTo(x, chartArea.top);
+    ctx.lineTo(x, chartArea.bottom);
+    ctx.stroke();
+    ctx.restore();
+  },
+};
+
+function formatChartDateLabel(isoDate: string) {
+  const d = new Date(`${isoDate}T12:00:00`);
+  if (Number.isNaN(d.getTime())) return isoDate.slice(5);
+  return d.toLocaleDateString('en-KE', { month: 'short', day: 'numeric' });
+}
 
 export function DashboardPage() {
   const location = useLocation();
   const accessDenied = (location.state as { accessDenied?: boolean } | null)?.accessDenied;
   const [activeTab, setActiveTab] = useState(0);
-  const [chartDays, setChartDays] = useState('1');
+  const [chartDays, setChartDays] = useState('7');
+  const salesChartRef = useRef<ChartJS<'line'> | null>(null);
 
   const { data: kpis, isLoading, isError, refetch, isFetching } = useQuery({
     queryKey: ['dashboard-kpis'],
@@ -77,6 +109,104 @@ export function DashboardPage() {
     queryFn: () => dashboardApi.getCharts(Number(chartDays)).then((r) => r.data.data as DashboardCharts),
     enabled: activeTab === 0,
   });
+
+  const salesFill = (ctx: ScriptableContext<'line'>) => {
+    const chart = ctx.chart;
+    const { ctx: c, chartArea } = chart;
+    if (!chartArea) return 'rgba(14, 165, 233, 0.12)';
+    const gradient = c.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
+    gradient.addColorStop(0, 'rgba(14, 165, 233, 0.38)');
+    gradient.addColorStop(0.55, 'rgba(37, 99, 235, 0.12)');
+    gradient.addColorStop(1, 'rgba(37, 99, 235, 0.02)');
+    return gradient;
+  };
+
+  const salesChartData = useMemo(
+    () => ({
+      labels: charts?.salesTrend?.map((d) => formatChartDateLabel(d.date)) || [],
+      datasets: [
+        {
+          label: 'Sales',
+          data: charts?.salesTrend?.map((d) => d.amount) || [],
+          borderColor: '#0ea5e9',
+          backgroundColor: salesFill,
+          fill: true,
+          tension: 0.4,
+          borderWidth: 2.5,
+          pointRadius: 0,
+          pointHoverRadius: 6,
+          pointBackgroundColor: '#fff',
+          pointBorderColor: '#0ea5e9',
+          pointBorderWidth: 2.5,
+          pointHoverBackgroundColor: '#0ea5e9',
+          pointHoverBorderColor: '#fff',
+          pointHoverBorderWidth: 3,
+          cubicInterpolationMode: 'monotone' as const,
+        },
+      ],
+    }),
+    [charts?.salesTrend]
+  );
+
+  const salesChartOptions: ChartOptions<'line'> = useMemo(
+    () => ({
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      hover: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          enabled: true,
+          displayColors: false,
+          backgroundColor: 'rgba(15, 23, 42, 0.94)',
+          titleColor: '#e2e8f0',
+          bodyColor: '#fff',
+          titleFont: { family: FONT, size: 12, weight: 500 },
+          bodyFont: { family: FONT, size: 14, weight: 700 },
+          padding: { top: 10, right: 14, bottom: 10, left: 14 },
+          cornerRadius: 12,
+          caretSize: 6,
+          caretPadding: 8,
+          borderColor: 'rgba(148, 163, 184, 0.25)',
+          borderWidth: 1,
+          callbacks: {
+            title: (items) => items[0]?.label || '',
+            label: (item) => formatCurrency(Number(item.raw) || 0),
+          },
+        },
+      },
+      scales: {
+        x: {
+          grid: { display: false },
+          border: { display: false },
+          ticks: {
+            color: '#64748b',
+            maxTicksLimit: chartDays === '90' ? 8 : 10,
+            font: { size: 11, family: FONT, weight: 500 },
+            padding: 8,
+          },
+        },
+        y: {
+          beginAtZero: true,
+          border: { display: false },
+          grid: { color: 'rgba(148, 163, 184, 0.18)' },
+          ticks: {
+            color: '#64748b',
+            font: { size: 11, family: FONT },
+            padding: 10,
+            callback: (value) => {
+              const n = Number(value);
+              if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(n % 1_000_000 === 0 ? 0 : 1)}M`;
+              if (n >= 1_000) return `${(n / 1_000).toFixed(n % 1_000 === 0 ? 0 : 1)}k`;
+              return String(n);
+            },
+          },
+        },
+      },
+    }),
+    [chartDays]
+  );
 
   if (isLoading) {
     return (
@@ -103,32 +233,16 @@ export function DashboardPage() {
   const hasSalesTrend = salesTotal > 0;
   const hasCategories = (charts?.productCategories?.length || 0) > 0;
   const hasTopSellers = (kpis.topSellingProducts?.length || 0) > 0;
-
-  const salesChartData = {
-    labels: charts?.salesTrend?.map((d) => d.date.slice(5)) || [],
-    datasets: [
-      {
-        label: 'Sales (KES)',
-        data: charts?.salesTrend?.map((d) => d.amount) || [],
-        borderColor: '#2563eb',
-        backgroundColor: 'rgba(37, 99, 235, 0.12)',
-        fill: true,
-        tension: 0.35,
-        pointRadius: 0,
-        pointHoverRadius: 4,
-        borderWidth: 2,
-      },
-    ],
-  };
+  const daysLabel = CHART_DAYS_OPTIONS.find((o) => o.value === chartDays)?.label || `Last ${chartDays} days`;
 
   const categoryData = {
     labels: charts?.productCategories?.map((c) => c.category) || [],
     datasets: [
       {
         data: charts?.productCategories?.map((c) => c.count) || [],
-        backgroundColor: ['#2563eb', '#3b82f6', '#0ea5e9', '#0284c7', '#1d4ed8', '#0369a1', '#1e40af', '#0891b2'],
+        backgroundColor: ['#0ea5e9', '#2563eb', '#38bdf8', '#0284c7', '#1d4ed8', '#0369a1', '#1e40af', '#0891b2'],
         borderWidth: 0,
-        hoverOffset: 6,
+        hoverOffset: 8,
       },
     ],
   };
@@ -176,9 +290,18 @@ export function DashboardPage() {
       {activeTab === 0 && (
         <div className="space-y-4">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            <Card title={`Sales trend (${chartDays} days)`} className="lg:col-span-2">
+            <Card
+              title="Sales trend"
+              action={
+                <span className="text-xs font-medium text-slate-500 tabular-nums">
+                  {daysLabel}
+                  {hasSalesTrend ? ` · ${formatCurrency(salesTotal)}` : ''}
+                </span>
+              }
+              className="lg:col-span-2"
+            >
               {chartsLoading ? (
-                <LoadingSpinner className="h-52" size="sm" />
+                <LoadingSpinner className="h-64" size="sm" />
               ) : chartsError ? (
                 <Alert variant="error">
                   Failed to load chart.{' '}
@@ -187,19 +310,16 @@ export function DashboardPage() {
                   </button>
                 </Alert>
               ) : hasSalesTrend ? (
-                <Line
-                  data={salesChartData}
-                  options={{
-                    ...chartDefaults,
-                    plugins: { ...chartDefaults.plugins, legend: { display: false } },
-                    scales: {
-                      x: { grid: { display: false }, ticks: { color: '#64748b', maxTicksLimit: 10, font: { size: 11, family: 'Plus Jakarta Sans' } } },
-                      y: { beginAtZero: true, grid: { color: '#f1f5f9' }, ticks: { color: '#64748b', font: { size: 11, family: 'Plus Jakarta Sans' } } },
-                    },
-                  }}
-                />
+                <div className="h-64 sm:h-72 -mx-1">
+                  <Line
+                    ref={salesChartRef}
+                    data={salesChartData}
+                    options={salesChartOptions}
+                    plugins={[salesHoverLine]}
+                  />
+                </div>
               ) : (
-                <EmptyState title="No sales in this period" description="Sales invoices will appear here once recorded." />
+                <EmptyState title="No sales in this period" />
               )}
             </Card>
 
@@ -215,12 +335,29 @@ export function DashboardPage() {
                     options={{
                       ...chartDefaults,
                       maintainAspectRatio: false,
-                      plugins: { ...chartDefaults.plugins, legend: { position: 'bottom' } },
+                      plugins: {
+                        ...chartDefaults.plugins,
+                        legend: { position: 'bottom' },
+                        tooltip: {
+                          backgroundColor: 'rgba(15, 23, 42, 0.94)',
+                          titleFont: { family: FONT, size: 12 },
+                          bodyFont: { family: FONT, size: 13, weight: 600 },
+                          padding: 12,
+                          cornerRadius: 10,
+                          callbacks: {
+                            label: (item) => {
+                              const label = item.label || '';
+                              const value = Number(item.raw) || 0;
+                              return ` ${label}: ${value}`;
+                            },
+                          },
+                        },
+                      },
                     }}
                   />
                 </div>
               ) : (
-                <EmptyState title="No products yet" description="Add products to see category breakdown." />
+                <EmptyState title="No products yet" />
               )}
             </Card>
           </div>
@@ -246,7 +383,7 @@ export function DashboardPage() {
                 ))}
               </ul>
             ) : (
-              <EmptyState title="No sales data yet" description="Top sellers will appear after orders are invoiced." />
+              <EmptyState title="No sales data yet" />
             )}
           </Card>
         </div>
