@@ -185,16 +185,61 @@ server {
 
 ## 8. Backup & restore
 
-### Backup
+### Automated backups on the VPS (recommended)
+
+After deploy, SSH into Contabo and run once:
 
 ```bash
-docker compose exec mysql mysqldump -u erp_user -perp_password filter_erp > backup_$(date +%F).sql
+cd ~/Abexcore
+git pull origin main
+chmod +x scripts/server-backup.sh scripts/server-restore.sh scripts/install-backup-cron.sh
+./scripts/install-backup-cron.sh
+./scripts/server-backup.sh    # test immediately
 ```
 
-### Restore
+This installs a **daily cron job at 02:00** (server local time) that backs up:
+
+| Item | File |
+|------|------|
+| MySQL database | `~/Abexcore-backups/YYYY-MM-DD/database.sql.gz` |
+| Uploaded files (logos, avatars, products) | `uploads.tar.gz` |
+| Generated reports | `reports.tar.gz` |
+| Single download bundle | `~/Abexcore-backups/abexcore_backup_YYYYMMDD_HHMMSS.tar.gz` |
+
+Backups older than **14 days** are removed automatically (`RETAIN_DAYS=14`).
+
+**Important:** Copy the `.tar.gz` bundle off the server regularly (Google Drive, another PC, Contabo snapshot, etc.). Backups on the same disk do not protect against server failure.
+
+Logs: `/var/log/abexcore-backup.log`
+
+### Manual backup (quick)
 
 ```bash
-docker compose exec -T mysql mysql -u erp_user -perp_password filter_erp < backup_2026-07-14.sql
+cd ~/Abexcore
+docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env exec -T mysql \
+  sh -c 'mysqldump -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" --single-transaction "$MYSQL_DATABASE"' \
+  | gzip > ~/erp_backup_$(date +%F).sql.gz
+```
+
+Or use `./scripts/server-backup.sh` for database + uploads + reports.
+
+### Restore from server backup
+
+```bash
+cd ~/Abexcore
+./scripts/server-restore.sh ~/Abexcore-backups/2026-08-14
+# or from bundle:
+./scripts/server-restore.sh ~/Abexcore-backups/abexcore_backup_20260814_020001.tar.gz
+```
+
+Type `RESTORE` when prompted. Take a fresh backup before restoring.
+
+### Legacy / CI backup scripts
+
+`scripts/backup-mysql.sh` + `DATABASE_URL` — for local dev or GitHub Actions (`BACKUP_DATABASE_URL` secret).
+
+```bash
+docker compose exec -T mysql mysql -u erp_user -p"$MYSQL_PASSWORD" filter_erp < backup_2026-07-14.sql
 ```
 
 ---
