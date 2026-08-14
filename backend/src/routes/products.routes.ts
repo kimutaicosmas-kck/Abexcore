@@ -9,10 +9,12 @@ import { getParam, getQuery } from '../utils/request';
 import { ProductService } from '../services/catalog.service';
 import prisma from '../config/database';
 import { productImageUpload } from '../middleware/upload';
+import { acceptExcelUpload } from '../middleware/excelImport';
 import { compressProductImage } from '../utils/image';
 import { AccountingService } from '../services/accounting.service';
 import { injectTenantData } from '../utils/tenant';
 import { StockMovementService } from '../services/inventory.service';
+import { ExcelImportService } from '../services/excel-import.service';
 
 const router = Router();
 router.use(authenticate);
@@ -27,6 +29,29 @@ router.get(
   authorize('products:read'),
   asyncHandler(async (_req: AuthRequest, res: Response) => {
     const data = await ProductService.getStats();
+    res.json({ success: true, data });
+  })
+);
+
+router.get(
+  '/import/template',
+  authorize('products:create'),
+  asyncHandler(async (_req: AuthRequest, res: Response) => {
+    const buffer = await ExcelImportService.buildTemplate('products');
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', 'attachment; filename="products-import-template.xlsx"');
+    res.send(buffer);
+  })
+);
+
+router.post(
+  '/import',
+  authorize('products:create'),
+  acceptExcelUpload,
+  auditLog('products', 'import', 'product'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    if (!req.file?.buffer) throw new AppError('Spreadsheet file is required', 400);
+    const data = await ExcelImportService.import('products', req.file.buffer, req.user!.id);
     res.json({ success: true, data });
   })
 );

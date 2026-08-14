@@ -44,6 +44,7 @@ import {
 } from '../components/ui';
 import { Modal } from '../components/ui/Modal';
 import { CustomerForm } from '../components/forms/CustomerForm';
+import { ExcelImportModal } from '../components/forms/ExcelImportModal';
 import { ComplaintForm } from '../components/forms/ComplaintForm';
 import { OpportunityForm } from '../components/forms/OpportunityForm';
 import { ComplaintResolveForm } from '../components/forms/ComplaintResolveForm';
@@ -143,6 +144,7 @@ export function CustomersPage() {
   const [warrSearch, setWarrSearch] = useState('');
 
   const [customerModalOpen, setCustomerModalOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [complaintModalOpen, setComplaintModalOpen] = useState(false);
   const [opportunityModalOpen, setOpportunityModalOpen] = useState(false);
   const [warrantyModalOpen, setWarrantyModalOpen] = useState(false);
@@ -581,10 +583,16 @@ export function CustomersPage() {
 
   const toolbarActions = canCreate
     ? activeTab === 0 ? (
-        <Button size="sm" onClick={openCreate}>
-          <Plus className="h-4 w-4 mr-1.5" />
-          Add Customer
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button size="sm" variant="secondary" onClick={() => setImportOpen(true)}>
+            <FileSpreadsheet className="h-4 w-4 mr-1.5" />
+            Import Excel
+          </Button>
+          <Button size="sm" onClick={openCreate}>
+            <Plus className="h-4 w-4 mr-1.5" />
+            Add Customer
+          </Button>
+        </div>
       ) : activeTab === 1 ? (
         <Button size="sm" onClick={() => setComplaintModalOpen(true)}>
           <Plus className="h-4 w-4 mr-1.5" />
@@ -861,6 +869,16 @@ export function CustomersPage() {
       <Modal open={customerModalOpen} onClose={() => { setCustomerModalOpen(false); setEditing(null); }} title={editing ? 'Edit Customer' : 'Add Customer'} size="lg">
         <CustomerForm customer={editing} onSuccess={() => { setCustomerModalOpen(false); setEditing(null); }} onCancel={() => { setCustomerModalOpen(false); setEditing(null); }} />
       </Modal>
+
+      <ExcelImportModal
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        entity="customers"
+        onSuccess={() => {
+          queryClient.invalidateQueries({ queryKey: ['customers'] });
+          queryClient.invalidateQueries({ queryKey: ['crm-stats'] });
+        }}
+      />
 
       <Modal open={complaintModalOpen} onClose={() => setComplaintModalOpen(false)} title="Add Complaint" size="lg">
         <ComplaintForm onSuccess={() => setComplaintModalOpen(false)} onCancel={() => setComplaintModalOpen(false)} />

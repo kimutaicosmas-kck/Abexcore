@@ -44,6 +44,7 @@ import { PurchaseOrderForm } from '../components/forms/PurchaseOrderForm';
 import { RequisitionForm } from '../components/forms/RequisitionForm';
 import { GoodsReceiptForm } from '../components/forms/GoodsReceiptForm';
 import { SupplierForm } from '../components/forms/SupplierForm';
+import { ExcelImportModal } from '../components/forms/ExcelImportModal';
 import { RfqForm } from '../components/forms/RfqForm';
 import { RfqDetailPanel } from '../components/forms/RfqDetailPanel';
 import { useAuth } from '../contexts/AuthContext';
@@ -119,6 +120,7 @@ export function ProcurementPage() {
   const [supSearch, setSupSearch] = useState('');
 
   const [modalType, setModalType] = useState<ModalType>(null);
+  const [importOpen, setImportOpen] = useState(false);
   const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null);
   const [rfqRequisitionId, setRfqRequisitionId] = useState<string | null>(null);
   const [selectedRfq, setSelectedRfq] = useState<Record<string, unknown> | null>(null);
@@ -574,14 +576,27 @@ export function ProcurementPage() {
             New Purchase Order
           </Button>
         )
-      : tabActions[activeTab]
+      : activeTab === 4
         ? (
-            <Button size="sm" onClick={() => openModal(tabActions[activeTab].type)}>
-              <Plus className="h-4 w-4 mr-1.5" />
-              {tabActions[activeTab].label}
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              <Button size="sm" variant="secondary" onClick={() => setImportOpen(true)}>
+                <FileSpreadsheet className="h-4 w-4 mr-1.5" />
+                Import Excel
+              </Button>
+              <Button size="sm" onClick={() => openModal('supplier')}>
+                <Plus className="h-4 w-4 mr-1.5" />
+                Add Supplier
+              </Button>
+            </div>
           )
-        : undefined);
+        : tabActions[activeTab]
+          ? (
+              <Button size="sm" onClick={() => openModal(tabActions[activeTab].type)}>
+                <Plus className="h-4 w-4 mr-1.5" />
+                {tabActions[activeTab].label}
+              </Button>
+            )
+          : undefined);
 
   return (
     <div className="space-y-4">
@@ -795,6 +810,16 @@ export function ProcurementPage() {
         {modalType === 'supplier' && <SupplierForm supplier={editingSupplier} onSuccess={closeModal} onCancel={closeModal} />}
         {modalType === 'rfq' && rfqRequisitionId && <RfqForm requisitionId={rfqRequisitionId} onSuccess={closeModal} onCancel={closeModal} />}
       </Modal>
+
+      <ExcelImportModal
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        entity="suppliers"
+        onSuccess={() => {
+          queryClient.invalidateQueries({ queryKey: ['suppliers'] });
+          queryClient.invalidateQueries({ queryKey: ['procurement-stats'] });
+        }}
+      />
 
       <Modal open={selectedRfq !== null} onClose={() => setSelectedRfq(null)} title="RFQ — Supplier Quotes" size="lg">
         {selectedRfq && (

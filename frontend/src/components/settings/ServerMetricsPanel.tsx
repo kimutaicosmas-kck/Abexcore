@@ -1,6 +1,17 @@
 import { useQuery } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
-import { Activity, Cpu, HardDrive, MemoryStick, RefreshCw, Server } from 'lucide-react';
+import {
+  Activity,
+  Cpu,
+  Database,
+  HardDrive,
+  MemoryStick,
+  RefreshCw,
+  Server,
+  Timer,
+  AlertTriangle,
+  Layers,
+} from 'lucide-react';
 import { systemApi } from '../../services/api';
 import { ApiErrorAlert, Button, Card, PageQueryStatus, StatCard, StatGrid } from '../ui';
 import type { SystemMetrics } from '../../types';
@@ -19,6 +30,12 @@ function formatUptime(seconds: number): string {
   if (days > 0) return `${days}d ${hours}h`;
   if (hours > 0) return `${hours}h ${minutes}m`;
   return `${minutes}m`;
+}
+
+function formatMs(ms: number): string {
+  if (!Number.isFinite(ms) || ms <= 0) return '0 ms';
+  if (ms >= 1000) return `${(ms / 1000).toFixed(2)} s`;
+  return `${ms.toFixed(ms >= 100 ? 0 : 1)} ms`;
 }
 
 function UsageBar({ percent, tone }: { percent: number; tone: 'cpu' | 'memory' | 'disk' }) {
@@ -101,6 +118,15 @@ export function ServerMetricsPanel() {
     ? `${formatBytes(data.disk.usedBytes)} used · ${formatBytes(data.disk.freeBytes)} free`
     : 'Disk stats unavailable';
 
+  const mysqlConnected = data.mysql.threadsConnected;
+  const mysqlMax = data.mysql.maxConnections;
+  const redisMem = data.redis.usedMemoryBytes;
+  const redisLabel = !data.redis.configured
+    ? 'Not configured'
+    : !data.redis.connected
+      ? 'Disconnected'
+      : data.redis.usedMemoryHuman || (redisMem != null ? formatBytes(redisMem) : '—');
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -146,6 +172,45 @@ export function ServerMetricsPanel() {
           value={formatUptime(data.host.uptimeSeconds)}
           icon={<Activity className="h-5 w-5 text-white" />}
           color="from-orange-500 to-orange-700"
+        />
+      </StatGrid>
+
+      <StatGrid>
+        <StatCard
+          title="MySQL connections"
+          value={mysqlConnected != null ? String(mysqlConnected) : '—'}
+          icon={<Database className="h-5 w-5 text-white" />}
+          color="from-cyan-500 to-cyan-700"
+        />
+        <StatCard
+          title="Redis memory"
+          value={redisLabel}
+          icon={<MemoryStick className="h-5 w-5 text-white" />}
+          color="from-rose-500 to-rose-700"
+        />
+        <StatCard
+          title="Queue length"
+          value={data.queue.configured ? String(data.queue.waiting + data.queue.active) : '—'}
+          icon={<Layers className="h-5 w-5 text-white" />}
+          color="from-indigo-500 to-indigo-700"
+        />
+        <StatCard
+          title="API p95"
+          value={data.api.sampleCount ? formatMs(data.api.p95Ms) : 'Sampling…'}
+          icon={<Timer className="h-5 w-5 text-white" />}
+          color="from-teal-500 to-teal-700"
+        />
+        <StatCard
+          title="Failed jobs"
+          value={data.queue.configured ? String(data.queue.failed) : '—'}
+          icon={<AlertTriangle className="h-5 w-5 text-white" />}
+          color="from-amber-500 to-amber-700"
+        />
+        <StatCard
+          title="Worker crashes"
+          value={data.process.workerCrashes != null ? String(data.process.workerCrashes) : '—'}
+          icon={<AlertTriangle className="h-5 w-5 text-white" />}
+          color="from-red-500 to-red-700"
         />
       </StatGrid>
 
@@ -217,6 +282,12 @@ export function ServerMetricsPanel() {
               <dd className="font-medium text-slate-900">{data.process.clusterWorkers}</dd>
             </div>
             <div>
+              <dt className="text-slate-500">Worker crashes</dt>
+              <dd className="font-medium text-slate-900">
+                {data.process.workerCrashes != null ? data.process.workerCrashes : '—'}
+              </dd>
+            </div>
+            <div>
               <dt className="text-slate-500">Process uptime</dt>
               <dd className="font-medium text-slate-900">{formatUptime(data.process.uptimeSeconds)}</dd>
             </div>
@@ -229,6 +300,151 @@ export function ServerMetricsPanel() {
               <dd className="font-medium text-slate-900">{formatBytes(data.process.memory.heapUsedBytes)}</dd>
             </div>
           </dl>
+        </Card>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <Card title="MySQL">
+          <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3 text-sm">
+            <div>
+              <dt className="text-slate-500">Threads connected</dt>
+              <dd className="font-medium text-slate-900 tabular-nums">
+                {mysqlConnected != null ? mysqlConnected : '—'}
+                {mysqlMax != null ? ` / ${mysqlMax}` : ''}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-slate-500">Threads running</dt>
+              <dd className="font-medium text-slate-900 tabular-nums">
+                {data.mysql.threadsRunning != null ? data.mysql.threadsRunning : '—'}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-slate-500">App pool limit</dt>
+              <dd className="font-medium text-slate-900 tabular-nums">{data.mysql.poolLimit}</dd>
+            </div>
+          </dl>
+        </Card>
+
+        <Card title="Redis">
+          <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3 text-sm">
+            <div>
+              <dt className="text-slate-500">Status</dt>
+              <dd className="font-medium text-slate-900">
+                {!data.redis.configured
+                  ? 'Not configured'
+                  : data.redis.connected
+                    ? 'Connected'
+                    : 'Disconnected'}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-slate-500">Used memory</dt>
+              <dd className="font-medium text-slate-900">
+                {data.redis.usedMemoryHuman ||
+                  (data.redis.usedMemoryBytes != null ? formatBytes(data.redis.usedMemoryBytes) : '—')}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-slate-500">Peak memory</dt>
+              <dd className="font-medium text-slate-900">
+                {data.redis.usedMemoryPeakBytes != null
+                  ? formatBytes(data.redis.usedMemoryPeakBytes)
+                  : '—'}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-slate-500">Max memory</dt>
+              <dd className="font-medium text-slate-900">
+                {data.redis.maxMemoryBytes != null ? formatBytes(data.redis.maxMemoryBytes) : '—'}
+              </dd>
+            </div>
+          </dl>
+        </Card>
+
+        <Card title="Job queue">
+          <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3 text-sm">
+            <div>
+              <dt className="text-slate-500">Waiting</dt>
+              <dd className="font-medium text-slate-900 tabular-nums">
+                {data.queue.configured ? data.queue.waiting : '—'}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-slate-500">Active</dt>
+              <dd className="font-medium text-slate-900 tabular-nums">
+                {data.queue.configured ? data.queue.active : '—'}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-slate-500">Failed</dt>
+              <dd className="font-medium text-slate-900 tabular-nums">
+                {data.queue.configured ? data.queue.failed : '—'}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-slate-500">Status</dt>
+              <dd className="font-medium text-slate-900">
+                {!data.queue.configured
+                  ? 'Not configured'
+                  : data.queue.connected
+                    ? 'Connected'
+                    : 'Disconnected'}
+              </dd>
+            </div>
+          </dl>
+        </Card>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <Card title="API response time">
+          <dl className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-3 text-sm">
+            <div>
+              <dt className="text-slate-500">Avg</dt>
+              <dd className="font-medium text-slate-900 tabular-nums">{formatMs(data.api.avgMs)}</dd>
+            </div>
+            <div>
+              <dt className="text-slate-500">p50</dt>
+              <dd className="font-medium text-slate-900 tabular-nums">{formatMs(data.api.p50Ms)}</dd>
+            </div>
+            <div>
+              <dt className="text-slate-500">p95</dt>
+              <dd className="font-medium text-slate-900 tabular-nums">{formatMs(data.api.p95Ms)}</dd>
+            </div>
+            <div>
+              <dt className="text-slate-500">p99</dt>
+              <dd className="font-medium text-slate-900 tabular-nums">{formatMs(data.api.p99Ms)}</dd>
+            </div>
+            <div>
+              <dt className="text-slate-500">Max</dt>
+              <dd className="font-medium text-slate-900 tabular-nums">{formatMs(data.api.maxMs)}</dd>
+            </div>
+            <div>
+              <dt className="text-slate-500">Requests / 5xx</dt>
+              <dd className="font-medium text-slate-900 tabular-nums">
+                {data.api.requestCount} / {data.api.errorCount}
+              </dd>
+            </div>
+          </dl>
+        </Card>
+
+        <Card title="Recent failed jobs">
+          {!data.queue.configured ? (
+            <p className="text-sm text-slate-500">Set REDIS_URL to enable the job queue.</p>
+          ) : data.queue.recentFailed.length === 0 ? (
+            <p className="text-sm text-slate-500">No failed jobs recorded.</p>
+          ) : (
+            <ul className="space-y-2 text-sm max-h-48 overflow-auto">
+              {data.queue.recentFailed.map((job) => (
+                <li key={job.id} className="rounded-lg border border-amber-100 bg-amber-50/60 px-3 py-2">
+                  <p className="font-medium text-slate-900">{job.name}</p>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    {new Date(job.failedAt).toLocaleString()} · {job.error}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          )}
         </Card>
       </div>
     </div>

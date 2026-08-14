@@ -52,8 +52,12 @@ export const config = {
       'dev-encryption-key-change-in-production-32b'
     ),
   },
-  /** 0 = auto (production: min(cpus, 4)). Set CLUSTER_WORKERS=1 to disable cluster mode. */
+  /** 0 = auto (production: min(cpus, 4)). Default docker/prod uses 4. Set CLUSTER_WORKERS=1 to disable cluster. */
   clusterWorkers: parseInt(process.env.CLUSTER_WORKERS || '0', 10) || 0,
+  redis: {
+    /** Optional. When set, enables queue + Redis memory metrics. */
+    url: process.env.REDIS_URL || '',
+  },
   dbPool: {
     connectionLimit: parseInt(process.env.DB_POOL_CONNECTION_LIMIT || '10', 10),
     poolTimeout: parseInt(process.env.DB_POOL_TIMEOUT || '20', 10),

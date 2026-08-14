@@ -74,3 +74,21 @@ export const avatarUpload = multer({
     cb(null, ext && mime);
   },
 });
+
+/** Spreadsheet uploads kept in memory for ExcelJS parsing (max 10MB). */
+export const excelUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    const allowedExt = ['.xlsx', '.xls', '.csv'];
+    const allowedMime = [
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'application/vnd.ms-excel',
+      'text/csv',
+      'application/csv',
+      'application/octet-stream',
+    ];
+    cb(null, allowedExt.includes(ext) || allowedMime.includes(file.mimetype));
+  },
+});

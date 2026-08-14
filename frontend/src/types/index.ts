@@ -1120,6 +1120,44 @@ export interface SystemMetrics {
       externalBytes: number;
     };
     clusterWorkers: number;
+    workerCrashes: number | null;
+  };
+  mysql: {
+    threadsConnected: number | null;
+    maxConnections: number | null;
+    threadsRunning: number | null;
+    poolLimit: number;
+  };
+  redis: {
+    configured: boolean;
+    connected: boolean;
+    usedMemoryBytes: number | null;
+    usedMemoryPeakBytes: number | null;
+    maxMemoryBytes: number | null;
+    usedMemoryHuman: string | null;
+  };
+  queue: {
+    configured: boolean;
+    connected: boolean;
+    waiting: number;
+    active: number;
+    failed: number;
+    recentFailed: {
+      id: string;
+      name: string;
+      failedAt: string;
+      error: string;
+    }[];
+  };
+  api: {
+    sampleCount: number;
+    requestCount: number;
+    errorCount: number;
+    avgMs: number;
+    p50Ms: number;
+    p95Ms: number;
+    p99Ms: number;
+    maxMs: number;
   };
   runtime: {
     nodeVersion: string;

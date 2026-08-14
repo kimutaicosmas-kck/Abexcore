@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Plus,
   Pencil,
@@ -14,6 +14,7 @@ import {
   Activity,
   ChevronRight,
   PackagePlus,
+  FileSpreadsheet,
 } from 'lucide-react';
 import { inventoryApi } from '../services/api';
 import {
@@ -37,6 +38,7 @@ import {
 } from '../components/ui';
 import { Modal } from '../components/ui/Modal';
 import { RawMaterialForm } from '../components/forms/RawMaterialForm';
+import { ExcelImportModal } from '../components/forms/ExcelImportModal';
 import { StockAdjustForm } from '../components/forms/StockAdjustForm';
 import { StockTransferForm } from '../components/forms/StockTransferForm';
 import { useAuth } from '../contexts/AuthContext';
@@ -70,6 +72,7 @@ function txTypeVariant(type: string): 'success' | 'danger' | 'warning' | 'info' 
 }
 
 export function InventoryPage() {
+  const queryClient = useQueryClient();
   const { hasPermission } = useAuth();
   const [activeTab, setActiveTab] = useState(0);
   const [stockPage, setStockPage] = useState(1);
@@ -82,6 +85,7 @@ export function InventoryPage() {
   const [txType, setTxType] = useState('');
 
   const [materialModalOpen, setMaterialModalOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [adjustModalOpen, setAdjustModalOpen] = useState(false);
   const [transferModalOpen, setTransferModalOpen] = useState(false);
   const [editingMaterial, setEditingMaterial] = useState<RawMaterial | null>(null);
@@ -329,10 +333,16 @@ export function InventoryPage() {
         )}
       </div>
     ) : activeTab === 1 ? (
-      <Button onClick={() => { setEditingMaterial(null); setMaterialModalOpen(true); }}>
-        <Plus className="h-4 w-4 mr-2" />
-        Add Material
-      </Button>
+      <div className="flex flex-wrap gap-2">
+        <Button variant="secondary" onClick={() => setImportOpen(true)}>
+          <FileSpreadsheet className="h-4 w-4 mr-2" />
+          Import Excel
+        </Button>
+        <Button onClick={() => { setEditingMaterial(null); setMaterialModalOpen(true); }}>
+          <Plus className="h-4 w-4 mr-2" />
+          Add Material
+        </Button>
+      </div>
     ) : undefined);
 
   return (
@@ -666,6 +676,19 @@ export function InventoryPage() {
           onCancel={() => { setMaterialModalOpen(false); setEditingMaterial(null); }}
         />
       </Modal>
+
+      <ExcelImportModal
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        entity="materials"
+        onSuccess={() => {
+          queryClient.invalidateQueries({ queryKey: ['materials'] });
+          queryClient.invalidateQueries({ queryKey: ['material-types'] });
+          queryClient.invalidateQueries({ queryKey: ['inventory-stats'] });
+          queryClient.invalidateQueries({ queryKey: ['stock-levels'] });
+          queryClient.invalidateQueries({ queryKey: ['low-stock'] });
+        }}
+      />
 
       <Modal open={adjustModalOpen} onClose={() => setAdjustModalOpen(false)} title="Stock Adjustment" size="lg">
         <StockAdjustForm onSuccess={() => setAdjustModalOpen(false)} onCancel={() => setAdjustModalOpen(false)} />

@@ -18,6 +18,8 @@ import { AccountingService } from '../services/accounting.service';
 import { ProcurementService } from '../services/procurement.service';
 import { Prisma, TransactionType } from '@prisma/client';
 import { isLowStock, sumStockQuantities, toStockQty } from '../utils/stock';
+import { ExcelImportService } from '../services/excel-import.service';
+import { acceptExcelUpload } from '../middleware/excelImport';
 
 const router = Router();
 router.use(authenticate);
@@ -26,6 +28,53 @@ router.use(mutationAudit('inventory'));
 function checkLowStockAlerts() {
   NotificationService.runLowStockCheckForAllCompanies().catch(() => undefined);
 }
+
+router.get(
+  '/materials/import/template',
+  authorize('inventory:create'),
+  asyncHandler(async (_req: AuthRequest, res: Response) => {
+    const buffer = await ExcelImportService.buildTemplate('materials');
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', 'attachment; filename="materials-import-template.xlsx"');
+    res.send(buffer);
+  })
+);
+
+router.post(
+  '/materials/import',
+  authorize('inventory:create'),
+  acceptExcelUpload,
+  auditLog('inventory', 'import', 'raw_material'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    if (!req.file?.buffer) throw new AppError('Spreadsheet file is required', 400);
+    const data = await ExcelImportService.import('materials', req.file.buffer, req.user!.id);
+    checkLowStockAlerts();
+    res.json({ success: true, data });
+  })
+);
+
+router.get(
+  '/suppliers/import/template',
+  authorize('procurement:create'),
+  asyncHandler(async (_req: AuthRequest, res: Response) => {
+    const buffer = await ExcelImportService.buildTemplate('suppliers');
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', 'attachment; filename="suppliers-import-template.xlsx"');
+    res.send(buffer);
+  })
+);
+
+router.post(
+  '/suppliers/import',
+  authorize('procurement:create'),
+  acceptExcelUpload,
+  auditLog('procurement', 'import', 'supplier'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    if (!req.file?.buffer) throw new AppError('Spreadsheet file is required', 400);
+    const data = await ExcelImportService.import('suppliers', req.file.buffer, req.user!.id);
+    res.json({ success: true, data });
+  })
+);
 
 router.get(
   '/stats',

@@ -11,6 +11,7 @@ import {
   FileText,
   ChevronRight,
   Boxes,
+  FileSpreadsheet,
 } from 'lucide-react';
 import { productsApi } from '../services/api';
 import {
@@ -34,6 +35,7 @@ import {
 } from '../components/ui';
 import { Modal } from '../components/ui/Modal';
 import { ProductForm } from '../components/forms/ProductForm';
+import { ExcelImportModal } from '../components/forms/ExcelImportModal';
 import { useAuth } from '../contexts/AuthContext';
 import { Product, ProductCategoryOption, ProductStats } from '../types';
 import { PART_NUMBER_LABEL, formatPartNumberLine } from '../utils/productDisplay';
@@ -103,6 +105,7 @@ export function ProductsPage() {
   const [isActive, setIsActive] = useState('');
 
   const [formOpen, setFormOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
   const [deactivateOpen, setDeactivateOpen] = useState(false);
   const [editing, setEditing] = useState<Product | null>(null);
@@ -247,10 +250,16 @@ export function ProductsPage() {
 
   const toolbarActions =
     canCreate && activeTabName === 'Catalog' ? (
-      <Button size="sm" onClick={openAddProduct}>
-        <Plus className="h-4 w-4 mr-1.5" />
-        Add Product
-      </Button>
+      <div className="flex flex-wrap gap-2">
+        <Button size="sm" variant="secondary" onClick={() => setImportOpen(true)}>
+          <FileSpreadsheet className="h-4 w-4 mr-1.5" />
+          Import Excel
+        </Button>
+        <Button size="sm" onClick={openAddProduct}>
+          <Plus className="h-4 w-4 mr-1.5" />
+          Add Product
+        </Button>
+      </div>
     ) : undefined;
 
   const subtitle =
@@ -380,13 +389,19 @@ export function ProductsPage() {
             <div className="p-6">
               <EmptyState
                 title="No products found"
-                description="Try different filters or add a new product."
+                description="Add products one by one, or import an Excel sheet with opening stock."
                 action={
                   canCreate ? (
-                    <Button onClick={openAddProduct}>
-                      <Plus className="h-4 w-4 mr-2" />
-                      Add product
-                    </Button>
+                    <div className="flex flex-wrap gap-2 justify-center">
+                      <Button variant="secondary" onClick={() => setImportOpen(true)}>
+                        <FileSpreadsheet className="h-4 w-4 mr-2" />
+                        Import Excel
+                      </Button>
+                      <Button onClick={openAddProduct}>
+                        <Plus className="h-4 w-4 mr-2" />
+                        Add product
+                      </Button>
+                    </div>
                   ) : undefined
                 }
               />
@@ -434,6 +449,21 @@ export function ProductsPage() {
           }}
         />
       </Modal>
+
+      <ExcelImportModal
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        entity="products"
+        onSuccess={() => {
+          queryClient.invalidateQueries({ queryKey: ['products'] });
+          queryClient.invalidateQueries({ queryKey: ['product-stats'] });
+          queryClient.invalidateQueries({ queryKey: ['product-categories'] });
+          queryClient.invalidateQueries({ queryKey: ['stock-levels'] });
+          queryClient.invalidateQueries({ queryKey: ['inventory-stats'] });
+          queryClient.invalidateQueries({ queryKey: ['low-stock'] });
+          queryClient.invalidateQueries({ queryKey: ['dashboard-kpis'] });
+        }}
+      />
 
       <Modal
         open={detailOpen}

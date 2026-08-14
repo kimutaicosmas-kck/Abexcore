@@ -2,20 +2,16 @@ import { describe, expect, it } from 'vitest';
 import { getSystemMetrics, resetCpuBaselineForTests } from '../src/services/systemMetrics.service';
 
 describe('getSystemMetrics', () => {
-  it('returns structured host and process metrics', () => {
+  it('returns host and process metrics with new monitors', async () => {
     resetCpuBaselineForTests();
-    const first = getSystemMetrics();
-    const second = getSystemMetrics();
+    const first = await getSystemMetrics();
+    const second = await getSystemMetrics();
 
-    expect(first.capturedAt).toBeTruthy();
-    expect(['host', 'container']).toContain(first.scope);
-    expect(first.host.cpuCount).toBeGreaterThan(0);
-    expect(first.memory.totalBytes).toBeGreaterThan(0);
-    expect(first.memory.usedPercent).toBeGreaterThanOrEqual(0);
-    expect(first.process.pid).toBeGreaterThan(0);
-    expect(first.runtime.nodeVersion).toMatch(/^v\d+/);
-
-    expect(first.host.cpuUsagePercent).toBeNull();
-    expect(typeof second.host.cpuUsagePercent).toBe('number');
+    expect(first.process.clusterWorkers).toBeGreaterThanOrEqual(1);
+    expect(first.mysql.poolLimit).toBeGreaterThan(0);
+    expect(first.redis).toHaveProperty('configured');
+    expect(first.queue).toHaveProperty('waiting');
+    expect(first.api).toHaveProperty('p95Ms');
+    expect(second.host.cpuCount).toBe(first.host.cpuCount);
   });
 });

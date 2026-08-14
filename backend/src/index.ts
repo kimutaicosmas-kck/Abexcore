@@ -7,6 +7,12 @@ import { AuthService } from './services/auth.service';
 import { initMonitoring } from './utils/monitoring';
 import prisma from './config/database';
 import { forkWorkers, resolveClusterWorkers, shouldRunCluster } from './cluster';
+import {
+  enqueueJob,
+  registerJobHandler,
+  startQueueProcessor,
+} from './services/jobQueue.service';
+import { ensureRedisConnected, disconnectRedis } from './services/redis.service';
 import type { Server } from 'http';
 
 process.env.TZ = config.timezone;
@@ -25,16 +31,32 @@ async function runStartupMigrations() {
   );
 }
 
+function registerBackgroundHandlers() {
+  registerJobHandler('low-stock-check', async () => {
+    await NotificationService.runLowStockCheckForAllCompanies();
+  });
+}
+
 function startBackgroundJobs() {
-  NotificationService.runLowStockCheckForAllCompanies().catch((err) =>
-    logger.warn('Startup low-stock check failed', err)
+  registerBackgroundHandlers();
+  void ensureRedisConnected().then((redis) => {
+    if (redis) {
+      logger.info('Redis connected — job queue enabled');
+      startQueueProcessor();
+    } else if (config.redis.url) {
+      logger.warn('REDIS_URL set but Redis is unreachable — jobs run inline');
+    }
+  });
+
+  void enqueueJob('low-stock-check').catch((err) =>
+    logger.warn('Startup low-stock enqueue failed', err)
   );
 
   const lowStockIntervalMs =
     config.nodeEnv === 'production' ? 6 * 60 * 60 * 1000 : 60 * 60 * 1000;
 
   setInterval(() => {
-    NotificationService.runLowStockCheckForAllCompanies().catch(() => undefined);
+    void enqueueJob('low-stock-check').catch(() => undefined);
   }, lowStockIntervalMs).unref();
 }
 
@@ -59,8 +81,9 @@ async function startWorker() {
     server.close(async () => {
       try {
         await prisma.$disconnect();
+        await disconnectRedis();
       } catch (error) {
-        logger.warn('Prisma disconnect failed during shutdown', error);
+        logger.warn('Disconnect failed during shutdown', error);
       }
       process.exit(0);
     });

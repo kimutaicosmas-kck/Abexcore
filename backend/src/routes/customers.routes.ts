@@ -16,10 +16,35 @@ import prisma from '../config/database';
 import { requireTenantId } from '../utils/tenant';
 import { isSalesBookOwner, SALES_PERSON_ROLE_NAMES } from '../config/rolePermissions';
 import { CustomerStatementService } from '../services/customerStatement.service';
+import { ExcelImportService } from '../services/excel-import.service';
+import { acceptExcelUpload } from '../middleware/excelImport';
 import { z } from 'zod';
 
 const router = Router();
 router.use(authenticate);
+
+router.get(
+  '/import/template',
+  authorize('customers:create'),
+  asyncHandler(async (_req: AuthRequest, res: Response) => {
+    const buffer = await ExcelImportService.buildTemplate('customers');
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', 'attachment; filename="customers-import-template.xlsx"');
+    res.send(buffer);
+  })
+);
+
+router.post(
+  '/import',
+  authorize('customers:create'),
+  acceptExcelUpload,
+  auditLog('customers', 'import', 'customer'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    if (!req.file?.buffer) throw new AppError('Spreadsheet file is required', 400);
+    const data = await ExcelImportService.import('customers', req.file.buffer, req.user!.id);
+    res.json({ success: true, data });
+  })
+);
 
 const customerService = createCrudService('customer', ['name', 'code', 'email'], {
   contacts: true,

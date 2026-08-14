@@ -3,6 +3,10 @@ import os from 'os';
 import { statfsSync } from 'fs';
 import { config } from '../config';
 import { resolveClusterWorkers } from '../cluster';
+import prisma from '../config/database';
+import { getApiLatencyStats } from '../utils/apiLatency';
+import { getRedisMemoryStats } from './redis.service';
+import { getQueueStats, getWorkerCrashCount } from './jobQueue.service';
 
 export type MetricsScope = 'host' | 'container';
 
@@ -41,6 +45,44 @@ export interface SystemMetricsSnapshot {
       externalBytes: number;
     };
     clusterWorkers: number;
+    workerCrashes: number | null;
+  };
+  mysql: {
+    threadsConnected: number | null;
+    maxConnections: number | null;
+    threadsRunning: number | null;
+    poolLimit: number;
+  };
+  redis: {
+    configured: boolean;
+    connected: boolean;
+    usedMemoryBytes: number | null;
+    usedMemoryPeakBytes: number | null;
+    maxMemoryBytes: number | null;
+    usedMemoryHuman: string | null;
+  };
+  queue: {
+    configured: boolean;
+    connected: boolean;
+    waiting: number;
+    active: number;
+    failed: number;
+    recentFailed: {
+      id: string;
+      name: string;
+      failedAt: string;
+      error: string;
+    }[];
+  };
+  api: {
+    sampleCount: number;
+    requestCount: number;
+    errorCount: number;
+    avgMs: number;
+    p50Ms: number;
+    p95Ms: number;
+    p99Ms: number;
+    maxMs: number;
   };
   runtime: {
     nodeVersion: string;
@@ -138,12 +180,49 @@ function buildMemory(scope: MetricsScope) {
   return { totalBytes, usedBytes, freeBytes, usedPercent };
 }
 
-export function getSystemMetrics(): SystemMetricsSnapshot {
+async function getMysqlStats(): Promise<SystemMetricsSnapshot['mysql']> {
+  const poolLimit = config.dbPool.connectionLimit;
+  try {
+    const rows = await prisma.$queryRawUnsafe<Array<{ Variable_name: string; Value: string }>>(
+      "SHOW STATUS WHERE Variable_name IN ('Threads_connected', 'Threads_running')"
+    );
+    const vars = await prisma.$queryRawUnsafe<Array<{ Variable_name: string; Value: string }>>(
+      "SHOW VARIABLES WHERE Variable_name = 'max_connections'"
+    );
+    const read = (list: Array<{ Variable_name: string; Value: string }>, name: string) => {
+      const row = list.find((r) => r.Variable_name === name);
+      return row ? Number(row.Value) : null;
+    };
+
+    return {
+      threadsConnected: read(rows, 'Threads_connected'),
+      threadsRunning: read(rows, 'Threads_running'),
+      maxConnections: read(vars, 'max_connections'),
+      poolLimit,
+    };
+  } catch {
+    return {
+      threadsConnected: null,
+      threadsRunning: null,
+      maxConnections: null,
+      poolLimit,
+    };
+  }
+}
+
+export async function getSystemMetrics(): Promise<SystemMetricsSnapshot> {
   const scope: MetricsScope = fs.existsSync('/host/proc/meminfo') ? 'host' : 'container';
   const hostLoad = scope === 'host' ? readHostLoadAverage() : null;
   const [load1, load5, load15] = os.loadavg();
   const mem = buildMemory(scope);
   const procMem = process.memoryUsage();
+
+  const [mysql, redis, queue, workerCrashes] = await Promise.all([
+    getMysqlStats(),
+    getRedisMemoryStats(),
+    getQueueStats(),
+    getWorkerCrashCount(),
+  ]);
 
   return {
     capturedAt: new Date().toISOString(),
@@ -169,7 +248,24 @@ export function getSystemMetrics(): SystemMetricsSnapshot {
         externalBytes: procMem.external,
       },
       clusterWorkers: resolveClusterWorkers(),
+      workerCrashes,
     },
+    mysql,
+    redis,
+    queue: {
+      configured: queue.configured,
+      connected: queue.connected,
+      waiting: queue.waiting,
+      active: queue.active,
+      failed: queue.failed,
+      recentFailed: queue.recentFailed.map((j) => ({
+        id: j.id,
+        name: j.name,
+        failedAt: j.failedAt,
+        error: j.error,
+      })),
+    },
+    api: getApiLatencyStats(),
     runtime: {
       nodeVersion: process.version,
       environment: config.nodeEnv,

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plus, Pencil, Users, Calendar, DollarSign, UserCheck, ChevronRight, Clock, Download, FileText, Wallet, CircleCheck } from 'lucide-react';
+import { Plus, Pencil, Users, Calendar, DollarSign, UserCheck, ChevronRight, Clock, Download, FileText, Wallet, CircleCheck, FileSpreadsheet } from 'lucide-react';
 import { hrApi } from '../services/api';
 import {
   PageHeader,
@@ -26,6 +26,7 @@ import {
 } from '../components/ui';
 import { Modal } from '../components/ui/Modal';
 import { EmployeeForm } from '../components/forms/EmployeeForm';
+import { ExcelImportModal } from '../components/forms/ExcelImportModal';
 import { AttendanceForm } from '../components/forms/AttendanceForm';
 import { LeaveForm } from '../components/forms/LeaveForm';
 import { PayrollForm } from '../components/forms/PayrollForm';
@@ -69,6 +70,7 @@ export function HRPage() {
   const { hasPermission } = useAuth();
   const [activeTab, setActiveTab] = useState(0);
   const [modal, setModal] = useState<HrModal>(null);
+  const [importOpen, setImportOpen] = useState(false);
   const [editing, setEditing] = useState<Employee | null>(null);
   const [empPage, setEmpPage] = useState(1);
   const [attPage, setAttPage] = useState(1);
@@ -454,10 +456,23 @@ export function HRPage() {
 
   const toolbarActions =
     canCreate && tabActions[activeTab] ? (
-      <Button size="sm" onClick={() => { setEditing(null); setModal(tabActions[activeTab].modal); }}>
-        <Plus className="h-4 w-4 mr-1.5" />
-        {tabActions[activeTab].label}
-      </Button>
+      activeTab === 0 ? (
+        <div className="flex flex-wrap gap-2">
+          <Button size="sm" variant="secondary" onClick={() => setImportOpen(true)}>
+            <FileSpreadsheet className="h-4 w-4 mr-1.5" />
+            Import Excel
+          </Button>
+          <Button size="sm" onClick={() => { setEditing(null); setModal(tabActions[activeTab].modal); }}>
+            <Plus className="h-4 w-4 mr-1.5" />
+            {tabActions[activeTab].label}
+          </Button>
+        </div>
+      ) : (
+        <Button size="sm" onClick={() => { setEditing(null); setModal(tabActions[activeTab].modal); }}>
+          <Plus className="h-4 w-4 mr-1.5" />
+          {tabActions[activeTab].label}
+        </Button>
+      )
     ) : undefined;
 
   return (
@@ -906,6 +921,16 @@ export function HRPage() {
         {modal === 'advance' && <SalaryAdvanceForm onSuccess={() => setModal(null)} onCancel={() => setModal(null)} />}
         {modal === 'payroll' && <PayrollForm onSuccess={() => setModal(null)} onCancel={() => setModal(null)} />}
       </Modal>
+
+      <ExcelImportModal
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        entity="employees"
+        onSuccess={() => {
+          queryClient.invalidateQueries({ queryKey: ['employees'] });
+          queryClient.invalidateQueries({ queryKey: ['hr-stats'] });
+        }}
+      />
 
       <Modal
         open={!!selectedAdvanceId}

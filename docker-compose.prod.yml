@@ -6,8 +6,9 @@ services:
     environment:
       # Fresh MySQL has no baseline migrations — always push schema in prod
       USE_DB_PUSH: "true"
-      # API workers per container (2–4 typical on VPS). Set 1 to disable cluster mode.
-      CLUSTER_WORKERS: ${CLUSTER_WORKERS:-2}
+      # API workers per container (default 4). Set 1 to disable cluster mode.
+      CLUSTER_WORKERS: ${CLUSTER_WORKERS:-4}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
       # 0 = off (unblocks shared-office NAT lockouts). Set to 100 later to re-enable per-email throttle.
       LOGIN_RATE_LIMIT_MAX: ${LOGIN_RATE_LIMIT_MAX:-0}
     volumes:

@@ -2,6 +2,7 @@ import cluster from 'node:cluster';
 import os from 'node:os';
 import { config } from './config';
 import { logger } from './config/logger';
+import { incrementWorkerCrashCount } from './services/jobQueue.service';
 
 export function resolveClusterWorkers(): number {
   const explicit = parseInt(process.env.CLUSTER_WORKERS || '', 10);
@@ -26,7 +27,13 @@ export function forkWorkers(count: number): void {
   }
 
   cluster.on('exit', (worker, code, signal) => {
-    logger.warn(`Worker ${worker.process.pid} exited (${code ?? signal}); restarting`);
+    const crashed = code !== 0 && code !== null;
+    logger.warn(
+      `Worker ${worker.process.pid} exited (${code ?? signal})${crashed ? ' — crash' : ''}; restarting`
+    );
+    if (crashed || signal) {
+      void incrementWorkerCrashCount().catch(() => undefined);
+    }
     cluster.fork();
   });
 }

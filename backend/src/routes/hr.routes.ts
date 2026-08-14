@@ -30,6 +30,8 @@ import { AccountingService } from '../services/accounting.service';
 import { LeaveService } from '../services/leave.service';
 import { ExportService } from '../services/export.service';
 import { SalaryAdvanceService } from '../services/salary-advance.service';
+import { ExcelImportService } from '../services/excel-import.service';
+import { acceptExcelUpload } from '../middleware/excelImport';
 import { Prisma } from '@prisma/client';
 import { parseLocalDateInput } from '../utils/date';
 import { injectTenantData } from '../utils/tenant';
@@ -43,6 +45,29 @@ router.get(
   authorize('hr:read'),
   asyncHandler(async (_req: AuthRequest, res: Response) => {
     const data = await HrService.getStats();
+    res.json({ success: true, data });
+  })
+);
+
+router.get(
+  '/employees/import/template',
+  authorize('hr:create'),
+  asyncHandler(async (_req: AuthRequest, res: Response) => {
+    const buffer = await ExcelImportService.buildTemplate('employees');
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', 'attachment; filename="employees-import-template.xlsx"');
+    res.send(buffer);
+  })
+);
+
+router.post(
+  '/employees/import',
+  authorize('hr:create'),
+  acceptExcelUpload,
+  auditLog('hr', 'import', 'employee'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    if (!req.file?.buffer) throw new AppError('Spreadsheet file is required', 400);
+    const data = await ExcelImportService.import('employees', req.file.buffer, req.user!.id);
     res.json({ success: true, data });
   })
 );

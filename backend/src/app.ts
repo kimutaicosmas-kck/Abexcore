@@ -8,6 +8,7 @@ import swaggerUi from 'swagger-ui-express';
 import swaggerJsdoc from 'swagger-jsdoc';
 import { config } from './config';
 import { createGlobalRateLimiter } from './middleware/globalRateLimiter';
+import { apiLatencyMiddleware } from './middleware/apiLatency';
 import { errorHandler, notFound } from './middleware/errorHandler';
 import { isCorsOriginAllowed } from './utils/corsOrigins';
 import { authenticate, requireSuperAdmin } from './middleware/auth';
@@ -65,6 +66,7 @@ export function createApp() {
   app.use(express.json({ limit: '10mb' }));
   app.use(express.urlencoded({ extended: true }));
   app.use(cookieParser());
+  app.use(apiLatencyMiddleware);
 
   // Global limiter: authenticated users get their own bucket (Bearer token key).
   // Auth login routes use dedicated limiters in auth.routes.

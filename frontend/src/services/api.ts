@@ -208,6 +208,12 @@ export const customersApi = {
   addContact: (customerId: string, data: object) => api.post(`/customers/${customerId}/contacts`, data),
   deleteContact: (customerId: string, contactId: string) =>
     api.delete(`/customers/${customerId}/contacts/${contactId}`),
+  importTemplatePath: '/customers/import/template',
+  importExcel: (file: File) => {
+    const form = new FormData();
+    form.append('file', file);
+    return api.post('/customers/import', form);
+  },
 };
 
 export const crmApi = {
@@ -245,6 +251,12 @@ export const productsApi = {
     const form = new FormData();
     form.append('image', file);
     return api.post(`/products/${id}/image`, form);
+  },
+  importTemplatePath: '/products/import/template',
+  importExcel: (file: File) => {
+    const form = new FormData();
+    form.append('file', file);
+    return api.post('/products/import', form);
   },
 };
 
@@ -293,6 +305,18 @@ export const inventoryApi = {
     api.patch(`/inventory/rfqs/${id}/award`, { quotationId }),
   updateQuotation: (id: string, data: object) =>
     api.patch(`/inventory/quotations/${id}`, data),
+  importMaterialsTemplatePath: '/inventory/materials/import/template',
+  importMaterialsExcel: (file: File) => {
+    const form = new FormData();
+    form.append('file', file);
+    return api.post('/inventory/materials/import', form);
+  },
+  importSuppliersTemplatePath: '/inventory/suppliers/import/template',
+  importSuppliersExcel: (file: File) => {
+    const form = new FormData();
+    form.append('file', file);
+    return api.post('/inventory/suppliers/import', form);
+  },
 };
 
 export const searchApi = {
@@ -380,6 +404,12 @@ export const hrApi = {
   repayAdvance: (id: string, data: object) => api.post(`/hr/advances/${id}/repay`, data),
   cancelAdvance: (id: string, data?: object) => api.patch(`/hr/advances/${id}/cancel`, data || {}),
   writeOffAdvance: (id: string, data?: object) => api.patch(`/hr/advances/${id}/write-off`, data || {}),
+  importEmployeesTemplatePath: '/hr/employees/import/template',
+  importEmployeesExcel: (file: File) => {
+    const form = new FormData();
+    form.append('file', file);
+    return api.post('/hr/employees/import', form);
+  },
 };
 
 export const maintenanceApi = {
