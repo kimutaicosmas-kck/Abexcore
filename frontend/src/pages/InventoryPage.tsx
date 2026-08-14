@@ -130,7 +130,6 @@ export function InventoryPage() {
   const { data: lowStock } = useQuery({
     queryKey: ['low-stock'],
     queryFn: () => inventoryApi.lowStock().then((r) => r.data.data),
-    enabled: activeTab === 3,
   });
 
   const { data: transactions, isLoading: txLoading } = useQuery({
@@ -185,9 +184,19 @@ export function InventoryPage() {
     {
       key: 'quantity',
       label: 'On hand',
-      render: (val: unknown) => (
-        <span className="font-semibold tabular-nums">{Number(val).toLocaleString()}</span>
-      ),
+      render: (val: unknown, row: Record<string, unknown>) => {
+        const qty = Number(val);
+        const product = row.product as { minStockLevel?: number } | undefined;
+        const material = row.rawMaterial as { minStockLevel?: number } | undefined;
+        const min = Number(product?.minStockLevel ?? material?.minStockLevel ?? 0);
+        const low = qty <= 0 || qty <= min;
+        return (
+          <span className={`font-semibold tabular-nums ${low ? 'text-red-600' : ''}`}>
+            {qty.toLocaleString()}
+            {low ? <span className="ml-1 text-xs font-medium">{qty <= 0 ? 'Out' : 'Low'}</span> : null}
+          </span>
+        );
+      },
     },
     {
       key: 'unitCost',
@@ -516,32 +525,53 @@ export function InventoryPage() {
           {(lowStock?.length || 0) === 0 ? (
             <EmptyState
               title="Inventory levels are healthy"
-              description="Every active material is above its minimum stock threshold."
+              description="No items are at zero stock or at/below their minimum stock level."
             />
           ) : (
             <div className="space-y-3">
               <Alert variant="warning">
-                <strong>{lowStock.length}</strong> material(s) are at or below minimum stock. Plan replenishment or
+                <strong>{lowStock.length}</strong> item(s) are at zero stock or at/below minimum. Plan replenishment or
                 adjust stock after a goods receipt.
               </Alert>
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-                {(lowStock as (RawMaterial & { stockLevels?: { quantity: number }[] })[]).map((item) => {
-                  const onHand = item.stockLevels?.reduce((s, l) => s + Number(l.quantity), 0) ?? 0;
+                {(
+                  lowStock as {
+                    id: string;
+                    name: string;
+                    code: string;
+                    unit: string;
+                    itemType?: 'RAW_MATERIAL' | 'PRODUCT';
+                    minStockLevel: number;
+                    currentStock?: number;
+                    stockLevels?: { quantity: number }[];
+                    materialType?: { name: string } | null;
+                    category?: { name: string } | null;
+                  }[]
+                ).map((item) => {
+                  const onHand =
+                    item.currentStock ??
+                    item.stockLevels?.reduce((s, l) => s + Number(l.quantity), 0) ??
+                    0;
                   const min = Number(item.minStockLevel);
-                  const pct = min > 0 ? Math.min(100, Math.round((onHand / min) * 100)) : 0;
+                  const pct = min > 0 ? Math.min(100, Math.round((onHand / min) * 100)) : onHand <= 0 ? 0 : 100;
+                  const kind = item.itemType === 'PRODUCT' ? 'Product' : 'Material';
+                  const subtype =
+                    item.itemType === 'PRODUCT'
+                      ? item.category?.name || 'Finished good'
+                      : item.materialType?.name || 'Uncategorized';
                   return (
                     <div
-                      key={item.id}
+                      key={`${item.itemType || 'RAW_MATERIAL'}-${item.id}`}
                       className="rounded-xl border border-red-100 bg-gradient-to-br from-red-50/80 to-white p-4"
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div>
                           <p className="font-semibold text-slate-900">{item.name}</p>
                           <p className="text-xs text-slate-500 mt-0.5">
-                            {item.code} · {item.materialType?.name || 'Uncategorized'}
+                            {item.code} · {kind} · {subtype}
                           </p>
                         </div>
-                        <Badge variant="danger">Low</Badge>
+                        <Badge variant="danger">{onHand <= 0 ? 'Out' : 'Low'}</Badge>
                       </div>
                       <div className="mt-4 grid grid-cols-3 gap-2 text-center">
                         <div className="rounded-lg bg-white/80 px-2 py-2 border border-red-100">

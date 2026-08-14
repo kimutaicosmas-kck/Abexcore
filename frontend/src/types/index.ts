@@ -101,7 +101,14 @@ export interface DashboardKPIs {
   ordersAwaitingProduction: number;
   inventoryValue: number;
   rawMaterialsLow: number;
-  lowStockItems: { id: string; name: string; code: string; currentStock: number; minLevel: number }[];
+  lowStockItems: {
+    id: string;
+    name: string;
+    code: string;
+    currentStock: number;
+    minLevel: number;
+    itemType?: 'RAW_MATERIAL' | 'PRODUCT';
+  }[];
   finishedGoods: number;
   monthlyRevenue: number;
   monthlyProfit: number;

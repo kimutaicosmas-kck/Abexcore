@@ -3,6 +3,7 @@ import { startOfDay, startOfMonth, endOfDay, subDays } from '../utils/date';
 import { getNetAccountsReceivable } from '../utils/finance-metrics';
 import { InvoiceMaintenanceService } from './invoice-maintenance.service';
 import { mergeTenantWarehouseWhere, requireTenantId } from '../utils/tenant';
+import { isLowStock, sumStockQuantities, toStockQty } from '../utils/stock';
 
 export class DashboardService {
   static async getKPIs(userId: string) {
@@ -20,6 +21,7 @@ export class DashboardService {
       productionOrders,
       awaitingProduction,
       lowStockMaterials,
+      lowStockProducts,
       finishedGoods,
       recentOrders,
       productionStatus,
@@ -51,6 +53,10 @@ export class DashboardService {
       prisma.productionOrder.count({ where: { status: { in: ['PLANNED', 'SCHEDULED', 'IN_PROGRESS'] } } }),
       prisma.salesOrder.count({ where: { status: 'CONFIRMED' } }),
       prisma.rawMaterial.findMany({
+        where: { isActive: true, deletedAt: null },
+        include: { stockLevels: { where: { warehouse: { companyId } } } },
+      }),
+      prisma.product.findMany({
         where: { isActive: true, deletedAt: null },
         include: { stockLevels: { where: { warehouse: { companyId } } } },
       }),
@@ -94,10 +100,30 @@ export class DashboardService {
       return sum + Number(sl.quantity) * Number(sl.unitCost);
     }, 0);
 
-    const lowStock = lowStockMaterials.filter((m) => {
-      const totalQty = m.stockLevels.reduce((s, sl) => s + Number(sl.quantity), 0);
-      return totalQty <= Number(m.minStockLevel);
-    });
+    const lowMaterials = lowStockMaterials.filter((m) =>
+      isLowStock(sumStockQuantities(m.stockLevels), m.minStockLevel)
+    );
+    const lowProducts = lowStockProducts.filter((p) =>
+      isLowStock(sumStockQuantities(p.stockLevels), p.minStockLevel)
+    );
+    const lowStock = [
+      ...lowMaterials.map((m) => ({
+        id: m.id,
+        name: m.name,
+        code: m.code,
+        currentStock: sumStockQuantities(m.stockLevels),
+        minLevel: toStockQty(m.minStockLevel),
+        itemType: 'RAW_MATERIAL' as const,
+      })),
+      ...lowProducts.map((p) => ({
+        id: p.id,
+        name: p.name,
+        code: p.sku,
+        currentStock: sumStockQuantities(p.stockLevels),
+        minLevel: toStockQty(p.minStockLevel),
+        itemType: 'PRODUCT' as const,
+      })),
+    ].sort((a, b) => a.currentStock - b.currentStock);
 
     const deliveryItems = await prisma.deliveryItem.findMany({
       where: {
@@ -177,13 +203,7 @@ export class DashboardService {
       ordersAwaitingProduction: awaitingProduction,
       inventoryValue: totalInventoryValue,
       rawMaterialsLow: lowStock.length,
-      lowStockItems: lowStock.slice(0, 5).map((m) => ({
-        id: m.id,
-        name: m.name,
-        code: m.code,
-        currentStock: m.stockLevels.reduce((s, sl) => s + Number(sl.quantity), 0),
-        minLevel: Number(m.minStockLevel),
-      })),
+      lowStockItems: lowStock.slice(0, 5),
       finishedGoods: Number(finishedGoods._sum.quantity || 0),
       monthlyRevenue: revenue,
       monthlyProfit: revenue - expenses,

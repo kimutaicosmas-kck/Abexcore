@@ -143,8 +143,8 @@ export const createRawMaterialSchema = z.object({
   unit: z.string().optional(),
   unitCost: z.number().min(0).optional(),
   supplierId: z.string().uuid().optional(),
-  minStockLevel: z.number().min(0).optional(),
-  reorderQty: z.number().min(0).optional(),
+  minStockLevel: z.coerce.number().min(0).optional(),
+  reorderQty: z.coerce.number().min(0).optional(),
   shelfLifeDays: z.number().int().optional(),
 });
 

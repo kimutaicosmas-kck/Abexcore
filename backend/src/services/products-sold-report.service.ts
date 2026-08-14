@@ -122,7 +122,7 @@ export class ProductsSoldReportService {
         const availableQty = Math.max(0, stock.onHand - stock.reserved);
         const qtySold = g._sum.quantity || 0;
         const minStockLevel = product.minStockLevel;
-        const needsRestock = availableQty <= minStockLevel;
+        const needsRestock = availableQty <= 0 || availableQty <= minStockLevel;
         const suggestedRestockQty = needsRestock
           ? Math.max(qtySold, minStockLevel - availableQty + qtySold)
           : 0;

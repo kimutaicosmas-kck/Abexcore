@@ -1,5 +1,6 @@
 import prisma from '../config/database';
-import { mergeTenantWarehouseWhere } from '../utils/tenant';
+import { mergeTenantWarehouseWhere, requireTenantId } from '../utils/tenant';
+import { isLowStock, sumStockQuantities } from '../utils/stock';
 
 export class ProductService {
   static async getStats() {
@@ -42,15 +43,26 @@ export class ProductService {
 
 export class InventoryService {
   static async getStats() {
-    const materials = await prisma.rawMaterial.findMany({
-      where: { isActive: true, deletedAt: null },
-      include: { stockLevels: true },
-    });
+    const companyId = requireTenantId();
+    const stockWhere = { warehouse: { companyId } };
 
-    const lowStock = materials.filter((m) => {
-      const total = m.stockLevels.reduce((s, sl) => s + Number(sl.quantity), 0);
-      return total <= Number(m.minStockLevel);
-    });
+    const [materials, products] = await Promise.all([
+      prisma.rawMaterial.findMany({
+        where: { isActive: true, deletedAt: null },
+        include: { stockLevels: { where: stockWhere } },
+      }),
+      prisma.product.findMany({
+        where: { isActive: true, deletedAt: null },
+        include: { stockLevels: { where: stockWhere } },
+      }),
+    ]);
+
+    const lowMaterials = materials.filter((m) =>
+      isLowStock(sumStockQuantities(m.stockLevels), m.minStockLevel)
+    );
+    const lowProducts = products.filter((p) =>
+      isLowStock(sumStockQuantities(p.stockLevels), p.minStockLevel)
+    );
 
     const stockLevels = await prisma.stockLevel.findMany({
       where: mergeTenantWarehouseWhere(),
@@ -75,7 +87,7 @@ export class InventoryService {
     return {
       materialsCount,
       warehouses,
-      lowStockCount: lowStock.length,
+      lowStockCount: lowMaterials.length + lowProducts.length,
       inventoryValue,
       transfersToday,
     };

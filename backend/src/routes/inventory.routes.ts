@@ -17,6 +17,7 @@ import { StockMovementService } from '../services/inventory.service';
 import { AccountingService } from '../services/accounting.service';
 import { ProcurementService } from '../services/procurement.service';
 import { Prisma, TransactionType } from '@prisma/client';
+import { isLowStock, sumStockQuantities, toStockQty } from '../utils/stock';
 
 const router = Router();
 router.use(authenticate);
@@ -186,18 +187,65 @@ router.get('/materials', authorize('inventory:read'), validate(materialListQuery
 
 router.get('/materials/low-stock', authorize('inventory:read'), asyncHandler(async (_req: AuthRequest, res: Response) => {
   const companyId = requireTenantId();
-  const materials = await prisma.rawMaterial.findMany({
-    where: { isActive: true, deletedAt: null },
-    include: {
-      stockLevels: { where: { warehouse: { companyId } } },
-      supplier: true,
-      materialType: true,
-    },
-  });
-  const lowStock = materials.filter((m) => {
-    const total = m.stockLevels.reduce((s, sl) => s + Number(sl.quantity), 0);
-    return total <= Number(m.minStockLevel);
-  });
+  const stockWhere = { warehouse: { companyId } };
+
+  const [materials, products] = await Promise.all([
+    prisma.rawMaterial.findMany({
+      where: { isActive: true, deletedAt: null },
+      include: {
+        stockLevels: { where: stockWhere },
+        supplier: true,
+        materialType: true,
+      },
+    }),
+    prisma.product.findMany({
+      where: { isActive: true, deletedAt: null },
+      include: {
+        stockLevels: { where: stockWhere },
+        category: { select: { id: true, name: true } },
+      },
+    }),
+  ]);
+
+  const lowMaterials = materials
+    .filter((m) => isLowStock(sumStockQuantities(m.stockLevels), m.minStockLevel))
+    .map((m) => {
+      const currentStock = sumStockQuantities(m.stockLevels);
+      return {
+        id: m.id,
+        name: m.name,
+        code: m.code,
+        unit: m.unit,
+        itemType: 'RAW_MATERIAL' as const,
+        minStockLevel: toStockQty(m.minStockLevel),
+        currentStock,
+        stockLevels: m.stockLevels,
+        materialType: m.materialType,
+        supplier: m.supplier,
+        category: null as { id: string; name: string } | null,
+      };
+    });
+
+  const lowProducts = products
+    .filter((p) => isLowStock(sumStockQuantities(p.stockLevels), p.minStockLevel))
+    .map((p) => {
+      const currentStock = sumStockQuantities(p.stockLevels);
+      return {
+        id: p.id,
+        name: p.name,
+        code: p.sku,
+        unit: 'pcs',
+        itemType: 'PRODUCT' as const,
+        minStockLevel: toStockQty(p.minStockLevel),
+        currentStock,
+        stockLevels: p.stockLevels,
+        materialType: null as { id: string; name: string } | null,
+        supplier: null,
+        category: p.category,
+      };
+    });
+
+  const lowStock = [...lowMaterials, ...lowProducts].sort((a, b) => a.currentStock - b.currentStock);
   res.json({ success: true, data: lowStock });
 }));
 

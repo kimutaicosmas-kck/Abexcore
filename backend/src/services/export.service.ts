@@ -6,6 +6,7 @@ import { config } from '../config';
 import prisma from '../config/database';
 import { AppError } from '../middleware/errorHandler';
 import { requireTenantId } from '../utils/tenant';
+import { isLowStock } from '../utils/stock';
 import {
   DOC_BLUE,
   PAGE_LEFT,
@@ -1001,7 +1002,7 @@ export class ExportService {
 
     return stockLevels.filter((sl) => {
       const min = sl.product?.minStockLevel ?? sl.rawMaterial?.minStockLevel ?? 0;
-      return Number(sl.quantity) <= Number(min);
+      return isLowStock(sl.quantity, min);
     });
   }
 

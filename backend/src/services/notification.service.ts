@@ -2,6 +2,7 @@ import { NotificationType } from '@prisma/client';
 import prisma from '../config/database';
 import { EmailService } from './email.service';
 import { getTenantId, requireTenantId, runWithTenant } from '../utils/tenant';
+import { isLowStock, sumStockQuantities, toStockQty } from '../utils/stock';
 
 export class NotificationService {
   static async notifyUser(
@@ -87,12 +88,12 @@ export class NotificationService {
 
     const withTotals = materials.map((m) => ({
       material: m,
-      total: m.stockLevels.reduce((s, sl) => s + Number(sl.quantity), 0),
-      min: Number(m.minStockLevel),
+      total: sumStockQuantities(m.stockLevels),
+      min: toStockQty(m.minStockLevel),
     }));
 
     const outOfStock = withTotals.filter((row) => row.total <= 0);
-    const belowMin = withTotals.filter((row) => row.total > 0 && row.total <= row.min);
+    const belowMin = withTotals.filter((row) => row.total > 0 && isLowStock(row.total, row.min));
 
     if (outOfStock.length === 0 && belowMin.length === 0) return;
 

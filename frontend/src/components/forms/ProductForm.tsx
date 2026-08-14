@@ -144,7 +144,10 @@ export function ProductForm({ product, onSuccess, onCancel }: ProductFormProps) 
       queryClient.invalidateQueries({ queryKey: ['products'] });
       queryClient.invalidateQueries({ queryKey: ['product-stats'] });
       queryClient.invalidateQueries({ queryKey: ['inventory'] });
+      queryClient.invalidateQueries({ queryKey: ['inventory-stats'] });
       queryClient.invalidateQueries({ queryKey: ['stock-levels'] });
+      queryClient.invalidateQueries({ queryKey: ['low-stock'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-kpis'] });
       if (isEdit) queryClient.invalidateQueries({ queryKey: ['product-detail', product!.id] });
       onSuccess();
     },
