@@ -744,11 +744,6 @@ export function FinancePage() {
               Export Excel
             </Button>
           </div>
-          <p className="px-4 pt-2 text-xs text-slate-500">
-            “Taken & paid this week/month” = invoice issued and paid in that same period.
-            “Paid in week/month invoice was taken” = payment landed in the invoice’s own week or month (any period).
-            “Paid this week (any invoice)” also includes older invoices paid this week.
-          </p>
           {(payments?.data?.length || 0) === 0 && !payLoading ? (
             <div className="p-6">
               <EmptyState

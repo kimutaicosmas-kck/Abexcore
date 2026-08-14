@@ -6,7 +6,7 @@ import { Alert, Badge, Button, EmptyState, Input } from '../ui';
 import { CatalogManageItem } from '../../types';
 
 interface CatalogListManagerProps {
-  description: string;
+  description?: string;
   items: CatalogManageItem[];
   loading: boolean;
   canEdit: boolean;
@@ -23,7 +23,6 @@ interface CatalogListManagerProps {
 }
 
 export function CatalogListManager({
-  description,
   items,
   loading,
   canEdit,
@@ -152,8 +151,6 @@ export function CatalogListManager({
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-slate-600">{description}</p>
-
       {error && <Alert variant="error">{error}</Alert>}
 
       {canEdit && (

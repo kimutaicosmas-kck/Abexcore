@@ -680,13 +680,10 @@ export function TabGroup({ tabs, activeIndex, onChange, className }: TabGroupPro
 }
 
 /** Page-level actions only — title lives in TopNav. */
-export function PageHeader({ subtitle, action }: { title?: string; subtitle?: string; action?: React.ReactNode }) {
-  if (!subtitle && !action) return null;
+export function PageHeader({ action }: { title?: string; subtitle?: string; action?: React.ReactNode }) {
+  if (!action) return null;
   return (
     <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end mb-3">
-      {subtitle && (
-        <p className="text-xs text-primary-700/70 truncate sm:mr-auto">{subtitle}</p>
-      )}
       {action && <div className="flex flex-wrap items-center gap-2 shrink-0">{action}</div>}
     </div>
   );
@@ -773,12 +770,11 @@ interface EmptyStateProps {
   action?: React.ReactNode;
 }
 
-export function EmptyState({ title, description, action }: EmptyStateProps) {
+export function EmptyState({ title, action }: EmptyStateProps) {
   return (
     <div className="flex flex-col items-center justify-center py-8 sm:py-14 px-3 sm:px-4 text-center rounded-xl border border-dashed border-primary-200 bg-primary-50/50">
       <div className="h-9 w-9 sm:h-12 sm:w-12 rounded-lg sm:rounded-xl bg-primary-100 flex items-center justify-center mb-2.5 sm:mb-4 text-primary-600 text-base sm:text-xl font-light">∅</div>
       <p className="text-xs sm:text-sm font-semibold text-primary-900">{title}</p>
-      {description && <p className="text-[11px] sm:text-xs text-primary-700/70 mt-1 max-w-sm">{description}</p>}
       {action && <div className="mt-3 sm:mt-5">{action}</div>}
     </div>
   );

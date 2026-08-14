@@ -135,10 +135,6 @@ export function ServerMetricsPanel() {
             <Server className="h-5 w-5 text-primary-600" />
             Server performance
           </h2>
-          <p className="text-sm text-slate-500 mt-1">
-            Live VPS metrics · {data.scope === 'host' ? 'host view' : 'container view'} · updated{' '}
-            {new Date(dataUpdatedAt).toLocaleTimeString()}
-          </p>
         </div>
         <Button variant="secondary" size="sm" loading={isFetching} onClick={() => refetch()}>
           <RefreshCw className="h-4 w-4 mr-1.5" />

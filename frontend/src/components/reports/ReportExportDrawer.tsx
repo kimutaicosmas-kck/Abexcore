@@ -144,7 +144,6 @@ export function ReportExportDrawer({
           <div className="min-w-0">
             <p className="text-xs font-semibold uppercase tracking-wide text-primary-600">Configure report</p>
             <h2 className="text-lg font-semibold text-slate-900 truncate">{report.name}</h2>
-            <p className="text-sm text-slate-500 mt-0.5">{report.description}</p>
           </div>
           <button
             type="button"

@@ -15,7 +15,6 @@ import {
 } from 'lucide-react';
 import { productsApi } from '../services/api';
 import {
-  PageHeader,
   Table,
   Badge,
   Button,
@@ -262,15 +261,8 @@ export function ProductsPage() {
       </div>
     ) : undefined;
 
-  const subtitle =
-    activeTabName === 'Available'
-      ? 'Products currently in stock — available quantity after reservations.'
-      : 'Manage the full product catalog, prices, and status.';
-
   return (
     <div className="space-y-4">
-      <PageHeader subtitle={subtitle} />
-
       {canManageProducts && stats && activeTabName !== 'Available' && (
         <StatGrid>
           <StatCard

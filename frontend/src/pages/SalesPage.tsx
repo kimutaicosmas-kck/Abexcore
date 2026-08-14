@@ -609,14 +609,7 @@ export function SalesPage() {
 
       {activeTab === 0 && (
         <DataPanel className="min-w-0 max-w-full">
-          <FilterBar
-            hint={
-              <>
-                Showing <strong>today&apos;s orders</strong> by default.
-                {myBook ? ' Filter below to change the view.' : null}
-              </>
-            }
-          >
+          <FilterBar>
             <FilterField span="full">
               <Input
                 placeholder={myBook ? 'Search my orders…' : 'Search orders…'}
@@ -673,10 +666,6 @@ export function SalesPage() {
           )}
           {canCreateDelivery && (
             <div className="px-4 pt-3 space-y-3">
-              <Alert variant="info">
-                Tick Ready / Partially Delivered orders below, then click{' '}
-                <strong>Create delivery</strong> (top right, or the button under this message).
-              </Alert>
               {selectedDeliveryOrderIds.length > 0 && (
                 <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-primary-200 bg-primary-50 px-3 py-2.5">
                   <p className="text-sm text-primary-900">
@@ -873,9 +862,6 @@ export function SalesPage() {
             )}
             {activeOrder.invoices && activeOrder.invoices.length > 0 && (
               <Card title="Invoices">
-                <p className="text-xs text-slate-500 mb-2">
-                  Invoices are created with each delivery note and cover the products on that dispatch.
-                </p>
                 {activeOrder.invoices.map((inv) => (
                   <div key={inv.id} className="flex justify-between items-center py-2 border-b border-border/60 last:border-0 gap-2">
                     <span>{inv.invoiceNumber}</span>

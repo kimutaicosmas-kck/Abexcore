@@ -119,12 +119,6 @@ export function RawMaterialForm({ material, onSuccess, onCancel }: RawMaterialFo
         </p>
       )}
 
-      {!isEdit && (
-        <p className="text-xs text-slate-500">
-          A material reference (e.g. RM-00012) is assigned automatically when you save.
-        </p>
-      )}
-
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Input label="Name *" {...register('name')} error={errors.name?.message} />
         <div className="md:col-span-2 space-y-2">

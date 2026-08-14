@@ -540,8 +540,7 @@ export function InventoryPage() {
           ) : (
             <div className="space-y-3">
               <Alert variant="warning">
-                <strong>{lowStock.length}</strong> item(s) are at zero stock or at/below minimum. Plan replenishment or
-                adjust stock after a goods receipt.
+                <strong>{lowStock.length}</strong> item(s) at or below minimum
               </Alert>
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
                 {(

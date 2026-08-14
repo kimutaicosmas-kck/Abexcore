@@ -188,12 +188,6 @@ export function SalaryAdvanceForm({
         </button>
       </div>
 
-      <Alert variant="info">
-        {isRecord
-          ? 'Use this when money was already given outside the system. It becomes active for monthly payroll recovery without posting a new cash disbursement.'
-          : 'Issue a fresh advance to an employee. Optionally disburse now to post cash and the staff-advance receivable.'}
-      </Alert>
-
       <Select
         label="Employee *"
         options={employeeOptions}
@@ -278,10 +272,7 @@ export function SalaryAdvanceForm({
               checked={!!watch('approveNow') || !!disburseNow}
               onChange={(e) => setValue('approveNow', e.target.checked)}
             />
-            <span>
-              <span className="font-medium text-slate-900">Approve immediately</span>
-              <span className="block text-xs text-slate-500">Skip pending queue and mark as active.</span>
-            </span>
+            <span className="font-medium text-slate-900">Approve immediately</span>
           </label>
           <label className="flex items-start gap-3 cursor-pointer">
             <input
@@ -289,12 +280,7 @@ export function SalaryAdvanceForm({
               className="mt-1 rounded border-slate-300"
               {...register('disburseNow')}
             />
-            <span>
-              <span className="font-medium text-slate-900">Disburse now (post to ledger)</span>
-              <span className="block text-xs text-slate-500">
-                Records cash out and staff advance receivable. Required before payroll recovery starts.
-              </span>
-            </span>
+            <span className="font-medium text-slate-900">Disburse now (post to ledger)</span>
           </label>
         </div>
       )}

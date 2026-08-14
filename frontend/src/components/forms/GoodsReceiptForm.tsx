@@ -207,10 +207,6 @@ export function GoodsReceiptForm({ onSuccess, onCancel }: GoodsReceiptFormProps)
 
       <Input label="Notes" {...register('notes')} />
 
-      <p className="text-xs text-slate-500">
-        Received goods are held pending quality inspection. After QC passes, use Post to Stock on the Goods Receipts tab to add items to inventory.
-      </p>
-
       <div className="flex justify-end gap-3 pt-4 border-t">
         <Button type="button" variant="secondary" onClick={onCancel}>Cancel</Button>
         <Button type="submit" loading={mutation.isPending}>Create Goods Receipt</Button>

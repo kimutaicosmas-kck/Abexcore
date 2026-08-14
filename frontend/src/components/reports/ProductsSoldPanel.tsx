@@ -3,7 +3,6 @@ import { useQuery } from '@tanstack/react-query';
 import { Download, Package, AlertTriangle, Boxes } from 'lucide-react';
 import { reportsApi } from '../../services/api';
 import {
-  Alert,
   Badge,
   Button,
   DataPanel,
@@ -214,11 +213,6 @@ export function ProductsSoldPanel({ toolbar }: { toolbar?: ReactNode }) {
           Excel
         </Button>
       </div>
-
-      <Alert variant="info">
-        Qty sold is based on deliveries in the selected period (excluding failed/returned). Use this
-        with available stock and min levels to plan restocking.
-      </Alert>
 
       {isError && <QueryErrorAlert error={error} onRetry={() => refetch()} />}
 

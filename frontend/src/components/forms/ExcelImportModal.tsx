@@ -16,42 +16,37 @@ export interface ExcelImportResult {
 
 const ENTITY_CONFIG: Record<
   ExcelImportEntity,
-  { title: string; templatePath: string; templateName: string; importPath: string; hint: string }
+  { title: string; templatePath: string; templateName: string; importPath: string }
 > = {
   products: {
     title: 'Import products',
     templatePath: '/products/import/template',
     templateName: 'products-import-template.xlsx',
     importPath: '/products/import',
-    hint: 'Include sku, name, category, and optional initialQuantity for opening stock.',
   },
   customers: {
     title: 'Import customers',
     templatePath: '/customers/import/template',
     templateName: 'customers-import-template.xlsx',
     importPath: '/customers/import',
-    hint: 'Include code, name, and vatStatus (VAT or NON_VAT). Tax PIN is required for VAT rows.',
   },
   materials: {
     title: 'Import materials',
     templatePath: '/inventory/materials/import/template',
     templateName: 'materials-import-template.xlsx',
     importPath: '/inventory/materials/import',
-    hint: 'Include name and type. Optional initialQuantity posts opening stock.',
   },
   suppliers: {
     title: 'Import suppliers',
     templatePath: '/inventory/suppliers/import/template',
     templateName: 'suppliers-import-template.xlsx',
     importPath: '/inventory/suppliers/import',
-    hint: 'Include code and name. Existing codes are updated.',
   },
   employees: {
     title: 'Import employees',
     templatePath: '/hr/employees/import/template',
     templateName: 'employees-import-template.xlsx',
     importPath: '/hr/employees/import',
-    hint: 'Include employeeNo, firstName, lastName, and hireDate (YYYY-MM-DD).',
   },
 };
 
@@ -142,18 +137,13 @@ export function ExcelImportModal({ open, onClose, entity, onSuccess }: ExcelImpo
       }
     >
       <div className="space-y-4">
-        <p className="text-sm text-slate-600">{config.hint}</p>
-
         <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-4 space-y-3">
           <div className="flex items-start gap-3">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700">
               <FileSpreadsheet className="h-5 w-5" />
             </div>
             <div className="min-w-0 flex-1">
-              <p className="font-medium text-slate-900">1. Download the template</p>
-              <p className="text-xs text-slate-500 mt-0.5">
-                Use the sample sheet and Instructions tab, then fill your rows.
-              </p>
+              <p className="font-medium text-slate-900">Download template</p>
               <Button
                 variant="secondary"
                 size="sm"
@@ -168,13 +158,12 @@ export function ExcelImportModal({ open, onClose, entity, onSuccess }: ExcelImpo
           </div>
 
           <div className="border-t border-slate-200 pt-3">
-            <p className="font-medium text-slate-900">2. Upload your filled file</p>
-            <p className="text-xs text-slate-500 mt-0.5 mb-2">Accepts .xlsx (max 10MB).</p>
+            <p className="font-medium text-slate-900">Upload file</p>
             <input
               ref={inputRef}
               type="file"
               accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
-              className="block w-full text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-primary-50 file:px-3 file:py-2 file:text-sm file:font-medium file:text-primary-700 hover:file:bg-primary-100"
+              className="mt-2 block w-full text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-primary-50 file:px-3 file:py-2 file:text-sm file:font-medium file:text-primary-700 hover:file:bg-primary-100"
               onChange={(e) => {
                 setFile(e.target.files?.[0] || null);
                 setResult(null);

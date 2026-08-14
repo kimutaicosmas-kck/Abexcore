@@ -169,7 +169,6 @@ export function UserForm({ user, onSuccess, onCancel }: UserFormProps) {
   });
 
   const selectedRoleId = watch('roleId');
-  const createEmployeeProfile = watch('createEmployeeProfile');
   const selectedEmployeeId = watch('employeeId');
   const selectedRoleName = rolesData?.find((r) => r.id === selectedRoleId)?.name || '';
   const roleBaseline = selectedRoleName ? modulesForRoleName(selectedRoleName) : ['dashboard'];
@@ -350,9 +349,6 @@ export function UserForm({ user, onSuccess, onCancel }: UserFormProps) {
 
       <div className="mt-4 space-y-3 rounded-xl border border-primary-100 bg-primary-50/50 p-3">
         <p className="text-sm font-medium text-primary-950">HR employee link</p>
-        <p className="text-xs text-primary-800/80">
-          One login should map to one employee so leave and payroll stay on the same person.
-        </p>
         {linkedEmployee && (
           <p className="text-xs text-emerald-800">
             Currently linked: {linkedEmployee.employeeNo} — {linkedEmployee.firstName}{' '}
@@ -369,16 +365,11 @@ export function UserForm({ user, onSuccess, onCancel }: UserFormProps) {
             <span>
               {isEdit
                 ? 'Create HR employee profile for this login'
-                : 'Also create HR employee profile (recommended)'}
+                : 'Also create HR employee profile'}
             </span>
           </label>
         )}
         <Select label="Link existing employee" options={employeeOptions} {...register('employeeId')} />
-        {createEmployeeProfile && !selectedEmployeeId && !linkedEmployee && (
-          <p className="text-xs text-slate-600">
-            An employee record will be created and linked using this user’s name and email.
-          </p>
-        )}
       </div>
 
       <ModuleAccessPicker

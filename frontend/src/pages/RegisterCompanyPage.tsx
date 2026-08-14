@@ -89,12 +89,9 @@ export function RegisterCompanyPage() {
   }
 
   return (
-    <div className="space-y-4 max-w-2xl">
+      <div className="space-y-4 max-w-2xl">
       <div>
         <h1 className="text-2xl font-bold text-slate-900">Register new company</h1>
-        <p className="text-sm text-slate-500 mt-1">
-          Create an isolated workspace for a new tenant. Their logo and name will appear in their workspace after sign-in.
-        </p>
       </div>
 
       <div className="bg-white rounded-2xl border border-border shadow-soft overflow-hidden">
@@ -120,7 +117,6 @@ export function RegisterCompanyPage() {
               })}
               error={errors.companySlug?.message}
             />
-            <p className="text-xs text-slate-500 -mt-2">The tenant uses this code (or subdomain URL) to sign in.</p>
 
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1.5">Company logo (optional)</label>

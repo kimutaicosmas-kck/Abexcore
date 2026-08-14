@@ -228,11 +228,6 @@ export function ProductForm({ product, onSuccess, onCancel }: ProductFormProps) 
           />
         )}
       </div>
-      <p className="text-xs text-slate-500">
-        {isEdit
-          ? 'Set the real quantity on hand. Saving updates stock to this number (opening balance / count).'
-          : 'Enter how many units you have on hand (e.g. 5000). Stock is recorded when the product is created.'}
-      </p>
       <Input label="Description" {...register('description')} />
 
       <div className="flex justify-end gap-3 pt-4 border-t">

@@ -278,9 +278,6 @@ export function DeliveryForm({ onSuccess, onCancel, initialOrderIds = [] }: Deli
           </Button>
           {showHiredLorryForm && (
             <div className="rounded-lg border border-amber-200 bg-amber-50/60 p-3 space-y-2">
-              <p className="text-xs text-amber-900">
-                Long-distance runs often use external lorries. Add the plate number for this trip — it will appear in your vehicle list.
-              </p>
               <Input
                 label="Lorry registration *"
                 placeholder="e.g. KCA 456B"
@@ -320,20 +317,10 @@ export function DeliveryForm({ onSuccess, onCancel, initialOrderIds = [] }: Deli
           error={errors.waybillNo?.message}
         />
       </div>
-      {(selectedVehicleId && hiredVehicles.some((v) => v.id === selectedVehicleId)) ||
-      showHiredLorryForm ? (
-        <p className="text-xs text-slate-500 -mt-2">
-          For hired lorries or other third-party transport, enter the carrier’s waybill number if you have one.
-        </p>
-      ) : null}
-
       <div className="rounded-lg border border-border p-4 space-y-3">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
           <div>
             <p className="text-sm font-medium text-slate-800">Bulk delivery — select ready orders</p>
-            <p className="text-xs text-slate-500 mt-1">
-              Tick several READY orders to create one trip with a delivery note (and invoice) per stop — no need to create them one by one.
-            </p>
           </div>
           <div className="flex gap-2 shrink-0">
             <Button type="button" variant="secondary" size="sm" onClick={selectAllVisible} disabled={allVisibleSelected || ordersLoading}>
@@ -441,12 +428,6 @@ export function DeliveryForm({ onSuccess, onCancel, initialOrderIds = [] }: Deli
       </div>
 
       <Input label="Notes" {...register('notes')} error={errors.notes?.message} />
-
-      <p className="text-xs text-slate-500">
-        {tripOrders.length > 1
-          ? 'A printable delivery note PDF downloads for each stop to accompany the goods. A sales invoice is auto-created per note.'
-          : 'A printable delivery note PDF downloads after create — print it to go with the goods. The sales invoice is auto-created on dispatch.'}
-      </p>
 
       <div className="flex justify-end gap-3 pt-4 border-t">
         <Button type="button" variant="secondary" onClick={onCancel}>Cancel</Button>

@@ -272,7 +272,6 @@ export function ReportsPage() {
                     </div>
                     <div className="min-w-0 w-full">
                       <p className="font-semibold text-slate-900">{report.name}</p>
-                      <p className="text-xs text-slate-600 mt-1 line-clamp-2">{report.description}</p>
                     </div>
                     <div className="flex flex-wrap gap-1.5">
                       {report.filters.length > 0 && (
@@ -349,16 +348,6 @@ export function ReportsPage() {
         )}
         {isVatModal && (
           <div className="space-y-4">
-            {detailModal === 'non-vat-customers' && (
-              <p className="text-sm text-slate-600">
-                Non-VAT customers still receive company sales invoices; VAT on those invoices is 0%.
-              </p>
-            )}
-            {detailModal === 'vat-combined' && (
-              <p className="text-sm text-slate-600">
-                Combined view of VAT and Non-VAT customers. Excel export includes a combined sheet plus separate VAT / Non-VAT sheets.
-              </p>
-            )}
             {vatModalStatus && (
               <div className="flex flex-wrap gap-2">
                 <Button

@@ -490,11 +490,6 @@ export function SettingsPage() {
                     </label>
                   )}
                 </div>
-                <p className="text-xs text-slate-500 mt-1">
-                  {isPlatformOwner
-                    ? 'The platform owner workspace always uses the AbexCore brand logo.'
-                    : 'Logos are normalized to a standard square format for sidebar and login.'}
-                </p>
               </div>
 
               <Input label="Company Name *" {...register('name', { required: 'Company name is required' })} error={errors.name?.message} disabled={!canUpdate} />
@@ -510,9 +505,6 @@ export function SettingsPage() {
               </div>
               <div className="rounded-xl border border-sky-100 bg-sky-50/50 p-4 space-y-3">
                 <p className="text-sm font-semibold text-slate-800">Document payment block (Lipa na M-Pesa)</p>
-                <p className="text-xs text-slate-500">
-                  Printed on sales invoices, delivery notes, and customer statements when paybill is set.
-                </p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <Input
                     label="Paybill number"
@@ -530,9 +522,6 @@ export function SettingsPage() {
               </div>
               <div className="rounded-xl border border-primary-100 bg-primary-50/40 p-4 space-y-3">
                 <p className="text-sm font-semibold text-slate-800">Login welcome message</p>
-                <p className="text-xs text-slate-500">
-                  Shown once after a user signs in. Keep it unique to your company (max 280 characters).
-                </p>
                 <Textarea
                   label="Welcome message"
                   rows={3}
@@ -552,9 +541,6 @@ export function SettingsPage() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {isPlatformOwner && (
             <Card title="Platform administration" className="lg:col-span-2">
-              <p className="text-sm text-slate-600 mb-3">
-                As the platform owner, you can register new company workspaces with their own logo and admin account.
-              </p>
               <Link to="/admin/register-company">
                 <Button type="button">Register new company</Button>
               </Link>
@@ -563,10 +549,6 @@ export function SettingsPage() {
 
           {isPlatformOwner && (
             <Card title="Demo test data" className="lg:col-span-2 border-emerald-200 bg-emerald-50/40">
-              <p className="text-sm text-slate-600 mb-3">
-                Load at least 10 sample records in every module (customers, products, orders, invoices,
-                production, delivery, HR, finance, etc.) for serious end-to-end testing.
-              </p>
               {seedDemoMutation.isError && (
                 <Alert variant="error" className="mb-3">
                   {getApiErrorMessage(seedDemoMutation.error)}
@@ -583,11 +565,6 @@ export function SettingsPage() {
 
           {isPlatformOwner && (
             <Card title="Reset demo workspace" className="lg:col-span-2 border-amber-200 bg-amber-50/40">
-              <p className="text-sm text-slate-600 mb-3">
-                Use this between client demos to wipe all transactional data from your AbexCore workspace — products,
-                customers, orders, invoices, inventory, and any demo users you invited. Your login, company profile,
-                branches, and empty warehouses are preserved.
-              </p>
               {resetDemoMutation.isError && (
                 <Alert variant="error" className="mb-3">
                   {(resetDemoMutation.error as { response?: { data?: { message?: string } } })?.response?.data?.message
@@ -611,7 +588,6 @@ export function SettingsPage() {
                 <div>
                   <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Company code</p>
                   <p className="text-lg font-semibold text-slate-900 mt-1">{workspace.slug}</p>
-                  <p className="text-sm text-slate-500 mt-1">Users enter this on the main login page if they are not using a workspace URL.</p>
                 </div>
 
                 <div className="space-y-2">
@@ -663,7 +639,6 @@ export function SettingsPage() {
                   />
                   <span>
                     <span className="block text-sm font-medium text-slate-900">Quality module</span>
-                    <span className="block text-sm text-slate-500">Enable inspections, quality checks, and related workflows for this company.</span>
                   </span>
                 </label>
                 {canUpdate && (
@@ -684,9 +659,6 @@ export function SettingsPage() {
       {activeTabName === 'Companies' && isPlatformOwner && (
         <Card title="Registered companies">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
-            <p className="text-sm text-slate-600">
-              View and manage all company workspaces registered on the platform.
-            </p>
             <Link to="/admin/register-company">
               <Button type="button">Register new company</Button>
             </Link>
@@ -869,10 +841,6 @@ export function SettingsPage() {
                   {...registerInvite('password', { required: 'Password is required', minLength: { value: 8, message: 'At least 8 characters' } })}
                   error={inviteErrors.password?.message}
                 />
-                <p className="text-xs text-slate-500">The user must change this password on first login.</p>
-                <p className="text-xs text-slate-500">
-                  A welcome email with sign-in details is sent when SMTP is configured under Settings → Email.
-                </p>
                 <Button type="submit" loading={inviteMutation.isPending}>Send invite</Button>
               </form>
             </Card>
@@ -917,7 +885,6 @@ export function SettingsPage() {
             {hasPermission('products:read') && (
               <Card title="Product categories">
                 <CatalogListManager
-                  description="Define the product groupings your company uses. Inactive categories stay on existing products but are hidden when creating new ones."
                   items={productCategories || []}
                   loading={categoriesLoading}
                   canEdit={canEditCategories}
@@ -938,7 +905,6 @@ export function SettingsPage() {
             {hasPermission('inventory:read') && (
               <Card title="Material types">
                 <CatalogListManager
-                  description="Define raw material classifications for your operations. Inactive types stay on existing materials but are hidden when creating new ones."
                   items={materialTypes || []}
                   loading={materialTypesLoading}
                   canEdit={canEditMaterialTypes}
@@ -1048,10 +1014,6 @@ export function SettingsPage() {
                     <code className="text-[11px]">SMTP_FROM</code> on Contabo, or save company SMTP below.
                   </p>
                 )}
-                <p className="text-xs text-slate-500 mt-1">
-                  When configured, low stock, delivery, leave, invites, and other alerts are emailed to users
-                  in addition to the bell notifications.
-                </p>
               </div>
 
               {emailMessage && <Alert variant="success">{emailMessage}</Alert>}
@@ -1153,15 +1115,6 @@ export function SettingsPage() {
                 Send email notifications (active)
               </label>
 
-              <p className="text-xs text-slate-500">
-                For Gmail, <strong>SMTP username</strong> and <strong>From email</strong> should match the same
-                account. Change the username only together with a new App Password.
-              </p>
-              <p className="text-xs text-slate-500">
-                Gmail: enable 2FA, then create an App Password at Google Account → Security → App passwords.
-                Use port <strong>587</strong> (not SSL). Contabo/VPS must allow outbound SMTP.
-              </p>
-
               {canUpdate && (
                 <div className="flex flex-wrap gap-2 pt-1">
                   <Button type="submit" loading={emailSaving}>
@@ -1201,9 +1154,6 @@ export function SettingsPage() {
         <Card title="Two-Factor Authentication">
           <p className="text-sm text-slate-600 mb-4">
             Status: <span className="font-semibold text-slate-900">{twoFaEnabled ? 'Enabled' : 'Not enabled'}</span>
-          </p>
-          <p className="text-sm text-slate-600 mb-4">
-            Protect your account with an authenticator app (Google Authenticator, Authy, etc.).
           </p>
           {!twoFaQr ? (
             <Button

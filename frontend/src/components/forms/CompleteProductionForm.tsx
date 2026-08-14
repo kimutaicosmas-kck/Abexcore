@@ -166,12 +166,9 @@ export function CompleteProductionForm({
       ) : qcBlocked ? (
         <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-900 text-sm space-y-2">
           <p className="font-medium">Quality inspection required</p>
-          <p>
-            Pass a quality check linked to this order, or a standalone product inspection for surplus stock.
-            {pendingInspection
-              ? ' Mark the pending inspection as passed to continue.'
-              : ' Create and pass a quality inspection in Quality to continue.'}
-          </p>
+          {pendingInspection && (
+            <p>Mark the pending inspection as passed to continue.</p>
+          )}
           {canPassQc && pendingInspection && (
             <Button
               type="button"
@@ -182,14 +179,11 @@ export function CompleteProductionForm({
               Mark quality check as passed
             </Button>
           )}
-          {!canPassQc && (
-            <p className="text-xs">Ask a quality team member to pass the inspection in Quality.</p>
-          )}
         </div>
       ) : (
         <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm">
           Quality check passed ({passedInspection?.inspectionNo}
-          {passedInspection?.productionOrder ? '' : ' — surplus stock inspection'}). You can complete production.
+          {passedInspection?.productionOrder ? '' : ' — surplus stock'}).
         </div>
       )}
 
@@ -210,10 +204,7 @@ export function CompleteProductionForm({
         <p className="text-primary-800/90 mt-0.5">
           {finishedGoodsWarehouse
             ? `${finishedGoodsWarehouse.code} — ${finishedGoodsWarehouse.name}`
-            : 'Finished goods warehouse (configured automatically)'}
-        </p>
-        <p className="text-xs text-primary-700/70 mt-1">
-          Completed units are always posted to finished goods stock so sales can reserve them.
+            : 'Finished goods warehouse'}
         </p>
       </div>
 

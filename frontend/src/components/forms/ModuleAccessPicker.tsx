@@ -32,9 +32,6 @@ export function ModuleAccessPicker({
   return (
     <div className="space-y-2">
       <p className="text-sm font-medium text-slate-700">Module access *</p>
-      <p className="text-xs text-slate-500">
-        Role defaults are locked on. Tick extra boxes only if this user needs modules beyond their role.
-      </p>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 rounded-2xl border border-slate-200 p-3 bg-slate-50/70">
         {ASSIGNABLE_MODULES.map((module) => {
           const isRoleDefault = baseline.has(module);

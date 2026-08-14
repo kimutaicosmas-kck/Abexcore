@@ -91,10 +91,6 @@ export function ProductionOrderForm({ onSuccess, onCancel }: ProductionOrderForm
       </div>
       <Input label="Notes" {...register('notes')} placeholder="Optional — e.g. batch run, shift notes" />
 
-      <p className="text-xs text-slate-500">
-        Production is independent of sales orders. Completed goods are recorded as finished stock ready for sale.
-      </p>
-
       <div className="flex justify-end gap-3 pt-4 border-t">
         <Button type="button" variant="secondary" onClick={onCancel}>Cancel</Button>
         <Button type="submit" loading={mutation.isPending}>Create Production Order</Button>

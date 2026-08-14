@@ -72,12 +72,7 @@ export function VehicleForm({ onSuccess, onCancel }: VehicleFormProps) {
           className="mt-0.5 h-4 w-4 rounded border-slate-300"
           {...register('isHired')}
         />
-        <span>
-          Hired / external vehicle
-          <span className="block text-xs text-slate-500 mt-0.5">
-            Check for lorries hired for long-distance runs — they can be added each time the carrier changes.
-          </span>
-        </span>
+        <span>Hired / external vehicle</span>
       </label>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Input

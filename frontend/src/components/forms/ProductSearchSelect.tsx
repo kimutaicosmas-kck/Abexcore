@@ -204,16 +204,6 @@ export function ProductSearchSelect({
         </div>
       )}
 
-      <p className="text-[11px] text-slate-500">
-        {isFetching
-          ? 'Updating results…'
-          : debouncedQuery
-            ? `${options.length} match${options.length === 1 ? '' : 'es'} — click a product below`
-            : value && selectedProduct
-              ? 'Click the selected product to search again'
-              : 'Type to search — matching products appear below'}
-      </p>
-
       {error && <p className="text-sm text-red-600">{error}</p>}
     </div>
   );

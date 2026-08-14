@@ -177,9 +177,6 @@ export function CustomerForm({ customer, onSuccess, onCancel }: CustomerFormProp
         />
         <div>
           <Input label="Credit Limit (KES) — optional" type="number" min={0} step="0.01" {...register('creditLimit')} />
-          <p className="text-xs text-slate-500 mt-1">
-            Maximum unpaid balance allowed for this customer. Set to 0 for no credit limit check.
-          </p>
         </div>
         <Input label="Payment Terms (days)" type="number" {...register('paymentTerms')} />
         {isEdit && (
@@ -195,17 +192,6 @@ export function CustomerForm({ customer, onSuccess, onCancel }: CustomerFormProp
           />
         )}
       </div>
-      <p className="text-xs text-slate-500 -mt-1">
-        {vatStatus === 'NON_VAT'
-          ? 'Non-VAT: enter the final selling price for this customer. No VAT is added on top (0% on the invoice).'
-          : 'VAT: enter the final selling price including VAT. VAT is extracted from that total for accounting — never added on top. Tax PIN is required.'}
-      </p>
-      {canAssignSalesPerson && (
-        <p className="-mt-2 text-xs text-slate-500">
-          Assign a sales officer to own this account, or leave blank so any sales user with rights
-          can see them and place orders.
-        </p>
-      )}
       <Input label="Address" {...register('address')} />
       <Input label="Notes" {...register('notes')} />
       </ModalFormBody>

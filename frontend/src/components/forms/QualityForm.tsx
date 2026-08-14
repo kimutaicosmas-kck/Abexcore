@@ -119,10 +119,6 @@ export function QualityForm({ onSuccess, onCancel }: QualityFormProps) {
         </div>
       )}
 
-      <p className="text-xs text-slate-500">
-        Production inspections do not require a sales or production order. Select a product for surplus-stock runs, or link a production order when available.
-      </p>
-
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Select label="Type *" options={qualityTypeOptions} {...register('type')} error={errors.type?.message} />
         <Select label="Status" options={qualityStatusOptions} {...register('status')} />

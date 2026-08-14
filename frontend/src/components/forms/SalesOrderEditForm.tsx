@@ -83,11 +83,6 @@ export function SalesOrderEditForm({ order, onSuccess, onCancel }: SalesOrderEdi
     <form onSubmit={handleSubmit((data) => mutation.mutate(data))} className="space-y-4">
       {mutation.isError && <Alert variant="error">{getApiErrorMessage(mutation.error)}</Alert>}
 
-      <Alert variant="info">
-        Adjust quantities to match available stock or customer agreement. Quantity cannot go below what is already delivered.
-        The assigned salesperson will be notified of changes.
-      </Alert>
-
       <Input
         label="Reason for adjustment *"
         placeholder="e.g. Only 40 units in stock — customer agreed to 40"

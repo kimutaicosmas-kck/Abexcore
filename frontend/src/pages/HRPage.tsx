@@ -641,9 +641,6 @@ export function HRPage() {
 
           <Card title={`Amend leave balances (${leaveYear})`}>
             <div className="space-y-3">
-              <p className="text-xs text-slate-500">
-                Defaults: Annual 21, Sick 7, Compassionate 5, Paternity 14 (male), Maternity 90 (female). Balances reset each January.
-              </p>
               <div className="flex flex-col sm:flex-row gap-3">
                 <Select
                   label="Employee"

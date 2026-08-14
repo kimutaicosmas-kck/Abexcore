@@ -257,20 +257,6 @@ export function SalesOrderForm({ onSuccess, onCancel }: SalesOrderFormProps) {
         />
       </div>
 
-      {canAssignSalesPerson && (
-        <p className="-mt-2 text-xs text-slate-500">
-          Choose a sales officer, or leave as Me — the order stays under the account that created it.
-        </p>
-      )}
-      <p className="-mt-1 text-xs text-slate-500">
-        Sale / required date is when the sale counts (e.g. yesterday). Invoices use this date.
-        Entry date is when you typed the order (defaults to today).
-        {orderDate && !watch('requiredDate') ? ' Required date defaults to entry date if left blank.' : ''}
-      </p>
-      <p className="mt-1 text-xs text-slate-500">
-        Enter the customer&apos;s LPO / purchase order number — it is copied onto the sales invoice.
-      </p>
-
       <div ref={customerBoxRef} className="rounded-xl border border-slate-200 bg-slate-50/60 p-3 space-y-2">
         <p className="text-sm font-medium text-slate-800">Customer *</p>
         {customerId && selectedCustomer && !customerListOpen ? (
@@ -343,9 +329,6 @@ export function SalesOrderForm({ onSuccess, onCancel }: SalesOrderFormProps) {
         {errors.customerId?.message && (
           <p className="text-sm text-red-600">{errors.customerId.message}</p>
         )}
-        <p className="text-xs text-slate-500">
-          Type to search — matching customers appear below (no dropdown needed).
-        </p>
       </div>
 
       {selectedCustomer && hasCreditLimit && (
@@ -367,7 +350,7 @@ export function SalesOrderForm({ onSuccess, onCancel }: SalesOrderFormProps) {
         <Alert variant="warning">
           This order is above the customer&apos;s credit limit (available{' '}
           {formatCurrency(availableCredit)}, order {formatCurrency(total)}, limit{' '}
-          {formatCurrency(creditLimit)}). Credit limit is optional — you can still create the order.
+          {formatCurrency(creditLimit)}).
         </Alert>
       )}
       {isCreditLimitError && errorMessage && (

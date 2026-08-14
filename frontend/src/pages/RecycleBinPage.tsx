@@ -161,7 +161,7 @@ export function RecycleBinPanel() {
 
   return (
     <div className="space-y-6">
-      <PageHeader subtitle="Soft-deleted records. Restore them, or permanently remove them if you are a Super Admin." />
+      <PageHeader />
 
       {summary.length > 0 && (
         <div className="flex flex-wrap gap-2">
@@ -250,13 +250,7 @@ export function RecycleBinPanel() {
           onPageChange={setPage}
           label="items"
         />
-      </DataPanel>
-
-      {!isSuperAdmin && (
-        <p className="text-xs text-slate-500">
-          Permanent deletion is limited to Super Admins. You can restore items you manage.
-        </p>
-      )}
+          </DataPanel>
 
       <ConfirmDialog
         open={!!restoreTarget}
