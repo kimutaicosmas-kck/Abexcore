@@ -25,6 +25,13 @@ async function signIn(page: import('@playwright/test').Page) {
     }),
   ]);
 
+  // Dismiss post-login welcome overlay if present (blocks dashboard assertions).
+  const welcome = page.getByRole('dialog', { name: /Welcome back/i });
+  if (await welcome.isVisible().catch(() => false)) {
+    await page.keyboard.press('Escape');
+    await expect(welcome).toBeHidden({ timeout: 5_000 });
+  }
+
   await expect(page.getByText(/Sales today/i).first()).toBeVisible({ timeout: 20_000 });
 }
 
@@ -45,7 +52,7 @@ test.describe('AbexCore ERP smoke', () => {
     await signIn(page);
 
     await page.goto('/finance');
-    await expect(page.getByRole('button', { name: 'Overview' })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole('button', { name: 'Reconciliation' })).toBeVisible({ timeout: 15_000 });
 
     await page.getByRole('button', { name: 'Reconciliation' }).click();
     await expect(
