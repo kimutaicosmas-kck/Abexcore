@@ -206,8 +206,8 @@ export function MySalesPage() {
                 to="/finance"
               />
               <StatCard
-                title="Invoiced orders this month"
-                value={overview.month.invoicedOrderCount ?? 0}
+                title="Invoiced this month"
+                value={formatCurrency(overview.month.invoiced)}
                 icon={<FileCheck2 className="h-5 w-5 text-white" />}
                 color="from-amber-500 to-amber-700"
                 onClick={() => applyPreset('month')}
