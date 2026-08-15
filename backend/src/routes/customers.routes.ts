@@ -103,8 +103,8 @@ router.get(
     if (vatStatus) where.vatStatus = vatStatus;
     if (isActive !== undefined) where.isActive = isActive;
 
-    // Sales officers/reps see their own customers plus unassigned (free) accounts.
-    // Sales Manager keeps company-wide CRM visibility.
+    // Sales officers/reps see their own customers plus unassigned accounts
+    // (not attached to any salesperson). They never see other officers' books.
     if (isSalesBookOwner(req.user!.roleName)) {
       where.OR = [{ salesPersonId: req.user!.id }, { salesPersonId: null }];
     } else if (salesPersonId === 'none') {

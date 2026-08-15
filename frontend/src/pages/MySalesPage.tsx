@@ -3,11 +3,11 @@ import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
 import {
-  Target,
   TrendingUp,
   Wallet,
   Receipt,
   AlertCircle,
+  FileCheck2,
 } from 'lucide-react';
 import { financeApi } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
@@ -192,29 +192,25 @@ export function MySalesPage() {
                 onClick={() => applyPreset('today')}
               />
               <StatCard
-                title="This month"
+                title="This month sales"
                 value={formatCurrency(overview.month.sales)}
                 icon={<Receipt className="h-5 w-5 text-white" />}
                 color="from-indigo-500 to-indigo-700"
                 onClick={() => applyPreset('month')}
               />
               <StatCard
-                title="Collected (month)"
+                title="Collected (this month)"
                 value={formatCurrency(overview.month.paid)}
                 icon={<Wallet className="h-5 w-5 text-white" />}
                 color="from-teal-500 to-teal-700"
                 to="/finance"
               />
               <StatCard
-                title="Monthly target"
-                value={
-                  overview.monthlyTarget > 0
-                    ? `${overview.monthAchievementPercent ?? 0}%`
-                    : 'Not set'
-                }
-                icon={<Target className="h-5 w-5 text-white" />}
+                title="Invoiced orders this month"
+                value={overview.month.invoicedOrderCount ?? 0}
+                icon={<FileCheck2 className="h-5 w-5 text-white" />}
                 color="from-amber-500 to-amber-700"
-                to="/sales-performance?tab=targets"
+                onClick={() => applyPreset('month')}
               />
               <StatCard
                 title="Outstanding"

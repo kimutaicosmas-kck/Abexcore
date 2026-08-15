@@ -36,6 +36,7 @@ import { Modal } from '../components/ui/Modal';
 import { ProductForm } from '../components/forms/ProductForm';
 import { ExcelImportModal } from '../components/forms/ExcelImportModal';
 import { useAuth } from '../contexts/AuthContext';
+import { isSalesBookOwner } from '../utils/salesTargets';
 import { Product, ProductCategoryOption, ProductStats } from '../types';
 import { PART_NUMBER_LABEL, formatPartNumberLine } from '../utils/productDisplay';
 import { AvailableProductsPanel } from './AvailableProductsPage';
@@ -49,14 +50,15 @@ const STATUS_OPTIONS = [
 
 export function ProductsPage() {
   const queryClient = useQueryClient();
-  const { hasPermission } = useAuth();
+  const { hasPermission, user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
 
+  const salesCatalogViewOnly = isSalesBookOwner(user?.role?.name);
   const canManageProducts = hasPermission('products:read');
   const canViewAvailable = hasPermission('sales:read');
-  const canCreate = hasPermission('products:create');
-  const canUpdate = hasPermission('products:update');
-  const canDelete = hasPermission('products:delete');
+  const canCreate = hasPermission('products:create') && !salesCatalogViewOnly;
+  const canUpdate = hasPermission('products:update') && !salesCatalogViewOnly;
+  const canDelete = hasPermission('products:delete') && !salesCatalogViewOnly;
 
   const tabs = useMemo(() => {
     const items: string[] = [];

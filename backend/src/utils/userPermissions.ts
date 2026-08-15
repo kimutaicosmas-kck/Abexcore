@@ -1,5 +1,5 @@
 import prisma from '../config/database';
-import { modulesForRoleName, PERMISSION_MODULES } from '../config/rolePermissions';
+import { modulesForRoleName, PERMISSION_MODULES, isSalesBookOwner } from '../config/rolePermissions';
 
 const VALID_MODULES = new Set<string>(PERMISSION_MODULES);
 
@@ -28,6 +28,26 @@ async function permissionStringsForModules(modules: string[]): Promise<string[]>
   return permissions.map((p) => `${p.module}:${p.action}`);
 }
 
+/** Sales book owners may browse products but never create/edit/delete the catalog. */
+function applySalesBookOwnerPermissionGuards(
+  roleName: string,
+  permissions: string[]
+): string[] {
+  if (!isSalesBookOwner(roleName)) return permissions;
+
+  const next = permissions.filter((p) => {
+    if (!p.startsWith('products:')) return true;
+    return p === 'products:read';
+  });
+
+  // Catalog browse via Products nav (also allowed by sales:read on the frontend).
+  if (next.includes('sales:read') && !next.includes('products:read')) {
+    next.push('products:read');
+  }
+
+  return next;
+}
+
 export async function resolveUserPermissionStrings(user: {
   role: { name: string; permissions: RolePermissionRow[] };
   allowedModules?: unknown;
@@ -37,13 +57,15 @@ export async function resolveUserPermissionStrings(user: {
   }
 
   const modules = normalizeAllowedModules(user.allowedModules);
+  let permissions: string[];
   if (modules?.length) {
-    return permissionStringsForModules(modules);
+    permissions = await permissionStringsForModules(modules);
+  } else {
+    const rolePerms = user.role.permissions.map((rp) => `${rp.permission.module}:${rp.permission.action}`);
+    permissions = rolePerms.length
+      ? rolePerms
+      : await permissionStringsForModules(modulesForRoleName(user.role.name));
   }
 
-  const rolePerms = user.role.permissions.map((rp) => `${rp.permission.module}:${rp.permission.action}`);
-  if (rolePerms.length) return rolePerms;
-
-  // Production seed may create roles without role_permissions — fall back to role matrix.
-  return permissionStringsForModules(modulesForRoleName(user.role.name));
+  return applySalesBookOwnerPermissionGuards(user.role.name, permissions);
 }

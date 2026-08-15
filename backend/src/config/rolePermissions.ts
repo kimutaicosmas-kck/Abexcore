@@ -64,9 +64,9 @@ export const ROLE_MODULE_ACCESS: Record<string, readonly string[]> = {
   'Procurement Officer': ['dashboard', 'procurement', 'inventory'],
   'Warehouse Officer': ['dashboard', 'inventory'],
   Storekeeper: ['dashboard', 'inventory'],
-  'Sales Officer': ['dashboard', 'customers', 'sales'],
-  'Sales Executive': ['dashboard', 'customers', 'sales'],
-  'Sales Representative': ['dashboard', 'customers', 'sales'], // legacy
+  'Sales Officer': ['dashboard', 'customers', 'sales', 'products'],
+  'Sales Executive': ['dashboard', 'customers', 'sales', 'products'],
+  'Sales Representative': ['dashboard', 'customers', 'sales', 'products'], // legacy
   'Machine Operator': ['dashboard', 'production'],
   'Finance Officer': ['dashboard', 'finance', 'reports'],
   Accountant: ['dashboard', 'finance', 'reports'],
@@ -158,5 +158,12 @@ export function permissionsForRole(roleName: string, allPermissions: PermissionR
   }
 
   const modules = modulesForRoleName(roleName);
-  return allPermissions.filter((p) => modules.includes(p.module));
+  const filtered = allPermissions.filter((p) => modules.includes(p.module));
+
+  // Front-line sales may view the product catalog only.
+  if (isSalesBookOwner(roleName)) {
+    return filtered.filter((p) => p.module !== 'products' || p.action === 'read');
+  }
+
+  return filtered;
 }

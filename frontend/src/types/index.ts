@@ -1031,6 +1031,7 @@ export interface MySalesPeriodMetrics {
   paid: number;
   outstanding: number;
   orderCount: number;
+  invoicedOrderCount: number;
 }
 
 export interface MySalesOverview {

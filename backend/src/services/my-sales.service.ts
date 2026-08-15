@@ -38,6 +38,7 @@ type PeriodMetrics = {
   paid: number;
   outstanding: number;
   orderCount: number;
+  invoicedOrderCount: number;
 };
 
 async function getPeriodMetrics(
@@ -56,14 +57,25 @@ async function getPeriodMetrics(
     salesOrder: salesPersonOrderFilter(salesPersonId),
     invoiceDate: { gte: from, lte: to },
   };
+  const invoicedOrderWhere: Prisma.SalesOrderWhereInput = {
+    ...salesPersonOrderFilter(salesPersonId),
+    invoices: {
+      some: {
+        type: 'SALES',
+        status: { not: 'REFUNDED' },
+        invoiceDate: { gte: from, lte: to },
+      },
+    },
+  };
 
-  const [orderAgg, orderCount, invoiceAgg] = await Promise.all([
+  const [orderAgg, orderCount, invoiceAgg, invoicedOrderCount] = await Promise.all([
     prisma.salesOrder.aggregate({ where: orderWhere, _sum: { totalAmount: true } }),
     prisma.salesOrder.count({ where: orderWhere }),
     prisma.invoice.aggregate({
       where: invoiceWhere,
       _sum: { totalAmount: true, paidAmount: true },
     }),
+    prisma.salesOrder.count({ where: invoicedOrderWhere }),
   ]);
 
   const invoiced = Number(invoiceAgg._sum.totalAmount || 0);
@@ -75,6 +87,7 @@ async function getPeriodMetrics(
     paid,
     outstanding: invoiced - paid,
     orderCount,
+    invoicedOrderCount,
   };
 }
 
