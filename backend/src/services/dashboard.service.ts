@@ -1,5 +1,5 @@
 import prisma from '../config/database';
-import { startOfDay, startOfMonth, endOfDay, subDays } from '../utils/date';
+import { startOfDay, startOfMonth, endOfDay, subDays, toLocalDateKey } from '../utils/date';
 import { getNetAccountsReceivable } from '../utils/finance-metrics';
 import { InvoiceMaintenanceService } from './invoice-maintenance.service';
 import { mergeTenantWarehouseWhere, requireTenantId } from '../utils/tenant';
@@ -296,12 +296,12 @@ export class DashboardService {
 
     const salesByDayMap = new Map<string, number>();
     for (let i = safeDays - 1; i >= 0; i--) {
-      const dateKey = startOfDay(subDays(new Date(), i)).toISOString().split('T')[0];
+      const dateKey = toLocalDateKey(startOfDay(subDays(new Date(), i)));
       salesByDayMap.set(dateKey, 0);
     }
 
     for (const inv of invoices) {
-      const key = startOfDay(inv.invoiceDate).toISOString().split('T')[0];
+      const key = toLocalDateKey(inv.invoiceDate);
       if (salesByDayMap.has(key)) {
         salesByDayMap.set(key, (salesByDayMap.get(key) || 0) + Number(inv.totalAmount));
       }

@@ -10,6 +10,22 @@ export function endOfDay(date: Date): Date {
   return d;
 }
 
+/**
+ * Calendar day key (YYYY-MM-DD) in the business timezone.
+ * Never use `toISOString().slice(0, 10)` — UTC shifts EAT midnight to the previous day.
+ */
+export function toLocalDateKey(
+  date: Date,
+  timeZone = process.env.TZ || 'Africa/Nairobi'
+): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(date);
+}
+
 /** Parse `YYYY-MM-DD` as a local calendar day (avoids UTC off-by-one). */
 export function parseLocalDateInput(dateStr: string): Date | null {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateStr.trim());
