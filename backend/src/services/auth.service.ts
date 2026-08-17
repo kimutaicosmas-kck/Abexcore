@@ -122,6 +122,7 @@ export class AuthService {
             currency: true,
             isActive: true,
             welcomeMessage: true,
+            enabledModules: true,
           },
         },
       },
@@ -231,6 +232,7 @@ export class AuthService {
             vatRate: Number(company.vatRate),
             currency: company.currency,
             welcomeMessage: company.welcomeMessage,
+            enabledModules: company.enabledModules,
           })
         : { name: 'Company', vatRate: 16, currency: 'KES', welcomeMessage: null },
       ...tokens,

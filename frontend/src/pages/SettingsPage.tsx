@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Copy, Check, Upload } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { settingsApi, authApi, tenantApi, usersApi, productsApi, inventoryApi } from '../services/api';
-import { Card, Button, Input, Textarea, Alert, PageToolbar, EmptyState, Select, formatDate, formatDateTime } from '../components/ui';
+import { Card, Button, Input, Textarea, Alert, PageToolbar, EmptyState, Select, formatDate, formatDateTime, Modal, ModalFormBody } from '../components/ui';
 import { useAuth } from '../contexts/AuthContext';
 import { CatalogManageItem, CompanySettings, RegisteredCompany, TenantTeamMember, WorkspaceSettings } from '../types';
 import { CompanyLogoMark } from '../components/brand/CompanyBrand';
@@ -20,6 +20,16 @@ import {
   modulesForRoleName,
   resolveDepartmentIdFromModules,
 } from '../utils/roleModules';
+import {
+  CompanyModulePreset,
+  CORE_COMPANY_MODULES,
+  PACKAGE_PRESET_OPTIONS,
+  detectModulePreset,
+  modulesForPreset,
+  packageLabel,
+  resolveCompanyModules,
+  TRADING_COMPANY_MODULES,
+} from '../utils/companyModules';
 import { getApiErrorMessage } from '../utils/apiError';
 import { RecycleBinPanel } from './RecycleBinPage';
 
@@ -82,6 +92,9 @@ export function SettingsPage() {
   const [logoError, setLogoError] = useState('');
   const [statusUpdatingId, setStatusUpdatingId] = useState<string | null>(null);
   const [deletingCompanyId, setDeletingCompanyId] = useState<string | null>(null);
+  const [modulesEditing, setModulesEditing] = useState<RegisteredCompany | null>(null);
+  const [editModulePreset, setEditModulePreset] = useState<CompanyModulePreset>('manufacturing');
+  const [editCustomModules, setEditCustomModules] = useState<string[]>([...TRADING_COMPANY_MODULES]);
   const [resettingDemo, setResettingDemo] = useState(false);
   const [seedingDemo, setSeedingDemo] = useState(false);
   const [inviteModules, setInviteModules] = useState<string[]>(['dashboard']);
@@ -333,6 +346,47 @@ export function SettingsPage() {
     },
     onSettled: () => setDeletingCompanyId(null),
   });
+
+  const companyModulesMutation = useMutation({
+    mutationFn: ({
+      id,
+      modulePreset,
+      enabledModules,
+    }: {
+      id: string;
+      modulePreset: CompanyModulePreset;
+      enabledModules?: string[];
+    }) =>
+      tenantApi.updateCompanyModules(id, {
+        modulePreset,
+        ...(modulePreset === 'custom' ? { enabledModules } : {}),
+      }),
+    onSuccess: (res) => {
+      queryClient.invalidateQueries({ queryKey: ['tenant-companies'] });
+      setModulesEditing(null);
+      setSuccessMessage(res.data.message || 'Company modules updated.');
+      setTimeout(() => setSuccessMessage(''), 4000);
+    },
+  });
+
+  const openModulesEditor = (entry: RegisteredCompany) => {
+    const preset = detectModulePreset(entry.enabledModules);
+    setEditModulePreset(preset);
+    setEditCustomModules(resolveCompanyModules(entry.enabledModules));
+    setModulesEditing(entry);
+  };
+
+  const saveCompanyModules = () => {
+    if (!modulesEditing) return;
+    companyModulesMutation.mutate({
+      id: modulesEditing.id,
+      modulePreset: editModulePreset,
+      enabledModules:
+        editModulePreset === 'custom'
+          ? modulesForPreset('custom', editCustomModules)
+          : undefined,
+    });
+  };
 
   const resetDemoMutation = useMutation({
     mutationFn: (confirmSlug: string) => tenantApi.resetDemoWorkspace(confirmSlug),
@@ -684,6 +738,7 @@ export function SettingsPage() {
                   <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-500">
                     <th className="py-2 px-2 font-medium">Company</th>
                     <th className="py-2 px-2 font-medium">Code</th>
+                    <th className="py-2 px-2 font-medium">Package</th>
                     <th className="py-2 px-2 font-medium">Users</th>
                     <th className="py-2 px-2 font-medium">Registered</th>
                     <th className="py-2 px-2 font-medium">Status</th>
@@ -705,6 +760,11 @@ export function SettingsPage() {
                           </div>
                         </td>
                         <td className="py-3 px-2 font-mono text-xs text-slate-700">{entry.slug}</td>
+                        <td className="py-3 px-2">
+                          <span className="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700">
+                            {isPlatformCompany ? 'Platform' : packageLabel(entry.enabledModules)}
+                          </span>
+                        </td>
                         <td className="py-3 px-2 text-slate-700">{entry.userCount}</td>
                         <td className="py-3 px-2 text-slate-500 whitespace-nowrap">{formatDate(entry.createdAt)}</td>
                         <td className="py-3 px-2">
@@ -722,7 +782,15 @@ export function SettingsPage() {
                           {isPlatformCompany ? (
                             <span className="text-xs text-slate-400">Platform owner</span>
                           ) : (
-                            <div className="flex items-center justify-end gap-1">
+                            <div className="flex items-center justify-end gap-1 flex-wrap">
+                              <Button
+                                type="button"
+                                variant="secondary"
+                                size="sm"
+                                onClick={() => openModulesEditor(entry)}
+                              >
+                                Modules
+                              </Button>
                               <Button
                                 type="button"
                                 variant={entry.isActive ? 'ghost' : 'secondary'}
@@ -756,6 +824,78 @@ export function SettingsPage() {
               description="Register the first company workspace to get started."
             />
           )}
+
+          <Modal
+            open={!!modulesEditing}
+            onClose={() => !companyModulesMutation.isPending && setModulesEditing(null)}
+            title={modulesEditing ? `Modules — ${modulesEditing.name}` : 'Modules'}
+            size="lg"
+          >
+            <ModalFormBody
+              footer={
+                <div className="flex justify-end gap-2">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    disabled={companyModulesMutation.isPending}
+                    onClick={() => setModulesEditing(null)}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="button"
+                    loading={companyModulesMutation.isPending}
+                    onClick={saveCompanyModules}
+                  >
+                    Save modules
+                  </Button>
+                </div>
+              }
+            >
+              {companyModulesMutation.isError && (
+                <Alert variant="error">
+                  {getApiErrorMessage(companyModulesMutation.error)}
+                </Alert>
+              )}
+              <div className="space-y-2">
+                {PACKAGE_PRESET_OPTIONS.map((opt) => (
+                  <label
+                    key={opt.value}
+                    className={`flex gap-3 rounded-xl border px-3 py-2.5 cursor-pointer transition-colors ${
+                      editModulePreset === opt.value
+                        ? 'border-primary-300 bg-primary-50/60'
+                        : 'border-slate-200 hover:bg-slate-50'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="editModulePreset"
+                      className="mt-1"
+                      checked={editModulePreset === opt.value}
+                      onChange={() => {
+                        setEditModulePreset(opt.value);
+                        if (opt.value === 'custom' && modulesEditing) {
+                          setEditCustomModules(resolveCompanyModules(modulesEditing.enabledModules));
+                        }
+                      }}
+                    />
+                    <span>
+                      <span className="block text-sm font-medium text-slate-900">{opt.label}</span>
+                      <span className="block text-xs text-slate-500 mt-0.5">{opt.description}</span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+              {editModulePreset === 'custom' && (
+                <ModuleAccessPicker
+                  value={editCustomModules}
+                  roleBaseline={[...CORE_COMPANY_MODULES]}
+                  onChange={setEditCustomModules}
+                  label="Included modules *"
+                />
+              )}
+            </ModalFormBody>
+          </Modal>
         </Card>
       )}
 
@@ -829,6 +969,11 @@ export function SettingsPage() {
                 <ModuleAccessPicker
                   value={inviteModules}
                   roleBaseline={inviteRoleBaseline}
+                  availableModules={
+                    Array.isArray(authCompany?.enabledModules)
+                      ? authCompany.enabledModules
+                      : undefined
+                  }
                   onChange={(next) =>
                     setInviteModules(mergeRoleAndExtraModules(inviteRoleName || 'Sales Executive', next))
                   }

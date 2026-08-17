@@ -982,6 +982,8 @@ export interface RegisteredCompany {
   isActive: boolean;
   userCount: number;
   createdAt: string;
+  enabledModules?: string[] | null;
+  qualityModuleEnabled?: boolean;
 }
 
 export interface TenantTeamMember {

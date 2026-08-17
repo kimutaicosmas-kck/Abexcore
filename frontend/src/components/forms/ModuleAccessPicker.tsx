@@ -6,18 +6,31 @@ interface ModuleAccessPickerProps {
   onChange: (modules: string[]) => void;
   /** Modules that come with the selected role — always on and locked. */
   roleBaseline?: string[];
+  /** When set, only these modules are listed (company package limit). */
+  availableModules?: string[];
   disabled?: boolean;
   error?: string;
+  label?: string;
 }
 
 export function ModuleAccessPicker({
   value,
   onChange,
   roleBaseline = ['dashboard'],
+  availableModules,
   disabled,
   error,
+  label = 'Module access *',
 }: ModuleAccessPickerProps) {
-  const baseline = new Set(roleBaseline.includes('dashboard') ? roleBaseline : ['dashboard', ...roleBaseline]);
+  const catalog = availableModules?.length
+    ? ASSIGNABLE_MODULES.filter((m) => availableModules.includes(m))
+    : [...ASSIGNABLE_MODULES];
+
+  const baseline = new Set(
+    (roleBaseline.includes('dashboard') ? roleBaseline : ['dashboard', ...roleBaseline]).filter((m) =>
+      catalog.includes(m as (typeof ASSIGNABLE_MODULES)[number])
+    )
+  );
 
   const toggle = (module: string) => {
     if (disabled) return;
@@ -25,15 +38,15 @@ export function ModuleAccessPicker({
     if (value.includes(module)) {
       onChange(value.filter((m) => m !== module));
     } else {
-      onChange([...new Set([...roleBaseline, ...value, module])]);
+      onChange([...new Set([...roleBaseline, ...value, module].filter((m) => catalog.includes(m as (typeof ASSIGNABLE_MODULES)[number]) || baseline.has(m)))]);
     }
   };
 
   return (
     <div className="space-y-2">
-      <p className="text-sm font-medium text-slate-700">Module access *</p>
+      <p className="text-sm font-medium text-slate-700">{label}</p>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 rounded-2xl border border-slate-200 p-3 bg-slate-50/70">
-        {ASSIGNABLE_MODULES.map((module) => {
+        {catalog.map((module) => {
           const isRoleDefault = baseline.has(module);
           const checked = isRoleDefault || value.includes(module);
           return (

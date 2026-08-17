@@ -34,6 +34,8 @@ export interface CompanyConfig {
   vatRate: number;
   currency: string;
   welcomeMessage?: string | null;
+  /** null/undefined = full manufacturing suite (legacy). */
+  enabledModules?: string[] | null;
 }
 
 interface AuthContextType {

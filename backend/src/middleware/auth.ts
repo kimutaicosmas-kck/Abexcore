@@ -46,7 +46,7 @@ export const authenticate = async (
             permissions: { include: { permission: true } },
           },
         },
-        company: { select: { id: true, slug: true, isActive: true } },
+        company: { select: { id: true, slug: true, isActive: true, enabledModules: true } },
       },
     });
 

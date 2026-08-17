@@ -307,6 +307,13 @@ router.post(
       allowedModules = normalizeAllowedModules(modulesForRoleName(role.name));
     }
 
+    const tenantCompany = await prisma.company.findUnique({
+      where: { id: req.user!.companyId },
+      select: { enabledModules: true },
+    });
+    const { clampModulesToCompany } = await import('../config/companyModules');
+    allowedModules = clampModulesToCompany(allowedModules, tenantCompany?.enabledModules);
+
     if (employeeId) {
       const emp = await prisma.employee.findFirst({
         where: { id: employeeId, deletedAt: null, userId: null },
@@ -322,7 +329,7 @@ router.post(
         email: data.email.toLowerCase(),
         passwordHash,
         passwordChangedAt: new Date(),
-        allowedModules: allowedModules ?? modulesForRoleName(role.name),
+        allowedModules,
       },
       include: {
         role: true,
@@ -414,7 +421,16 @@ router.put(
 
     if (modules !== undefined) {
       const allowedModules = normalizeAllowedModules(modules);
-      updateData.allowedModules = allowedModules === null ? Prisma.DbNull : allowedModules;
+      if (allowedModules === null) {
+        updateData.allowedModules = Prisma.DbNull;
+      } else {
+        const tenantCompany = await prisma.company.findUnique({
+          where: { id: req.user!.companyId },
+          select: { enabledModules: true },
+        });
+        const { clampModulesToCompany } = await import('../config/companyModules');
+        updateData.allowedModules = clampModulesToCompany(allowedModules, tenantCompany?.enabledModules);
+      }
     }
 
     if (password) {

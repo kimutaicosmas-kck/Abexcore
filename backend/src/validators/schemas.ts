@@ -17,6 +17,10 @@ export const registerCompanySchema = z.object({
   phone: z.string().optional(),
   country: z.string().optional(),
   currency: z.string().optional(),
+  /** manufacturing | trading | custom */
+  modulePreset: z.enum(['manufacturing', 'trading', 'custom']).optional(),
+  /** JSON array or comma-separated module keys when preset is custom (or override). */
+  enabledModules: z.union([z.array(z.string()), z.string()]).optional(),
 });
 
 export const refreshTokenSchema = z.object({

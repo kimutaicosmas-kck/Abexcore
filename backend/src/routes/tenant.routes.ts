@@ -194,8 +194,10 @@ router.post(
 
     const company = await prisma.company.findUnique({
       where: { id: companyId },
-      select: { slug: true, name: true },
+      select: { slug: true, name: true, enabledModules: true },
     });
+    const { clampModulesToCompany } = await import('../config/companyModules');
+    allowedModules = clampModulesToCompany(allowedModules, company?.enabledModules);
 
     const passwordHash = await AuthService.hashPassword(password);
     const user = existing?.deletedAt
@@ -214,7 +216,7 @@ router.post(
             mustChangePassword: true,
             status: 'ACTIVE',
             deletedAt: null,
-            allowedModules: allowedModules ?? modulesForRoleName(role.name),
+            allowedModules,
           },
           include: { role: true, department: true, branch: true },
         })
@@ -226,7 +228,7 @@ router.post(
             passwordHash,
             passwordChangedAt: new Date(),
             mustChangePassword: true,
-            allowedModules: allowedModules ?? modulesForRoleName(role.name),
+            allowedModules,
           },
           include: { role: true, department: true, branch: true },
         });
@@ -307,6 +309,8 @@ router.get(
         logo: true,
         email: true,
         isActive: true,
+        enabledModules: true,
+        qualityModuleEnabled: true,
         createdAt: true,
         _count: { select: { users: { where: { deletedAt: null } } } },
       },
@@ -320,6 +324,33 @@ router.get(
           userCount: _count.users,
         })
       ),
+    });
+  })
+);
+
+const companyModulesSchema = z.object({
+  modulePreset: z.enum(['manufacturing', 'trading', 'custom']).optional(),
+  enabledModules: z.union([z.array(z.string()), z.string()]).optional(),
+}).refine(
+  (body) => body.modulePreset != null || body.enabledModules != null,
+  { message: 'Provide modulePreset and/or enabledModules' }
+);
+
+router.patch(
+  '/companies/:id/modules',
+  requirePlatformOwner,
+  validate(companyModulesSchema),
+  auditLog('tenant', 'update', 'company_modules'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const companyId = getParam(req.params.id);
+    const company = await TenantService.updateCompanyModules(companyId, {
+      modulePreset: req.body.modulePreset,
+      enabledModules: req.body.enabledModules,
+    });
+    res.json({
+      success: true,
+      data: company,
+      message: `Module access updated for ${company.name}.`,
     });
   })
 );
@@ -400,6 +431,8 @@ router.post(
       phone: req.body.phone || undefined,
       country: req.body.country || undefined,
       currency: req.body.currency || undefined,
+      modulePreset: req.body.modulePreset || undefined,
+      enabledModules: req.body.enabledModules || undefined,
     });
 
     AuthService.validatePassword(parsed.adminPassword);
@@ -409,7 +442,13 @@ router.post(
     res.status(201).json({
       success: true,
       data: {
-        company: { id: company.id, slug: company.slug, name: company.name, logo: company.logo },
+        company: {
+          id: company.id,
+          slug: company.slug,
+          name: company.name,
+          logo: company.logo,
+          enabledModules: company.enabledModules,
+        },
         admin: { id: admin.id, email: admin.email, firstName: admin.firstName, lastName: admin.lastName },
       },
       message: `Company "${company.name}" registered. Admin can sign in with company code "${company.slug}".`,

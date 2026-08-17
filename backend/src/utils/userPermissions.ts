@@ -1,5 +1,6 @@
 import prisma from '../config/database';
 import { modulesForRoleName, PERMISSION_MODULES, isSalesBookOwner } from '../config/rolePermissions';
+import { resolveCompanyModules } from '../config/companyModules';
 
 const VALID_MODULES = new Set<string>(PERMISSION_MODULES);
 
@@ -48,24 +49,42 @@ function applySalesBookOwnerPermissionGuards(
   return next;
 }
 
+function filterByCompanyModules(
+  permissions: string[],
+  enabledModules: unknown
+): string[] {
+  const allowed = new Set(resolveCompanyModules(enabledModules));
+  return permissions.filter((p) => {
+    const module = p.split(':')[0];
+    return module ? allowed.has(module) : false;
+  });
+}
+
 export async function resolveUserPermissionStrings(user: {
   role: { name: string; permissions: RolePermissionRow[] };
   allowedModules?: unknown;
+  company?: { enabledModules?: unknown } | null;
 }): Promise<string[]> {
-  if (user.role.name === 'Super Admin') {
-    return user.role.permissions.map((rp) => `${rp.permission.module}:${rp.permission.action}`);
-  }
-
-  const modules = normalizeAllowedModules(user.allowedModules);
   let permissions: string[];
-  if (modules?.length) {
-    permissions = await permissionStringsForModules(modules);
+
+  if (user.role.name === 'Super Admin') {
+    permissions = user.role.permissions.map(
+      (rp) => `${rp.permission.module}:${rp.permission.action}`
+    );
   } else {
-    const rolePerms = user.role.permissions.map((rp) => `${rp.permission.module}:${rp.permission.action}`);
-    permissions = rolePerms.length
-      ? rolePerms
-      : await permissionStringsForModules(modulesForRoleName(user.role.name));
+    const modules = normalizeAllowedModules(user.allowedModules);
+    if (modules?.length) {
+      permissions = await permissionStringsForModules(modules);
+    } else {
+      const rolePerms = user.role.permissions.map(
+        (rp) => `${rp.permission.module}:${rp.permission.action}`
+      );
+      permissions = rolePerms.length
+        ? rolePerms
+        : await permissionStringsForModules(modulesForRoleName(user.role.name));
+    }
   }
 
+  permissions = filterByCompanyModules(permissions, user.company?.enabledModules);
   return applySalesBookOwnerPermissionGuards(user.role.name, permissions);
 }

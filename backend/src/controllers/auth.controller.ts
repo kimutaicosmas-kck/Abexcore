@@ -68,6 +68,7 @@ export const me = asyncHandler(async (req: AuthRequest, res: Response) => {
           vatRate: true,
           currency: true,
           welcomeMessage: true,
+          enabledModules: true,
         },
       },
     },
@@ -87,6 +88,7 @@ export const me = asyncHandler(async (req: AuthRequest, res: Response) => {
             vatRate: Number(company.vatRate),
             currency: company.currency,
             welcomeMessage: company.welcomeMessage,
+            enabledModules: company.enabledModules,
           })
         : null,
     },

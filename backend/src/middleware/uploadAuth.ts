@@ -31,7 +31,7 @@ export async function authenticateUpload(req: AuthRequest, _res: Response, next:
       where: { id: decoded.userId, status: 'ACTIVE', deletedAt: null },
       include: {
         role: { include: { permissions: { include: { permission: true } } } },
-        company: { select: { id: true, slug: true, isActive: true } },
+        company: { select: { id: true, slug: true, isActive: true, enabledModules: true } },
       },
     });
 

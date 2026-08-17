@@ -88,8 +88,11 @@ export function UserForm({ user, onSuccess, onCancel }: UserFormProps) {
     queryFn: () => usersApi.linkableEmployees().then((r) => r.data.data as LinkableEmployee[]),
   });
 
-  const { user: authUser } = useAuth();
+  const { user: authUser, company: authCompany } = useAuth();
   const canAssignSuperAdmin = canAssignCompanySuperAdmin(authUser?.role?.name);
+  const companyAvailableModules = Array.isArray(authCompany?.enabledModules)
+    ? authCompany.enabledModules
+    : undefined;
   const editingIsSuperAdmin = user?.role?.name === 'Super Admin';
   // Per-company seats (Amazon ≠ Company X). Hide only when this tenant is full.
   const atSuperAdminCapacity =
@@ -375,6 +378,7 @@ export function UserForm({ user, onSuccess, onCancel }: UserFormProps) {
       <ModuleAccessPicker
         value={selectedModules}
         roleBaseline={roleBaseline}
+        availableModules={companyAvailableModules}
         onChange={(next) => {
           setSelectedModules(mergeRoleAndExtraModules(selectedRoleName || 'Sales Executive', next));
           setModuleError('');
