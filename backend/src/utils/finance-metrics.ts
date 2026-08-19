@@ -45,3 +45,15 @@ export async function getNetAccountsPayable(): Promise<number> {
     0
   );
 }
+
+/** Total amounts paid/received on sales invoices (customer collections). */
+export async function getInvoicePaymentsReceived(): Promise<number> {
+  const agg = await prisma.invoice.aggregate({
+    where: {
+      type: 'SALES',
+      status: { not: 'REFUNDED' },
+    },
+    _sum: { paidAmount: true },
+  });
+  return Number(agg._sum.paidAmount || 0);
+}

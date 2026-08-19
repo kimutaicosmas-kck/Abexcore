@@ -686,6 +686,8 @@ export interface FinanceStats {
   totalPurchases: number;
   accountsReceivable: number;
   accountsPayable: number;
+  /** Total paid/received on sales invoices (customer collections). */
+  paymentsReceived: number;
   overdueInvoices: number;
   monthlyRevenue: number;
   journalEntries: number;

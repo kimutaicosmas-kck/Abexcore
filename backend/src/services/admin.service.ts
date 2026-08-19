@@ -1,5 +1,10 @@
 import prisma from '../config/database';
-import { getMonthlySalesRevenue, getNetAccountsReceivable, getNetAccountsPayable } from '../utils/finance-metrics';
+import {
+  getMonthlySalesRevenue,
+  getNetAccountsReceivable,
+  getNetAccountsPayable,
+  getInvoicePaymentsReceived,
+} from '../utils/finance-metrics';
 import { InvoiceMaintenanceService } from './invoice-maintenance.service';
 
 export class FinanceService {
@@ -16,6 +21,7 @@ export class FinanceService {
       journalCount,
       accountsReceivable,
       accountsPayable,
+      paymentsReceived,
     ] = await Promise.all([
       prisma.invoice.aggregate({ where: { type: 'SALES' }, _sum: { totalAmount: true } }),
       prisma.invoice.aggregate({ where: { type: 'PURCHASE' }, _sum: { totalAmount: true } }),
@@ -29,6 +35,7 @@ export class FinanceService {
       prisma.journalEntry.count(),
       getNetAccountsReceivable(),
       getNetAccountsPayable(),
+      getInvoicePaymentsReceived(),
     ]);
 
     return {
@@ -36,6 +43,7 @@ export class FinanceService {
       totalPurchases: Number(purchaseAgg._sum?.totalAmount || 0),
       accountsReceivable,
       accountsPayable,
+      paymentsReceived,
       overdueInvoices: overdueCount,
       monthlyRevenue: monthlySales,
       journalEntries: journalCount,
