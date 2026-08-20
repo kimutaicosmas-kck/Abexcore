@@ -4,9 +4,7 @@ import { authenticate, authorize, AuthRequest } from '../middleware/auth';
 import { asyncHandler } from '../middleware/errorHandler';
 import { validate } from '../middleware/validate';
 import { WorkflowService } from '../services/workflow.service';
-import { AnalyticsService } from '../services/analytics.service';
 import { OutboxService } from '../services/outbox.service';
-import { KraEtimsService } from '../services/kra-etims.service';
 import { getParam } from '../utils/request';
 
 const router = Router();
@@ -71,36 +69,6 @@ router.post(
 );
 
 router.get(
-  '/analytics/summary',
-  authorize('reports:read', 'dashboard:read', 'finance:read'),
-  asyncHandler(async (req: AuthRequest, res: Response) => {
-    const from = typeof req.query.from === 'string' ? new Date(req.query.from) : undefined;
-    const to = typeof req.query.to === 'string' ? new Date(req.query.to) : undefined;
-    const data = await AnalyticsService.executiveSummary({ from, to });
-    res.json({ success: true, data });
-  })
-);
-
-router.get(
-  '/analytics/sales-trend',
-  authorize('reports:read', 'dashboard:read'),
-  asyncHandler(async (req: AuthRequest, res: Response) => {
-    const days = Math.min(90, Math.max(7, parseInt(String(req.query.days || '30'), 10) || 30));
-    const data = await AnalyticsService.salesTrend(days);
-    res.json({ success: true, data });
-  })
-);
-
-router.get(
-  '/analytics/ar-aging',
-  authorize('reports:read', 'finance:read'),
-  asyncHandler(async (_req: AuthRequest, res: Response) => {
-    const data = await AnalyticsService.arAging();
-    res.json({ success: true, data });
-  })
-);
-
-router.get(
   '/outbox/recent',
   authorize('settings:read'),
   asyncHandler(async (_req: AuthRequest, res: Response) => {
@@ -115,36 +83,6 @@ router.post(
   asyncHandler(async (_req: AuthRequest, res: Response) => {
     const published = await OutboxService.drain(50);
     res.json({ success: true, data: { published } });
-  })
-);
-
-router.post(
-  '/etims/invoices/:id/submit',
-  authorize('finance:update', 'finance:create'),
-  asyncHandler(async (req: AuthRequest, res: Response) => {
-    const invoiceId = getParam(req.params.id);
-    const queued = await KraEtimsService.enqueueInvoiceSubmit(invoiceId, req.user!.companyId);
-    res.json({
-      success: true,
-      data: queued,
-      message: queued.queued
-        ? 'eTIMS submission queued'
-        : 'eTIMS submission ran inline (Redis unavailable)',
-    });
-  })
-);
-
-router.get(
-  '/etims/status',
-  authorize('finance:read', 'settings:read'),
-  asyncHandler(async (_req: AuthRequest, res: Response) => {
-    res.json({
-      success: true,
-      data: {
-        configured: KraEtimsService.isConfigured(),
-        mode: KraEtimsService.isConfigured() ? 'live' : 'stub',
-      },
-    });
   })
 );
 
