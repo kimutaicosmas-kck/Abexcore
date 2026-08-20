@@ -35,6 +35,10 @@ function registerBackgroundHandlers() {
   registerJobHandler('low-stock-check', async () => {
     await NotificationService.runLowStockCheckForAllCompanies();
   });
+  registerJobHandler('audit-log-cleanup', async () => {
+    const { purgeExpiredAuditLogs } = await import('./services/auditRetention.service');
+    await purgeExpiredAuditLogs();
+  });
 }
 
 function startBackgroundJobs() {
@@ -51,13 +55,21 @@ function startBackgroundJobs() {
   void enqueueJob('low-stock-check').catch((err) =>
     logger.warn('Startup low-stock enqueue failed', err)
   );
+  void enqueueJob('audit-log-cleanup').catch((err) =>
+    logger.warn('Startup audit cleanup enqueue failed', err)
+  );
 
   const lowStockIntervalMs =
     config.nodeEnv === 'production' ? 6 * 60 * 60 * 1000 : 60 * 60 * 1000;
+  const auditCleanupIntervalMs = 24 * 60 * 60 * 1000;
 
   setInterval(() => {
     void enqueueJob('low-stock-check').catch(() => undefined);
   }, lowStockIntervalMs).unref();
+
+  setInterval(() => {
+    void enqueueJob('audit-log-cleanup').catch(() => undefined);
+  }, auditCleanupIntervalMs).unref();
 }
 
 async function startWorker() {

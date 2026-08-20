@@ -68,4 +68,9 @@ export const config = {
     authenticatedMax: parseInt(process.env.RATE_LIMIT_AUTH_MAX || '10000', 10),
     anonymousMax: parseInt(process.env.RATE_LIMIT_ANON_MAX || '3000', 10),
   },
+  /** Days to keep audit_logs / login_history before automatic purge (default 7). */
+  auditLogRetentionDays: Math.max(
+    1,
+    parseInt(process.env.AUDIT_LOG_RETENTION_DAYS || '7', 10) || 7
+  ),
 };

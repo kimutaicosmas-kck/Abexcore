@@ -8,7 +8,7 @@ const ACTIVE_KEY = `${PREFIX}:active`;
 const FAILED_KEY = `${PREFIX}:failed`;
 const CRASH_KEY = 'abexcore:metrics:worker_crashes';
 
-export type JobName = 'low-stock-check' | 'health-ping';
+export type JobName = 'low-stock-check' | 'health-ping' | 'audit-log-cleanup';
 
 export interface QueueJob {
   id: string;
