@@ -9,20 +9,21 @@ export async function computeCustomerCreditExposure(
   tx: TxClient = prisma,
   extraOrderAmount = 0
 ): Promise<number> {
-  const [invoiceAgg, creditNoteAgg, openOrdersList] = await Promise.all([
-    tx.invoice.aggregate({
+  const [openSales, unallocatedCredits, openOrdersList] = await Promise.all([
+    tx.invoice.findMany({
       where: {
         customerId,
         type: 'SALES',
         status: { in: ['UNPAID', 'PARTIAL', 'OVERDUE'] },
       },
-      _sum: { totalAmount: true, paidAmount: true },
+      select: { id: true, totalAmount: true, paidAmount: true, type: true, status: true },
     }),
     tx.invoice.aggregate({
       where: {
         customerId,
         type: 'CREDIT_NOTE',
         status: { in: ['UNPAID', 'PARTIAL'] },
+        originalInvoiceId: null,
       },
       _sum: { totalAmount: true, paidAmount: true },
     }),
@@ -40,10 +41,12 @@ export async function computeCustomerCreditExposure(
     }),
   ]);
 
-  const outstanding =
-    Number(invoiceAgg._sum.totalAmount || 0) - Number(invoiceAgg._sum.paidAmount || 0);
+  const { enrichInvoicesWithBalances } = await import('./invoiceBalance');
+  const enriched = await enrichInvoicesWithBalances(tx, openSales);
+  const outstanding = enriched.reduce((sum, inv) => sum + Number(inv.balanceDue || 0), 0);
   const openCredit =
-    Number(creditNoteAgg._sum.totalAmount || 0) - Number(creditNoteAgg._sum.paidAmount || 0);
+    Number(unallocatedCredits._sum.totalAmount || 0) -
+    Number(unallocatedCredits._sum.paidAmount || 0);
   const openOrders = openOrdersList.reduce((sum, order) => {
     const invoicedTotal = order.invoices.reduce((line, inv) => line + Number(inv.totalAmount), 0);
     return sum + Math.max(0, Number(order.totalAmount) - invoicedTotal);

@@ -108,11 +108,20 @@ const ACCOUNT_TYPE_LABELS: Record<string, string> = {
 };
 
 function invoiceBalance(inv: Invoice) {
-  return Math.max(0, Number(inv.totalAmount) - Number(inv.paidAmount));
+  if (inv.balanceDue != null) return Math.max(0, Number(inv.balanceDue));
+  return Math.max(
+    0,
+    Number(inv.totalAmount) - Number(inv.paidAmount) - Number(inv.creditedAmount || 0)
+  );
+}
+
+function invoiceDisplayStatus(inv: Invoice) {
+  if (inv.type === 'SALES' && invoiceBalance(inv) <= 0.009) return 'PAID';
+  return inv.status;
 }
 
 function isOverdue(inv: Invoice) {
-  if (!inv.dueDate || inv.status === 'PAID') return false;
+  if (!inv.dueDate || invoiceDisplayStatus(inv) === 'PAID') return false;
   return new Date(inv.dueDate) < new Date() && invoiceBalance(inv) > 0;
 }
 
@@ -363,7 +372,10 @@ export function FinancePage() {
     {
       key: 'status',
       label: 'Status',
-      render: (val: unknown) => <Badge variant={getStatusBadge(val as string)}>{val as string}</Badge>,
+      render: (_: unknown, row: Record<string, unknown>) => {
+        const status = invoiceDisplayStatus(row as unknown as Invoice);
+        return <Badge variant={getStatusBadge(status)}>{status}</Badge>;
+      },
     },
     {
       key: 'actions',
@@ -991,7 +1003,9 @@ export function FinancePage() {
               <div>
                 <div className="flex items-center gap-2 mb-1">
                   <Badge variant={invoiceDetail.type === 'SALES' ? 'success' : 'info'}>{invoiceDetail.type}</Badge>
-                  <Badge variant={getStatusBadge(invoiceDetail.status)}>{invoiceDetail.status}</Badge>
+                  <Badge variant={getStatusBadge(invoiceDisplayStatus(invoiceDetail))}>
+                    {invoiceDisplayStatus(invoiceDetail)}
+                  </Badge>
                   {isOverdue(invoiceDetail) && <Badge variant="danger">Overdue</Badge>}
                 </div>
                 <p className="text-lg font-bold text-slate-900">
@@ -1058,9 +1072,37 @@ export function FinancePage() {
                   <div className="flex justify-between"><span className="text-slate-500">Subtotal</span><span>{formatCurrency(Number(invoiceDetail.subtotal || 0))}</span></div>
                   <div className="flex justify-between"><span className="text-slate-500">VAT</span><span>{formatCurrency(Number(invoiceDetail.taxAmount || 0))}</span></div>
                   <div className="flex justify-between font-bold pt-2 border-t"><span>Total</span><span>{formatCurrency(Number(invoiceDetail.totalAmount))}</span></div>
-                  <div className="flex justify-between text-emerald-700"><span>Paid</span><span>{formatCurrency(Number(invoiceDetail.paidAmount))}</span></div>
+                  <div className="flex justify-between text-emerald-700"><span>Paid (cash)</span><span>{formatCurrency(Number(invoiceDetail.paidAmount))}</span></div>
+                  {Number(invoiceDetail.creditedAmount || 0) > 0 && (
+                    <div className="flex justify-between text-violet-700">
+                      <span>Credited (returns)</span>
+                      <span>{formatCurrency(Number(invoiceDetail.creditedAmount))}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between font-semibold pt-2 border-t">
+                    <span>Balance due</span>
+                    <span className={invoiceBalance(invoiceDetail) > 0 ? 'text-amber-700' : 'text-emerald-700'}>
+                      {formatCurrency(invoiceBalance(invoiceDetail))}
+                    </span>
+                  </div>
                 </div>
               </Card>
+
+              {invoiceDetail.creditNotes && invoiceDetail.creditNotes.length > 0 && (
+                <Card title="Credit notes (returns)" padding>
+                  <div className="space-y-2">
+                    {invoiceDetail.creditNotes.map((cn) => (
+                      <div key={cn.id} className="flex justify-between text-sm py-1.5 border-b border-slate-100 last:border-0">
+                        <div>
+                          <p className="font-medium">{cn.invoiceNumber}</p>
+                          <p className="text-xs text-slate-500">{(cn.status || '').replace(/_/g, ' ')}</p>
+                        </div>
+                        <span className="font-semibold text-violet-700">{formatCurrency(Number(cn.totalAmount))}</span>
+                      </div>
+                    ))}
+                  </div>
+                </Card>
+              )}
 
               <Card title="Payment history" padding>
                 {(invoiceDetail.payments || []).length === 0 ? (

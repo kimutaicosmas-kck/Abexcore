@@ -334,9 +334,11 @@ router.get(
         orderBy: { createdAt: 'desc' },
       });
       const pageResult = buildCursorResult(rows, limit);
+      const { enrichInvoicesWithBalances } = await import('../utils/invoiceBalance');
+      const data = await enrichInvoicesWithBalances(prisma, pageResult.data);
       res.json({
         success: true,
-        data: pageResult.data,
+        data,
         pagination: {
           limit: pageResult.limit,
           nextCursor: pageResult.nextCursor,
@@ -349,7 +351,7 @@ router.get(
 
     const skip = (page - 1) * limit;
 
-    const [data, total] = await Promise.all([
+    const [rows, total] = await Promise.all([
       prisma.invoice.findMany({
         where,
         skip,
@@ -359,6 +361,9 @@ router.get(
       }),
       prisma.invoice.count({ where }),
     ]);
+
+    const { enrichInvoicesWithBalances } = await import('../utils/invoiceBalance');
+    const data = await enrichInvoicesWithBalances(prisma, rows);
 
     res.json({
       success: true,
@@ -379,6 +384,18 @@ router.get(
         supplier: true,
         items: true,
         payments: true,
+        creditNotes: {
+          where: { type: 'CREDIT_NOTE' },
+          select: {
+            id: true,
+            invoiceNumber: true,
+            totalAmount: true,
+            status: true,
+            notes: true,
+            createdAt: true,
+          },
+          orderBy: { createdAt: 'desc' },
+        },
         salesOrder: {
           select: {
             id: true,
@@ -391,7 +408,12 @@ router.get(
       },
     });
     if (!data) throw new AppError('Invoice not found', 404);
-    res.json({ success: true, data });
+    const { creditedAmountForInvoice, withInvoiceBalances } = await import('../utils/invoiceBalance');
+    const credited = data.type === 'SALES' ? await creditedAmountForInvoice(prisma, data.id) : 0;
+    res.json({
+      success: true,
+      data: withInvoiceBalances(data, credited, data.creditNotes),
+    });
   })
 );
 

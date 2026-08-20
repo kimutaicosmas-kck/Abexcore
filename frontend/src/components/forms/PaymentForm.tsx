@@ -50,14 +50,22 @@ export function PaymentForm({ onSuccess, onCancel, invoiceId: preselectedId }: P
         .then((r) => r.data.data as Invoice[]),
   });
 
-  const unpaidInvoices = (invoicesData || []).filter(
-    (inv) => inv.status !== 'PAID' && Number(inv.totalAmount) > Number(inv.paidAmount)
-  );
+  const unpaidInvoices = (invoicesData || []).filter((inv) => {
+    if (inv.type === 'CREDIT_NOTE' || inv.type === 'PURCHASE') return false;
+    const balance =
+      inv.balanceDue != null
+        ? Number(inv.balanceDue)
+        : Math.max(0, Number(inv.totalAmount) - Number(inv.paidAmount) - Number(inv.creditedAmount || 0));
+    return balance > 0.009;
+  });
 
   const invoiceOptions = [
     { value: '', label: 'Select invoice...' },
     ...unpaidInvoices.map((inv) => {
-      const balance = Number(inv.totalAmount) - Number(inv.paidAmount);
+      const balance =
+        inv.balanceDue != null
+          ? Number(inv.balanceDue)
+          : Math.max(0, Number(inv.totalAmount) - Number(inv.paidAmount) - Number(inv.creditedAmount || 0));
       return {
         value: inv.id,
         label: `${inv.invoiceNumber} · Balance ${formatCurrency(balance)}`,
@@ -77,7 +85,14 @@ export function PaymentForm({ onSuccess, onCancel, invoiceId: preselectedId }: P
   const selectedId = watch('invoiceId');
   const selectedInvoice = unpaidInvoices.find((i) => i.id === selectedId);
   const balance = selectedInvoice
-    ? Number(selectedInvoice.totalAmount) - Number(selectedInvoice.paidAmount)
+    ? selectedInvoice.balanceDue != null
+      ? Number(selectedInvoice.balanceDue)
+      : Math.max(
+          0,
+          Number(selectedInvoice.totalAmount) -
+            Number(selectedInvoice.paidAmount) -
+            Number(selectedInvoice.creditedAmount || 0)
+        )
     : 0;
 
   const method = watch('method');

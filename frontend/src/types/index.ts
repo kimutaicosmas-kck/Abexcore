@@ -454,6 +454,10 @@ export interface Invoice {
   taxAmount?: number;
   totalAmount: number;
   paidAmount: number;
+  /** Sum of linked credit notes (returns) applied against this sales invoice. */
+  creditedAmount?: number;
+  /** Remaining amount due after cash paid and credit notes. */
+  balanceDue?: number;
   status: string;
   /** Customer's purchase order / LPO number. */
   customerPoNumber?: string | null;
@@ -463,6 +467,14 @@ export interface Invoice {
   notes?: string;
   items?: InvoiceItem[];
   payments?: Payment[];
+  creditNotes?: {
+    id: string;
+    invoiceNumber: string;
+    totalAmount: number | string;
+    status: string;
+    notes?: string | null;
+    createdAt?: string;
+  }[];
   salesOrder?: {
     id: string;
     orderNumber: string;

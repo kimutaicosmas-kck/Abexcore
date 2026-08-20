@@ -183,6 +183,15 @@ export class SalesReturnService {
       totalAmount,
     });
 
+    if (originalInvoice) {
+      const { applyCreditNoteToOriginalInvoice } = await import('../utils/invoiceBalance');
+      await applyCreditNoteToOriginalInvoice(tx, {
+        creditNoteId: creditNote.id,
+        originalInvoiceId: originalInvoice.id,
+        creditTotal: totalAmount,
+      });
+    }
+
     let cogsReversal = 0;
     for (const line of returnLines) {
       const stock = await tx.stockLevel.findFirst({

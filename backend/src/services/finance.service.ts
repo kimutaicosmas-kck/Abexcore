@@ -343,13 +343,31 @@ export class FinancePaymentService {
       },
     });
 
-    const balance = Number(invoice.totalAmount) - Number(invoice.paidAmount);
+    const balance =
+      Number(invoice.totalAmount) -
+      Number(invoice.paidAmount) -
+      (invoice.type === 'SALES'
+        ? await (async () => {
+            const { creditedAmountForInvoice } = await import('../utils/invoiceBalance');
+            return creditedAmountForInvoice(tx, invoice.id);
+          })()
+        : 0);
     if (Number(opts.amount) > balance + 0.01) {
       throw new AppError(`Payment exceeds invoice balance (KES ${balance.toFixed(2)})`, 400);
     }
 
     const paidAmount = Number(invoice.paidAmount) + Number(opts.amount);
-    const invStatus = paidAmount >= Number(invoice.totalAmount) ? 'PAID' : 'PARTIAL';
+    let invStatus: 'PAID' | 'PARTIAL' = paidAmount >= Number(invoice.totalAmount) ? 'PAID' : 'PARTIAL';
+    if (invoice.type === 'SALES') {
+      const { creditedAmountForInvoice, resolveSalesInvoiceStatus } = await import(
+        '../utils/invoiceBalance'
+      );
+      const credited = await creditedAmountForInvoice(tx, invoice.id);
+      invStatus = resolveSalesInvoiceStatus(
+        { ...invoice, paidAmount },
+        credited
+      ) as 'PAID' | 'PARTIAL';
+    }
     await tx.invoice.update({
       where: { id: opts.invoiceId },
       data: { paidAmount, status: invStatus },
