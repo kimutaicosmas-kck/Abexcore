@@ -661,6 +661,32 @@ export interface DeliveryNote {
   driver?: { id: string; firstName: string; lastName: string; email: string };
   deliveryTrip?: Pick<DeliveryTrip, 'id' | 'tripNo' | 'status' | 'waybillNo'>;
   items: { id: string; productId: string; quantity: number }[];
+  returnableItems?: {
+    productId: string;
+    deliveryItemId: string;
+    quantity: number;
+    alreadyReturned: number;
+    returnableQty: number;
+    productName: string;
+    sku?: string;
+    unitPrice: number;
+  }[];
+  salesReturns?: {
+    id: string;
+    returnNo: string;
+    reason: string;
+    createdAt: string;
+    creditNote?: { id: string; invoiceNumber: string; totalAmount: number | string };
+    items: { productId: string; quantity: number }[];
+  }[];
+  invoices?: {
+    id: string;
+    invoiceNumber: string;
+    type: string;
+    totalAmount: number | string;
+    paidAmount: number | string;
+    status: string;
+  }[];
 }
 
 export interface DeliveryTrip {

@@ -8,6 +8,7 @@ import { operationsApi, customersApi } from '../../services/api';
 import { Alert, Button, Input, Select, formatCurrency, ModalFormBody } from '../ui';
 import { Customer } from '../../types';
 import { useAuth, useVatRate } from '../../contexts/AuthContext';
+import { isSalesBookOwner } from '../../utils/salesTargets';
 import { getApiErrorCode, getApiErrorMessage } from '../../utils/apiError';
 import { formatProductOptionLabel } from '../../utils/productDisplay';
 import { ProductSearchSelect } from './ProductSearchSelect';
@@ -51,8 +52,8 @@ interface SalesOrderFormProps {
 
 export function SalesOrderForm({ onSuccess, onCancel }: SalesOrderFormProps) {
   const queryClient = useQueryClient();
-  const { isSalesOfficer } = useAuth();
-  const canAssignSalesPerson = !isSalesOfficer;
+  const { user } = useAuth();
+  const canAssignSalesPerson = !isSalesBookOwner(user?.role?.name);
   const [customerSearch, setCustomerSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [customerListOpen, setCustomerListOpen] = useState(false);

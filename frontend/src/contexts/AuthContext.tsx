@@ -252,7 +252,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           'Sales Officer',
           'Sales Executive',
           'Sales Representative',
-          'Sales Manager',
         ].includes(user?.role?.name || ''),
         isDriver: ['Logistics & Delivery', 'Driver'].includes(user?.role?.name || ''),
         mustChangePassword,

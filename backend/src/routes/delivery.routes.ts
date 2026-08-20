@@ -12,6 +12,7 @@ import {
   deliveryListQuerySchema,
   createVehicleSchema,
   vehicleListQuerySchema,
+  createSalesReturnSchema,
 } from '../validators/schemas';
 import prisma from '../config/database';
 import { getParam, getQuery } from '../utils/request';
@@ -25,6 +26,7 @@ import {
   createMultiOrderDelivery,
   deliveryStopInclude,
 } from '../services/delivery-trip.service';
+import { SalesReturnService } from '../services/sales-return.service';
 import { NotificationService } from '../services/notification.service';
 import { Prisma } from '@prisma/client';
 import {
@@ -487,7 +489,7 @@ router.get(
         salesOrder: {
           include: {
             customer: true,
-            items: true,
+            items: { include: { product: { select: { id: true, name: true, sku: true } } } },
           },
         },
         deliveryTrip: {
@@ -503,13 +505,88 @@ router.get(
         vehicle: true,
         driver: { select: { id: true, firstName: true, lastName: true, email: true } },
         items: true,
+        salesReturns: {
+          include: {
+            items: true,
+            creditNote: { select: { id: true, invoiceNumber: true, totalAmount: true } },
+          },
+          orderBy: { createdAt: 'desc' },
+        },
+        invoices: {
+          where: { type: { in: ['SALES', 'CREDIT_NOTE'] } },
+          select: {
+            id: true,
+            invoiceNumber: true,
+            type: true,
+            totalAmount: true,
+            paidAmount: true,
+            status: true,
+          },
+        },
       },
     });
     if (!data) throw new AppError('Delivery not found', 404);
     if (isDriverUser(req) && data.driverId !== req.user!.id) {
       throw new AppError('You can only view deliveries assigned to you', 403);
     }
-    res.json({ success: true, data });
+
+    const returnedByProduct = await SalesReturnService.returnedQtyByProduct(prisma, data.id);
+    const returnableItems = data.items.map((item) => {
+      const returned = returnedByProduct.get(item.productId) || 0;
+      const orderItem = data.salesOrder.items.find((oi) => oi.productId === item.productId);
+      return {
+        productId: item.productId,
+        deliveryItemId: item.id,
+        quantity: item.quantity,
+        alreadyReturned: returned,
+        // Current DN qty is already net of prior returns.
+        returnableQty: item.quantity,
+        productName: orderItem?.product.name || item.productId,
+        sku: orderItem?.product.sku,
+        unitPrice: orderItem ? Number(orderItem.unitPrice) : 0,
+      };
+    });
+
+    res.json({ success: true, data: { ...data, returnableItems } });
+  })
+);
+
+router.post(
+  '/:id/returns',
+  authorizeAny('delivery:update', 'sales:update', 'finance:create'),
+  validate(createSalesReturnSchema),
+  auditLog('delivery', 'create', 'sales_return'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    if (isDriverUser(req)) {
+      throw new AppError('Drivers cannot process customer returns', 403);
+    }
+    const deliveryNoteId = getParam(req.params.id);
+    const { reason, items } = req.body as {
+      reason: string;
+      items: { productId: string; quantity: number }[];
+    };
+
+    const existing = await prisma.deliveryNote.findFirst({
+      where: { id: deliveryNoteId, companyId: requireTenantId() },
+      select: { id: true },
+    });
+    if (!existing) throw new AppError('Delivery not found', 404);
+
+    const salesReturn = await prisma.$transaction(async (tx) =>
+      SalesReturnService.createFromDelivery(tx, {
+        deliveryNoteId,
+        items,
+        reason,
+        userId: req.user!.id,
+        companyId: requireTenantId(),
+      })
+    );
+
+    res.status(201).json({
+      success: true,
+      data: salesReturn,
+      message: `Return ${salesReturn.returnNo} recorded — stock restocked and credit note issued`,
+    });
   })
 );
 

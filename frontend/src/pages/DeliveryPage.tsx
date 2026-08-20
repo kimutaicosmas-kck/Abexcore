@@ -167,6 +167,10 @@ export function DeliveryPage() {
   } | null>(null);
   const [actualQtys, setActualQtys] = useState<Record<string, number>>({});
   const [printingId, setPrintingId] = useState<string | null>(null);
+  const [returnOpen, setReturnOpen] = useState(false);
+  const [returnReason, setReturnReason] = useState('');
+  const [returnQtys, setReturnQtys] = useState<Record<string, number>>({});
+  const [returnError, setReturnError] = useState<string | null>(null);
 
   const printDeliveryNote = async (id: string, deliveryNo: string) => {
     setPrintingId(id);
@@ -179,6 +183,11 @@ export function DeliveryPage() {
 
   const canCreate = hasPermission('delivery:create') && !isDriver;
   const canUpdate = hasPermission('delivery:update');
+  const canReturn =
+    !isDriver &&
+    (hasPermission('delivery:update') ||
+      hasPermission('sales:update') ||
+      hasPermission('finance:create'));
   const visibleTabs = isDriver ? ['My Deliveries'] : tabs;
   const showDeliveries = activeTab === 0;
   const showVehicles = !isDriver && activeTab === 1;
@@ -284,6 +293,35 @@ export function DeliveryPage() {
     queryKey: ['vehicles', 'assign'],
     queryFn: () => deliveryApi.vehicles({ limit: 100 }).then((r) => r.data.data as Vehicle[]),
     enabled: !!assignDialog,
+  });
+
+  const { data: selectedDetail } = useQuery({
+    queryKey: ['delivery-detail', selected?.id],
+    queryFn: () => deliveryApi.get(selected!.id).then((r) => r.data.data as DeliveryNote),
+    enabled: detailOpen && !!selected?.id && !selectedTrip,
+  });
+  const activeDelivery = selectedDetail ?? selected;
+
+  const returnMutation = useMutation({
+    mutationFn: (payload: { reason: string; items: { productId: string; quantity: number }[] }) =>
+      deliveryApi.createReturn(selected!.id, payload),
+    onSuccess: async () => {
+      queryClient.invalidateQueries({ queryKey: ['deliveries'] });
+      queryClient.invalidateQueries({ queryKey: ['delivery-trips'] });
+      queryClient.invalidateQueries({ queryKey: ['delivery-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['delivery-detail', selected?.id] });
+      queryClient.invalidateQueries({ queryKey: ['sales-orders'] });
+      queryClient.invalidateQueries({ queryKey: ['invoices'] });
+      setReturnOpen(false);
+      setReturnReason('');
+      setReturnQtys({});
+      setReturnError(null);
+      if (selected?.id) {
+        const refreshed = await deliveryApi.get(selected.id).then((r) => r.data.data as DeliveryNote);
+        setSelected(refreshed);
+      }
+    },
+    onError: (err) => setReturnError(getApiErrorMessage(err)),
   });
 
   const statusMutation = useMutation({
@@ -559,7 +597,35 @@ export function DeliveryPage() {
       setSelected(row.note);
       setSelectedTrip(null);
     }
+    setReturnOpen(false);
+    setReturnError(null);
     setDetailOpen(true);
+  };
+
+  const openReturnDialog = (note: DeliveryNote) => {
+    const lines = note.returnableItems?.length
+      ? note.returnableItems
+      : (note.items || []).map((item) => {
+          const orderItem = note.salesOrder?.items?.find((oi) => oi.productId === item.productId);
+          return {
+            productId: item.productId,
+            deliveryItemId: item.id,
+            quantity: item.quantity,
+            alreadyReturned: 0,
+            returnableQty: item.quantity,
+            productName: orderItem?.product?.name || `Product ${item.productId.slice(0, 8)}…`,
+            sku: orderItem?.product?.sku,
+            unitPrice: orderItem ? Number(orderItem.unitPrice) : 0,
+          };
+        });
+    const qtys: Record<string, number> = {};
+    for (const line of lines) {
+      if (line.returnableQty > 0) qtys[line.productId] = 0;
+    }
+    setReturnQtys(qtys);
+    setReturnReason('');
+    setReturnError(null);
+    setReturnOpen(true);
   };
 
   const deliveryColumns = [
@@ -1179,34 +1245,68 @@ export function DeliveryPage() {
             )}
           </div>
         )}
-        {selected && !selectedTrip && (
+        {activeDelivery && !selectedTrip && (
           <div className="space-y-4 text-sm">
             <div className="grid grid-cols-2 gap-4">
-              <div><p className="text-slate-500">Delivery #</p><p className="font-semibold">{selected.deliveryNo}</p></div>
-              <div><p className="text-slate-500">Customer</p><p className="font-semibold">{selected.salesOrder?.customer?.name}</p></div>
-              <div><p className="text-slate-500">Sales Order</p><p className="font-semibold">{selected.salesOrder?.orderNumber}</p></div>
-              <div><p className="text-slate-500">Vehicle</p><p className="font-semibold">{formatVehicleLabel(selected.vehicle)}</p></div>
+              <div><p className="text-slate-500">Delivery #</p><p className="font-semibold">{activeDelivery.deliveryNo}</p></div>
+              <div><p className="text-slate-500">Customer</p><p className="font-semibold">{activeDelivery.salesOrder?.customer?.name}</p></div>
+              <div><p className="text-slate-500">Sales Order</p><p className="font-semibold">{activeDelivery.salesOrder?.orderNumber}</p></div>
+              <div><p className="text-slate-500">Vehicle</p><p className="font-semibold">{formatVehicleLabel(activeDelivery.vehicle)}</p></div>
               <div>
                 <p className="text-slate-500">Delivery Person</p>
                 <p className="font-semibold">
-                  {selected.driver
-                    ? `${selected.driver.firstName} ${selected.driver.lastName}`.trim()
+                  {activeDelivery.driver
+                    ? `${activeDelivery.driver.firstName} ${activeDelivery.driver.lastName}`.trim()
                     : '—'}
                 </p>
               </div>
-              <div><p className="text-slate-500">Scheduled</p><p className="font-semibold">{selected.scheduledDate ? formatDate(selected.scheduledDate) : '-'}</p></div>
-              <div><p className="text-slate-500">Waybill #</p><p className="font-semibold">{selected.waybillNo || selected.deliveryTrip?.waybillNo || '—'}</p></div>
-              <div><p className="text-slate-500">Status</p><Badge variant={getStatusBadge(selected.status)}>{selected.status.replace(/_/g, ' ')}</Badge></div>
-              {selected.deliveredAt && (
-                <div><p className="text-slate-500">Delivered At</p><p className="font-semibold">{formatDate(selected.deliveredAt)}</p></div>
+              <div><p className="text-slate-500">Scheduled</p><p className="font-semibold">{activeDelivery.scheduledDate ? formatDate(activeDelivery.scheduledDate) : '-'}</p></div>
+              <div><p className="text-slate-500">Waybill #</p><p className="font-semibold">{activeDelivery.waybillNo || activeDelivery.deliveryTrip?.waybillNo || '—'}</p></div>
+              <div><p className="text-slate-500">Status</p><Badge variant={getStatusBadge(activeDelivery.status)}>{activeDelivery.status.replace(/_/g, ' ')}</Badge></div>
+              {activeDelivery.deliveredAt && (
+                <div><p className="text-slate-500">Delivered At</p><p className="font-semibold">{formatDate(activeDelivery.deliveredAt)}</p></div>
               )}
             </div>
-            {selected.items?.length > 0 && (
+            {(activeDelivery.returnableItems?.length || activeDelivery.items?.length) ? (
               <Card title="Items">
-                {selected.items.map((item) => (
-                  <div key={item.id} className="flex justify-between py-2 border-b border-border/60 last:border-0">
-                    <span>Product {item.productId.slice(0, 8)}…</span>
-                    <span>Qty: {item.quantity}</span>
+                {(activeDelivery.returnableItems?.length
+                  ? activeDelivery.returnableItems.map((item) => (
+                      <div key={item.productId} className="flex justify-between py-2 border-b border-border/60 last:border-0">
+                        <span>
+                          {item.productName}
+                          {item.sku ? <span className="text-slate-400 text-xs ml-2">{item.sku}</span> : null}
+                          {item.alreadyReturned > 0 ? (
+                            <span className="block text-xs text-amber-700">Previously returned: {item.alreadyReturned}</span>
+                          ) : null}
+                        </span>
+                        <span>With customer: {item.returnableQty}</span>
+                      </div>
+                    ))
+                  : activeDelivery.items.map((item) => {
+                      const orderItem = activeDelivery.salesOrder?.items?.find((oi) => oi.productId === item.productId);
+                      return (
+                        <div key={item.id} className="flex justify-between py-2 border-b border-border/60 last:border-0">
+                          <span>{orderItem?.product?.name || `Product ${item.productId.slice(0, 8)}…`}</span>
+                          <span>Qty: {item.quantity}</span>
+                        </div>
+                      );
+                    }))}
+              </Card>
+            ) : null}
+            {activeDelivery.salesReturns && activeDelivery.salesReturns.length > 0 && (
+              <Card title="Returns">
+                {activeDelivery.salesReturns.map((ret) => (
+                  <div key={ret.id} className="py-2 border-b border-border/60 last:border-0">
+                    <div className="flex justify-between gap-2">
+                      <span className="font-medium">{ret.returnNo}</span>
+                      <span className="text-slate-500">{formatDate(ret.createdAt)}</span>
+                    </div>
+                    <p className="text-slate-600 text-xs mt-1">{ret.reason}</p>
+                    {ret.creditNote && (
+                      <p className="text-xs text-emerald-700 mt-1">
+                        Credit note {ret.creditNote.invoiceNumber} · {Number(ret.creditNote.totalAmount).toLocaleString()}
+                      </p>
+                    )}
                   </div>
                 ))}
               </Card>
@@ -1214,21 +1314,29 @@ export function DeliveryPage() {
             <div className="flex flex-wrap justify-end gap-2">
               <Button
                 variant="secondary"
-                loading={printingId === selected.id}
-                onClick={() => printDeliveryNote(selected.id, selected.deliveryNo)}
+                loading={printingId === activeDelivery.id}
+                onClick={() => printDeliveryNote(activeDelivery.id, activeDelivery.deliveryNo)}
               >
                 <Download className="h-4 w-4 mr-2" />
                 Print delivery note
               </Button>
-              {canUpdate && !isDriver && isOpenDeliveryStatus(selected.status) && (
+              {canReturn &&
+                activeDelivery.status === 'DELIVERED' &&
+                (activeDelivery.returnableItems?.some((i) => i.returnableQty > 0) ||
+                  (activeDelivery.items?.length ?? 0) > 0) && (
+                  <Button variant="secondary" onClick={() => openReturnDialog(activeDelivery)}>
+                    Return goods
+                  </Button>
+                )}
+              {canUpdate && !isDriver && isOpenDeliveryStatus(activeDelivery.status) && (
                 <Button
                   variant="secondary"
                   onClick={() =>
                     openEditDialog({
                       kind: 'note',
-                      id: selected.id,
-                      createdAt: selected.createdAt || '',
-                      note: selected,
+                      id: activeDelivery.id,
+                      createdAt: activeDelivery.createdAt || '',
+                      note: activeDelivery,
                     })
                   }
                 >
@@ -1236,7 +1344,7 @@ export function DeliveryPage() {
                 </Button>
               )}
               {canUpdate &&
-                getDeliveryActions(selected.status, isDriver).map((action) => (
+                getDeliveryActions(activeDelivery.status, isDriver).map((action) => (
                   <Button
                     key={action.status}
                     variant={action.status === 'DELIVERED' ? 'primary' : 'secondary'}
@@ -1244,20 +1352,105 @@ export function DeliveryPage() {
                     onClick={() =>
                       requestStatusChange(
                         {
-                          id: selected.id,
+                          id: activeDelivery.id,
                           kind: 'note',
                           status: action.status,
                           label: action.label,
                           proofOfDelivery:
                             action.status === 'DELIVERED' ? 'Confirmed by driver' : undefined,
                         },
-                        selected
+                        activeDelivery
                       )
                     }
                   >
                     {action.label}
                   </Button>
                 ))}
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      <Modal
+        open={returnOpen && !!activeDelivery}
+        onClose={() => {
+          if (returnMutation.isPending) return;
+          setReturnOpen(false);
+          setReturnError(null);
+        }}
+        title="Return delivered goods"
+        size="md"
+      >
+        {activeDelivery && (
+          <div className="space-y-4 text-sm">
+            <p className="text-slate-600">
+              Use this when the customer cannot pay or returns goods after delivery. Stock is restocked,
+              a credit note reduces what they owe, and the sales order reopens so you can edit or remove remaining lines.
+            </p>
+            {(activeDelivery.returnableItems || []).map((item) =>
+              item.returnableQty > 0 ? (
+                <div key={item.productId} className="grid grid-cols-2 gap-2 items-end">
+                  <div>
+                    <p className="font-medium">{item.productName}</p>
+                    <p className="text-xs text-slate-500">Returnable: {item.returnableQty}</p>
+                  </div>
+                  <Input
+                    label="Return qty"
+                    type="number"
+                    min={0}
+                    max={item.returnableQty}
+                    value={returnQtys[item.productId] ?? 0}
+                    onChange={(e) =>
+                      setReturnQtys((prev) => ({
+                        ...prev,
+                        [item.productId]: Math.min(
+                          item.returnableQty,
+                          Math.max(0, Number(e.target.value) || 0)
+                        ),
+                      }))
+                    }
+                  />
+                </div>
+              ) : null
+            )}
+            <Input
+              label="Reason"
+              value={returnReason}
+              onChange={(e) => setReturnReason(e.target.value)}
+              placeholder="e.g. Customer cannot afford / partial return after delivery"
+            />
+            {returnError && <Alert variant="error">{returnError}</Alert>}
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="secondary"
+                disabled={returnMutation.isPending}
+                onClick={() => {
+                  setReturnOpen(false);
+                  setReturnError(null);
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                loading={returnMutation.isPending}
+                onClick={() => {
+                  const items = Object.entries(returnQtys)
+                    .filter(([, qty]) => qty > 0)
+                    .map(([productId, quantity]) => ({ productId, quantity }));
+                  if (!items.length) {
+                    setReturnError('Enter at least one return quantity');
+                    return;
+                  }
+                  if (returnReason.trim().length < 3) {
+                    setReturnError('Enter a short reason for the return');
+                    return;
+                  }
+                  setReturnError(null);
+                  returnMutation.mutate({ reason: returnReason.trim(), items });
+                }}
+              >
+                Confirm return
+              </Button>
             </div>
           </div>
         )}

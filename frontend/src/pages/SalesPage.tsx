@@ -894,6 +894,13 @@ export function SalesPage() {
                 ))}
               </Card>
             )}
+            {activeOrder.status === 'DELIVERED' && (
+              <Alert variant="info">
+                Customer cannot pay or wants goods back? Open the delivered note in Delivery and use
+                &quot;Return goods&quot; (full or partial). Stock is restocked, a credit note is issued, and this
+                order reopens so you can adjust or cancel remaining lines.
+              </Alert>
+            )}
             {activeOrder.productionOrders && activeOrder.productionOrders.length > 0 && (
               <Card title="Production Orders">
                 {activeOrder.productionOrders.map((po) => (

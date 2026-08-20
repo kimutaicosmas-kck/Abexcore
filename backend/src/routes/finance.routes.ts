@@ -507,6 +507,17 @@ router.post(
         if (customerId) await syncCustomerCreditUsed(customerId, tx);
       }
 
+      if (type === 'CREDIT_NOTE') {
+        await AccountingService.postCreditNote(tx, {
+          id: inv.id,
+          invoiceNumber: inv.invoiceNumber,
+          subtotal: Number(inv.subtotal),
+          taxAmount: Number(inv.taxAmount),
+          totalAmount: Number(inv.totalAmount),
+        });
+        if (customerId) await syncCustomerCreditUsed(customerId, tx);
+      }
+
       if (type === 'PURCHASE') {
         await AccountingService.postPurchaseInvoice(tx, {
           invoiceNumber: inv.invoiceNumber,

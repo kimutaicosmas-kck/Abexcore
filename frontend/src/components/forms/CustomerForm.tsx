@@ -7,6 +7,7 @@ import { customersApi, operationsApi } from '../../services/api';
 import { Input, Select, FormActions, ModalFormBody } from '../ui';
 import { Customer } from '../../types';
 import { useAuth } from '../../contexts/AuthContext';
+import { isSalesBookOwner } from '../../utils/salesTargets';
 
 const customerSchema = z
   .object({
@@ -63,9 +64,9 @@ function getApiError(error: unknown): string {
 
 export function CustomerForm({ customer, onSuccess, onCancel }: CustomerFormProps) {
   const queryClient = useQueryClient();
-  const { isSalesOfficer } = useAuth();
+  const { user } = useAuth();
   const isEdit = !!customer;
-  const canAssignSalesPerson = !isSalesOfficer;
+  const canAssignSalesPerson = !isSalesBookOwner(user?.role?.name);
 
   const { data: salesOfficers } = useQuery({
     queryKey: ['sales-officers'],

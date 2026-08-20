@@ -172,6 +172,7 @@ export class StockMovementService {
       userId?: string;
       unitCost?: number;
       notes?: string;
+      transactionType?: 'PRODUCTION_OUTPUT' | 'RETURN' | 'ADJUSTMENT';
     }
   ) {
     const warehouseId = opts.warehouseId ?? (await this.getFinishedGoodsWarehouseId(tx));
@@ -198,7 +199,7 @@ export class StockMovementService {
     await tx.inventoryTransaction.create({
       data: {
         warehouseId,
-        type: 'PRODUCTION_OUTPUT',
+        type: opts.transactionType ?? 'PRODUCTION_OUTPUT',
         productId: opts.productId,
         quantity: opts.quantity,
         unitCost: opts.unitCost ?? 0,

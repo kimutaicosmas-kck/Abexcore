@@ -392,6 +392,7 @@ model User {
   productionOrders ProductionOrder[]
   assignedDeliveries DeliveryNote[] @relation("DeliveryDriver")
   assignedDeliveryTrips DeliveryTrip[] @relation("DeliveryTripDriver")
+  salesReturnsCreated SalesReturn[] @relation("SalesReturnCreator")
   employee              Employee?
   leaveRequestsRequested LeaveRequest[] @relation("LeaveRequestedBy")
   leaveRequestsApproved  LeaveRequest[] @relation("LeaveApprovedBy")
@@ -686,6 +687,7 @@ model Product {
   productionOrders ProductionOrder[]
   warranties       Warranty[]
   qualityInspections QualityInspection[]
+  salesReturnItems SalesReturnItem[]
 
   @@unique([companyId, sku])
   @@unique([companyId, barcode])
@@ -1193,6 +1195,7 @@ model SalesOrder {
   productionOrders ProductionOrder[]
   invoices         Invoice[]
   deliveries       DeliveryNote[]
+  salesReturns     SalesReturn[]
 
   @@unique([companyId, orderNumber])
   @@index([status])
@@ -1302,6 +1305,7 @@ model DeliveryNote {
   driver       User?         @relation("DeliveryDriver", fields: [driverId], references: [id])
   items        DeliveryItem[]
   invoices     Invoice[]
+  salesReturns SalesReturn[]
 
   @@unique([companyId, deliveryNo])
   @@index([companyId])
@@ -1317,6 +1321,48 @@ model DeliveryItem {
   deliveryNote DeliveryNote @relation(fields: [deliveryNoteId], references: [id], onDelete: Cascade)
 
   @@map("delivery_items")
+}
+
+model SalesReturn {
+  id                String   @id @default(uuid())
+  companyId         String   @map("company_id")
+  returnNo          String   @map("return_no")
+  salesOrderId      String   @map("sales_order_id")
+  deliveryNoteId    String   @map("delivery_note_id")
+  originalInvoiceId String?  @map("original_invoice_id")
+  creditNoteId      String?  @unique @map("credit_note_id")
+  reason            String   @db.Text
+  status            String   @default("COMPLETED")
+  createdById       String   @map("created_by_id")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  salesOrder      SalesOrder        @relation(fields: [salesOrderId], references: [id])
+  deliveryNote    DeliveryNote      @relation(fields: [deliveryNoteId], references: [id])
+  originalInvoice Invoice?          @relation("SalesReturnOriginalInvoice", fields: [originalInvoiceId], references: [id])
+  creditNote      Invoice?          @relation("SalesReturnCreditNote", fields: [creditNoteId], references: [id])
+  createdBy       User              @relation("SalesReturnCreator", fields: [createdById], references: [id])
+  items           SalesReturnItem[]
+
+  @@unique([companyId, returnNo])
+  @@index([companyId])
+  @@index([salesOrderId])
+  @@index([deliveryNoteId])
+  @@map("sales_returns")
+}
+
+model SalesReturnItem {
+  id            String  @id @default(uuid())
+  salesReturnId String  @map("sales_return_id")
+  productId     String  @map("product_id")
+  quantity      Int
+  unitPrice     Decimal @map("unit_price") @db.Decimal(15, 2)
+  totalPrice    Decimal @map("total_price") @db.Decimal(15, 2)
+
+  salesReturn SalesReturn @relation(fields: [salesReturnId], references: [id], onDelete: Cascade)
+  product     Product     @relation(fields: [productId], references: [id])
+
+  @@map("sales_return_items")
 }
 
 // ==================== FINANCE ====================
@@ -1388,6 +1434,8 @@ model Invoice {
   purchaseOrderId String?       @map("purchase_order_id")
   deliveryNoteId  String?       @map("delivery_note_id")
   goodsReceiptId  String?       @map("goods_receipt_id")
+  /** For CREDIT_NOTE: the sales invoice being credited. */
+  originalInvoiceId String?     @map("original_invoice_id")
   invoiceDate     DateTime      @default(now()) @map("invoice_date")
   dueDate         DateTime?     @map("due_date")
   subtotal        Decimal       @default(0) @db.Decimal(15, 2)
@@ -1414,10 +1462,14 @@ model Invoice {
   purchaseOrder PurchaseOrder? @relation(fields: [purchaseOrderId], references: [id])
   deliveryNote  DeliveryNote?  @relation(fields: [deliveryNoteId], references: [id])
   goodsReceipt  GoodsReceipt?  @relation(fields: [goodsReceiptId], references: [id])
+  originalInvoice Invoice?     @relation("InvoiceCreditNotes", fields: [originalInvoiceId], references: [id])
+  creditNotes   Invoice[]      @relation("InvoiceCreditNotes")
   items         InvoiceItem[]
   payments      Payment[]
   mpesaTransactions MpesaTransaction[]
   paymentAllocations PaymentAllocation[]
+  salesReturnsAsOriginal SalesReturn[] @relation("SalesReturnOriginalInvoice")
+  salesReturnAsCreditNote SalesReturn? @relation("SalesReturnCreditNote")
 
   @@unique([companyId, invoiceNumber])
   @@index([status])
@@ -1425,6 +1477,7 @@ model Invoice {
   @@index([invoiceDate])
   @@index([dueDate])
   @@index([type])
+  @@index([originalInvoiceId])
   @@map("invoices")
 }
 

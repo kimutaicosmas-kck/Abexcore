@@ -923,6 +923,18 @@ export const updateDeliveryStatusSchema = z.object({
     .optional(),
 });
 
+export const createSalesReturnSchema = z.object({
+  reason: z.string().trim().min(3).max(2000),
+  items: z
+    .array(
+      z.object({
+        productId: z.string().uuid(),
+        quantity: z.coerce.number().int().min(1),
+      })
+    )
+    .min(1),
+});
+
 export const bulkAssignDeliveriesSchema = z.object({
   items: z
     .array(

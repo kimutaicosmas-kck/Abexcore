@@ -9,12 +9,20 @@ export async function computeCustomerCreditExposure(
   tx: TxClient = prisma,
   extraOrderAmount = 0
 ): Promise<number> {
-  const [invoiceAgg, openOrdersList] = await Promise.all([
+  const [invoiceAgg, creditNoteAgg, openOrdersList] = await Promise.all([
     tx.invoice.aggregate({
       where: {
         customerId,
         type: 'SALES',
         status: { in: ['UNPAID', 'PARTIAL', 'OVERDUE'] },
+      },
+      _sum: { totalAmount: true, paidAmount: true },
+    }),
+    tx.invoice.aggregate({
+      where: {
+        customerId,
+        type: 'CREDIT_NOTE',
+        status: { in: ['UNPAID', 'PARTIAL'] },
       },
       _sum: { totalAmount: true, paidAmount: true },
     }),
@@ -34,11 +42,13 @@ export async function computeCustomerCreditExposure(
 
   const outstanding =
     Number(invoiceAgg._sum.totalAmount || 0) - Number(invoiceAgg._sum.paidAmount || 0);
+  const openCredit =
+    Number(creditNoteAgg._sum.totalAmount || 0) - Number(creditNoteAgg._sum.paidAmount || 0);
   const openOrders = openOrdersList.reduce((sum, order) => {
     const invoicedTotal = order.invoices.reduce((line, inv) => line + Number(inv.totalAmount), 0);
     return sum + Math.max(0, Number(order.totalAmount) - invoicedTotal);
   }, 0);
-  return outstanding + openOrders + extraOrderAmount;
+  return Math.max(0, outstanding - openCredit) + openOrders + extraOrderAmount;
 }
 
 export async function syncCustomerCreditUsed(
@@ -95,6 +105,11 @@ export function assertOrderStatusTransition(
     if (current === 'PARTIALLY_DELIVERED' && next === 'DELIVERED') return;
     if (current === 'DISPATCHED' && next === 'DELIVERED') return;
     if (current === 'READY' && next === 'DELIVERED') return;
+    // Post-delivery returns reopen the order for adjust / cancel.
+    if (current === 'DELIVERED' && (next === 'PARTIALLY_DELIVERED' || next === 'READY' || next === 'DISPATCHED')) {
+      return;
+    }
+    if (current === 'PARTIALLY_DELIVERED' && next === 'READY') return;
     // Physical delivery completion may race ahead of order status bookkeeping.
     if (next === 'DELIVERED' && !['DELIVERED', 'COMPLETED', 'CANCELLED'].includes(current)) {
       return;

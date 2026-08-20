@@ -19,7 +19,7 @@ function maxSequenceFromNumbers(numbers: string[], prefix: string): number {
 
 export async function nextInvoiceNumber(
   tx: TxClient,
-  prefix: 'INV' | 'PINV'
+  prefix: 'INV' | 'PINV' | 'CN'
 ): Promise<string> {
   const year = new Date().getFullYear();
   const rows = await tx.invoice.findMany({
@@ -27,6 +27,15 @@ export async function nextInvoiceNumber(
     select: { invoiceNumber: true },
   });
   return generateNumber(prefix, maxSequenceFromNumbers(rows.map((r) => r.invoiceNumber), prefix) + 1);
+}
+
+export async function nextSalesReturnNumber(tx: TxClient, companyId: string): Promise<string> {
+  const year = new Date().getFullYear();
+  const rows = await tx.salesReturn.findMany({
+    where: { companyId, returnNo: { startsWith: `RET-${year}-` } },
+    select: { returnNo: true },
+  });
+  return generateNumber('RET', maxSequenceFromNumbers(rows.map((r) => r.returnNo), 'RET') + 1);
 }
 
 export async function nextPaymentNumber(tx: TxClient): Promise<string> {

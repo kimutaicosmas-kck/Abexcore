@@ -249,6 +249,29 @@ export class AccountingService {
     });
   }
 
+  /** Reverse a sales invoice (customer return / credit note). */
+  static async postCreditNote(tx: TxClient, invoice: { invoiceNumber: string; subtotal: number; taxAmount: number; totalAmount: number; id?: string }) {
+    const subtotal = Number(invoice.subtotal);
+    const tax = Number(invoice.taxAmount);
+    const total = Number(invoice.totalAmount);
+
+    const lines: JournalLineInput[] = [
+      { accountCode: '4100', debit: subtotal, credit: 0, description: 'Sales revenue reversal' },
+      { accountCode: '1200', debit: 0, credit: total, description: 'Reduce accounts receivable' },
+    ];
+    if (tax > 0.009) {
+      lines.push({ accountCode: '2200', debit: tax, credit: 0, description: 'VAT payable reversal' });
+    }
+
+    return this.createJournalEntry(tx, {
+      description: `Credit note ${invoice.invoiceNumber}`,
+      reference: invoice.invoiceNumber,
+      sourceType: 'CREDIT_NOTE',
+      sourceId: invoice.id,
+      lines,
+    });
+  }
+
   static async postPayment(
     tx: TxClient,
     payment: { paymentNumber: string; amount: number; method?: string | null; id?: string },
@@ -596,6 +619,26 @@ export class AccountingService {
       lines: [
         { accountCode: '5100', debit: amount, credit: 0, description: 'Cost of goods sold' },
         { accountCode: '1300', debit: 0, credit: amount, description: 'Inventory issued to customer' },
+      ],
+    });
+  }
+
+  /** Restock after customer return — reverse COGS. */
+  static async postCogsReversal(
+    tx: TxClient,
+    opts: { reference: string; amount: number; sourceId?: string }
+  ) {
+    const amount = Number(opts.amount);
+    if (amount <= 0) return null;
+
+    return this.createJournalEntry(tx, {
+      description: `COGS reversal — ${opts.reference}`,
+      reference: opts.reference,
+      sourceType: 'COGS_REVERSAL',
+      sourceId: opts.sourceId,
+      lines: [
+        { accountCode: '1300', debit: amount, credit: 0, description: 'Inventory returned to warehouse' },
+        { accountCode: '5100', debit: 0, credit: amount, description: 'Cost of goods sold reversal' },
       ],
     });
   }

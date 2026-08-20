@@ -361,6 +361,7 @@ export const deliveryApi = {
   create: (data: object) => api.post('/delivery', data),
   updateStatus: (id: string, data: object) => api.patch(`/delivery/${id}/status`, data),
   updateTripStatus: (id: string, data: object) => api.patch(`/delivery/trips/${id}/status`, data),
+  createReturn: (id: string, data: object) => api.post(`/delivery/${id}/returns`, data),
   bulkAssign: (data: {
     items: { id: string; kind: 'note' | 'trip' }[];
     driverId: string;

@@ -638,10 +638,20 @@ router.get(
 
     const where: Prisma.SalesQuotationWhereInput = {};
     if (status) where.status = status as Prisma.EnumApprovalStatusFilter['equals'];
+    if (isSalesBookOwner(req.user!.roleName)) {
+      where.customer = {
+        OR: [{ salesPersonId: req.user!.id }, { salesPersonId: null }],
+      };
+    }
     if (search) {
-      where.OR = [
-        { quotationNo: { contains: search } },
-        { customer: { name: { contains: search } } },
+      where.AND = [
+        ...(Array.isArray(where.AND) ? where.AND : where.AND ? [where.AND] : []),
+        {
+          OR: [
+            { quotationNo: { contains: search } },
+            { customer: { name: { contains: search } } },
+          ],
+        },
       ];
     }
 
