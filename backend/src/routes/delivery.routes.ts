@@ -8,6 +8,7 @@ import {
   updateDeliveryStatusSchema,
   updateDeliveryTripStatusSchema,
   bulkAssignDeliveriesSchema,
+  bulkDeliverDeliveriesSchema,
   deliveryListQuerySchema,
   createVehicleSchema,
   vehicleListQuerySchema,
@@ -620,13 +621,13 @@ router.patch(
             select: { id: true, status: true, tripNo: true },
           });
           if (!trip) throw new AppError(`Delivery trip not found: ${item.id}`, 404);
-          if (trip.status !== 'PENDING') {
+          if (!['PENDING', 'ASSIGNED', 'IN_TRANSIT'].includes(trip.status)) {
             throw new AppError(
-              `Trip ${trip.tripNo} is ${trip.status.replace(/_/g, ' ').toLowerCase()} and cannot be assigned`,
+              `Trip ${trip.tripNo} is ${trip.status.replace(/_/g, ' ').toLowerCase()} and cannot be edited`,
               400
             );
           }
-          await applyDeliveryTripStatus(tx, trip.id, 'ASSIGNED', {
+          await applyDeliveryTripStatus(tx, trip.id, trip.status === 'PENDING' ? 'ASSIGNED' : trip.status, {
             userId: req.user!.id,
             driverId,
             vehicleId,
@@ -645,13 +646,13 @@ router.patch(
               400
             );
           }
-          if (note.status !== 'PENDING') {
+          if (!['PENDING', 'ASSIGNED', 'IN_TRANSIT'].includes(note.status)) {
             throw new AppError(
-              `${note.deliveryNo} is ${note.status.replace(/_/g, ' ').toLowerCase()} and cannot be assigned`,
+              `${note.deliveryNo} is ${note.status.replace(/_/g, ' ').toLowerCase()} and cannot be edited`,
               400
             );
           }
-          await applyDeliveryNoteStatus(tx, note.id, 'ASSIGNED', {
+          await applyDeliveryNoteStatus(tx, note.id, note.status === 'PENDING' ? 'ASSIGNED' : note.status, {
             userId: req.user!.id,
             driverId,
             vehicleId,
@@ -674,7 +675,93 @@ router.patch(
     res.json({
       success: true,
       data: { assignedCount: assigned.length, items: assigned },
-      message: `${assigned.length} ${assigned.length === 1 ? 'delivery' : 'deliveries'} assigned`,
+      message: `${assigned.length} ${assigned.length === 1 ? 'delivery' : 'deliveries'} updated`,
+    });
+  })
+);
+
+router.patch(
+  '/bulk-deliver',
+  authorize('delivery:update'),
+  validate(bulkDeliverDeliveriesSchema),
+  auditLog('delivery', 'update', 'delivery_note'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const { items, proofOfDelivery } = req.body as {
+      items: { id: string; kind: 'note' | 'trip' }[];
+      proofOfDelivery?: string;
+    };
+
+    const seen = new Set<string>();
+    const uniqueItems = items.filter((item) => {
+      const key = `${item.kind}:${item.id}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+
+    const delivered = await prisma.$transaction(async (tx) => {
+      const results: { kind: 'note' | 'trip'; id: string; label: string }[] = [];
+      const proof = proofOfDelivery?.trim() || 'Bulk marked delivered';
+
+      for (const item of uniqueItems) {
+        if (item.kind === 'trip') {
+          const trip = await tx.deliveryTrip.findFirst({
+            where: { id: item.id, companyId: requireTenantId() },
+            select: { id: true, status: true, tripNo: true, driverId: true },
+          });
+          if (!trip) throw new AppError(`Delivery trip not found: ${item.id}`, 404);
+          assertDriverTripAccess(req, trip, 'DELIVERED');
+          if (!['ASSIGNED', 'IN_TRANSIT'].includes(trip.status)) {
+            throw new AppError(
+              `Trip ${trip.tripNo} is ${trip.status.replace(/_/g, ' ').toLowerCase()} and cannot be marked delivered`,
+              400
+            );
+          }
+          await applyDeliveryTripStatus(tx, trip.id, 'DELIVERED', {
+            userId: req.user!.id,
+            proofOfDelivery: proof,
+          });
+          results.push({ kind: 'trip', id: trip.id, label: trip.tripNo });
+        } else {
+          const note = await tx.deliveryNote.findFirst({
+            where: { id: item.id, salesOrder: { companyId: requireTenantId() } },
+            select: {
+              id: true,
+              status: true,
+              deliveryNo: true,
+              deliveryTripId: true,
+              driverId: true,
+            },
+          });
+          if (!note) throw new AppError(`Delivery not found: ${item.id}`, 404);
+          if (note.deliveryTripId) {
+            throw new AppError(
+              `${note.deliveryNo} is part of a trip — mark the trip delivered instead`,
+              400
+            );
+          }
+          assertDriverDeliveryAccess(req, note, 'DELIVERED');
+          if (!['ASSIGNED', 'IN_TRANSIT'].includes(note.status)) {
+            throw new AppError(
+              `${note.deliveryNo} is ${note.status.replace(/_/g, ' ').toLowerCase()} and cannot be marked delivered`,
+              400
+            );
+          }
+          await applyDeliveryNoteStatus(tx, note.id, 'DELIVERED', {
+            userId: req.user!.id,
+            proofOfDelivery: proof,
+          });
+          results.push({ kind: 'note', id: note.id, label: note.deliveryNo });
+        }
+      }
+
+      return results;
+    });
+
+    res.json({
+      success: true,
+      data: { deliveredCount: delivered.length, items: delivered },
+      message: `${delivered.length} ${delivered.length === 1 ? 'delivery' : 'deliveries'} marked delivered`,
     });
   })
 );

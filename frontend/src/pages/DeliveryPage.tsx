@@ -100,6 +100,14 @@ function getDeliveryActions(status: string, isDriver: boolean) {
   return [];
 }
 
+function isOpenDeliveryStatus(status: string) {
+  return status === 'PENDING' || status === 'ASSIGNED' || status === 'IN_TRANSIT';
+}
+
+function canMarkDeliveredStatus(status: string) {
+  return status === 'ASSIGNED' || status === 'IN_TRANSIT';
+}
+
 function rowStatus(row: DeliveryListRow): string {
   return row.kind === 'trip' ? row.trip.status : row.note.status;
 }
@@ -139,12 +147,14 @@ export function DeliveryPage() {
     proofOfDelivery?: string;
   } | null>(null);
   const [assignDialog, setAssignDialog] = useState<{
-    items: { id: string; kind: 'note' | 'trip'; title: string }[];
+    items: { id: string; kind: 'note' | 'trip'; title: string; status: string }[];
+    mode: 'assign' | 'edit';
     driverId: string;
     vehicleId: string;
     scheduledDate: string;
   } | null>(null);
-  const [selectedAssignKeys, setSelectedAssignKeys] = useState<string[]>([]);
+  const [selectedKeys, setSelectedKeys] = useState<string[]>([]);
+  const [bulkDeliverConfirmOpen, setBulkDeliverConfirmOpen] = useState(false);
   const [deliverConfirm, setDeliverConfirm] = useState<{
     id: string;
     kind: 'note' | 'trip';
@@ -252,7 +262,7 @@ export function DeliveryPage() {
   ]);
 
   useEffect(() => {
-    setSelectedAssignKeys([]);
+    setSelectedKeys([]);
   }, [page, search, status, deliveryDate]);
 
   const { data: vehicles, isLoading: vehLoading, isError: vehiclesError, error: vehiclesErr, refetch: refetchVehicles } = useQuery({
@@ -324,7 +334,7 @@ export function DeliveryPage() {
       setSelected(null);
       setSelectedTrip(null);
       setAssignDialog(null);
-      setSelectedAssignKeys([]);
+      setSelectedKeys([]);
     },
   });
 
@@ -340,7 +350,22 @@ export function DeliveryPage() {
       queryClient.invalidateQueries({ queryKey: ['delivery-trips'] });
       queryClient.invalidateQueries({ queryKey: ['delivery-stats'] });
       setAssignDialog(null);
-      setSelectedAssignKeys([]);
+      setSelectedKeys([]);
+    },
+  });
+
+  const bulkDeliverMutation = useMutation({
+    mutationFn: (payload: {
+      items: { id: string; kind: 'note' | 'trip' }[];
+      proofOfDelivery?: string;
+    }) => deliveryApi.bulkDeliver(payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['deliveries'] });
+      queryClient.invalidateQueries({ queryKey: ['delivery-trips'] });
+      queryClient.invalidateQueries({ queryKey: ['delivery-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['sales-orders'] });
+      setBulkDeliverConfirmOpen(false);
+      setSelectedKeys([]);
     },
   });
 
@@ -445,8 +470,11 @@ export function DeliveryPage() {
           : note?.deliveryNo || 'Delivery note';
       const scheduled =
         (change.kind === 'trip' ? trip?.scheduledDate : note?.scheduledDate) || '';
+      const currentStatus =
+        change.kind === 'trip' ? trip?.status || 'PENDING' : note?.status || 'PENDING';
       setAssignDialog({
-        items: [{ id: change.id, kind: change.kind, title }],
+        items: [{ id: change.id, kind: change.kind, title, status: currentStatus }],
+        mode: currentStatus === 'PENDING' ? 'assign' : 'edit',
         driverId: (change.kind === 'trip' ? trip?.driver?.id : note?.driverId || note?.driver?.id) || '',
         vehicleId: (change.kind === 'trip' ? trip?.vehicle?.id : note?.vehicle?.id) || '',
         scheduledDate: scheduled ? String(scheduled).slice(0, 10) : '',
@@ -456,29 +484,70 @@ export function DeliveryPage() {
     setPendingStatusChange(change);
   };
 
-  const assignableRows = listRows.filter((row) => rowStatus(row) === 'PENDING' && !isDriver);
-  const allAssignableSelected =
-    assignableRows.length > 0 &&
-    assignableRows.every((row) => selectedAssignKeys.includes(selectionKey(row.kind, row.id)));
+  const selectableRows = listRows.filter((row) => isOpenDeliveryStatus(rowStatus(row)));
+  const selectedRows = listRows.filter((row) =>
+    selectedKeys.includes(selectionKey(row.kind, row.id))
+  );
+  const selectedPending = selectedRows.filter((row) => rowStatus(row) === 'PENDING');
+  const selectedDeliverable = selectedRows.filter((row) => canMarkDeliveredStatus(rowStatus(row)));
+  const selectedEditable = selectedRows.filter(
+    (row) => isOpenDeliveryStatus(rowStatus(row)) && !isDriver
+  );
+  const allSelectableSelected =
+    selectableRows.length > 0 &&
+    selectableRows.every((row) => selectedKeys.includes(selectionKey(row.kind, row.id)));
 
-  const toggleAssignSelection = (kind: 'note' | 'trip', id: string) => {
+  const toggleSelection = (kind: 'note' | 'trip', id: string) => {
     const key = selectionKey(kind, id);
-    setSelectedAssignKeys((prev) =>
+    setSelectedKeys((prev) =>
       prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]
     );
   };
 
-  const openBulkAssignDialog = () => {
-    const items = listRows
-      .filter((row) => selectedAssignKeys.includes(selectionKey(row.kind, row.id)))
-      .filter((row) => rowStatus(row) === 'PENDING')
-      .map((row) => ({ id: row.id, kind: row.kind, title: rowTitle(row) }));
+  const openBulkAssignDialog = (mode: 'assign' | 'edit' = 'assign') => {
+    const source =
+      mode === 'assign'
+        ? selectedPending
+        : selectedEditable.length
+          ? selectedEditable
+          : selectedRows.filter((row) => isOpenDeliveryStatus(rowStatus(row)));
+    const items = source.map((row) => ({
+      id: row.id,
+      kind: row.kind,
+      title: rowTitle(row),
+      status: rowStatus(row),
+    }));
     if (!items.length) return;
+    const first = source[0];
+    const driverId =
+      first.kind === 'trip'
+        ? first.trip.driver?.id || ''
+        : first.note.driverId || first.note.driver?.id || '';
+    const vehicleId =
+      first.kind === 'trip' ? first.trip.vehicle?.id || '' : first.note.vehicle?.id || '';
+    const scheduled =
+      (first.kind === 'trip' ? first.trip.scheduledDate : first.note.scheduledDate) || '';
     setAssignDialog({
       items,
-      driverId: '',
-      vehicleId: '',
-      scheduledDate: '',
+      mode,
+      driverId: mode === 'edit' ? driverId : '',
+      vehicleId: mode === 'edit' ? vehicleId : '',
+      scheduledDate: mode === 'edit' && scheduled ? String(scheduled).slice(0, 10) : '',
+    });
+  };
+
+  const openEditDialog = (row: DeliveryListRow) => {
+    const st = rowStatus(row);
+    if (!isOpenDeliveryStatus(st) || isDriver) return;
+    const scheduled =
+      (row.kind === 'trip' ? row.trip.scheduledDate : row.note.scheduledDate) || '';
+    setAssignDialog({
+      items: [{ id: row.id, kind: row.kind, title: rowTitle(row), status: st }],
+      mode: st === 'PENDING' ? 'assign' : 'edit',
+      driverId:
+        (row.kind === 'trip' ? row.trip.driver?.id : row.note.driverId || row.note.driver?.id) || '',
+      vehicleId: (row.kind === 'trip' ? row.trip.vehicle?.id : row.note.vehicle?.id) || '',
+      scheduledDate: scheduled ? String(scheduled).slice(0, 10) : '',
     });
   };
 
@@ -494,14 +563,14 @@ export function DeliveryPage() {
   };
 
   const deliveryColumns = [
-    ...(!isDriver && canUpdate
+    ...(canUpdate
       ? [
           {
             key: 'select',
             label: '',
             render: (_: unknown, row: Record<string, unknown>) => {
               const listRow = row as unknown as DeliveryListRow;
-              if (rowStatus(listRow) !== 'PENDING') {
+              if (!isOpenDeliveryStatus(rowStatus(listRow))) {
                 return <span className="inline-block w-4" />;
               }
               const key = selectionKey(listRow.kind, listRow.id);
@@ -510,10 +579,10 @@ export function DeliveryPage() {
                   type="checkbox"
                   className="h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
                   aria-label={`Select ${rowTitle(listRow)}`}
-                  checked={selectedAssignKeys.includes(key)}
+                  checked={selectedKeys.includes(key)}
                   onChange={(e) => {
                     e.stopPropagation();
-                    toggleAssignSelection(listRow.kind, listRow.id);
+                    toggleSelection(listRow.kind, listRow.id);
                   }}
                   onClick={(e) => e.stopPropagation()}
                 />
@@ -597,31 +666,49 @@ export function DeliveryPage() {
       render: (_: unknown, row: Record<string, unknown>) => {
         if (!canUpdate) return null;
         const listRow = row as unknown as DeliveryListRow;
-        const st = listRow.kind === 'trip' ? listRow.trip.status : listRow.note.status;
+        const st = rowStatus(listRow);
         const actions = getDeliveryActions(st, isDriver);
-        if (!actions.length) return null;
+        const editable = !isDriver && isOpenDeliveryStatus(st);
+        if (!actions.length && !editable) return null;
         const primary = actions[actions.length - 1];
         return (
-          <Button
-            size="sm"
-            loading={statusMutation.isPending}
-            onClick={(e) => {
-              e.stopPropagation();
-              requestStatusChange(
-                {
-                  id: listRow.id,
-                  kind: listRow.kind,
-                  status: primary.status,
-                  label: primary.label,
-                  proofOfDelivery: primary.status === 'DELIVERED' ? 'Confirmed by driver' : undefined,
-                },
-                listRow.kind === 'note' ? listRow.note : null,
-                listRow.kind === 'trip' ? listRow.trip : null
-              );
-            }}
-          >
-            {primary.label}
-          </Button>
+          <div className="flex flex-wrap gap-1 justify-end">
+            {editable && (
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  openEditDialog(listRow);
+                }}
+              >
+                Edit
+              </Button>
+            )}
+            {primary && (
+              <Button
+                size="sm"
+                loading={statusMutation.isPending}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  requestStatusChange(
+                    {
+                      id: listRow.id,
+                      kind: listRow.kind,
+                      status: primary.status,
+                      label: primary.label,
+                      proofOfDelivery:
+                        primary.status === 'DELIVERED' ? 'Confirmed by driver' : undefined,
+                    },
+                    listRow.kind === 'note' ? listRow.note : null,
+                    listRow.kind === 'trip' ? listRow.trip : null
+                  );
+                }}
+              >
+                {primary.label}
+              </Button>
+            )}
+          </div>
         );
       },
     },
@@ -649,9 +736,19 @@ export function DeliveryPage() {
 
   const toolbarActions = (
     <div className="flex flex-wrap gap-2">
-      {!isDriver && canUpdate && selectedAssignKeys.length > 0 && (
-        <Button size="sm" variant="secondary" onClick={openBulkAssignDialog}>
-          Assign selected ({selectedAssignKeys.length})
+      {!isDriver && canUpdate && selectedPending.length > 0 && (
+        <Button size="sm" variant="secondary" onClick={() => openBulkAssignDialog('assign')}>
+          Assign selected ({selectedPending.length})
+        </Button>
+      )}
+      {!isDriver && canUpdate && selectedEditable.length > 0 && selectedPending.length === 0 && (
+        <Button size="sm" variant="secondary" onClick={() => openBulkAssignDialog('edit')}>
+          Edit selected ({selectedEditable.length})
+        </Button>
+      )}
+      {canUpdate && selectedDeliverable.length > 0 && (
+        <Button size="sm" onClick={() => setBulkDeliverConfirmOpen(true)}>
+          Mark delivered ({selectedDeliverable.length})
         </Button>
       )}
       {canCreate && showDeliveries && (
@@ -775,28 +872,74 @@ export function DeliveryPage() {
                 Today
               </Button>
             )}
-            {!isDriver && canUpdate && assignableRows.length > 0 && (
+            {!isDriver && canUpdate && selectableRows.length > 0 && (
               <label className="inline-flex items-center gap-2 text-sm text-slate-600 sm:mb-0.5">
                 <input
                   type="checkbox"
                   className="h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
-                  checked={allAssignableSelected}
+                  checked={allSelectableSelected}
                   onChange={(e) => {
                     if (e.target.checked) {
-                      setSelectedAssignKeys(
-                        assignableRows.map((row) => selectionKey(row.kind, row.id))
+                      setSelectedKeys(
+                        selectableRows.map((row) => selectionKey(row.kind, row.id))
                       );
                     } else {
-                      setSelectedAssignKeys([]);
+                      setSelectedKeys([]);
                     }
                   }}
                 />
-                Select all pending ({assignableRows.length})
+                Select open ({selectableRows.length})
               </label>
             )}
-            {selectedAssignKeys.length > 0 && (
-              <Button type="button" size="sm" className="sm:mb-0.5" onClick={openBulkAssignDialog}>
-                Assign to person ({selectedAssignKeys.length})
+            {canUpdate && selectableRows.length > 0 && isDriver && (
+              <label className="inline-flex items-center gap-2 text-sm text-slate-600 sm:mb-0.5">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
+                  checked={allSelectableSelected}
+                  onChange={(e) => {
+                    if (e.target.checked) {
+                      setSelectedKeys(
+                        selectableRows.map((row) => selectionKey(row.kind, row.id))
+                      );
+                    } else {
+                      setSelectedKeys([]);
+                    }
+                  }}
+                />
+                Select ({selectableRows.length})
+              </label>
+            )}
+            {!isDriver && selectedPending.length > 0 && (
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                className="sm:mb-0.5"
+                onClick={() => openBulkAssignDialog('assign')}
+              >
+                Assign ({selectedPending.length})
+              </Button>
+            )}
+            {!isDriver && selectedEditable.length > 0 && (
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                className="sm:mb-0.5"
+                onClick={() => openBulkAssignDialog('edit')}
+              >
+                Edit ({selectedEditable.length})
+              </Button>
+            )}
+            {selectedDeliverable.length > 0 && (
+              <Button
+                type="button"
+                size="sm"
+                className="sm:mb-0.5"
+                onClick={() => setBulkDeliverConfirmOpen(true)}
+              >
+                Mark delivered ({selectedDeliverable.length})
               </Button>
             )}
           </div>
@@ -992,8 +1135,23 @@ export function DeliveryPage() {
               ))}
             </Card>
 
-            {canUpdate && getDeliveryActions(selectedTrip.status, isDriver).length > 0 && (
+            {canUpdate && (
               <div className="flex flex-wrap justify-end gap-2">
+                {!isDriver && isOpenDeliveryStatus(selectedTrip.status) && (
+                  <Button
+                    variant="secondary"
+                    onClick={() =>
+                      openEditDialog({
+                        kind: 'trip',
+                        id: selectedTrip.id,
+                        createdAt: selectedTrip.createdAt || '',
+                        trip: selectedTrip,
+                      })
+                    }
+                  >
+                    Edit trip
+                  </Button>
+                )}
                 {getDeliveryActions(selectedTrip.status, isDriver).map((action) => (
                   <Button
                     key={action.status}
@@ -1062,6 +1220,21 @@ export function DeliveryPage() {
                 <Download className="h-4 w-4 mr-2" />
                 Print delivery note
               </Button>
+              {canUpdate && !isDriver && isOpenDeliveryStatus(selected.status) && (
+                <Button
+                  variant="secondary"
+                  onClick={() =>
+                    openEditDialog({
+                      kind: 'note',
+                      id: selected.id,
+                      createdAt: selected.createdAt || '',
+                      note: selected,
+                    })
+                  }
+                >
+                  Edit
+                </Button>
+              )}
               {canUpdate &&
                 getDeliveryActions(selected.status, isDriver).map((action) => (
                   <Button
@@ -1150,8 +1323,14 @@ export function DeliveryPage() {
         open={!!assignDialog}
         onClose={() => setAssignDialog(null)}
         title={
-          assignDialog && assignDialog.items.length > 1
-            ? `Assign ${assignDialog.items.length} deliveries`
+          assignDialog
+            ? assignDialog.mode === 'edit'
+              ? assignDialog.items.length > 1
+                ? `Edit ${assignDialog.items.length} deliveries`
+                : 'Edit delivery'
+              : assignDialog.items.length > 1
+                ? `Assign ${assignDialog.items.length} deliveries`
+                : 'Assign delivery person'
             : 'Assign delivery person'
         }
         size="md"
@@ -1159,11 +1338,23 @@ export function DeliveryPage() {
         {assignDialog && (
           <div className="space-y-4">
             <p className="text-sm text-slate-600">
-              {assignDialog.items.length > 1 ? (
+              {assignDialog.mode === 'edit' ? (
+                assignDialog.items.length > 1 ? (
+                  <>
+                    Update driver, vehicle, or schedule for{' '}
+                    <strong>{assignDialog.items.length} open deliveries</strong> (not yet
+                    delivered).
+                  </>
+                ) : (
+                  <>
+                    Update driver, vehicle, or schedule for{' '}
+                    <strong>{assignDialog.items[0]?.title}</strong> before it is marked delivered.
+                  </>
+                )
+              ) : assignDialog.items.length > 1 ? (
                 <>
                   Assign one delivery person to{' '}
-                  <strong>{assignDialog.items.length} pending deliveries</strong>. They will all
-                  appear on that person’s Delivery list.
+                  <strong>{assignDialog.items.length} pending deliveries</strong>.
                 </>
               ) : (
                 <>
@@ -1177,7 +1368,8 @@ export function DeliveryPage() {
               <ul className="max-h-28 overflow-y-auto rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700 space-y-1">
                 {assignDialog.items.map((item) => (
                   <li key={`${item.kind}:${item.id}`}>
-                    {item.kind === 'trip' ? 'Trip' : 'Note'} · {item.title}
+                    {item.kind === 'trip' ? 'Trip' : 'Note'} · {item.title} ·{' '}
+                    {item.status.replace(/_/g, ' ')}
                   </li>
                 ))}
               </ul>
@@ -1241,10 +1433,14 @@ export function DeliveryPage() {
                   };
                   if (assignDialog.items.length === 1) {
                     const item = assignDialog.items[0];
+                    const nextStatus =
+                      item.status === 'PENDING' || assignDialog.mode === 'assign'
+                        ? 'ASSIGNED'
+                        : item.status;
                     statusMutation.mutate({
                       id: item.id,
                       kind: item.kind,
-                      status: 'ASSIGNED',
+                      status: nextStatus,
                       ...payload,
                     });
                     return;
@@ -1255,15 +1451,34 @@ export function DeliveryPage() {
                   });
                 }}
               >
-                {assignDialog.items.length > 1
-                  ? `Assign ${assignDialog.items.length} to driver`
-                  : 'Assign to driver'}
+                {assignDialog.mode === 'edit'
+                  ? assignDialog.items.length > 1
+                    ? `Save ${assignDialog.items.length} deliveries`
+                    : 'Save changes'
+                  : assignDialog.items.length > 1
+                    ? `Assign ${assignDialog.items.length} to driver`
+                    : 'Assign to driver'}
               </Button>
             </div>
           </div>
         )}
       </Modal>
 
+      <ConfirmDialog
+        open={bulkDeliverConfirmOpen}
+        title="Mark selected deliveries as delivered?"
+        message={`This will mark ${selectedDeliverable.length} ${selectedDeliverable.length === 1 ? 'delivery' : 'deliveries'} as delivered using full dispatched quantities. Continue?`}
+        confirmLabel="Mark delivered"
+        variant="primary"
+        loading={bulkDeliverMutation.isPending}
+        onCancel={() => setBulkDeliverConfirmOpen(false)}
+        onConfirm={() =>
+          bulkDeliverMutation.mutate({
+            items: selectedDeliverable.map((row) => ({ id: row.id, kind: row.kind })),
+            proofOfDelivery: 'Bulk marked delivered',
+          })
+        }
+      />
       <ConfirmDialog
         open={!!pendingStatusChange && pendingStatusChange.status !== 'DELIVERED'}
         title="Update delivery status?"

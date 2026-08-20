@@ -944,6 +944,19 @@ export const bulkAssignDeliveriesSchema = z.object({
   ),
 });
 
+export const bulkDeliverDeliveriesSchema = z.object({
+  items: z
+    .array(
+      z.object({
+        id: z.string().uuid(),
+        kind: z.enum(['note', 'trip']),
+      })
+    )
+    .min(1)
+    .max(50),
+  proofOfDelivery: z.string().max(500).optional(),
+});
+
 export const vehicleListQuerySchema = paginationSchema.extend({
   type: z.preprocess(
     (v) => (v === '' || v === undefined ? undefined : v),

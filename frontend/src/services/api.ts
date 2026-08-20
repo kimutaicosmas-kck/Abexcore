@@ -367,6 +367,10 @@ export const deliveryApi = {
     vehicleId?: string;
     scheduledDate?: string;
   }) => api.patch('/delivery/bulk-assign', data),
+  bulkDeliver: (data: {
+    items: { id: string; kind: 'note' | 'trip' }[];
+    proofOfDelivery?: string;
+  }) => api.patch('/delivery/bulk-deliver', data),
   drivers: () => api.get('/delivery/drivers/list'),
   vehicles: (params?: object) => api.get('/delivery/vehicles', { params }),
   createVehicle: (data: object) => api.post('/delivery/vehicles', data),
