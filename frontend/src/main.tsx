@@ -31,26 +31,11 @@ document.addEventListener(
   { passive: true, capture: true }
 );
 
-// autoUpdate in vite.config — apply new SW quietly when the tab is hidden so mid-work
-// isn't interrupted. On the login screen, apply immediately so installed PWAs don't keep a stale shell.
+// autoUpdate — apply new SW immediately so production deploys aren't stuck on a stale shell.
 const updateSW = registerSW({
   immediate: true,
   onNeedRefresh() {
-    const applyQuietly = () => {
-      void updateSW(true);
-    };
-    const onLogin =
-      window.location.pathname === '/login' || window.location.pathname.startsWith('/login/');
-    if (onLogin || document.visibilityState === 'hidden') {
-      applyQuietly();
-      return;
-    }
-    const onHide = () => {
-      if (document.visibilityState !== 'hidden') return;
-      document.removeEventListener('visibilitychange', onHide);
-      applyQuietly();
-    };
-    document.addEventListener('visibilitychange', onHide);
+    void updateSW(true);
   },
 });
 
