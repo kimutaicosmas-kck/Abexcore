@@ -7,6 +7,7 @@ import {
   createDeliverySchema,
   updateDeliveryStatusSchema,
   updateDeliveryTripStatusSchema,
+  bulkAssignDeliveriesSchema,
   deliveryListQuerySchema,
   createVehicleSchema,
   vehicleListQuerySchema,
@@ -577,6 +578,104 @@ router.post(
       });
     }
     res.status(201).json({ success: true, data: delivery.dn, invoice: delivery.invoice });
+  })
+);
+
+router.patch(
+  '/bulk-assign',
+  authorize('delivery:update'),
+  validate(bulkAssignDeliveriesSchema),
+  auditLog('delivery', 'update', 'delivery_note'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    if (isDriverUser(req)) {
+      throw new AppError('Drivers cannot bulk-assign deliveries', 403);
+    }
+
+    const { items, driverId, vehicleId, scheduledDate } = req.body as {
+      items: { id: string; kind: 'note' | 'trip' }[];
+      driverId: string;
+      vehicleId?: string;
+      scheduledDate?: string;
+    };
+
+    await assertActiveDriver(driverId);
+    const scheduled = scheduledDate ? new Date(scheduledDate) : undefined;
+
+    // De-dupe while preserving order
+    const seen = new Set<string>();
+    const uniqueItems = items.filter((item) => {
+      const key = `${item.kind}:${item.id}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+
+    const assigned = await prisma.$transaction(async (tx) => {
+      const results: { kind: 'note' | 'trip'; id: string; label: string }[] = [];
+
+      for (const item of uniqueItems) {
+        if (item.kind === 'trip') {
+          const trip = await tx.deliveryTrip.findFirst({
+            where: { id: item.id, companyId: requireTenantId() },
+            select: { id: true, status: true, tripNo: true },
+          });
+          if (!trip) throw new AppError(`Delivery trip not found: ${item.id}`, 404);
+          if (trip.status !== 'PENDING') {
+            throw new AppError(
+              `Trip ${trip.tripNo} is ${trip.status.replace(/_/g, ' ').toLowerCase()} and cannot be assigned`,
+              400
+            );
+          }
+          await applyDeliveryTripStatus(tx, trip.id, 'ASSIGNED', {
+            userId: req.user!.id,
+            driverId,
+            vehicleId,
+            scheduledDate: scheduled,
+          });
+          results.push({ kind: 'trip', id: trip.id, label: trip.tripNo });
+        } else {
+          const note = await tx.deliveryNote.findFirst({
+            where: { id: item.id, salesOrder: { companyId: requireTenantId() } },
+            select: { id: true, status: true, deliveryNo: true, deliveryTripId: true },
+          });
+          if (!note) throw new AppError(`Delivery not found: ${item.id}`, 404);
+          if (note.deliveryTripId) {
+            throw new AppError(
+              `${note.deliveryNo} is part of a trip — assign the trip instead`,
+              400
+            );
+          }
+          if (note.status !== 'PENDING') {
+            throw new AppError(
+              `${note.deliveryNo} is ${note.status.replace(/_/g, ' ').toLowerCase()} and cannot be assigned`,
+              400
+            );
+          }
+          await applyDeliveryNoteStatus(tx, note.id, 'ASSIGNED', {
+            userId: req.user!.id,
+            driverId,
+            vehicleId,
+            scheduledDate: scheduled,
+          });
+          results.push({ kind: 'note', id: note.id, label: note.deliveryNo });
+        }
+      }
+
+      return results;
+    });
+
+    await NotificationService.notifyDriverDeliveryAssigned({
+      driverId,
+      deliveryNo: assigned.length === 1 ? assigned[0].label : `${assigned.length} deliveries`,
+      orderNumbers: assigned.map((a) => a.label),
+      scheduledDate: scheduled || null,
+    }).catch(() => undefined);
+
+    res.json({
+      success: true,
+      data: { assignedCount: assigned.length, items: assigned },
+      message: `${assigned.length} ${assigned.length === 1 ? 'delivery' : 'deliveries'} assigned`,
+    });
   })
 );
 

@@ -100,6 +100,18 @@ function getDeliveryActions(status: string, isDriver: boolean) {
   return [];
 }
 
+function rowStatus(row: DeliveryListRow): string {
+  return row.kind === 'trip' ? row.trip.status : row.note.status;
+}
+
+function rowTitle(row: DeliveryListRow): string {
+  return row.kind === 'trip' ? row.trip.tripNo : row.note.deliveryNo;
+}
+
+function selectionKey(kind: 'note' | 'trip', id: string) {
+  return `${kind}:${id}`;
+}
+
 export function DeliveryPage() {
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -127,14 +139,12 @@ export function DeliveryPage() {
     proofOfDelivery?: string;
   } | null>(null);
   const [assignDialog, setAssignDialog] = useState<{
-    id: string;
-    kind: 'note' | 'trip';
-    label: string;
-    title: string;
+    items: { id: string; kind: 'note' | 'trip'; title: string }[];
     driverId: string;
     vehicleId: string;
     scheduledDate: string;
   } | null>(null);
+  const [selectedAssignKeys, setSelectedAssignKeys] = useState<string[]>([]);
   const [deliverConfirm, setDeliverConfirm] = useState<{
     id: string;
     kind: 'note' | 'trip';
@@ -241,6 +251,10 @@ export function DeliveryPage() {
       }))),
   ]);
 
+  useEffect(() => {
+    setSelectedAssignKeys([]);
+  }, [page, search, status, deliveryDate]);
+
   const { data: vehicles, isLoading: vehLoading, isError: vehiclesError, error: vehiclesErr, refetch: refetchVehicles } = useQuery({
     queryKey: ['vehicles', vehPage, vehSearch, vehType],
     queryFn: () =>
@@ -310,6 +324,23 @@ export function DeliveryPage() {
       setSelected(null);
       setSelectedTrip(null);
       setAssignDialog(null);
+      setSelectedAssignKeys([]);
+    },
+  });
+
+  const bulkAssignMutation = useMutation({
+    mutationFn: (payload: {
+      items: { id: string; kind: 'note' | 'trip' }[];
+      driverId: string;
+      vehicleId?: string;
+      scheduledDate?: string;
+    }) => deliveryApi.bulkAssign(payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['deliveries'] });
+      queryClient.invalidateQueries({ queryKey: ['delivery-trips'] });
+      queryClient.invalidateQueries({ queryKey: ['delivery-stats'] });
+      setAssignDialog(null);
+      setSelectedAssignKeys([]);
     },
   });
 
@@ -415,10 +446,7 @@ export function DeliveryPage() {
       const scheduled =
         (change.kind === 'trip' ? trip?.scheduledDate : note?.scheduledDate) || '';
       setAssignDialog({
-        id: change.id,
-        kind: change.kind,
-        label: change.label,
-        title,
+        items: [{ id: change.id, kind: change.kind, title }],
         driverId: (change.kind === 'trip' ? trip?.driver?.id : note?.driverId || note?.driver?.id) || '',
         vehicleId: (change.kind === 'trip' ? trip?.vehicle?.id : note?.vehicle?.id) || '',
         scheduledDate: scheduled ? String(scheduled).slice(0, 10) : '',
@@ -426,6 +454,32 @@ export function DeliveryPage() {
       return;
     }
     setPendingStatusChange(change);
+  };
+
+  const assignableRows = listRows.filter((row) => rowStatus(row) === 'PENDING' && !isDriver);
+  const allAssignableSelected =
+    assignableRows.length > 0 &&
+    assignableRows.every((row) => selectedAssignKeys.includes(selectionKey(row.kind, row.id)));
+
+  const toggleAssignSelection = (kind: 'note' | 'trip', id: string) => {
+    const key = selectionKey(kind, id);
+    setSelectedAssignKeys((prev) =>
+      prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]
+    );
+  };
+
+  const openBulkAssignDialog = () => {
+    const items = listRows
+      .filter((row) => selectedAssignKeys.includes(selectionKey(row.kind, row.id)))
+      .filter((row) => rowStatus(row) === 'PENDING')
+      .map((row) => ({ id: row.id, kind: row.kind, title: rowTitle(row) }));
+    if (!items.length) return;
+    setAssignDialog({
+      items,
+      driverId: '',
+      vehicleId: '',
+      scheduledDate: '',
+    });
   };
 
   const openDetail = (row: DeliveryListRow) => {
@@ -440,6 +494,34 @@ export function DeliveryPage() {
   };
 
   const deliveryColumns = [
+    ...(!isDriver && canUpdate
+      ? [
+          {
+            key: 'select',
+            label: '',
+            render: (_: unknown, row: Record<string, unknown>) => {
+              const listRow = row as unknown as DeliveryListRow;
+              if (rowStatus(listRow) !== 'PENDING') {
+                return <span className="inline-block w-4" />;
+              }
+              const key = selectionKey(listRow.kind, listRow.id);
+              return (
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
+                  aria-label={`Select ${rowTitle(listRow)}`}
+                  checked={selectedAssignKeys.includes(key)}
+                  onChange={(e) => {
+                    e.stopPropagation();
+                    toggleAssignSelection(listRow.kind, listRow.id);
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                />
+              );
+            },
+          },
+        ]
+      : []),
     {
       key: 'deliveryNo',
       label: 'Delivery #',
@@ -565,25 +647,33 @@ export function DeliveryPage() {
     { key: 'capacity', label: 'Capacity' },
   ];
 
-  const toolbarActions =
-    canCreate &&
-    (showDeliveries ? (
-      <Button
-        size="sm"
-        onClick={() => {
-          setPrefillOrderIds([]);
-          setDeliveryModalOpen(true);
-        }}
-      >
-        <Plus className="h-4 w-4 mr-1.5" />
-        Bulk Delivery Trip
-      </Button>
-    ) : showVehicles ? (
-      <Button size="sm" onClick={() => setVehicleModalOpen(true)}>
-        <Plus className="h-4 w-4 mr-1.5" />
-        Add Vehicle
-      </Button>
-    ) : undefined);
+  const toolbarActions = (
+    <div className="flex flex-wrap gap-2">
+      {!isDriver && canUpdate && selectedAssignKeys.length > 0 && (
+        <Button size="sm" variant="secondary" onClick={openBulkAssignDialog}>
+          Assign selected ({selectedAssignKeys.length})
+        </Button>
+      )}
+      {canCreate && showDeliveries && (
+        <Button
+          size="sm"
+          onClick={() => {
+            setPrefillOrderIds([]);
+            setDeliveryModalOpen(true);
+          }}
+        >
+          <Plus className="h-4 w-4 mr-1.5" />
+          Bulk Delivery Trip
+        </Button>
+      )}
+      {canCreate && showVehicles && (
+        <Button size="sm" onClick={() => setVehicleModalOpen(true)}>
+          <Plus className="h-4 w-4 mr-1.5" />
+          Add Vehicle
+        </Button>
+      )}
+    </div>
+  );
 
   return (
     <div className="space-y-4">
@@ -683,6 +773,30 @@ export function DeliveryPage() {
                 }}
               >
                 Today
+              </Button>
+            )}
+            {!isDriver && canUpdate && assignableRows.length > 0 && (
+              <label className="inline-flex items-center gap-2 text-sm text-slate-600 sm:mb-0.5">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
+                  checked={allAssignableSelected}
+                  onChange={(e) => {
+                    if (e.target.checked) {
+                      setSelectedAssignKeys(
+                        assignableRows.map((row) => selectionKey(row.kind, row.id))
+                      );
+                    } else {
+                      setSelectedAssignKeys([]);
+                    }
+                  }}
+                />
+                Select all pending ({assignableRows.length})
+              </label>
+            )}
+            {selectedAssignKeys.length > 0 && (
+              <Button type="button" size="sm" className="sm:mb-0.5" onClick={openBulkAssignDialog}>
+                Assign to person ({selectedAssignKeys.length})
               </Button>
             )}
           </div>
@@ -1035,17 +1149,43 @@ export function DeliveryPage() {
       <Modal
         open={!!assignDialog}
         onClose={() => setAssignDialog(null)}
-        title="Assign delivery person"
+        title={
+          assignDialog && assignDialog.items.length > 1
+            ? `Assign ${assignDialog.items.length} deliveries`
+            : 'Assign delivery person'
+        }
         size="md"
       >
         {assignDialog && (
           <div className="space-y-4">
             <p className="text-sm text-slate-600">
-              Assign a driver (and optional vehicle) to <strong>{assignDialog.title}</strong> so it
-              appears on their Delivery list.
+              {assignDialog.items.length > 1 ? (
+                <>
+                  Assign one delivery person to{' '}
+                  <strong>{assignDialog.items.length} pending deliveries</strong>. They will all
+                  appear on that person’s Delivery list.
+                </>
+              ) : (
+                <>
+                  Assign a driver (and optional vehicle) to{' '}
+                  <strong>{assignDialog.items[0]?.title}</strong> so it appears on their Delivery
+                  list.
+                </>
+              )}
             </p>
-            {statusMutation.isError && (
-              <Alert variant="error">{getApiErrorMessage(statusMutation.error)}</Alert>
+            {assignDialog.items.length > 1 && (
+              <ul className="max-h-28 overflow-y-auto rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700 space-y-1">
+                {assignDialog.items.map((item) => (
+                  <li key={`${item.kind}:${item.id}`}>
+                    {item.kind === 'trip' ? 'Trip' : 'Note'} · {item.title}
+                  </li>
+                ))}
+              </ul>
+            )}
+            {(statusMutation.isError || bulkAssignMutation.isError) && (
+              <Alert variant="error">
+                {getApiErrorMessage(statusMutation.error || bulkAssignMutation.error)}
+              </Alert>
             )}
             <Select
               label="Delivery person *"
@@ -1091,20 +1231,33 @@ export function DeliveryPage() {
               </Button>
               <Button
                 type="button"
-                loading={statusMutation.isPending}
+                loading={statusMutation.isPending || bulkAssignMutation.isPending}
                 disabled={!assignDialog.driverId}
-                onClick={() =>
-                  statusMutation.mutate({
-                    id: assignDialog.id,
-                    kind: assignDialog.kind,
-                    status: 'ASSIGNED',
+                onClick={() => {
+                  const payload = {
                     driverId: assignDialog.driverId,
                     vehicleId: assignDialog.vehicleId || undefined,
                     scheduledDate: assignDialog.scheduledDate || undefined,
-                  })
-                }
+                  };
+                  if (assignDialog.items.length === 1) {
+                    const item = assignDialog.items[0];
+                    statusMutation.mutate({
+                      id: item.id,
+                      kind: item.kind,
+                      status: 'ASSIGNED',
+                      ...payload,
+                    });
+                    return;
+                  }
+                  bulkAssignMutation.mutate({
+                    items: assignDialog.items.map(({ id, kind }) => ({ id, kind })),
+                    ...payload,
+                  });
+                }}
               >
-                Assign to driver
+                {assignDialog.items.length > 1
+                  ? `Assign ${assignDialog.items.length} to driver`
+                  : 'Assign to driver'}
               </Button>
             </div>
           </div>
