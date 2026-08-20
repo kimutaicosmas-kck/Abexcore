@@ -48,11 +48,9 @@ export async function purgeExpiredAuditLogs(
     if (result.count < BATCH_SIZE) break;
   }
 
-  if (auditLogs || loginHistory) {
-    logger.info(
-      `Audit retention: deleted ${auditLogs} audit_logs and ${loginHistory} login_history older than ${days} days`
-    );
-  }
+  logger.info(
+    `Audit retention complete (keep ${days} days): deleted ${auditLogs} audit_logs and ${loginHistory} login_history (cutoff ${cutoff.toISOString()})`
+  );
 
   return { auditLogs, loginHistory };
 }

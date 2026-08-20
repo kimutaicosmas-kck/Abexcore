@@ -52,11 +52,18 @@ function startBackgroundJobs() {
     }
   });
 
+  // Run audit purge inline on boot so it always executes (queue may race Redis connect).
+  void (async () => {
+    try {
+      const { purgeExpiredAuditLogs } = await import('./services/auditRetention.service');
+      await purgeExpiredAuditLogs();
+    } catch (err) {
+      logger.warn('Startup audit cleanup failed', err);
+    }
+  })();
+
   void enqueueJob('low-stock-check').catch((err) =>
     logger.warn('Startup low-stock enqueue failed', err)
-  );
-  void enqueueJob('audit-log-cleanup').catch((err) =>
-    logger.warn('Startup audit cleanup enqueue failed', err)
   );
 
   const lowStockIntervalMs =
