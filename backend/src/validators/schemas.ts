@@ -455,6 +455,30 @@ export const createPaymentSchema = z
     path: ['reference'],
   });
 
+export const createExpenseSchema = z.object({
+  expenseDate: z.string().optional(),
+  categoryAccountId: z.string().uuid(),
+  payeeName: z.string().min(1).max(200),
+  supplierId: z.string().uuid().optional().nullable(),
+  description: z.string().min(2).max(2000),
+  amount: z.number().positive(),
+  vatAmount: z.number().min(0).optional(),
+  paymentMethod: z
+    .enum(['CASH', 'BANK_TRANSFER', 'MPESA', 'CHEQUE', 'CARD', 'PETTY_CASH'])
+    .optional(),
+  reference: z.string().max(120).optional().nullable(),
+  notes: z.string().max(2000).optional().nullable(),
+  receiptUrl: z.string().max(500).optional().nullable(),
+  submit: z.boolean().optional(),
+});
+
+export const updateExpenseSchema = createExpenseSchema.partial();
+
+export const expenseDecisionSchema = z.object({
+  decision: z.enum(['APPROVED', 'REJECTED']),
+  note: z.string().max(1000).optional(),
+});
+
 export const createEmployeeSchema = z.object({
   employeeNo: z.string().min(1),
   firstName: z.string().min(1),
@@ -897,6 +921,27 @@ export const updateDeliveryStatusSchema = z.object({
       })
     )
     .optional(),
+});
+
+export const bulkAssignDeliveriesSchema = z.object({
+  items: z
+    .array(
+      z.object({
+        id: z.string().uuid(),
+        kind: z.enum(['note', 'trip']),
+      })
+    )
+    .min(1)
+    .max(50),
+  driverId: z.string().uuid(),
+  vehicleId: z.preprocess(
+    (v) => (v === '' || v === null || v === undefined ? undefined : v),
+    z.string().uuid().optional()
+  ),
+  scheduledDate: z.preprocess(
+    (v) => (v === '' || v === null || v === undefined ? undefined : v),
+    z.string().optional()
+  ),
 });
 
 export const vehicleListQuerySchema = paginationSchema.extend({

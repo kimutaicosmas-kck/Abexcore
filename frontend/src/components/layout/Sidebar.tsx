@@ -79,6 +79,7 @@ const navigationGroups: NavGroup[] = [
       { name: 'My Leave', href: '/my-leave', icon: CalendarDays },
       { name: 'Maintenance', href: '/maintenance', icon: Wrench, permission: 'maintenance:read' },
       { name: 'Reports', href: '/reports', icon: BarChart3, permission: 'reports:read' },
+      { name: 'Approvals', href: '/approvals', icon: ClipboardCheck, permissions: ['settings:read', 'procurement:read', 'hr:read', 'finance:read'] },
     ],
   },
   {

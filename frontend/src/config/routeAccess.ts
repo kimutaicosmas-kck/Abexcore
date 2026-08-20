@@ -22,6 +22,7 @@ export const ROUTE_PERMISSIONS: Record<string, string | string[] | undefined> = 
   '/my-leave': undefined,
   '/maintenance': 'maintenance:read',
   '/reports': 'reports:read',
+  '/approvals': ['settings:read', 'procurement:read', 'hr:read', 'finance:read', 'users:read'],
   '/settings': 'settings:read',
   '/account': undefined,
 };

@@ -22,6 +22,7 @@ import productsRoutes from './routes/products.routes';
 import inventoryRoutes from './routes/inventory.routes';
 import operationsRoutes from './routes/operations.routes';
 import financeRoutes from './routes/finance.routes';
+import expensesRoutes from './routes/expenses.routes';
 import hrRoutes from './routes/hr.routes';
 import deliveryRoutes from './routes/delivery.routes';
 import crmRoutes from './routes/crm.routes';
@@ -33,6 +34,7 @@ import realtimeRoutes from './routes/realtime.routes';
 import tenantRoutes from './routes/tenant.routes';
 import trashRoutes from './routes/trash.routes';
 import systemRoutes from './routes/system.routes';
+import platformRoutes from './routes/platform.routes';
 
 export function createApp() {
   const app = express();
@@ -187,8 +189,11 @@ export function createApp() {
   apiRouter.use('/products', productsRoutes);
   apiRouter.use('/inventory', inventoryRoutes);
   apiRouter.use('/operations', operationsRoutes);
-  apiRouter.use('/finance', financeRoutes);
+  // Mount nested finance modules before the general /finance router so they
+  // are never swallowed by finance middleware / unmatched-route fallthrough.
+  apiRouter.use('/finance/expenses', expensesRoutes);
   apiRouter.use('/finance/mpesa', mpesaRoutes);
+  apiRouter.use('/finance', financeRoutes);
   apiRouter.use('/hr', hrRoutes);
   apiRouter.use('/delivery', deliveryRoutes);
   apiRouter.use('/crm', crmRoutes);
@@ -199,6 +204,7 @@ export function createApp() {
   apiRouter.use('/tenant', tenantRoutes);
   apiRouter.use('/trash', trashRoutes);
   apiRouter.use('/system', systemRoutes);
+  apiRouter.use('/platform', platformRoutes);
 
   app.use('/api/v1', apiRouter);
   app.use(notFound);

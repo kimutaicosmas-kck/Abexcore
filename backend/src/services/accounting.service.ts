@@ -147,6 +147,59 @@ export class AccountingService {
     return entry;
   }
 
+  static async postOperatingExpense(
+    tx: TxClient,
+    expense: {
+      id: string;
+      expenseNumber: string;
+      expenseDate: Date;
+      amount: number;
+      vatAmount: number;
+      totalAmount: number;
+      paymentMethod: string;
+      categoryAccountId: string;
+      description: string;
+      payeeName: string;
+    }
+  ) {
+    const amount = Number(expense.amount);
+    const vat = Number(expense.vatAmount || 0);
+    const total = Number(expense.totalAmount);
+    const cashCode = await this.resolveCashAccountCode(tx, expense.paymentMethod);
+
+    const lines: JournalLineInput[] = [
+      {
+        accountId: expense.categoryAccountId,
+        debit: amount,
+        credit: 0,
+        description: expense.description || `Expense ${expense.expenseNumber}`,
+      },
+      {
+        accountCode: cashCode,
+        debit: 0,
+        credit: total,
+        description: `Paid to ${expense.payeeName}`,
+      },
+    ];
+    if (vat > 0.009) {
+      lines.push({
+        accountCode: '1250',
+        debit: vat,
+        credit: 0,
+        description: 'VAT input on expense',
+      });
+    }
+
+    return this.createJournalEntry(tx, {
+      description: `Operating expense ${expense.expenseNumber} — ${expense.payeeName}`,
+      reference: expense.expenseNumber,
+      sourceType: 'EXPENSE',
+      sourceId: expense.id,
+      date: expense.expenseDate,
+      lines,
+    });
+  }
+
   static async reverseJournalEntry(
     tx: TxClient,
     entryId: string,

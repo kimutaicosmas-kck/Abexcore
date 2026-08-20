@@ -175,22 +175,38 @@ export class DashboardService {
       .map(([category, count]) => ({ category, count }))
       .sort((a, b) => b.count - a.count);
 
-    const monthExpenses = await prisma.invoice.aggregate({
-      where: {
-        type: 'PURCHASE',
-        invoiceDate: { gte: monthStart, lte: monthEnd },
-      },
-      _sum: { totalAmount: true },
-    });
+    const [monthPurchaseExpenses, monthOperatingExpenses, pendingExpenses] = await Promise.all([
+      prisma.invoice.aggregate({
+        where: {
+          type: 'PURCHASE',
+          invoiceDate: { gte: monthStart, lte: monthEnd },
+        },
+        _sum: { totalAmount: true },
+      }),
+      prisma.expense.aggregate({
+        where: {
+          status: 'POSTED',
+          deletedAt: null,
+          expenseDate: { gte: monthStart, lte: monthEnd },
+        },
+        _sum: { totalAmount: true },
+      }),
+      prisma.expense.count({
+        where: { status: 'PENDING_APPROVAL', deletedAt: null },
+      }),
+    ]);
 
     const revenue = Number(salesMonth._sum.totalAmount || 0);
-    const expenses = Number(monthExpenses._sum.totalAmount || 0);
+    const expenses =
+      Number(monthPurchaseExpenses._sum.totalAmount || 0) +
+      Number(monthOperatingExpenses._sum.totalAmount || 0);
 
     const pendingActions = [
       { type: 'requisition', label: 'Purchase requisitions awaiting approval', count: pendingRequisitions, path: '/procurement' },
       { type: 'leave', label: 'Leave requests pending approval', count: pendingLeave, path: '/hr' },
       { type: 'complaint', label: 'Open customer complaints', count: openComplaints, path: '/customers' },
       { type: 'rfq', label: 'RFQs awaiting quotes', count: openRfqs, path: '/procurement' },
+      { type: 'expense', label: 'Expenses awaiting approval', count: pendingExpenses, path: '/finance' },
       { type: 'invoice', label: 'Overdue sales invoices', count: overdueInvoices, path: '/finance' },
       { type: 'notification', label: 'Unread notifications', count: unreadNotifications, path: '/finance' },
     ].filter((a) => a.count > 0);

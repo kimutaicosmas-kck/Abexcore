@@ -39,6 +39,10 @@ export const TENANT_SCOPED_MODELS = new Set([
   'Complaint',
   'DeliveryNote',
   'MpesaTransaction',
+  'OutboxEvent',
+  'ApprovalRequest',
+  'UserSsoIdentity',
+  'Expense',
 ]);
 
 export function isTenantScopedModel(model: string): boolean {

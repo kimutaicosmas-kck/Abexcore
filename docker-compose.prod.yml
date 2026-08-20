@@ -4,8 +4,8 @@
 services:
   backend:
     environment:
-      # Fresh MySQL has no baseline migrations — always push schema in prod
-      USE_DB_PUSH: "true"
+      # Prefer migrate deploy. Set USE_DB_PUSH=true only for emergency schema recovery.
+      USE_DB_PUSH: ${USE_DB_PUSH:-false}
       # API workers per container (default 4). Set 1 to disable cluster mode.
       CLUSTER_WORKERS: ${CLUSTER_WORKERS:-4}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}

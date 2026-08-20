@@ -91,6 +91,15 @@ enum FiscalStatus {
   FAILED
 }
 
+enum ExpenseStatus {
+  DRAFT
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
+  POSTED
+  VOIDED
+}
+
 enum MpesaTransactionStatus {
   PENDING
   SUCCESS
@@ -390,6 +399,11 @@ model User {
   salaryAdvancesCreated  SalaryAdvance[] @relation("SalaryAdvanceCreatedBy")
   salaryAdvancesApproved SalaryAdvance[] @relation("SalaryAdvanceApprovedBy")
   salaryAdvanceRepaymentsRecorded SalaryAdvanceRepayment[] @relation("SalaryAdvanceRepaymentRecordedBy")
+  ssoIdentities          UserSsoIdentity[]
+  approvalsRequested     ApprovalRequest[] @relation("ApprovalRequestedBy")
+  approvalsDecided       ApprovalRequest[] @relation("ApprovalDecidedBy")
+  expensesSubmitted      Expense[] @relation("ExpenseSubmittedBy")
+  expensesApproved       Expense[] @relation("ExpenseApprovedBy")
 
   @@unique([companyId, email])
   @@map("users")
@@ -599,6 +613,7 @@ model Supplier {
   supplierInvoices  Invoice[] @relation("SupplierInvoices")
   contracts         SupplierContract[]
   quotations        SupplierQuotation[]
+  expenses          Expense[]
 
   @@unique([companyId, code])
   @@map("suppliers")
@@ -1321,6 +1336,7 @@ model Account {
   parent   Account?       @relation("AccountHierarchy", fields: [parentId], references: [id])
   children Account[]      @relation("AccountHierarchy")
   journalEntries JournalEntryLine[]
+  expenses Expense[] @relation("ExpenseCategoryAccount")
 
   @@unique([companyId, code])
   @@map("accounts")
@@ -1726,4 +1742,106 @@ model MpesaTransaction {
   payment Payment? @relation(fields: [paymentId], references: [id])
 
   @@map("mpesa_transactions")
+}
+
+// ==================== ENTERPRISE PLATFORM ====================
+
+model UserSsoIdentity {
+  id        String   @id @default(uuid())
+  companyId String   @map("company_id")
+  userId    String   @map("user_id")
+  provider  String
+  subject   String
+  email     String?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, subject])
+  @@unique([userId, provider])
+  @@index([companyId, email])
+  @@map("user_sso_identities")
+}
+
+/** Transactional outbox for reliable domain events. */
+model OutboxEvent {
+  id            String    @id @default(uuid())
+  companyId     String    @map("company_id")
+  eventType     String    @map("event_type")
+  aggregateType String    @map("aggregate_type")
+  aggregateId   String    @map("aggregate_id")
+  payload       Json
+  status        String    @default("PENDING")
+  attempts      Int       @default(0)
+  availableAt   DateTime  @default(now()) @map("available_at")
+  publishedAt   DateTime? @map("published_at")
+  lastError     String?   @map("last_error") @db.Text
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  @@index([status, availableAt])
+  @@index([companyId, eventType, createdAt])
+  @@map("outbox_events")
+}
+
+/** Lightweight approval workflow for key documents. */
+model ApprovalRequest {
+  id           String    @id @default(uuid())
+  companyId    String    @map("company_id")
+  entityType   String    @map("entity_type")
+  entityId     String    @map("entity_id")
+  title        String
+  status       String    @default("PENDING")
+  requestedById String   @map("requested_by_id")
+  decidedById  String?   @map("decided_by_id")
+  decisionNote String?   @map("decision_note") @db.Text
+  decidedAt    DateTime? @map("decided_at")
+  metadata     Json?
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  requestedBy User  @relation("ApprovalRequestedBy", fields: [requestedById], references: [id])
+  decidedBy   User? @relation("ApprovalDecidedBy", fields: [decidedById], references: [id])
+
+  @@index([companyId, status, createdAt])
+  @@index([entityType, entityId])
+  @@map("approval_requests")
+}
+
+model Expense {
+  id                 String        @id @default(uuid())
+  companyId          String        @map("company_id")
+  expenseNumber      String        @map("expense_number")
+  expenseDate        DateTime      @default(now()) @map("expense_date")
+  categoryAccountId  String        @map("category_account_id")
+  payeeName          String        @map("payee_name")
+  supplierId         String?       @map("supplier_id")
+  description        String        @db.Text
+  amount             Decimal       @db.Decimal(15, 2)
+  vatAmount          Decimal       @default(0) @map("vat_amount") @db.Decimal(15, 2)
+  totalAmount        Decimal       @map("total_amount") @db.Decimal(15, 2)
+  paymentMethod      String        @default("CASH") @map("payment_method")
+  status             ExpenseStatus @default(DRAFT)
+  receiptUrl         String?       @map("receipt_url")
+  reference          String?
+  notes              String?       @db.Text
+  rejectionReason    String?       @map("rejection_reason") @db.Text
+  submittedById      String        @map("submitted_by_id")
+  approvedById       String?       @map("approved_by_id")
+  approvedAt         DateTime?     @map("approved_at")
+  postedAt           DateTime?     @map("posted_at")
+  journalEntryId     String?       @map("journal_entry_id")
+  createdAt          DateTime      @default(now()) @map("created_at")
+  updatedAt          DateTime      @updatedAt @map("updated_at")
+  deletedAt          DateTime?     @map("deleted_at")
+
+  categoryAccount Account  @relation("ExpenseCategoryAccount", fields: [categoryAccountId], references: [id])
+  supplier        Supplier? @relation(fields: [supplierId], references: [id])
+  submittedBy     User     @relation("ExpenseSubmittedBy", fields: [submittedById], references: [id])
+  approvedBy      User?    @relation("ExpenseApprovedBy", fields: [approvedById], references: [id])
+
+  @@unique([companyId, expenseNumber])
+  @@index([companyId, status, expenseDate])
+  @@index([categoryAccountId])
+  @@map("expenses")
 }

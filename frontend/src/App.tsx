@@ -46,6 +46,9 @@ const QualityPage = lazy(() =>
 const ReportsPage = lazy(() =>
   import('./pages/ReportsPage').then((m) => ({ default: m.ReportsPage }))
 );
+const ApprovalsPage = lazy(() =>
+  import('./pages/ApprovalsPage').then((m) => ({ default: m.ApprovalsPage }))
+);
 const DeliveryPage = lazy(() =>
   import('./pages/DeliveryPage').then((m) => ({ default: m.DeliveryPage }))
 );
@@ -170,6 +173,7 @@ function AppRoutes() {
           <Route path="my-leave" element={<PermissionRoute><MyLeavePage /></PermissionRoute>} />
           <Route path="maintenance" element={<PermissionRoute><MaintenancePage /></PermissionRoute>} />
           <Route path="reports" element={<PermissionRoute><ReportsPage /></PermissionRoute>} />
+          <Route path="approvals" element={<PermissionRoute><ApprovalsPage /></PermissionRoute>} />
           <Route path="settings" element={<Navigate to="/account?tab=settings" replace />} />
           <Route
             path="recycle-bin"

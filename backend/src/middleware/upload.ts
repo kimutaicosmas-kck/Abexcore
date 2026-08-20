@@ -92,3 +92,28 @@ export const excelUpload = multer({
     cb(null, allowedExt.includes(ext) || allowedMime.includes(file.mimetype));
   },
 });
+
+/** Expense receipt images / PDFs (max 5MB). */
+const expenseUploadDir = path.resolve(config.uploadDir, 'expenses');
+if (!fs.existsSync(expenseUploadDir)) {
+  fs.mkdirSync(expenseUploadDir, { recursive: true });
+}
+
+const expenseReceiptStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, expenseUploadDir),
+  filename: (_req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase() || '.bin';
+    cb(null, `${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`);
+  },
+});
+
+export const expenseReceiptUpload = multer({
+  storage: expenseReceiptStorage,
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    const allowedExt = ['.jpg', '.jpeg', '.png', '.webp', '.pdf'];
+    const allowedMime = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
+    cb(null, allowedExt.includes(ext) || allowedMime.includes(file.mimetype));
+  },
+});

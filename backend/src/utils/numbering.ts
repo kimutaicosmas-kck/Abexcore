@@ -64,3 +64,12 @@ export async function nextSalaryAdvanceNumber(tx: TxClient, companyId: string): 
   });
   return generateNumber('ADV', maxSequenceFromNumbers(rows.map((r) => r.advanceNo), 'ADV') + 1);
 }
+
+export async function nextExpenseNumber(tx: TxClient, companyId: string): Promise<string> {
+  const year = new Date().getFullYear();
+  const rows = await tx.expense.findMany({
+    where: { companyId, expenseNumber: { startsWith: `EXP-${year}-` } },
+    select: { expenseNumber: true },
+  });
+  return generateNumber('EXP', maxSequenceFromNumbers(rows.map((r) => r.expenseNumber), 'EXP') + 1);
+}

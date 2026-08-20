@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Chart as ChartJS,
@@ -53,6 +53,7 @@ import { Modal } from '../components/ui/Modal';
 import { InvoiceForm } from '../components/forms/InvoiceForm';
 import { PaymentForm } from '../components/forms/PaymentForm';
 import { JournalEntryForm } from '../components/forms/JournalEntryForm';
+import { ExpensesPanel, type ExpensesPanelHandle } from '../components/finance/ExpensesPanel';
 import { useAuth } from '../contexts/AuthContext';
 import { downloadFile } from '../utils/download';
 import { getApiErrorMessage } from '../utils/apiError';
@@ -82,7 +83,7 @@ const AGING_BUCKETS = [
   { key: 'days90Plus' as const, label: '90+ days', sub: 'Critical', color: 'bg-rose-700', variant: 'danger' as const },
 ];
 
-const tabs = ['Invoices', 'Payments', 'Journals', 'Accounts', 'Reconciliation'];
+const tabs = ['Invoices', 'Payments', 'Expenses', 'Journals', 'Accounts', 'Reconciliation'];
 
 const TYPE_FILTER = [
   { value: '', label: 'All types' },
@@ -119,6 +120,7 @@ export function FinancePage() {
   const queryClient = useQueryClient();
   const { hasPermission } = useAuth();
   const [activeTab, setActiveTab] = useState(0);
+  const expensesPanelRef = useRef<ExpensesPanelHandle>(null);
 
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
@@ -200,20 +202,20 @@ export function FinancePage() {
   const { data: accounts } = useQuery({
     queryKey: ['accounts'],
     queryFn: () => financeApi.accounts().then((r) => r.data.data as { id: string; code: string; name: string; type: string; balance: number }[]),
-    enabled: activeTab === 3,
+    enabled: activeTab === 4,
   });
 
   const { data: journalEntries, isLoading: journalLoading } = useQuery({
     queryKey: ['journal-entries', journalPage, journalSearch],
     queryFn: () =>
       financeApi.journalEntries({ page: journalPage, limit: 15, search: journalSearch || undefined }).then((r) => r.data),
-    enabled: activeTab === 2,
+    enabled: activeTab === 3,
   });
 
   const { data: reconciliation } = useQuery({
     queryKey: ['bank-reconciliation'],
     queryFn: () => financeApi.bankReconciliation().then((r) => r.data.data),
-    enabled: activeTab === 4,
+    enabled: activeTab === 5,
   });
 
   const reconcileMutation = useMutation({
@@ -568,6 +570,11 @@ export function FinancePage() {
         </Button>
       )}
       {activeTab === 2 && (
+        <Button size="sm" onClick={() => expensesPanelRef.current?.openCreate()}>
+          <Plus className="h-4 w-4 mr-1.5" /> New expense
+        </Button>
+      )}
+      {activeTab === 3 && (
         <Button size="sm" onClick={() => setJournalModalOpen(true)}>
           <Plus className="h-4 w-4 mr-1.5" /> Post Journal
         </Button>
@@ -767,8 +774,17 @@ export function FinancePage() {
         </DataPanel>
       )}
 
-      {/* Journals */}
+      {/* Expenses */}
       {activeTab === 2 && (
+        <DataPanel>
+          <div className="p-4">
+            <ExpensesPanel ref={expensesPanelRef} />
+          </div>
+        </DataPanel>
+      )}
+
+      {/* Journals */}
+      {activeTab === 3 && (
         <DataPanel>
           <div className="panel-filters max-w-sm">
             <Input placeholder="Search journals…" value={journalSearch} onChange={(e) => { setJournalSearch(e.target.value); setJournalPage(1); }} />
@@ -819,7 +835,7 @@ export function FinancePage() {
       )}
 
       {/* Accounts */}
-      {activeTab === 3 && (
+      {activeTab === 4 && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {Object.entries(accountsByType).map(([typeKey, accs]) => (
             <Card key={typeKey} title={ACCOUNT_TYPE_LABELS[typeKey] || typeKey} padding>
@@ -845,7 +861,7 @@ export function FinancePage() {
       )}
 
       {/* Reconciliation */}
-      {activeTab === 4 && reconciliation && (
+      {activeTab === 5 && reconciliation && (
         <>
           <StatGrid>
             <StatCard title="Bank Balance (GL)" value={formatCurrency(reconciliation.bankBalance)} icon={<Landmark className="h-5 w-5 text-white" />} color="from-teal-500 to-teal-700" />

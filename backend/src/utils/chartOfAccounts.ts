@@ -19,6 +19,15 @@ export const DEFAULT_CHART_OF_ACCOUNTS = [
   { code: '5000', name: 'Expenses', type: 'EXPENSE' as const },
   { code: '5100', name: 'Cost of Goods Sold', type: 'EXPENSE' as const },
   { code: '5200', name: 'Operating Expenses', type: 'EXPENSE' as const },
+  { code: '5210', name: 'Rent & Rates', type: 'EXPENSE' as const },
+  { code: '5220', name: 'Utilities', type: 'EXPENSE' as const },
+  { code: '5230', name: 'Fuel & Transport', type: 'EXPENSE' as const },
+  { code: '5240', name: 'Office & Admin', type: 'EXPENSE' as const },
+  { code: '5250', name: 'Communications', type: 'EXPENSE' as const },
+  { code: '5260', name: 'Repairs & Maintenance', type: 'EXPENSE' as const },
+  { code: '5270', name: 'Staff Welfare & Meals', type: 'EXPENSE' as const },
+  { code: '5280', name: 'Professional Fees', type: 'EXPENSE' as const },
+  { code: '5290', name: 'Other Operating Expenses', type: 'EXPENSE' as const },
 ] as const;
 
 type Tx = Prisma.TransactionClient;

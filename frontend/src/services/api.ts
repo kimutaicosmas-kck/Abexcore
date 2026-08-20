@@ -162,6 +162,10 @@ export const authApi = {
   login: (companySlug: string, email: string, password: string, totpCode?: string) =>
     api.post('/auth/login', { companySlug, email, password, totpCode }),
   resolveTenant: (slug: string) => api.get(`/auth/resolve-tenant/${encodeURIComponent(slug)}`),
+  ssoStatus: () => api.get('/auth/sso/status'),
+  ssoStart: (companySlug: string) =>
+    api.get('/auth/sso/start', { params: { companySlug } }),
+  ssoExchange: (exchange: string) => api.post('/auth/sso/exchange', { exchange }),
   logout: (refreshToken?: string) => api.post('/auth/logout', { refreshToken }),
   me: () => api.get('/auth/me'),
   changePassword: (currentPassword: string, newPassword: string) =>
@@ -357,6 +361,12 @@ export const deliveryApi = {
   create: (data: object) => api.post('/delivery', data),
   updateStatus: (id: string, data: object) => api.patch(`/delivery/${id}/status`, data),
   updateTripStatus: (id: string, data: object) => api.patch(`/delivery/trips/${id}/status`, data),
+  bulkAssign: (data: {
+    items: { id: string; kind: 'note' | 'trip' }[];
+    driverId: string;
+    vehicleId?: string;
+    scheduledDate?: string;
+  }) => api.patch('/delivery/bulk-assign', data),
   drivers: () => api.get('/delivery/drivers/list'),
   vehicles: (params?: object) => api.get('/delivery/vehicles', { params }),
   createVehicle: (data: object) => api.post('/delivery/vehicles', data),
@@ -464,6 +474,25 @@ export const financeApi = {
   mpesaStkPush: (data: object) => api.post('/finance/mpesa/stk-push', data),
 };
 
+export const expensesApi = {
+  list: (params?: object) => api.get('/finance/expenses', { params }),
+  get: (id: string) => api.get(`/finance/expenses/${id}`),
+  categories: () => api.get('/finance/expenses/categories'),
+  summary: (params?: object) => api.get('/finance/expenses/summary', { params }),
+  create: (data: object) => api.post('/finance/expenses', data),
+  update: (id: string, data: object) => api.patch(`/finance/expenses/${id}`, data),
+  submit: (id: string) => api.post(`/finance/expenses/${id}/submit`),
+  decide: (id: string, data: { decision: 'APPROVED' | 'REJECTED'; note?: string }) =>
+    api.post(`/finance/expenses/${id}/decide`, data),
+  post: (id: string) => api.post(`/finance/expenses/${id}/post`),
+  void: (id: string, reason?: string) => api.post(`/finance/expenses/${id}/void`, { reason }),
+  uploadReceipt: (id: string, file: File) => {
+    const formData = new FormData();
+    formData.append('receipt', file);
+    return api.post(`/finance/expenses/${id}/receipt`, formData);
+  },
+};
+
 export const reportsApi = {
   summary: () => api.get('/finance/reports/summary'),
   profitLoss: (params?: object) => api.get('/finance/reports/profit-loss', { params }),
@@ -512,6 +541,19 @@ export const tenantApi = {
 
 export const systemApi = {
   metrics: () => api.get('/system/metrics'),
+};
+
+export const platformApi = {
+  listApprovals: (params?: object) => api.get('/platform/approvals', { params }),
+  requestApproval: (data: object) => api.post('/platform/approvals', data),
+  decideApproval: (id: string, data: { decision: 'APPROVED' | 'REJECTED'; note?: string }) =>
+    api.post(`/platform/approvals/${id}/decide`, data),
+  analyticsSummary: (params?: object) => api.get('/platform/analytics/summary', { params }),
+  salesTrend: (days = 30) => api.get('/platform/analytics/sales-trend', { params: { days } }),
+  arAging: () => api.get('/platform/analytics/ar-aging'),
+  outboxRecent: () => api.get('/platform/outbox/recent'),
+  etimsStatus: () => api.get('/platform/etims/status'),
+  etimsSubmit: (invoiceId: string) => api.post(`/platform/etims/invoices/${invoiceId}/submit`),
 };
 
 export const qualityApi = {
