@@ -204,6 +204,8 @@ export function SalesPage() {
     queryFn: () =>
       operationsApi.getSalesOrder(selectedOrder!.id).then((r) => r.data.data as SalesOrder),
     enabled: orderDetailOpen && !!selectedOrder?.id,
+    staleTime: 0,
+    refetchOnMount: 'always',
   });
 
   const activeOrder = orderDetail ?? selectedOrder;
@@ -839,12 +841,12 @@ export function SalesPage() {
               <div><p className="text-slate-500">Total</p><p className="font-semibold text-lg">{formatCurrency(Number(activeOrder.totalAmount))}</p></div>
             </div>
             {activeOrder.items?.length > 0 && (
-              <Card title="Line Items">
-                {activeOrder.items.map((item) => {
+              <Card title={`Line Items (${activeOrder.items.length})`}>
+                {activeOrder.items.map((item, index) => {
                   const delivered = item.deliveredQty || 0;
                   const remaining = Math.max(0, item.quantity - delivered);
                   return (
-                  <div key={item.id} className="py-2 border-b border-border/60 last:border-0">
+                  <div key={item.id || `${item.productId}-${index}`} className="py-2 border-b border-border/60 last:border-0">
                     <div className="flex justify-between gap-2">
                       <span>{item.product?.name || item.productId}</span>
                       <span>{item.quantity} × {formatCurrency(Number(item.unitPrice))}</span>

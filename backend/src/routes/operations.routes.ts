@@ -203,10 +203,10 @@ router.get(
       include: {
         customer: true,
         quotation: { select: { quotationNo: true, status: true } },
-        items: { include: { product: true } },
+        items: { include: { product: true }, orderBy: { id: 'asc' } },
         createdBy: { select: { id: true, firstName: true, lastName: true } },
         salesPerson: { select: { id: true, firstName: true, lastName: true } },
-        deliveries: { include: { vehicle: true, items: true } },
+        deliveries: { include: { vehicle: true, items: true }, orderBy: { createdAt: 'asc' } },
         productionOrders: { select: { id: true, orderNumber: true, status: true } },
         invoices: { select: { id: true, invoiceNumber: true, status: true, totalAmount: true, deliveryNoteId: true } },
       },

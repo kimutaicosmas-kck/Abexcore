@@ -3,7 +3,7 @@ import { Controller, useFieldArray, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Check, ChevronDown, Plus, Search, Trash2, X } from 'lucide-react';
+import { Check, Plus, Search, Trash2, X } from 'lucide-react';
 import { operationsApi, customersApi } from '../../services/api';
 import { Alert, Button, Input, Select, formatCurrency, ModalFormBody } from '../ui';
 import { Customer } from '../../types';
@@ -57,7 +57,6 @@ export function SalesOrderForm({ onSuccess, onCancel }: SalesOrderFormProps) {
   const [customerSearch, setCustomerSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [customerListOpen, setCustomerListOpen] = useState(false);
-  const [expandedItemIndex, setExpandedItemIndex] = useState(0);
   const [productLabels, setProductLabels] = useState<Record<string, string>>({});
   const customerBoxRef = useRef<HTMLDivElement>(null);
 
@@ -169,12 +168,18 @@ export function SalesOrderForm({ onSuccess, onCancel }: SalesOrderFormProps) {
   const exceedsCreditLimit = hasCreditLimit && projectedExposure > creditLimit;
 
   const { mutate, reset, isPending, isError, error } = useMutation({
-    mutationFn: (data: SalesOrderFormData) =>
-      operationsApi.createSalesOrder({
+    mutationFn: (data: SalesOrderFormData) => {
+      const lines = data.items.filter((item) => item.productId);
+      if (!lines.length) {
+        throw new Error('Add at least one product line');
+      }
+      return operationsApi.createSalesOrder({
         ...data,
+        items: lines,
         salesPersonId: data.salesPersonId || undefined,
         requiredDate: data.requiredDate || data.orderDate,
-      }),
+      });
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['sales-orders'] });
       queryClient.invalidateQueries({ queryKey: ['sales-stats'] });
@@ -211,7 +216,6 @@ export function SalesOrderForm({ onSuccess, onCancel }: SalesOrderFormProps) {
 
   const addItem = () => {
     append({ productId: '', quantity: 1, unitPrice: 0, discount: 0 });
-    setExpandedItemIndex(fields.length);
   };
 
   return (
@@ -375,43 +379,9 @@ export function SalesOrderForm({ onSuccess, onCancel }: SalesOrderFormProps) {
         <div className="space-y-2">
           {fields.map((field, index) => {
             const line = items[index];
-            const hasProduct = !!line?.productId;
-            const collapsed = hasProduct && expandedItemIndex !== index;
-            const label = productLabels[line?.productId || ''] || 'Product';
             const lineTotal = Math.round(
               (line?.quantity || 0) * (line?.unitPrice || 0) * (1 - (line?.discount || 0) / 100)
             );
-
-            if (collapsed) {
-              return (
-                <div
-                  key={field.id}
-                  className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2"
-                >
-                  <button
-                    type="button"
-                    onClick={() => setExpandedItemIndex(index)}
-                    className="min-w-0 flex-1 text-left"
-                  >
-                    <p className="truncate text-sm font-medium text-slate-900">{label}</p>
-                    <p className="text-xs text-slate-500">
-                      Qty {line?.quantity || 0} · {formatCurrency(line?.unitPrice || 0)}
-                      {(line?.discount || 0) > 0 ? ` · ${line?.discount}% off` : ''}
-                      {' · '}
-                      {formatCurrency(lineTotal)}
-                    </p>
-                  </button>
-                  <Button type="button" variant="ghost" size="sm" onClick={() => setExpandedItemIndex(index)} title="Edit">
-                    <ChevronDown className="h-4 w-4 text-slate-500" />
-                  </Button>
-                  {fields.length > 1 && (
-                    <Button type="button" variant="ghost" size="sm" onClick={() => remove(index)}>
-                      <Trash2 className="h-4 w-4 text-red-500" />
-                    </Button>
-                  )}
-                </div>
-              );
-            }
 
             return (
               <div key={field.id} className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-end p-3 bg-gray-50 rounded-lg">
@@ -421,7 +391,7 @@ export function SalesOrderForm({ onSuccess, onCancel }: SalesOrderFormProps) {
                     control={control}
                     render={({ field: productField }) => (
                       <ProductSearchSelect
-                        label="Search product"
+                        label={index === 0 ? 'Product' : undefined}
                         value={productField.value}
                         onChange={productField.onChange}
                         onProductSelect={(product) => {
@@ -433,34 +403,33 @@ export function SalesOrderForm({ onSuccess, onCancel }: SalesOrderFormProps) {
                             if (!items[index]?.unitPrice || items[index].unitPrice === 0) {
                               setValue(`items.${index}.unitPrice`, Number(product.sellingPrice));
                             }
-                            setExpandedItemIndex(-1);
                           }
                         }}
                         error={errors.items?.[index]?.productId?.message}
                       />
                     )}
                   />
+                  {productLabels[line?.productId || ''] && (
+                    <p className="mt-1 text-xs text-slate-500 truncate">
+                      {productLabels[line.productId]} · line {formatCurrency(lineTotal)}
+                    </p>
+                  )}
                 </div>
                 <div className="col-span-6 sm:col-span-2">
-                  <Input label="Qty" type="number" min={1} {...register(`items.${index}.quantity`)} />
+                  <Input label={index === 0 ? 'Qty' : undefined} type="number" min={1} {...register(`items.${index}.quantity`)} />
                 </div>
                 <div className="col-span-6 sm:col-span-2">
                   <Input
-                    label={isVatCustomer ? 'Price (incl. VAT)' : 'Price'}
+                    label={index === 0 ? (isVatCustomer ? 'Price (incl. VAT)' : 'Price') : undefined}
                     type="number"
                     step="1"
                     {...register(`items.${index}.unitPrice`)}
                   />
                 </div>
                 <div className="col-span-6 sm:col-span-2">
-                  <Input label="Disc %" type="number" min={0} max={100} {...register(`items.${index}.discount`)} />
+                  <Input label={index === 0 ? 'Disc %' : undefined} type="number" min={0} max={100} {...register(`items.${index}.discount`)} />
                 </div>
                 <div className="col-span-6 sm:col-span-1 flex gap-1 justify-end">
-                  {hasProduct && (
-                    <Button type="button" variant="ghost" size="sm" onClick={() => setExpandedItemIndex(-1)} title="Collapse">
-                      Done
-                    </Button>
-                  )}
                   {fields.length > 1 && (
                     <Button type="button" variant="ghost" size="sm" onClick={() => remove(index)}>
                       <Trash2 className="h-4 w-4 text-red-500" />
