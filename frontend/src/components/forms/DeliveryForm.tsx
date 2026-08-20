@@ -6,7 +6,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Container, Trash2 } from 'lucide-react';
 import { deliveryApi } from '../../services/api';
 import { Alert, Button, Input, Select, formatCurrency } from '../ui';
-import { DeliveryNote, DeliveryTrip, SalesOrder, Vehicle, vehicleTypeLabel } from '../../types';
+import { SalesOrder, Vehicle, vehicleTypeLabel } from '../../types';
 import { formatProductOptionLabel } from '../../utils/productDisplay';
 import { getApiErrorMessage } from '../../utils/apiError';
 
