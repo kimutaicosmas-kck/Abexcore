@@ -1334,6 +1334,9 @@ export function DeliveryPage() {
                     {ret.creditNote && (
                       <p className="text-xs text-emerald-700 mt-1">
                         Credit note {ret.creditNote.invoiceNumber} · {Number(ret.creditNote.totalAmount).toLocaleString()}
+                        {ret.originalInvoice
+                          ? ` · invoice ${ret.originalInvoice.invoiceNumber} now ${Number(ret.originalInvoice.totalAmount).toLocaleString()}`
+                          : ''}
                       </p>
                     )}
                   </div>

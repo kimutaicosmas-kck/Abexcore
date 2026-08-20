@@ -869,7 +869,7 @@ export function SalesPage() {
                     <span>{inv.invoiceNumber}</span>
                     <div className="flex items-center gap-2 flex-wrap justify-end">
                       <Badge variant={getStatusBadge(inv.status)}>{inv.status}</Badge>
-                      <span>{formatCurrency(Number(inv.totalAmount))}</span>
+                      <span className="tabular-nums font-medium">{formatCurrency(Number(inv.totalAmount))}</span>
                       {canDownloadInvoice && (
                         <Button
                           variant="secondary"
@@ -884,6 +884,9 @@ export function SalesPage() {
                     </div>
                   </div>
                 ))}
+                <p className="text-xs text-slate-500 mt-2">
+                  Invoice total is the amount still payable for goods kept after any unpaid returns.
+                </p>
               </Card>
             )}
             {activeOrder.deliveries && activeOrder.deliveries.length > 0 && (

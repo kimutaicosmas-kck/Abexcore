@@ -145,53 +145,15 @@ export class SalesReturnService {
     const { subtotal, taxAmount, totalAmount } = splitInclusiveAmount(gross, vatRate);
 
     const originalInvoice = delivery.invoices[0] || null;
+    const invoiceUnpaid =
+      !!originalInvoice &&
+      Number(originalInvoice.paidAmount || 0) <= 0.009 &&
+      (originalInvoice.payments?.length || 0) === 0;
+
     const returnNo = await nextSalesReturnNumber(tx, opts.companyId);
-    const creditNoteNumber = await nextInvoiceNumber(tx, 'CN');
 
-    const creditNote = await tx.invoice.create({
-      data: {
-        companyId: opts.companyId,
-        invoiceNumber: creditNoteNumber,
-        type: 'CREDIT_NOTE',
-        customerId: delivery.salesOrder.customerId,
-        salesOrderId: delivery.salesOrderId,
-        deliveryNoteId: delivery.id,
-        originalInvoiceId: originalInvoice?.id,
-        subtotal,
-        taxAmount,
-        totalAmount,
-        status: 'UNPAID',
-        fiscalStatus: 'NOT_REQUIRED',
-        notes: `Sales return ${returnNo} — ${reason}`,
-        items: {
-          create: returnLines.map((l) => ({
-            description: `Return: ${l.productName}`,
-            quantity: l.quantity,
-            unitPrice: l.unitPrice,
-            taxRate: vatRate,
-            totalPrice: l.totalPrice,
-          })),
-        },
-      },
-    });
-
-    await AccountingService.postCreditNote(tx, {
-      id: creditNote.id,
-      invoiceNumber: creditNote.invoiceNumber,
-      subtotal,
-      taxAmount,
-      totalAmount,
-    });
-
-    if (originalInvoice) {
-      const { applyCreditNoteToOriginalInvoice } = await import('../utils/invoiceBalance');
-      await applyCreditNoteToOriginalInvoice(tx, {
-        creditNoteId: creditNote.id,
-        originalInvoiceId: originalInvoice.id,
-        creditTotal: totalAmount,
-      });
-    }
-
+    // Restock and shrink delivery lines first so unpaid invoices can be rewritten
+    // from remaining delivered qty.
     let cogsReversal = 0;
     for (const line of returnLines) {
       const stock = await tx.stockLevel.findFirst({
@@ -229,12 +191,6 @@ export class SalesReturnService {
       });
     }
 
-    await AccountingService.postCogsReversal(tx, {
-      reference: returnNo,
-      amount: cogsReversal,
-      sourceId: creditNote.id,
-    });
-
     const remainingItems = await tx.deliveryItem.count({ where: { deliveryNoteId: delivery.id } });
     if (remainingItems === 0) {
       await tx.deliveryNote.update({
@@ -244,6 +200,92 @@ export class SalesReturnService {
       if (delivery.deliveryTripId) {
         const { syncDeliveryTripStatus } = await import('./delivery-trip.service');
         await syncDeliveryTripStatus(tx, delivery.deliveryTripId);
+      }
+    }
+
+    // Unpaid sales invoice: rewrite lines/totals to remaining goods (amount still due).
+    // Paid / partially paid: keep invoice total and apply a credit note against balance.
+    if (invoiceUnpaid && originalInvoice) {
+      const { FinanceInvoiceService } = await import('./finance.service');
+      await FinanceInvoiceService.recalculateDeliveryInvoice(tx, delivery.id);
+    }
+
+    const creditNoteNumber = await nextInvoiceNumber(tx, 'CN');
+    const cnNotes = invoiceUnpaid
+      ? `Sales return ${returnNo} — ${reason}\n[INVOICE_ADJUSTED]`
+      : `Sales return ${returnNo} — ${reason}`;
+
+    const creditNote = await tx.invoice.create({
+      data: {
+        companyId: opts.companyId,
+        invoiceNumber: creditNoteNumber,
+        type: 'CREDIT_NOTE',
+        customerId: delivery.salesOrder.customerId,
+        salesOrderId: delivery.salesOrderId,
+        deliveryNoteId: delivery.id,
+        originalInvoiceId: originalInvoice?.id,
+        subtotal,
+        taxAmount,
+        totalAmount,
+        status: 'UNPAID',
+        fiscalStatus: 'NOT_REQUIRED',
+        notes: cnNotes,
+        items: {
+          create: returnLines.map((l) => ({
+            description: `Return: ${l.productName}`,
+            quantity: l.quantity,
+            unitPrice: l.unitPrice,
+            taxRate: vatRate,
+            totalPrice: l.totalPrice,
+          })),
+        },
+      },
+    });
+
+    await AccountingService.postCreditNote(tx, {
+      id: creditNote.id,
+      invoiceNumber: creditNote.invoiceNumber,
+      subtotal,
+      taxAmount,
+      totalAmount,
+    });
+
+    await AccountingService.postCogsReversal(tx, {
+      reference: returnNo,
+      amount: cogsReversal,
+      sourceId: creditNote.id,
+    });
+
+    if (originalInvoice) {
+      const { applyCreditNoteToOriginalInvoice, resolveSalesInvoiceStatus } = await import(
+        '../utils/invoiceBalance'
+      );
+      if (invoiceUnpaid) {
+        // CN is audit + GL only; balance due comes from rewritten invoice total.
+        await tx.invoice.update({
+          where: { id: creditNote.id },
+          data: {
+            paidAmount: totalAmount,
+            status: 'PAID',
+            notes: `${cnNotes}\nApplied to original sales invoice (invoice rewritten)`,
+          },
+        });
+        const refreshed = await tx.invoice.findUnique({ where: { id: originalInvoice.id } });
+        if (refreshed) {
+          const nextStatus = resolveSalesInvoiceStatus(refreshed, 0);
+          if (nextStatus !== refreshed.status) {
+            await tx.invoice.update({
+              where: { id: refreshed.id },
+              data: { status: nextStatus },
+            });
+          }
+        }
+      } else {
+        await applyCreditNoteToOriginalInvoice(tx, {
+          creditNoteId: creditNote.id,
+          originalInvoiceId: originalInvoice.id,
+          creditTotal: totalAmount,
+        });
       }
     }
 
@@ -272,6 +314,9 @@ export class SalesReturnService {
         creditNote: { select: { id: true, invoiceNumber: true, totalAmount: true, status: true } },
         deliveryNote: { select: { id: true, deliveryNo: true, status: true } },
         salesOrder: { select: { id: true, orderNumber: true, status: true } },
+        originalInvoice: {
+          select: { id: true, invoiceNumber: true, totalAmount: true, paidAmount: true, status: true },
+        },
       },
     });
 

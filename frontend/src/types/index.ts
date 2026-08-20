@@ -689,6 +689,13 @@ export interface DeliveryNote {
     reason: string;
     createdAt: string;
     creditNote?: { id: string; invoiceNumber: string; totalAmount: number | string };
+    originalInvoice?: {
+      id: string;
+      invoiceNumber: string;
+      totalAmount: number | string;
+      paidAmount?: number | string;
+      status?: string;
+    };
     items: { productId: string; quantity: number }[];
   }[];
   invoices?: {

@@ -88,6 +88,11 @@ export class ExportService {
     const money = (n: number) =>
       Math.round(n).toLocaleString('en-KE', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 
+    const { creditedAmountForInvoice, computeInvoiceBalanceDue } = await import('../utils/invoiceBalance');
+    const credited =
+      invoice.type === 'SALES' ? await creditedAmountForInvoice(prisma, invoice.id) : 0;
+    const balanceDue = computeInvoiceBalanceDue(invoice, credited);
+
     return new Promise((resolve, reject) => {
       const doc = new PDFDocument({ margin: 40, size: 'A4' });
       const chunks: Buffer[] = [];
@@ -152,9 +157,12 @@ export class ExportService {
         { label: `VAT (${vatRate}%)`, value: `KES ${money(Number(invoice.taxAmount))}` },
         { label: 'Total', value: `KES ${money(Number(invoice.totalAmount))}`, bold: true },
         { label: 'Paid', value: `KES ${money(Number(invoice.paidAmount))}` },
+        ...(credited > 0.009
+          ? [{ label: 'Credited (returns)', value: `KES ${money(credited)}` }]
+          : []),
         {
-          label: 'Balance',
-          value: `KES ${money(Number(invoice.totalAmount) - Number(invoice.paidAmount))}`,
+          label: 'Balance due',
+          value: `KES ${money(balanceDue)}`,
           bold: true,
         },
       ]);

@@ -1095,7 +1095,12 @@ export function FinancePage() {
                       <div key={cn.id} className="flex justify-between text-sm py-1.5 border-b border-slate-100 last:border-0">
                         <div>
                           <p className="font-medium">{cn.invoiceNumber}</p>
-                          <p className="text-xs text-slate-500">{(cn.status || '').replace(/_/g, ' ')}</p>
+                          <p className="text-xs text-slate-500">
+                            {(cn.status || '').replace(/_/g, ' ')}
+                            {(cn.notes || '').includes('[INVOICE_ADJUSTED]')
+                              ? ' · invoice rewritten'
+                              : ''}
+                          </p>
                         </div>
                         <span className="font-semibold text-violet-700">{formatCurrency(Number(cn.totalAmount))}</span>
                       </div>

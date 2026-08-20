@@ -10,19 +10,24 @@ export type InvoiceBalanceFields = {
   status: PaymentStatus | string;
 };
 
-/** Credit notes linked to a sales invoice (goods returns). */
+/** Credit notes linked to a sales invoice that still reduce balance due.
+ * CNs that accompanied an in-place invoice rewrite are excluded ([INVOICE_ADJUSTED]).
+ */
 export async function creditedAmountForInvoice(
   tx: TxClient,
   invoiceId: string
 ): Promise<number> {
-  const agg = await tx.invoice.aggregate({
+  const notes = await tx.invoice.findMany({
     where: {
       originalInvoiceId: invoiceId,
       type: 'CREDIT_NOTE',
     },
-    _sum: { totalAmount: true },
+    select: { totalAmount: true, notes: true },
   });
-  return Number(agg._sum.totalAmount || 0);
+  return notes.reduce((sum, cn) => {
+    if ((cn.notes || '').includes('[INVOICE_ADJUSTED]')) return sum;
+    return sum + Number(cn.totalAmount || 0);
+  }, 0);
 }
 
 export function computeInvoiceBalanceDue(
@@ -71,18 +76,20 @@ export async function enrichInvoicesWithBalances<T extends InvoiceBalanceFields>
   const salesIds = invoices.filter((i) => i.type === 'SALES').map((i) => i.id);
   const creditByOriginal = new Map<string, number>();
   if (salesIds.length) {
-    const rows = await tx.invoice.groupBy({
-      by: ['originalInvoiceId'],
+    const rows = await tx.invoice.findMany({
       where: {
         type: 'CREDIT_NOTE',
         originalInvoiceId: { in: salesIds },
       },
-      _sum: { totalAmount: true },
+      select: { originalInvoiceId: true, totalAmount: true, notes: true },
     });
     for (const row of rows) {
-      if (row.originalInvoiceId) {
-        creditByOriginal.set(row.originalInvoiceId, Number(row._sum.totalAmount || 0));
-      }
+      if (!row.originalInvoiceId) continue;
+      if ((row.notes || '').includes('[INVOICE_ADJUSTED]')) continue;
+      creditByOriginal.set(
+        row.originalInvoiceId,
+        (creditByOriginal.get(row.originalInvoiceId) || 0) + Number(row.totalAmount || 0)
+      );
     }
   }
 

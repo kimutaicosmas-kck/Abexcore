@@ -509,6 +509,9 @@ router.get(
           include: {
             items: true,
             creditNote: { select: { id: true, invoiceNumber: true, totalAmount: true } },
+            originalInvoice: {
+              select: { id: true, invoiceNumber: true, totalAmount: true, paidAmount: true, status: true },
+            },
           },
           orderBy: { createdAt: 'desc' },
         },
