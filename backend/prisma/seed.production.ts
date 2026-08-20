@@ -150,21 +150,39 @@ async function main() {
   const passwordHash = await bcrypt.hash(adminPassword, 12);
   const email = adminEmail.toLowerCase();
 
-  await prisma.user.upsert({
+  const existingAdmin = await prisma.user.findUnique({
     where: { companyId_email: { companyId, email } },
-    update: { mustChangePassword: true, passwordHash },
-    create: {
-      companyId,
-      email,
-      passwordHash,
-      firstName: 'System',
-      lastName: 'Administrator',
-      roleId: superAdmin!.id,
-      departmentId: dept.id,
-      branchId: branch.id,
-      mustChangePassword: true,
-    },
+    select: { id: true },
   });
+
+  if (existingAdmin) {
+    // Never reset password on redeploy — that locked owners out after Contabo rebuilds.
+    await prisma.user.update({
+      where: { id: existingAdmin.id },
+      data: {
+        status: 'ACTIVE',
+        deletedAt: null,
+        roleId: superAdmin!.id,
+        departmentId: dept.id,
+        branchId: branch.id,
+      },
+    });
+  } else {
+    await prisma.user.create({
+      data: {
+        companyId,
+        email,
+        passwordHash,
+        firstName: 'System',
+        lastName: 'Administrator',
+        roleId: superAdmin!.id,
+        departmentId: dept.id,
+        branchId: branch.id,
+        mustChangePassword: true,
+        status: 'ACTIVE',
+      },
+    });
+  }
 
   const accounts = [
     { code: '1100', name: 'Cash & Bank', type: 'ASSET' as const },
