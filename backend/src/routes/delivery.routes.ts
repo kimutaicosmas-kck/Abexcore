@@ -1,4 +1,5 @@
 ﻿import { Router, Response } from 'express';
+import { z } from 'zod';
 import { authenticate, authorize, authorizeAny, AuthRequest } from '../middleware/auth';
 import { validate } from '../middleware/validate';
 import { asyncHandler, AppError } from '../middleware/errorHandler';
@@ -833,4 +834,142 @@ router.patch(
     res.json({ success: true, data: delivery });
   })
 );
+
+const locationPingSchema = z.object({
+  latitude: z.number().min(-90).max(90),
+  longitude: z.number().min(-180).max(180),
+  speedKph: z.number().min(0).max(300).optional(),
+  tripId: z.string().uuid().optional(),
+});
+
+/** Live fleet map — vehicles with last GPS fix. */
+router.get(
+  '/fleet/live',
+  authorize('delivery:read'),
+  asyncHandler(async (_req: AuthRequest, res: Response) => {
+    const vehicles = await prisma.vehicle.findMany({
+      where: { isActive: true },
+      select: {
+        id: true,
+        registration: true,
+        type: true,
+        make: true,
+        model: true,
+        lastLat: true,
+        lastLng: true,
+        lastLocatedAt: true,
+        trips: {
+          where: { status: { in: ['ASSIGNED', 'IN_TRANSIT', 'PENDING'] } },
+          take: 1,
+          orderBy: { updatedAt: 'desc' },
+          select: {
+            id: true,
+            tripNo: true,
+            status: true,
+            driver: { select: { id: true, firstName: true, lastName: true } },
+          },
+        },
+      },
+      orderBy: { registration: 'asc' },
+    });
+    res.json({
+      success: true,
+      data: vehicles.map((v) => ({
+        ...v,
+        lastLat: v.lastLat != null ? Number(v.lastLat) : null,
+        lastLng: v.lastLng != null ? Number(v.lastLng) : null,
+        activeTrip: v.trips[0] || null,
+        trips: undefined,
+      })),
+    });
+  })
+);
+
+router.get(
+  '/vehicles/:id/locations',
+  authorize('delivery:read'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const vehicleId = getParam(req.params.id);
+    const limit = Math.min(Number(req.query.limit) || 50, 200);
+    const pings = await prisma.vehicleLocationPing.findMany({
+      where: { vehicleId },
+      orderBy: { recordedAt: 'desc' },
+      take: limit,
+    });
+    res.json({
+      success: true,
+      data: pings.map((p) => ({
+        ...p,
+        latitude: Number(p.latitude),
+        longitude: Number(p.longitude),
+        speedKph: p.speedKph != null ? Number(p.speedKph) : null,
+      })),
+    });
+  })
+);
+
+router.post(
+  '/vehicles/:id/location',
+  authorize('delivery:update', 'delivery:create'),
+  validate(locationPingSchema),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const vehicleId = getParam(req.params.id);
+    const { latitude, longitude, speedKph, tripId } = req.body as z.infer<typeof locationPingSchema>;
+
+    const vehicle = await prisma.vehicle.findUnique({ where: { id: vehicleId } });
+    if (!vehicle) throw new AppError('Vehicle not found', 404);
+
+    if (isDriverUser(req)) {
+      const assigned = await prisma.deliveryNote.findFirst({
+        where: {
+          driverId: req.user!.id,
+          vehicleId,
+          status: { in: ['ASSIGNED', 'IN_TRANSIT'] },
+        },
+      });
+      const tripAssigned = tripId
+        ? await prisma.deliveryTrip.findFirst({
+            where: { id: tripId, driverId: req.user!.id, vehicleId },
+          })
+        : null;
+      if (!assigned && !tripAssigned) {
+        throw new AppError('You can only ping location for your assigned vehicle', 403);
+      }
+    }
+
+    const companyId = requireTenantId();
+    const [updated] = await prisma.$transaction([
+      prisma.vehicle.update({
+        where: { id: vehicleId },
+        data: {
+          lastLat: latitude,
+          lastLng: longitude,
+          lastLocatedAt: new Date(),
+        },
+      }),
+      prisma.vehicleLocationPing.create({
+        data: {
+          companyId,
+          vehicleId,
+          tripId: tripId || null,
+          latitude,
+          longitude,
+          speedKph: speedKph ?? null,
+        },
+      }),
+    ]);
+
+    res.json({
+      success: true,
+      data: {
+        id: updated.id,
+        registration: updated.registration,
+        lastLat: Number(updated.lastLat),
+        lastLng: Number(updated.lastLng),
+        lastLocatedAt: updated.lastLocatedAt,
+      },
+    });
+  })
+);
+
 export default router;

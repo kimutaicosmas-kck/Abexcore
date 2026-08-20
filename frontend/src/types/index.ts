@@ -958,6 +958,7 @@ export interface CompanySettings {
   coopPaybillNumber?: string | null;
   mpesaAccountNumber?: string | null;
   welcomeMessage?: string | null;
+  storefrontEnabled?: boolean;
   branches?: { id: string; name: string; code: string; city: string }[];
   taxRates?: { id: string; name: string; rate: number; isDefault: boolean }[];
 }

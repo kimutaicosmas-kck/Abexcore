@@ -349,6 +349,21 @@ export const operationsApi = {
   completeProduction: (id: string, data: object) =>
     api.post(`/operations/production/${id}/complete`, data),
   machines: () => api.get('/operations/machines'),
+  listBom: (params?: object) => api.get('/operations/bom', { params }),
+  getBom: (productId: string) => api.get(`/operations/bom/${productId}`),
+  upsertBom: (data: object) => api.put('/operations/bom', data),
+};
+
+export const posApi = {
+  checkout: (data: object) => api.post('/pos/checkout', data),
+};
+
+export const storefrontApi = {
+  status: () => api.get('/storefront/admin/status'),
+  setEnabled: (enabled: boolean) => api.patch('/storefront/admin/enabled', { enabled }),
+  getStore: (slug: string) => api.get(`/storefront/${slug}`),
+  products: (slug: string, params?: object) => api.get(`/storefront/${slug}/products`, { params }),
+  checkout: (slug: string, data: object) => api.post(`/storefront/${slug}/checkout`, data),
 };
 
 export const deliveryApi = {
@@ -374,6 +389,10 @@ export const deliveryApi = {
   drivers: () => api.get('/delivery/drivers/list'),
   vehicles: (params?: object) => api.get('/delivery/vehicles', { params }),
   createVehicle: (data: object) => api.post('/delivery/vehicles', data),
+  fleetLive: () => api.get('/delivery/fleet/live'),
+  pingVehicleLocation: (id: string, data: object) => api.post(`/delivery/vehicles/${id}/location`, data),
+  vehicleLocations: (id: string, params?: object) =>
+    api.get(`/delivery/vehicles/${id}/locations`, { params }),
   pdfPath: (id: string) => `/delivery/${id}/pdf`,
 };
 
@@ -558,6 +577,9 @@ export const platformApi = {
   outboxRecent: () => api.get('/platform/outbox/recent'),
   etimsStatus: () => api.get('/platform/etims/status'),
   etimsSubmit: (invoiceId: string) => api.post(`/platform/etims/invoices/${invoiceId}/submit`),
+  assistantChat: (data: { message: string; history?: { role: string; content: string }[] }) =>
+    api.post('/platform/assistant/chat', data),
+  assistantStatus: () => api.get('/platform/assistant/status'),
 };
 
 export const qualityApi = {

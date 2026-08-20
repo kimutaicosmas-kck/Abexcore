@@ -3,7 +3,7 @@ import { useForm } from 'react-hook-form';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Copy, Check, Upload } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { settingsApi, authApi, tenantApi, usersApi, productsApi, inventoryApi } from '../services/api';
+import { settingsApi, authApi, tenantApi, usersApi, productsApi, inventoryApi, storefrontApi } from '../services/api';
 import { Card, Button, Input, Textarea, Alert, PageToolbar, EmptyState, Select, formatDate, formatDateTime, Modal, ModalFormBody } from '../components/ui';
 import { useAuth } from '../contexts/AuthContext';
 import { CatalogManageItem, CompanySettings, RegisteredCompany, TenantTeamMember, WorkspaceSettings } from '../types';
@@ -299,6 +299,15 @@ export function SettingsPage() {
     },
   });
 
+  const storefrontMutation = useMutation({
+    mutationFn: (enabled: boolean) => storefrontApi.setEnabled(enabled),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['company'] });
+      setSuccessMessage('Storefront setting updated.');
+      setTimeout(() => setSuccessMessage(''), 4000);
+    },
+  });
+
   const workspaceMutation = useMutation({
     mutationFn: (data: { qualityModuleEnabled: boolean }) => tenantApi.updateWorkspace(data),
     onSuccess: () => {
@@ -584,6 +593,28 @@ export function SettingsPage() {
                   {...register('welcomeMessage')}
                   disabled={!canUpdate}
                 />
+              </div>
+              <div className="rounded-xl border border-emerald-100 bg-emerald-50/40 p-4 space-y-3">
+                <p className="text-sm font-semibold text-slate-800">E-commerce storefront</p>
+                <p className="text-xs text-slate-600">
+                  Public shop URL:{' '}
+                  <code className="rounded bg-white px-1">
+                    /shop/{company?.slug || authCompany?.slug || 'your-slug'}
+                  </code>
+                </p>
+                <label className="flex items-center gap-2 text-sm text-slate-800">
+                  <input
+                    type="checkbox"
+                    className="rounded border-slate-300"
+                    checked={Boolean(company?.storefrontEnabled)}
+                    disabled={!canUpdate || storefrontMutation.isPending}
+                    onChange={(e) => storefrontMutation.mutate(e.target.checked)}
+                  />
+                  Enable online store catalog and checkout
+                </label>
+                {storefrontMutation.isError && (
+                  <Alert variant="error">{getApiErrorMessage(storefrontMutation.error)}</Alert>
+                )}
               </div>
               {canUpdate && <Button type="submit" loading={mutation.isPending}>Save Changes</Button>}
             </form>

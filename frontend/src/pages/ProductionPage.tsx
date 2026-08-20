@@ -24,6 +24,7 @@ import {
 import { Modal } from '../components/ui/Modal';
 import { ProductionOrderForm } from '../components/forms/ProductionOrderForm';
 import { CompleteProductionForm } from '../components/forms/CompleteProductionForm';
+import { BomPanel } from '../components/production/BomPanel';
 import { useAuth } from '../contexts/AuthContext';
 type ProductionStats = {
   activeOrders: number;
@@ -33,7 +34,7 @@ type ProductionStats = {
   awaitingProduction: number;
 };
 
-const tabs = ['Production Orders'];
+const tabs = ['Production Orders', 'Bill of Materials'];
 
 const STATUS_OPTIONS = [
   { value: '', label: 'All statuses' },
@@ -254,6 +255,8 @@ export function ProductionPage() {
           </div>
         </DataPanel>
       )}
+
+      {activeTab === 1 && <BomPanel />}
 
       <Modal open={createModalOpen} onClose={() => setCreateModalOpen(false)} title="New Production Order" size="lg">
         <ProductionOrderForm onSuccess={() => setCreateModalOpen(false)} onCancel={() => setCreateModalOpen(false)} />

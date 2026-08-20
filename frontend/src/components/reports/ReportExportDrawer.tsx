@@ -60,7 +60,7 @@ type ReportExportDrawerProps = {
   open: boolean;
   onClose: () => void;
   canExport: boolean;
-  onOpenPanel?: (section: 0 | 1 | 2) => void;
+  onOpenPanel?: (section: 0 | 1 | 2 | 3) => void;
   onOpenDetail?: (detailKey: string) => void;
 };
 
@@ -333,7 +333,7 @@ export function ReportExportDrawer({
               variant="secondary"
               className="w-full"
               onClick={() => {
-                onOpenPanel(report.panelSection!);
+                onOpenPanel(report.panelSection as 0 | 1 | 2 | 3);
                 onClose();
               }}
             >

@@ -6,6 +6,7 @@ import { MobileBottomNav } from './MobileBottomNav';
 import { RealtimeSync } from './RealtimeSync';
 import { LoginWelcomeToast } from './LoginWelcomeToast';
 import { TableScrollTouchFix } from './TableScrollTouchFix';
+import { AiAssistantPanel } from '../AiAssistantPanel';
 
 const SIDEBAR_WIDTH = '16rem';
 const SIDEBAR_COLLAPSED = '4.5rem';
@@ -77,6 +78,7 @@ export function AppLayout() {
           <div key={location.pathname} className="animate-fade-in min-w-0">
             <Outlet />
           </div>
+          <AiAssistantPanel />
         </div>
       </main>
 

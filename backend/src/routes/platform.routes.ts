@@ -5,6 +5,8 @@ import { asyncHandler } from '../middleware/errorHandler';
 import { validate } from '../middleware/validate';
 import { WorkflowService } from '../services/workflow.service';
 import { OutboxService } from '../services/outbox.service';
+import { AnalyticsService } from '../services/analytics.service';
+import { AssistantService } from '../services/assistant.service';
 import { getParam } from '../utils/request';
 
 const router = Router();
@@ -28,6 +30,19 @@ const requestApprovalSchema = z.object({
 const decideSchema = z.object({
   decision: z.enum(['APPROVED', 'REJECTED']),
   note: z.string().max(1000).optional(),
+});
+
+const assistantChatSchema = z.object({
+  message: z.string().min(1).max(2000),
+  history: z
+    .array(
+      z.object({
+        role: z.enum(['user', 'assistant', 'system']),
+        content: z.string().max(4000),
+      })
+    )
+    .max(20)
+    .optional(),
 });
 
 router.get(
@@ -83,6 +98,57 @@ router.post(
   asyncHandler(async (_req: AuthRequest, res: Response) => {
     const published = await OutboxService.drain(50);
     res.json({ success: true, data: { published } });
+  })
+);
+
+router.get(
+  '/analytics/summary',
+  authorize('reports:read', 'finance:read', 'dashboard:read'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const from = typeof req.query.from === 'string' ? new Date(req.query.from) : undefined;
+    const to = typeof req.query.to === 'string' ? new Date(req.query.to) : undefined;
+    const data = await AnalyticsService.executiveSummary({ from, to });
+    res.json({ success: true, data });
+  })
+);
+
+router.get(
+  '/analytics/sales-trend',
+  authorize('reports:read', 'finance:read', 'dashboard:read'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const days = req.query.days ? Number(req.query.days) : 30;
+    const data = await AnalyticsService.salesTrend(days);
+    res.json({ success: true, data });
+  })
+);
+
+router.get(
+  '/analytics/ar-aging',
+  authorize('reports:read', 'finance:read'),
+  asyncHandler(async (_req: AuthRequest, res: Response) => {
+    const data = await AnalyticsService.arAging();
+    res.json({ success: true, data });
+  })
+);
+
+router.post(
+  '/assistant/chat',
+  authorize('reports:read', 'dashboard:read', 'finance:read'),
+  validate(assistantChatSchema),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const data = await AssistantService.chat(req.body);
+    res.json({ success: true, data });
+  })
+);
+
+router.get(
+  '/assistant/status',
+  authorize('reports:read', 'dashboard:read'),
+  asyncHandler(async (_req: AuthRequest, res: Response) => {
+    res.json({
+      success: true,
+      data: { llmConfigured: AssistantService.isLlmConfigured() },
+    });
   })
 );
 

@@ -407,6 +407,7 @@ export const companySettingsSchema = z.object({
   coopPaybillNumber: z.string().max(40).optional().nullable(),
   mpesaAccountNumber: z.string().max(40).optional().nullable(),
   welcomeMessage: z.string().max(280).optional().nullable(),
+  storefrontEnabled: z.boolean().optional(),
 });
 
 export const createQuotationSchema = z.object({

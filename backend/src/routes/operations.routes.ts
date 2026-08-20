@@ -1,4 +1,5 @@
 import { Router, Response } from 'express';
+import { z } from 'zod';
 import { authenticate, authorize, authorizeAny, AuthRequest } from '../middleware/auth';
 import { validate } from '../middleware/validate';
 import { asyncHandler, AppError } from '../middleware/errorHandler';
@@ -28,6 +29,7 @@ import { assertCreditLimit, assertOrderStatusTransition, syncCustomerCreditUsed 
 import { StockMovementService } from '../services/inventory.service';
 import { SalesOrderService, StockShortage } from '../services/sales-order.service';
 import { AccountingService } from '../services/accounting.service';
+import { BomService } from '../services/bom.service';
 import { salesPersonOrderFilter } from '../services/my-sales.service';
 import { NotificationService } from '../services/notification.service';
 import { injectTenantData, requireTenantId } from '../utils/tenant';
@@ -898,11 +900,19 @@ router.post(
         },
       });
 
+      await BomService.expandOntoProductionOrder(tx, created.id, productId, quantity);
+
       if (salesOrderId) {
         await SalesOrderService.maybeSetInProduction(tx, salesOrderId);
       }
 
-      return created;
+      return tx.productionOrder.findUniqueOrThrow({
+        where: { id: created.id },
+        include: {
+          product: true,
+          consumption: { include: { rawMaterial: true } },
+        },
+      });
     });
 
     res.status(201).json({ success: true, data: productionOrder });
@@ -1110,6 +1120,56 @@ router.post(
     });
 
     res.json({ success: true, data: result });
+  })
+);
+
+const upsertBomSchema = z.object({
+  productId: z.string().uuid(),
+  version: z.string().max(20).optional(),
+  notes: z.string().max(2000).optional(),
+  items: z
+    .array(
+      z.object({
+        rawMaterialId: z.string().uuid(),
+        quantity: z.number().positive(),
+        unit: z.string().max(20).optional(),
+        wastePercent: z.number().min(0).max(100).optional(),
+        notes: z.string().max(500).optional(),
+      })
+    )
+    .min(1),
+});
+
+router.get(
+  '/bom',
+  authorize('production:read'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const data = await BomService.list({
+      search: typeof req.query.search === 'string' ? req.query.search : undefined,
+      page: req.query.page ? Number(req.query.page) : 1,
+      limit: req.query.limit ? Number(req.query.limit) : 50,
+    });
+    res.json({ success: true, ...data });
+  })
+);
+
+router.get(
+  '/bom/:productId',
+  authorize('production:read'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const data = await BomService.getByProductId(getParam(req.params.productId));
+    res.json({ success: true, data });
+  })
+);
+
+router.put(
+  '/bom',
+  authorize('production:create', 'production:update'),
+  validate(upsertBomSchema),
+  auditLog('production', 'update', 'bill_of_material'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const data = await BomService.upsert(req.body);
+    res.json({ success: true, data });
   })
 );
 

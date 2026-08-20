@@ -228,6 +228,8 @@ model Company {
   mpesaAccountNumber String? @map("mpesa_account_number")
   /** Shown once after login in the welcome ceremony. Unique per tenant. */
   welcomeMessage String? @map("welcome_message") @db.VarChar(280)
+  /** Public e-commerce catalog at /shop/:slug when enabled. */
+  storefrontEnabled Boolean @default(false) @map("storefront_enabled")
   isActive       Boolean  @default(true) @map("is_active")
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
@@ -1237,22 +1239,43 @@ model SalesTarget {
 // ==================== DELIVERY ====================
 
 model Vehicle {
-  id           String      @id @default(uuid())
-  companyId    String      @map("company_id")
-  registration String
-  type         VehicleType @default(TRUCK)
-  make         String?
-  model        String?
-  capacity     String?
-  isHired      Boolean     @default(false) @map("is_hired")
-  isActive     Boolean     @default(true) @map("is_active")
-  createdAt    DateTime    @default(now()) @map("created_at")
+  id            String      @id @default(uuid())
+  companyId     String      @map("company_id")
+  registration  String
+  type          VehicleType @default(TRUCK)
+  make          String?
+  model         String?
+  capacity      String?
+  isHired       Boolean     @default(false) @map("is_hired")
+  isActive      Boolean     @default(true) @map("is_active")
+  /** Last known GPS fix for live fleet tracking. */
+  lastLat       Decimal?    @map("last_lat") @db.Decimal(10, 7)
+  lastLng       Decimal?    @map("last_lng") @db.Decimal(10, 7)
+  lastLocatedAt DateTime?   @map("last_located_at")
+  createdAt     DateTime    @default(now()) @map("created_at")
 
   deliveries DeliveryNote[]
   trips      DeliveryTrip[]
+  locationPings VehicleLocationPing[]
 
   @@unique([companyId, registration])
   @@map("vehicles")
+}
+
+model VehicleLocationPing {
+  id         String   @id @default(uuid())
+  companyId  String   @map("company_id")
+  vehicleId  String   @map("vehicle_id")
+  tripId     String?  @map("trip_id")
+  latitude   Decimal  @db.Decimal(10, 7)
+  longitude  Decimal  @db.Decimal(10, 7)
+  speedKph   Decimal? @map("speed_kph") @db.Decimal(8, 2)
+  recordedAt DateTime @default(now()) @map("recorded_at")
+
+  vehicle Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, vehicleId, recordedAt])
+  @@map("vehicle_location_pings")
 }
 
 model DeliveryTrip {

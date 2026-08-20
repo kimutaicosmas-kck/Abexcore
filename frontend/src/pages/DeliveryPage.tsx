@@ -27,13 +27,14 @@ import {
 import { Modal } from '../components/ui/Modal';
 import { DeliveryForm } from '../components/forms/DeliveryForm';
 import { VehicleForm } from '../components/forms/VehicleForm';
+import { FleetTrackingPanel } from '../components/delivery/FleetTrackingPanel';
 import { useAuth } from '../contexts/AuthContext';
 import { DeliveryNote, DeliveryStats, DeliveryTrip, Vehicle, VEHICLE_TYPE_OPTIONS, vehicleTypeLabel, VehicleType } from '../types';
 import { getApiErrorMessage } from '../utils/apiError';
 
 type DriverOption = { id: string; firstName: string; lastName: string; email: string };
 
-const tabs = ['Deliveries', 'Vehicles'];
+const tabs = ['Deliveries', 'Vehicles', 'Live Map'];
 
 type DeliveryListRow =
   | { kind: 'trip'; id: string; createdAt: string; trip: DeliveryTrip }
@@ -182,6 +183,7 @@ export function DeliveryPage() {
   const visibleTabs = isDriver ? ['My Deliveries'] : tabs;
   const showDeliveries = activeTab === 0;
   const showVehicles = !isDriver && activeTab === 1;
+  const showLiveMap = !isDriver && activeTab === 2;
 
   useEffect(() => {
     if (!canCreate) return;
@@ -1032,6 +1034,14 @@ export function DeliveryPage() {
           )}
           <div className="px-4 pb-4">
             <TablePagination pagination={vehicles?.pagination} page={vehPage} onPageChange={setVehPage} label="vehicles" />
+          </div>
+        </DataPanel>
+      )}
+
+      {showLiveMap && (
+        <DataPanel>
+          <div className="p-4">
+            <FleetTrackingPanel />
           </div>
         </DataPanel>
       )}

@@ -16,6 +16,7 @@ import {
 } from '../components/ui';
 import { ChevronRight, Search, TrendingUp, AlertCircle, Users, Factory, Truck } from 'lucide-react';
 import { downloadFile } from '../utils/download';
+import { BusinessIntelligencePanel } from '../components/reports/BusinessIntelligencePanel';
 import { FinancialStatementsPanel } from '../components/reports/FinancialStatementsPanel';
 import { SalesByPersonPanel } from '../components/reports/SalesByPersonPanel';
 import { ProductsSoldPanel } from '../components/reports/ProductsSoldPanel';
@@ -70,7 +71,7 @@ export function ReportsPage() {
   const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState<ReportCategory | 'all'>('all');
-  const sections = ['Sales by Person', 'Products Sold', 'Financial Statements'];
+  const sections = ['Business Intelligence', 'Sales by Person', 'Products Sold', 'Financial Statements'];
 
   const canExport = hasPermission('reports:read');
   const selectedReport = selectedReportId ? getReportById(selectedReportId) ?? null : null;
@@ -135,6 +136,11 @@ export function ReportsPage() {
   };
 
   const openReport = (report: ReportDefinition) => {
+    // Interactive-only panels (e.g. Business Intelligence) open immediately.
+    if (report.panelSection !== undefined && report.formats.length === 0) {
+      setActiveSection(report.panelSection);
+      return;
+    }
     setSelectedReportId(report.id);
   };
 
@@ -209,10 +215,15 @@ export function ReportsPage() {
       {exportError && <Alert variant="error">{exportError}</Alert>}
 
       {activeSection === 0 ? (
-        <SalesByPersonPanel toolbar={sectionToolbar} />
+        <div className="space-y-3">
+          {sectionToolbar}
+          <BusinessIntelligencePanel />
+        </div>
       ) : activeSection === 1 ? (
-        <ProductsSoldPanel toolbar={sectionToolbar} />
+        <SalesByPersonPanel toolbar={sectionToolbar} />
       ) : activeSection === 2 ? (
+        <ProductsSoldPanel toolbar={sectionToolbar} />
+      ) : activeSection === 3 ? (
         <>
           {sectionToolbar}
           <FinancialStatementsPanel />
