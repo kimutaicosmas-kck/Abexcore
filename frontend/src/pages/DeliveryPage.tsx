@@ -303,23 +303,28 @@ export function DeliveryPage() {
   const activeDelivery = selectedDetail ?? selected;
 
   const returnMutation = useMutation({
-    mutationFn: (payload: { reason: string; items: { productId: string; quantity: number }[] }) =>
-      deliveryApi.createReturn(selected!.id, payload),
-    onSuccess: async () => {
+    mutationFn: (payload: {
+      deliveryId: string;
+      reason: string;
+      items: { productId: string; quantity: number }[];
+    }) => deliveryApi.createReturn(payload.deliveryId, {
+      reason: payload.reason,
+      items: payload.items,
+    }),
+    onSuccess: async (_res, vars) => {
       queryClient.invalidateQueries({ queryKey: ['deliveries'] });
       queryClient.invalidateQueries({ queryKey: ['delivery-trips'] });
       queryClient.invalidateQueries({ queryKey: ['delivery-stats'] });
-      queryClient.invalidateQueries({ queryKey: ['delivery-detail', selected?.id] });
+      queryClient.invalidateQueries({ queryKey: ['delivery-detail', vars.deliveryId] });
       queryClient.invalidateQueries({ queryKey: ['sales-orders'] });
       queryClient.invalidateQueries({ queryKey: ['invoices'] });
       setReturnOpen(false);
       setReturnReason('');
       setReturnQtys({});
       setReturnError(null);
-      if (selected?.id) {
-        const refreshed = await deliveryApi.get(selected.id).then((r) => r.data.data as DeliveryNote);
-        setSelected(refreshed);
-      }
+      const refreshed = await deliveryApi.get(vars.deliveryId).then((r) => r.data.data as DeliveryNote);
+      setSelected(refreshed);
+      setSelectedTrip(null);
     },
     onError: (err) => setReturnError(getApiErrorMessage(err)),
   });
@@ -625,7 +630,24 @@ export function DeliveryPage() {
     setReturnQtys(qtys);
     setReturnReason('');
     setReturnError(null);
+    setSelected(note);
+    setSelectedTrip(null);
+    setDetailOpen(true);
     setReturnOpen(true);
+  };
+
+  const openReturnFromStop = async (stop: DeliveryNote) => {
+    try {
+      setReturnError(null);
+      const note = await deliveryApi.get(stop.id).then((r) => r.data.data as DeliveryNote);
+      openReturnDialog(note);
+    } catch (err) {
+      setReturnError(getApiErrorMessage(err));
+      setReturnOpen(true);
+      setSelected(stop);
+      setSelectedTrip(null);
+      setDetailOpen(true);
+    }
   };
 
   const deliveryColumns = [
@@ -1170,6 +1192,13 @@ export function DeliveryPage() {
                       ))}
                     </div>
                   )}
+                  {canReturn && stop.status === 'DELIVERED' && (stop.items?.length ?? 0) > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <Button size="sm" variant="secondary" onClick={() => openReturnFromStop(stop)}>
+                        Return goods
+                      </Button>
+                    </div>
+                  )}
                   {canUpdate && getDeliveryActions(stop.status, isDriver).length > 0 && (
                     <div className="mt-2 flex flex-wrap gap-2">
                       {getDeliveryActions(stop.status, isDriver).map((action) => (
@@ -1446,7 +1475,11 @@ export function DeliveryPage() {
                     return;
                   }
                   setReturnError(null);
-                  returnMutation.mutate({ reason: returnReason.trim(), items });
+                  returnMutation.mutate({
+                    deliveryId: activeDelivery.id,
+                    reason: returnReason.trim(),
+                    items,
+                  });
                 }}
               >
                 Confirm return
