@@ -206,7 +206,7 @@ router.get(
         items: { include: { product: true } },
         createdBy: { select: { id: true, firstName: true, lastName: true } },
         salesPerson: { select: { id: true, firstName: true, lastName: true } },
-        deliveries: { include: { vehicle: true } },
+        deliveries: { include: { vehicle: true, items: true } },
         productionOrders: { select: { id: true, orderNumber: true, status: true } },
         invoices: { select: { id: true, invoiceNumber: true, status: true, totalAmount: true, deliveryNoteId: true } },
       },
@@ -380,7 +380,13 @@ router.patch(
     }
 
     const order = await prisma.$transaction(async (tx) => {
-      const updated = await SalesOrderService.updateOrderItems(tx, orderId, items, adjustmentReason);
+      const updated = await SalesOrderService.updateOrderItems(
+        tx,
+        orderId,
+        items,
+        adjustmentReason,
+        req.user!.id
+      );
       if (notes?.trim()) {
         return tx.salesOrder.update({
           where: { id: orderId },

@@ -368,7 +368,12 @@ export interface SalesOrder {
   createdBy?: SalesPersonRef | null;
   items: SalesOrderItem[];
   invoices?: { id: string; invoiceNumber: string; status: string; totalAmount: number }[];
-  deliveries?: { id: string; deliveryNo: string; status: string }[];
+  deliveries?: {
+    id: string;
+    deliveryNo: string;
+    status: string;
+    items?: { id?: string; productId: string; quantity: number }[];
+  }[];
   productionOrders?: { id: string; orderNumber: string; status: string }[];
 }
 

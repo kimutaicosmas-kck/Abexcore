@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { Controller, useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -16,7 +16,8 @@ const editItemSchema = z.object({
   productId: z.string().min(1, 'Product required'),
   productLabel: z.string().optional(),
   quantity: z.coerce.number().int().min(1),
-  deliveredQty: z.coerce.number().int().min(0).optional(),
+  /** Qty confirmed on DELIVERED delivery notes — hard floor. */
+  confirmedDeliveredQty: z.coerce.number().int().min(0).optional(),
   unitPrice: z.coerce.number().min(0),
   discount: z.coerce.number().min(0).max(100).optional(),
 });
@@ -34,23 +35,42 @@ interface SalesOrderEditFormProps {
   onCancel: () => void;
 }
 
+function confirmedQtyForProduct(order: SalesOrder, productId: string): number {
+  const deliveries = order.deliveries || [];
+  let sum = 0;
+  for (const dn of deliveries) {
+    if (dn.status !== 'DELIVERED') continue;
+    for (const item of dn.items || []) {
+      if (item.productId === productId) sum += Number(item.quantity || 0);
+    }
+  }
+  return sum;
+}
+
 export function SalesOrderEditForm({ order, onSuccess, onCancel }: SalesOrderEditFormProps) {
   const queryClient = useQueryClient();
-  const canAddProducts = ['PENDING', 'CONFIRMED', 'READY'].includes(order.status);
+  const orderOpen = !['DELIVERED', 'COMPLETED', 'CANCELLED'].includes(order.status);
+  const canAddProducts = orderOpen;
+
+  const defaultItems = useMemo(
+    () =>
+      (order.items || []).map((item) => ({
+        id: item.id,
+        productId: item.productId,
+        productLabel: item.product ? formatProductOptionLabel(item.product) : item.productId,
+        quantity: item.quantity,
+        confirmedDeliveredQty: confirmedQtyForProduct(order, item.productId),
+        unitPrice: Number(item.unitPrice),
+        discount: Number(item.discount || 0),
+      })),
+    [order]
+  );
 
   const { register, control, handleSubmit, setValue, watch, formState: { errors } } = useForm<EditOrderFormData>({
     resolver: zodResolver(editOrderSchema),
     defaultValues: {
       adjustmentReason: '',
-      items: (order.items || []).map((item) => ({
-        id: item.id,
-        productId: item.productId,
-        productLabel: item.product ? formatProductOptionLabel(item.product) : item.productId,
-        quantity: item.quantity,
-        deliveredQty: item.deliveredQty || 0,
-        unitPrice: Number(item.unitPrice),
-        discount: Number(item.discount || 0),
-      })),
+      items: defaultItems,
     },
   });
 
@@ -75,6 +95,7 @@ export function SalesOrderEditForm({ order, onSuccess, onCancel }: SalesOrderEdi
       queryClient.invalidateQueries({ queryKey: ['sales-stats'] });
       queryClient.invalidateQueries({ queryKey: ['sales-orders-deliverable'] });
       queryClient.invalidateQueries({ queryKey: ['customers'] });
+      queryClient.invalidateQueries({ queryKey: ['deliveries'] });
       onSuccess(res.data.data as SalesOrder);
     },
   });
@@ -94,17 +115,22 @@ export function SalesOrderEditForm({ order, onSuccess, onCancel }: SalesOrderEdi
         error={errors.adjustmentReason?.message}
       />
 
+      <p className="text-xs text-slate-600">
+        You can add or remove lines until the order is marked delivered. Open dispatches are reversed
+        automatically when you reduce or remove undelivered quantities.
+      </p>
+
       <div className="space-y-3">
         {fields.map((field, index) => {
           const line = items?.[index];
-          const delivered = Number(line?.deliveredQty || 0);
+          const confirmed = Number(line?.confirmedDeliveredQty || 0);
           const isExistingLine = Boolean(line?.id);
-          const canRemove = delivered === 0 && fields.length > 1;
+          const canRemove = orderOpen && confirmed === 0 && fields.length > 1;
 
           return (
             <div key={field.id} className="rounded-lg border border-border p-3 grid grid-cols-1 sm:grid-cols-12 gap-2">
               <input type="hidden" {...register(`items.${index}.id`)} />
-              <input type="hidden" {...register(`items.${index}.deliveredQty`)} />
+              <input type="hidden" {...register(`items.${index}.confirmedDeliveredQty`)} />
 
               <div className="sm:col-span-5">
                 {isExistingLine ? (
@@ -113,9 +139,9 @@ export function SalesOrderEditForm({ order, onSuccess, onCancel }: SalesOrderEdi
                     <p className="text-sm font-medium text-slate-900">
                       {line?.productLabel || 'Product'}
                     </p>
-                    {delivered > 0 && (
+                    {confirmed > 0 && (
                       <p className="text-xs text-amber-700 mt-1">
-                        {delivered} already delivered — cannot remove; minimum qty {delivered}
+                        {confirmed} customer-delivered — cannot go below / cannot remove
                       </p>
                     )}
                   </>
@@ -148,7 +174,7 @@ export function SalesOrderEditForm({ order, onSuccess, onCancel }: SalesOrderEdi
                 <Input
                   label="Qty"
                   type="number"
-                  min={delivered || 1}
+                  min={confirmed || 1}
                   {...register(`items.${index}.quantity`)}
                   error={errors.items?.[index]?.quantity?.message}
                 />
@@ -179,9 +205,11 @@ export function SalesOrderEditForm({ order, onSuccess, onCancel }: SalesOrderEdi
                   disabled={!canRemove}
                   title={
                     !canRemove
-                      ? delivered > 0
-                        ? 'Cannot remove — already delivered'
-                        : 'Keep at least one item'
+                      ? confirmed > 0
+                        ? 'Cannot remove — already customer-delivered'
+                        : !orderOpen
+                          ? 'Order is closed'
+                          : 'Keep at least one item'
                       : 'Remove item'
                   }
                   onClick={() => remove(index)}
@@ -211,7 +239,7 @@ export function SalesOrderEditForm({ order, onSuccess, onCancel }: SalesOrderEdi
               productId: '',
               productLabel: '',
               quantity: 1,
-              deliveredQty: 0,
+              confirmedDeliveredQty: 0,
               unitPrice: 0,
               discount: 0,
             })
@@ -220,12 +248,6 @@ export function SalesOrderEditForm({ order, onSuccess, onCancel }: SalesOrderEdi
           <Plus className="h-4 w-4 mr-1.5" />
           Add item
         </Button>
-      )}
-
-      {!canAddProducts && (
-        <p className="text-xs text-slate-500">
-          New products can only be added while the order is Pending, Confirmed, or Ready.
-        </p>
       )}
 
       <div className="flex justify-end gap-3 pt-4 border-t">

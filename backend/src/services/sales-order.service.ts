@@ -323,6 +323,114 @@ export class SalesOrderService {
     });
   }
 
+  /**
+   * Qty locked by customer-confirmed deliveries (DN status DELIVERED).
+   * Open dispatches (PENDING/ASSIGNED/IN_TRANSIT) are still adjustable.
+   */
+  static async confirmedDeliveredByProduct(
+    tx: TxClient,
+    salesOrderId: string
+  ): Promise<Map<string, number>> {
+    const rows = await tx.deliveryItem.findMany({
+      where: {
+        deliveryNote: { salesOrderId, status: 'DELIVERED' },
+      },
+      select: { productId: true, quantity: true },
+    });
+    const map = new Map<string, number>();
+    for (const row of rows) {
+      map.set(row.productId, (map.get(row.productId) || 0) + row.quantity);
+    }
+    return map;
+  }
+
+  /**
+   * Pull qty back from open (not yet customer-delivered) dispatch notes:
+   * restock, reduce deliveredQty, shrink/remove DN lines, drop unpaid invoices if DN emptied.
+   */
+  static async releaseOpenDispatchQty(
+    tx: TxClient,
+    opts: { salesOrderId: string; productId: string; quantity: number; userId: string; productName: string }
+  ) {
+    let left = opts.quantity;
+    if (left <= 0) return;
+
+    const notes = await tx.deliveryNote.findMany({
+      where: {
+        salesOrderId: opts.salesOrderId,
+        status: { notIn: ['DELIVERED', 'FAILED', 'RETURNED'] },
+        items: { some: { productId: opts.productId } },
+      },
+      include: {
+        items: true,
+        invoices: { include: { payments: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    for (const dn of notes) {
+      if (left <= 0) break;
+
+      const paid = dn.invoices.some(
+        (inv) => Number(inv.paidAmount) > 0 || inv.payments.length > 0
+      );
+      if (paid) {
+        throw new AppError(
+          `Cannot adjust ${opts.productName} — delivery ${dn.deliveryNo} already has a payment. Reverse the payment first.`,
+          400
+        );
+      }
+
+      const di = dn.items.find((i) => i.productId === opts.productId);
+      if (!di) continue;
+      const take = Math.min(left, di.quantity);
+
+      await StockMovementService.addProductStock(tx, {
+        productId: opts.productId,
+        quantity: take,
+        referenceType: 'order_adjustment',
+        referenceId: opts.salesOrderId,
+        userId: opts.userId,
+        notes: `Order adjust — reverse open dispatch ${dn.deliveryNo}`,
+      });
+
+      if (take >= di.quantity) {
+        await tx.deliveryItem.delete({ where: { id: di.id } });
+      } else {
+        await tx.deliveryItem.update({
+          where: { id: di.id },
+          data: { quantity: di.quantity - take },
+        });
+      }
+
+      await tx.salesOrderItem.updateMany({
+        where: { salesOrderId: opts.salesOrderId, productId: opts.productId },
+        data: { deliveredQty: { decrement: take } },
+      });
+
+      left -= take;
+
+      const remainingItems = await tx.deliveryItem.count({ where: { deliveryNoteId: dn.id } });
+      if (remainingItems === 0) {
+        for (const inv of dn.invoices) {
+          await tx.invoiceItem.deleteMany({ where: { invoiceId: inv.id } });
+          await tx.invoice.delete({ where: { id: inv.id } });
+        }
+        await tx.deliveryNote.delete({ where: { id: dn.id } });
+      } else {
+        const { FinanceInvoiceService } = await import('./finance.service');
+        await FinanceInvoiceService.recalculateDeliveryInvoice(tx, dn.id);
+      }
+    }
+
+    if (left > 0) {
+      throw new AppError(
+        `Cannot fully reverse open dispatches for ${opts.productName} (${left} unit(s) still locked).`,
+        400
+      );
+    }
+  }
+
   static async updateOrderItems(
     tx: TxClient,
     orderId: string,
@@ -333,7 +441,8 @@ export class SalesOrderService {
       unitPrice: number;
       discount?: number;
     }[],
-    adjustmentReason: string
+    adjustmentReason: string,
+    userId: string
   ) {
     const order = await tx.salesOrder.findUnique({
       where: { id: orderId },
@@ -350,6 +459,7 @@ export class SalesOrderService {
       throw new AppError(`Cannot edit order in ${order.status.replace(/_/g, ' ')} status`, 400);
     }
 
+    const confirmedByProduct = await this.confirmedDeliveredByProduct(tx, orderId);
     const reservesStock = ['READY', 'PARTIALLY_DELIVERED', 'DISPATCHED'].includes(order.status);
     const existingById = new Map(order.items.map((item) => [item.id, item]));
     const keptIds = new Set<string>();
@@ -361,34 +471,52 @@ export class SalesOrderService {
 
       if (existing) {
         keptIds.add(existing.id);
-        if (input.quantity < existing.deliveredQty) {
+        const confirmed = confirmedByProduct.get(existing.productId) || 0;
+        if (input.quantity < confirmed) {
           throw new AppError(
-            `Cannot set quantity below already delivered amount (${existing.deliveredQty} delivered for ${existing.product.name})`,
+            `Cannot set quantity below customer-delivered amount (${confirmed} delivered for ${existing.product.name})`,
             400
           );
         }
 
-        const qtyDelta = input.quantity - existing.quantity;
-        if (reservesStock && qtyDelta !== 0) {
-          if (qtyDelta < 0) {
+        // Refresh deliveredQty after any prior reverse in this loop
+        const live = await tx.salesOrderItem.findUniqueOrThrow({ where: { id: existing.id } });
+        const dispatched = Number(live.deliveredQty);
+        if (input.quantity < dispatched) {
+          await this.releaseOpenDispatchQty(tx, {
+            salesOrderId: orderId,
+            productId: existing.productId,
+            quantity: dispatched - input.quantity,
+            userId,
+            productName: existing.product.name,
+          });
+        }
+
+        const afterReverse = await tx.salesOrderItem.findUniqueOrThrow({ where: { id: existing.id } });
+        const undeliveredBeforeAdj = Math.max(0, existing.quantity - Number(afterReverse.deliveredQty));
+        const undeliveredAfter = Math.max(0, input.quantity - Number(afterReverse.deliveredQty));
+        const reserveDelta = undeliveredAfter - undeliveredBeforeAdj;
+
+        if (reservesStock && reserveDelta !== 0) {
+          if (reserveDelta < 0) {
             await StockMovementService.releaseProductReservation(tx, {
               productId: existing.productId,
-              quantity: -qtyDelta,
+              quantity: -reserveDelta,
             });
           } else {
             const check = await this.checkStockAvailability(tx, [
-              { productId: existing.productId, quantity: qtyDelta, product: existing.product },
+              { productId: existing.productId, quantity: reserveDelta, product: existing.product },
             ]);
             if (!check.canFulfill) {
               const s = check.shortages[0];
               throw new AppError(
-                `Insufficient stock to increase quantity (${s.productName}: need ${qtyDelta} more, only ${s.available} available)`,
+                `Insufficient stock to increase quantity (${s.productName}: need ${reserveDelta} more, only ${s.available} available)`,
                 400
               );
             }
             await StockMovementService.reserveProductStock(tx, {
               productId: existing.productId,
-              quantity: qtyDelta,
+              quantity: reserveDelta,
             });
           }
         }
@@ -407,10 +535,7 @@ export class SalesOrderService {
         continue;
       }
 
-      if (order.status !== 'PENDING' && order.status !== 'CONFIRMED' && order.status !== 'READY') {
-        throw new AppError('New products can only be added before dispatch starts', 400);
-      }
-
+      // New line — allowed until the order itself is delivered/completed.
       if (reservesStock) {
         const product = await tx.product.findUnique({ where: { id: input.productId } });
         const check = await this.checkStockAvailability(tx, [
@@ -445,13 +570,41 @@ export class SalesOrderService {
 
     for (const existing of order.items) {
       if (keptIds.has(existing.id)) continue;
-      if (existing.deliveredQty > 0) {
-        throw new AppError(`Cannot remove ${existing.product.name} — ${existing.deliveredQty} units already delivered`, 400);
+      const confirmed = confirmedByProduct.get(existing.productId) || 0;
+      if (confirmed > 0) {
+        throw new AppError(
+          `Cannot remove ${existing.product.name} — ${confirmed} unit(s) already customer-delivered`,
+          400
+        );
       }
-      if (reservesStock) {
+
+      const live = await tx.salesOrderItem.findUniqueOrThrow({ where: { id: existing.id } });
+      if (Number(live.deliveredQty) > 0) {
+        await this.releaseOpenDispatchQty(tx, {
+          salesOrderId: orderId,
+          productId: existing.productId,
+          quantity: Number(live.deliveredQty),
+          userId,
+          productName: existing.product.name,
+        });
+      }
+
+      const undelivered = Math.max(
+        0,
+        existing.quantity -
+          Number(
+            (
+              await tx.salesOrderItem.findUnique({
+                where: { id: existing.id },
+                select: { deliveredQty: true },
+              })
+            )?.deliveredQty || 0
+          )
+      );
+      if (reservesStock && undelivered > 0) {
         await StockMovementService.releaseProductReservation(tx, {
           productId: existing.productId,
-          quantity: existing.quantity,
+          quantity: undelivered,
         });
       }
       await tx.salesOrderItem.delete({ where: { id: existing.id } });
@@ -463,7 +616,6 @@ export class SalesOrderService {
       select: { vatStatus: true },
     });
     const vatRate = await getCustomerVatRate(customer);
-    // Line totalPrice is the keyed (VAT-inclusive) amount.
     const gross = updatedItems.reduce((sum, item) => sum + Number(item.totalPrice), 0);
     const { subtotal, taxAmount, totalAmount } = splitInclusiveAmount(gross, vatRate);
 
