@@ -9,7 +9,6 @@ import { Alert, Button, Input, Select, formatCurrency } from '../ui';
 import { DeliveryNote, DeliveryTrip, SalesOrder, Vehicle, vehicleTypeLabel } from '../../types';
 import { formatProductOptionLabel } from '../../utils/productDisplay';
 import { getApiErrorMessage } from '../../utils/apiError';
-import { downloadFile } from '../../utils/download';
 
 const tripSchema = z.object({
   vehicleId: z.string().optional(),
@@ -221,30 +220,14 @@ export function DeliveryForm({ onSuccess, onCancel, initialOrderIds = [] }: Deli
       };
       return deliveryApi.create(payload);
     },
-    onSuccess: async (res) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['deliveries'] });
       queryClient.invalidateQueries({ queryKey: ['delivery-trips'] });
       queryClient.invalidateQueries({ queryKey: ['delivery-stats'] });
       queryClient.invalidateQueries({ queryKey: ['sales-orders'] });
       queryClient.invalidateQueries({ queryKey: ['sales-orders-deliverable'] });
       queryClient.invalidateQueries({ queryKey: ['finance-invoices'] });
-
-      const payload = res.data.data as DeliveryNote | DeliveryTrip;
-      const notes: { id: string; deliveryNo: string }[] =
-        'stops' in payload && Array.isArray(payload.stops) && payload.stops.length > 0
-          ? payload.stops.map((stop) => ({ id: stop.id, deliveryNo: stop.deliveryNo }))
-          : 'deliveryNo' in payload && payload.id
-            ? [{ id: payload.id, deliveryNo: payload.deliveryNo }]
-            : [];
-
-      for (const note of notes) {
-        try {
-          await downloadFile(deliveryApi.pdfPath(note.id), `${note.deliveryNo}.pdf`);
-        } catch {
-          // Creation succeeded even if print download fails — user can reprint from Delivery details.
-        }
-      }
-
+      // Delivery notes are printable on demand from Delivery details — do not auto-download.
       onSuccess();
     },
   });
