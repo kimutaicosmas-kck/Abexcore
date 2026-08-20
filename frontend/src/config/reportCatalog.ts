@@ -39,7 +39,7 @@ export type ReportDefinition = {
   exportPaths?: Partial<Record<ReportExportFormat, string>>;
   exportFilename?: Partial<Record<ReportExportFormat, string>>;
   /** Opens an interactive panel instead of immediate download */
-  panelSection?: 0 | 1 | 2 | 3;
+  panelSection?: 0 | 1 | 2;
   /** Opens detail modal with live preview */
   detailKey?: string;
   vatScope?: 'VAT' | 'NON_VAT' | 'ALL';
@@ -56,17 +56,6 @@ export const REPORT_CATEGORIES: { id: ReportCategory | 'all'; label: string }[] 
 ];
 
 export const REPORT_CATALOG: ReportDefinition[] = [
-  {
-    id: 'business-intelligence',
-    name: 'Business Intelligence',
-    description: 'Executive KPIs, AR aging, and sales trend',
-    icon: BarChart3,
-    color: 'bg-indigo-50 text-indigo-700 border-indigo-100',
-    category: 'finance',
-    filters: [],
-    formats: [],
-    panelSection: 0,
-  },
   {
     id: 'sales',
     name: 'Sales Report',
@@ -96,7 +85,7 @@ export const REPORT_CATALOG: ReportDefinition[] = [
       pdf: '/finance/reports/sales-by-person/pdf',
     },
     exportFilename: { excel: 'sales-by-salesperson.xlsx', pdf: 'sales-by-salesperson.pdf' },
-    panelSection: 1,
+    panelSection: 0,
   },
   {
     id: 'products-sold',
@@ -112,7 +101,7 @@ export const REPORT_CATALOG: ReportDefinition[] = [
       pdf: '/finance/reports/products-sold/pdf',
     },
     exportFilename: { excel: 'products-sold-statement.xlsx', pdf: 'products-sold-statement.pdf' },
-    panelSection: 2,
+    panelSection: 1,
   },
   {
     id: 'inventory',
@@ -170,7 +159,7 @@ export const REPORT_CATALOG: ReportDefinition[] = [
     category: 'finance',
     filters: ['startDate', 'endDate'],
     formats: ['excel'],
-    panelSection: 3,
+    panelSection: 2,
   },
   {
     id: 'customer',

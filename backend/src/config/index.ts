@@ -68,26 +68,4 @@ export const config = {
     authenticatedMax: parseInt(process.env.RATE_LIMIT_AUTH_MAX || '10000', 10),
     anonymousMax: parseInt(process.env.RATE_LIMIT_ANON_MAX || '3000', 10),
   },
-  oidc: {
-    enabled: process.env.OIDC_ENABLED === 'true',
-    issuer: process.env.OIDC_ISSUER || '',
-    clientId: process.env.OIDC_CLIENT_ID || '',
-    clientSecret: process.env.OIDC_CLIENT_SECRET || '',
-    redirectUri: process.env.OIDC_REDIRECT_URI || '',
-    scopes: process.env.OIDC_SCOPES || 'openid profile email',
-    providerName: process.env.OIDC_PROVIDER_NAME || 'SSO',
-  },
-  etims: {
-    apiUrl: process.env.KRA_ETIMS_API_URL || '',
-    tokenUrl: process.env.KRA_ETIMS_TOKEN_URL || '',
-    clientId: process.env.KRA_ETIMS_CLIENT_ID || '',
-    clientSecret: process.env.KRA_ETIMS_CLIENT_SECRET || '',
-    pin: process.env.KRA_ETIMS_PIN || '',
-  },
-  /** Optional OpenAI-compatible API for the AI Business Assistant. */
-  ai: {
-    apiKey: process.env.OPENAI_API_KEY || process.env.AI_API_KEY || '',
-    model: process.env.AI_MODEL || 'gpt-4o-mini',
-    baseUrl: process.env.AI_BASE_URL || 'https://api.openai.com/v1',
-  },
 };

@@ -21,7 +21,6 @@ import {
   CalendarDays,
   CircleUser,
   Settings,
-  Store,
 } from 'lucide-react';
 import clsx from 'clsx';
 import { useAuth } from '../../contexts/AuthContext';
@@ -68,7 +67,6 @@ const navigationGroups: NavGroup[] = [
       { name: 'Production', href: '/production', icon: Factory, permission: 'production:read' },
       { name: 'Quality', href: '/quality', icon: ClipboardCheck, permission: 'quality:read' },
       { name: 'Sales', href: '/sales', icon: TrendingUp, permission: 'sales:read' },
-      { name: 'POS', href: '/pos', icon: Store, permission: 'sales:create' },
       { name: 'Delivery', href: '/delivery', icon: Truck, permissions: ['delivery:read', 'delivery:create'] },
     ],
   },

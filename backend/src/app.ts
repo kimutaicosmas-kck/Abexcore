@@ -35,8 +35,6 @@ import tenantRoutes from './routes/tenant.routes';
 import trashRoutes from './routes/trash.routes';
 import systemRoutes from './routes/system.routes';
 import platformRoutes from './routes/platform.routes';
-import posRoutes from './routes/pos.routes';
-import storefrontRoutes from './routes/storefront.routes';
 
 export function createApp() {
   const app = express();
@@ -198,8 +196,6 @@ export function createApp() {
   apiRouter.use('/finance', financeRoutes);
   apiRouter.use('/hr', hrRoutes);
   apiRouter.use('/delivery', deliveryRoutes);
-  apiRouter.use('/pos', posRoutes);
-  apiRouter.use('/storefront', storefrontRoutes);
   apiRouter.use('/crm', crmRoutes);
   apiRouter.use('/quality', qualityRoutes);
   apiRouter.use('/maintenance', maintenanceRoutes);

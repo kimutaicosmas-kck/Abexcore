@@ -52,10 +52,6 @@ const ApprovalsPage = lazy(() =>
 const DeliveryPage = lazy(() =>
   import('./pages/DeliveryPage').then((m) => ({ default: m.DeliveryPage }))
 );
-const PosPage = lazy(() => import('./pages/PosPage').then((m) => ({ default: m.PosPage })));
-const StorefrontShopPage = lazy(() =>
-  import('./pages/StorefrontShopPage').then((m) => ({ default: m.StorefrontShopPage }))
-);
 const MySalesPage = lazy(() =>
   import('./pages/MySalesPage').then((m) => ({ default: m.MySalesPage }))
 );
@@ -138,7 +134,6 @@ function AppRoutes() {
     <Suspense fallback={<PageFallback />}>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
-        <Route path="/shop/:slug" element={<StorefrontShopPage />} />
         <Route path="/register" element={<Navigate to="/admin/register-company" replace />} />
         <Route
           path="/change-password"
@@ -165,7 +160,6 @@ function AppRoutes() {
           <Route path="production" element={<PermissionRoute><ProductionPage /></PermissionRoute>} />
           <Route path="quality" element={<PermissionRoute><QualityPage /></PermissionRoute>} />
           <Route path="sales" element={<PermissionRoute><SalesPage /></PermissionRoute>} />
-          <Route path="pos" element={<PermissionRoute><PosPage /></PermissionRoute>} />
           <Route path="my-sales" element={<PermissionRoute><MySalesPage /></PermissionRoute>} />
           <Route path="available-products" element={<Navigate to="/products?tab=available" replace />} />
           <Route
