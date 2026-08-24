@@ -184,6 +184,114 @@ export class ExportService {
     });
   }
 
+  static async getSalesQuotation(id: string) {
+    const quotation = await prisma.salesQuotation.findFirst({
+      where: { id, companyId: requireTenantId() },
+      include: {
+        customer: true,
+        items: { include: { product: { select: { id: true, name: true, sku: true } } } },
+      },
+    });
+    if (!quotation) throw new AppError('Quotation not found', 404);
+    return quotation;
+  }
+
+  static async generateQuotationPDF(
+    quotation: NonNullable<Awaited<ReturnType<typeof ExportService.getSalesQuotation>>>
+  ): Promise<Buffer> {
+    const company = await resolveCompanyDocHeader(quotation.companyId);
+    const { vatRate } = company;
+    const money = (n: number) =>
+      Math.round(n).toLocaleString('en-KE', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+
+    return new Promise((resolve, reject) => {
+      const doc = new PDFDocument({ margin: 40, size: 'A4' });
+      const chunks: Buffer[] = [];
+      doc.on('data', (chunk) => chunks.push(chunk));
+      doc.on('end', () => resolve(Buffer.concat(chunks)));
+      doc.on('error', reject);
+
+      const customer = quotation.customer;
+      const partyAddress = [customer?.address, customer?.city, customer?.phone]
+        .filter(Boolean)
+        .join(', ');
+
+      let y = drawAmazonStyleHeader(doc, company, 'QUOTATION', { showPaybill: true });
+      y = drawPartyAndRefs(doc, y, customer?.name || 'N/A', partyAddress, [
+        {
+          label: 'Date',
+          value: quotation.createdAt
+            ? quotation.createdAt.toLocaleDateString('en-KE')
+            : new Date().toLocaleDateString('en-KE'),
+        },
+        { label: 'Quote No.', value: quotation.quotationNo },
+        {
+          label: 'Valid until',
+          value: quotation.validUntil
+            ? quotation.validUntil.toLocaleDateString('en-KE')
+            : '—',
+        },
+      ]);
+
+      y = drawInstructionLine(
+        doc,
+        y,
+        'We are pleased to quote the following goods and prices'
+      );
+
+      const rows = quotation.items.map((item) => {
+        const product = item.product;
+        const description = product
+          ? [product.sku, product.name].filter(Boolean).join(' — ')
+          : 'Item';
+        return {
+          qty: String(Number(item.quantity)),
+          description,
+          unit: money(Number(item.unitPrice)),
+          total: money(Number(item.totalPrice)),
+        };
+      });
+
+      y = drawDocTable(
+        doc,
+        y,
+        [
+          { key: 'qty', label: 'Qty', width: 50, align: 'center' },
+          { key: 'description', label: 'Description', width: 265 },
+          { key: 'unit', label: 'Unit Price', width: 92, align: 'right' },
+          { key: 'total', label: 'Amount', width: 92, align: 'right' },
+        ],
+        rows,
+        {
+          minBodyRows: Math.max(rows.length + 1, 10),
+          footerLeft: 'E.& O.E',
+          footerCenter: `No. ${quotation.quotationNo}`,
+        }
+      );
+
+      y = drawMoneyTotals(doc, y, [
+        { label: 'Subtotal', value: `KES ${money(Number(quotation.subtotal))}` },
+        { label: `VAT (${vatRate}%)`, value: `KES ${money(Number(quotation.taxAmount))}` },
+        { label: 'Total', value: `KES ${money(Number(quotation.totalAmount))}`, bold: true },
+      ]);
+
+      if (quotation.notes) {
+        doc.font('Helvetica').fontSize(8).fillColor(DOC_BLUE).text(`Notes: ${quotation.notes}`, PAGE_LEFT, y, {
+          width: PAGE_WIDTH,
+        });
+        y = doc.y + 10;
+      }
+
+      drawSignatureBlock(doc, Math.max(y + 8, 700), {
+        instruction: 'Prices are valid until the date shown above unless withdrawn earlier.',
+        confirmLabel: 'Prepared by:',
+        receiveLabel: 'Accepted by:',
+      });
+
+      doc.end();
+    });
+  }
+
   static async getDeliveryNote(id: string) {
     const delivery = await prisma.deliveryNote.findFirst({
       where: { id, companyId: requireTenantId() },

@@ -178,6 +178,7 @@ export function SalesPage() {
   const canManageTargets = canManageSalesTargets(user?.role?.name, hasPermission);
   const canDownloadInvoice = hasPermission('finance:read');
   const [downloadingInvoiceId, setDownloadingInvoiceId] = useState<string | null>(null);
+  const [downloadingQuoteId, setDownloadingQuoteId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!orderIdFromUrl) return;
@@ -297,6 +298,15 @@ export function SalesPage() {
       await downloadFile(`/finance/invoices/${invoiceId}/pdf`, `${invoiceNumber}.pdf`);
     } finally {
       setDownloadingInvoiceId(null);
+    }
+  };
+
+  const downloadQuotation = async (quoteId: string, quotationNo: string) => {
+    setDownloadingQuoteId(quoteId);
+    try {
+      await downloadFile(operationsApi.quotationPdfPath(quoteId), `${quotationNo}.pdf`);
+    } finally {
+      setDownloadingQuoteId(null);
     }
   };
 
@@ -468,20 +478,36 @@ export function SalesPage() {
       key: 'actions',
       label: 'Actions',
       render: (_: unknown, row: Record<string, unknown>) => {
-        if (!canCreate) return null;
         const status = row.status as string;
-        if (status === 'APPROVED' || status === 'CANCELLED' || status === 'REJECTED') return null;
+        const canConvert =
+          canCreate && !['APPROVED', 'CANCELLED', 'REJECTED'].includes(status);
         return (
-          <Button
-            size="sm"
-            loading={convertMutation.isPending}
-            onClick={(e) => {
-              e.stopPropagation();
-              convertMutation.mutate(row.id as string);
-            }}
-          >
-            Convert
-          </Button>
+          <div className="flex flex-wrap items-center gap-1.5 justify-end">
+            <Button
+              size="sm"
+              variant="secondary"
+              loading={downloadingQuoteId === row.id}
+              onClick={(e) => {
+                e.stopPropagation();
+                void downloadQuotation(row.id as string, row.quotationNo as string);
+              }}
+            >
+              <Download className="h-3.5 w-3.5 mr-1" />
+              PDF
+            </Button>
+            {canConvert && (
+              <Button
+                size="sm"
+                loading={convertMutation.isPending}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  convertMutation.mutate(row.id as string);
+                }}
+              >
+                Convert
+              </Button>
+            )}
+          </div>
         );
       },
     },
@@ -998,13 +1024,21 @@ export function SalesPage() {
                 ))}
               </Card>
             )}
-            {canCreate && !['APPROVED', 'CANCELLED', 'REJECTED'].includes(selectedQuote.status) && (
-              <div className="flex justify-end">
+            <div className="flex flex-wrap justify-end gap-2">
+              <Button
+                variant="secondary"
+                loading={downloadingQuoteId === selectedQuote.id}
+                onClick={() => void downloadQuotation(selectedQuote.id, selectedQuote.quotationNo)}
+              >
+                <Download className="h-4 w-4 mr-1.5" />
+                Export PDF
+              </Button>
+              {canCreate && !['APPROVED', 'CANCELLED', 'REJECTED'].includes(selectedQuote.status) && (
                 <Button loading={convertMutation.isPending} onClick={() => convertMutation.mutate(selectedQuote.id)}>
                   Convert to Sales Order
                 </Button>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         )}
       </Modal>

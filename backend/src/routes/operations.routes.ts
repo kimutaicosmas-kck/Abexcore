@@ -691,6 +691,19 @@ router.get(
   })
 );
 
+router.get(
+  '/quotations/:id/pdf',
+  authorize('sales:read'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const { ExportService } = await import('../services/export.service');
+    const quotation = await ExportService.getSalesQuotation(getParam(req.params.id));
+    const pdf = await ExportService.generateQuotationPDF(quotation);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${quotation.quotationNo}.pdf"`);
+    res.send(pdf);
+  })
+);
+
 router.post(
   '/quotations',
   authorize('sales:create'),

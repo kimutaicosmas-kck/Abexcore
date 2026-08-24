@@ -343,6 +343,7 @@ export const operationsApi = {
   getQuotation: (id: string) => api.get(`/operations/quotations/${id}`),
   createQuotation: (data: object) => api.post('/operations/quotations', data),
   convertQuotation: (id: string) => api.post(`/operations/quotations/${id}/convert`),
+  quotationPdfPath: (id: string) => `/operations/quotations/${id}/pdf`,
   production: (params?: object) => api.get('/operations/production', { params }),
   createProduction: (data: object) => api.post('/operations/production', data),
   startProduction: (id: string) => api.post(`/operations/production/${id}/start`),
