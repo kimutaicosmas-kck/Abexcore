@@ -443,16 +443,46 @@ export const createInvoiceSchema = z.object({
 
 export const createPaymentSchema = z
   .object({
-    invoiceId: z.string().uuid(),
-    amount: z.number().min(0.01),
+    /** Calendar day the money was received (YYYY-MM-DD). Defaults to today. */
+    paymentDate: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD')
+      .optional(),
     method: z.enum(['CASH', 'BANK_TRANSFER', 'CHEQUE', 'MPESA', 'CARD', 'CREDIT']).optional(),
     reference: z.string().optional(),
     notes: z.string().optional(),
     mpesaPhone: z.string().optional(),
+    /** Single-invoice shortcut (legacy). */
+    invoiceId: z.string().uuid().optional(),
+    amount: z.number().min(0.01).optional(),
+    /** One payment applied across one or more invoices. */
+    allocations: z
+      .array(
+        z.object({
+          invoiceId: z.string().uuid(),
+          amount: z.number().min(0.01),
+        })
+      )
+      .min(1)
+      .optional(),
   })
-  .refine((data) => data.method !== 'MPESA' || (data.reference && data.reference.length >= 6), {
-    message: 'M-Pesa payments require a transaction reference code',
-    path: ['reference'],
+  .superRefine((data, ctx) => {
+    const hasAllocations = Array.isArray(data.allocations) && data.allocations.length > 0;
+    const hasSingle = Boolean(data.invoiceId && data.amount != null);
+    if (!hasAllocations && !hasSingle) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Select at least one invoice and amount',
+        path: ['allocations'],
+      });
+    }
+    if (data.method === 'MPESA' && !(data.reference && data.reference.length >= 6)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'M-Pesa payments require a transaction reference code',
+        path: ['reference'],
+      });
+    }
   });
 
 export const createExpenseSchema = z.object({

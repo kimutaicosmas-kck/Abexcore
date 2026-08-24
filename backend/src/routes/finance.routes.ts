@@ -68,48 +68,74 @@ async function paymentIdsByInvoiceTiming(
   let rows: { id: string }[] = [];
   if (timing === 'same_week_as_invoice') {
     rows = await prisma.$queryRaw<{ id: string }[]>`
-      SELECT p.id AS id
+      SELECT DISTINCT p.id AS id
       FROM payments p
-      INNER JOIN invoices i ON i.id = p.invoice_id
+      LEFT JOIN invoices i ON i.id = p.invoice_id AND i.company_id = ${companyId}
+      LEFT JOIN payment_allocations pa ON pa.payment_id = p.id
+      LEFT JOIN invoices ai ON ai.id = pa.invoice_id AND ai.company_id = ${companyId}
       WHERE p.company_id = ${companyId}
-        AND i.company_id = ${companyId}
-        AND p.invoice_id IS NOT NULL
-        AND YEARWEEK(p.payment_date, 1) = YEARWEEK(i.invoice_date, 1)
+        AND (
+          (i.id IS NOT NULL AND YEARWEEK(p.payment_date, 1) = YEARWEEK(i.invoice_date, 1))
+          OR (ai.id IS NOT NULL AND YEARWEEK(p.payment_date, 1) = YEARWEEK(ai.invoice_date, 1))
+        )
     `;
   } else if (timing === 'same_month_as_invoice') {
     rows = await prisma.$queryRaw<{ id: string }[]>`
-      SELECT p.id AS id
+      SELECT DISTINCT p.id AS id
       FROM payments p
-      INNER JOIN invoices i ON i.id = p.invoice_id
+      LEFT JOIN invoices i ON i.id = p.invoice_id AND i.company_id = ${companyId}
+      LEFT JOIN payment_allocations pa ON pa.payment_id = p.id
+      LEFT JOIN invoices ai ON ai.id = pa.invoice_id AND ai.company_id = ${companyId}
       WHERE p.company_id = ${companyId}
-        AND i.company_id = ${companyId}
-        AND p.invoice_id IS NOT NULL
-        AND YEAR(p.payment_date) = YEAR(i.invoice_date)
-        AND MONTH(p.payment_date) = MONTH(i.invoice_date)
+        AND (
+          (
+            i.id IS NOT NULL
+            AND YEAR(p.payment_date) = YEAR(i.invoice_date)
+            AND MONTH(p.payment_date) = MONTH(i.invoice_date)
+          )
+          OR (
+            ai.id IS NOT NULL
+            AND YEAR(p.payment_date) = YEAR(ai.invoice_date)
+            AND MONTH(p.payment_date) = MONTH(ai.invoice_date)
+          )
+        )
     `;
   } else if (timing === 'this_week_taken_and_paid') {
     rows = await prisma.$queryRaw<{ id: string }[]>`
-      SELECT p.id AS id
+      SELECT DISTINCT p.id AS id
       FROM payments p
-      INNER JOIN invoices i ON i.id = p.invoice_id
+      LEFT JOIN invoices i ON i.id = p.invoice_id AND i.company_id = ${companyId}
+      LEFT JOIN payment_allocations pa ON pa.payment_id = p.id
+      LEFT JOIN invoices ai ON ai.id = pa.invoice_id AND ai.company_id = ${companyId}
       WHERE p.company_id = ${companyId}
-        AND i.company_id = ${companyId}
-        AND p.invoice_id IS NOT NULL
         AND YEARWEEK(p.payment_date, 1) = YEARWEEK(CURDATE(), 1)
-        AND YEARWEEK(i.invoice_date, 1) = YEARWEEK(CURDATE(), 1)
+        AND (
+          (i.id IS NOT NULL AND YEARWEEK(i.invoice_date, 1) = YEARWEEK(CURDATE(), 1))
+          OR (ai.id IS NOT NULL AND YEARWEEK(ai.invoice_date, 1) = YEARWEEK(CURDATE(), 1))
+        )
     `;
   } else {
     rows = await prisma.$queryRaw<{ id: string }[]>`
-      SELECT p.id AS id
+      SELECT DISTINCT p.id AS id
       FROM payments p
-      INNER JOIN invoices i ON i.id = p.invoice_id
+      LEFT JOIN invoices i ON i.id = p.invoice_id AND i.company_id = ${companyId}
+      LEFT JOIN payment_allocations pa ON pa.payment_id = p.id
+      LEFT JOIN invoices ai ON ai.id = pa.invoice_id AND ai.company_id = ${companyId}
       WHERE p.company_id = ${companyId}
-        AND i.company_id = ${companyId}
-        AND p.invoice_id IS NOT NULL
         AND YEAR(p.payment_date) = YEAR(CURDATE())
         AND MONTH(p.payment_date) = MONTH(CURDATE())
-        AND YEAR(i.invoice_date) = YEAR(CURDATE())
-        AND MONTH(i.invoice_date) = MONTH(CURDATE())
+        AND (
+          (
+            i.id IS NOT NULL
+            AND YEAR(i.invoice_date) = YEAR(CURDATE())
+            AND MONTH(i.invoice_date) = MONTH(CURDATE())
+          )
+          OR (
+            ai.id IS NOT NULL
+            AND YEAR(ai.invoice_date) = YEAR(CURDATE())
+            AND MONTH(ai.invoice_date) = MONTH(CURDATE())
+          )
+        )
     `;
   }
   return rows.map((r) => r.id);
@@ -163,6 +189,8 @@ async function buildPaymentWhere(
           { bankReference: { contains: search } },
           { invoice: { invoiceNumber: { contains: search } } },
           { invoice: { customer: { name: { contains: search } } } },
+          { allocations: { some: { invoice: { invoiceNumber: { contains: search } } } } },
+          { allocations: { some: { invoice: { customer: { name: { contains: search } } } } } },
         ],
       },
     ];
@@ -384,6 +412,12 @@ router.get(
         supplier: true,
         items: true,
         payments: true,
+        paymentAllocations: {
+          include: {
+            payment: true,
+          },
+          orderBy: { createdAt: 'desc' },
+        },
         creditNotes: {
           where: { type: 'CREDIT_NOTE' },
           select: {
@@ -410,9 +444,22 @@ router.get(
     if (!data) throw new AppError('Invoice not found', 404);
     const { creditedAmountForInvoice, withInvoiceBalances } = await import('../utils/invoiceBalance');
     const credited = data.type === 'SALES' ? await creditedAmountForInvoice(prisma, data.id) : 0;
+
+    const directIds = new Set(data.payments.map((p) => p.id));
+    const fromAllocations = data.paymentAllocations
+      .filter((a) => !directIds.has(a.paymentId))
+      .map((a) => ({
+        ...a.payment,
+        amount: a.amount,
+      }));
+    const payments = [...data.payments, ...fromAllocations].sort(
+      (a, b) => new Date(b.paymentDate).getTime() - new Date(a.paymentDate).getTime()
+    );
+
+    const { paymentAllocations: _ignored, ...rest } = data;
     res.json({
       success: true,
-      data: withInvoiceBalances(data, credited, data.creditNotes),
+      data: withInvoiceBalances({ ...rest, payments }, credited, data.creditNotes),
     });
   })
 );
@@ -602,15 +649,17 @@ router.post(
   validate(createPaymentSchema),
   auditLog('finance', 'create', 'payment'),
   asyncHandler(async (req: AuthRequest, res: Response) => {
-    const { invoiceId, amount, method, reference, notes } = req.body;
+    const { invoiceId, amount, method, reference, notes, paymentDate, allocations } = req.body;
 
     const payment = await prisma.$transaction(async (tx) =>
       FinancePaymentService.recordPayment(tx, {
         invoiceId,
-        amount: Number(amount),
+        amount: amount != null ? Number(amount) : undefined,
         method,
         reference,
         notes,
+        paymentDate,
+        allocations,
       })
     );
 
@@ -661,6 +710,18 @@ router.get(
               supplier: { select: { name: true } },
               salesOrder: {
                 select: { id: true, orderNumber: true, orderDate: true },
+              },
+            },
+          },
+          allocations: {
+            include: {
+              invoice: {
+                select: {
+                  id: true,
+                  invoiceNumber: true,
+                  customer: { select: { name: true } },
+                  supplier: { select: { name: true } },
+                },
               },
             },
           },

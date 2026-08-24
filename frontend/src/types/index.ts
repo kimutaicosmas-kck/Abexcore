@@ -440,6 +440,16 @@ export interface Payment {
     supplier?: { name: string };
     salesOrder?: { id: string; orderNumber: string; orderDate: string } | null;
   };
+  allocations?: {
+    id: string;
+    amount: number;
+    invoice?: {
+      id: string;
+      invoiceNumber: string;
+      customer?: { name: string };
+      supplier?: { name: string };
+    };
+  }[];
 }
 
 export interface Invoice {

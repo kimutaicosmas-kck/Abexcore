@@ -404,20 +404,36 @@ export function FinancePage() {
     {
       key: 'invoice',
       label: 'Invoice / Order',
-      render: (val: unknown) => {
-        const inv = val as Payment['invoice'];
+      render: (_: unknown, row: Record<string, unknown>) => {
+        const pay = row as unknown as Payment;
+        const allocs = pay.allocations || [];
+        if (allocs.length > 1) {
+          return (
+            <div>
+              <p className="font-medium text-slate-900">{allocs.length} invoices</p>
+              <p className="text-xs text-slate-500 truncate max-w-[220px]">
+                {allocs.map((a) => a.invoice?.invoiceNumber).filter(Boolean).join(', ')}
+              </p>
+            </div>
+          );
+        }
+        const inv =
+          pay.invoice ||
+          (allocs[0]?.invoice
+            ? { id: allocs[0].invoice.id, invoiceNumber: allocs[0].invoice.invoiceNumber }
+            : null);
         if (!inv) return '—';
         return (
           <div>
             <p className="font-medium text-slate-900">{inv.invoiceNumber}</p>
-            {inv.salesOrder?.orderNumber && (
+            {pay.invoice?.salesOrder?.orderNumber && (
               <p className="text-xs text-slate-500">
-                Order {inv.salesOrder.orderNumber}
-                {inv.salesOrder.orderDate ? ` · ${formatDate(inv.salesOrder.orderDate)}` : ''}
+                Order {pay.invoice.salesOrder.orderNumber}
+                {pay.invoice.salesOrder.orderDate ? ` · ${formatDate(pay.invoice.salesOrder.orderDate)}` : ''}
               </p>
             )}
-            {!inv.salesOrder?.orderNumber && inv.invoiceDate && (
-              <p className="text-xs text-slate-500">Invoiced {formatDate(inv.invoiceDate)}</p>
+            {!pay.invoice?.salesOrder?.orderNumber && pay.invoice?.invoiceDate && (
+              <p className="text-xs text-slate-500">Invoiced {formatDate(pay.invoice.invoiceDate)}</p>
             )}
           </div>
         );
@@ -427,8 +443,13 @@ export function FinancePage() {
       key: 'party',
       label: 'Party',
       render: (_: unknown, row: Record<string, unknown>) => {
-        const inv = row.invoice as Payment['invoice'];
-        return inv?.customer?.name || inv?.supplier?.name || '—';
+        const pay = row as unknown as Payment;
+        const inv = pay.invoice;
+        if (inv?.customer?.name || inv?.supplier?.name) {
+          return inv.customer?.name || inv.supplier?.name || '—';
+        }
+        const fromAlloc = pay.allocations?.[0]?.invoice;
+        return fromAlloc?.customer?.name || fromAlloc?.supplier?.name || '—';
       },
     },
     {
@@ -975,7 +996,7 @@ export function FinancePage() {
         open={paymentModalOpen}
         onClose={() => { setPaymentModalOpen(false); setPaymentForInvoiceId(undefined); }}
         title="Record Payment"
-        size="md"
+        size="lg"
       >
         <PaymentForm
           invoiceId={paymentForInvoiceId}
