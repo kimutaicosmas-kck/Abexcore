@@ -137,7 +137,7 @@ export function MaintenancePage() {
           <StatCard title="Machines" value={stats.totalMachines} icon={<Cog className="h-5 w-5 text-white" />} color="from-cyan-500 to-cyan-700" onClick={() => goToTab(0)} />
           <StatCard title="Operational" value={stats.operational} icon={<CheckCircle2 className="h-5 w-5 text-white" />} color="from-violet-500 to-violet-700" onClick={() => goToTab(0)} />
           <StatCard title="Open Requests" value={stats.openRequests} icon={<Wrench className="h-5 w-5 text-white" />} color="from-emerald-500 to-emerald-700" onClick={() => goToTab(1)} />
-          <StatCard title="Overdue" value={stats.overdueRequests} icon={<AlertTriangle className="h-5 w-5 text-white" />} color="from-orange-500 to-orange-700" onClick={() => { setStatus('OVERDUE'); setPage(1); goToTab(1); }} />
+          <StatCard title="Overdue" value={stats.overdueRequests} icon={<AlertTriangle className="h-5 w-5 text-white" />} color="from-orange-500 to-orange-700" onClick={() => { setStatus('OVERDUE'); setPage(1); goToTab(1); }} className="hidden sm:flex" />
           <StatCard title="Completed (Month)" value={stats.completedMonth} icon={<Calendar className="h-5 w-5 text-white" />} color="from-rose-500 to-rose-700" onClick={() => goToTab(1)} />
         </StatGrid>
       )}

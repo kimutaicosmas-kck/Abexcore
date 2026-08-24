@@ -601,7 +601,7 @@ export function FinancePage() {
           <StatCard title="Monthly Revenue" value={formatCurrency(stats.monthlyRevenue)} icon={<TrendingUp className="h-5 w-5 text-white" />} color="from-blue-500 to-blue-700" onClick={() => goToTab(0)} />
           <StatCard title="Receivable" value={formatCurrency(stats.accountsReceivable)} icon={<Wallet className="h-5 w-5 text-white" />} color="from-lime-500 to-lime-700" onClick={() => goToTab(0)} />
           <StatCard title="Paid / Received" value={formatCurrency(stats.paymentsReceived ?? stats.accountsPayable)} icon={<TrendingDown className="h-5 w-5 text-white" />} color="from-pink-500 to-pink-700" onClick={() => goToTab(1)} />
-          <StatCard title="Overdue" value={stats.overdueInvoices} icon={<AlertCircle className="h-5 w-5 text-white" />} color="from-amber-500 to-amber-700" onClick={() => goToTab(0)} />
+          <StatCard title="Overdue" value={stats.overdueInvoices} icon={<AlertCircle className="h-5 w-5 text-white" />} color="from-amber-500 to-amber-700" onClick={() => goToTab(0)} className="hidden sm:flex" />
           <StatCard title="Total Sales" value={formatCurrency(stats.totalSales)} icon={<Receipt className="h-5 w-5 text-white" />} color="from-slate-500 to-slate-700" onClick={() => goToTab(0)} />
         </StatGrid>
       )}

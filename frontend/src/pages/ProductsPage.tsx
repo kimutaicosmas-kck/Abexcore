@@ -287,6 +287,7 @@ export function ProductsPage() {
             icon={<FileText className="h-5 w-5 text-white" />}
             color={STAT_ROW_5[2]}
             onClick={() => setTab('Catalog')}
+            className="hidden sm:flex"
           />
           <StatCard
             title="FG in Stock"

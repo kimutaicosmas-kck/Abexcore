@@ -191,6 +191,7 @@ export function ProductionPage() {
             icon={<Package className="h-5 w-5 text-white" />}
             color="from-amber-500 to-amber-700"
             onClick={() => { setStatusFilter('PLANNED'); goToTab(0); }}
+            className="hidden sm:flex"
           />
           <StatCard
             title="Completed (Month)"

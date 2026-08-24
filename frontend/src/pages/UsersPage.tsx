@@ -285,7 +285,7 @@ export function UsersPage() {
         <StatGrid>
           <StatCard title="Total Users" value={stats.total} icon={<Users className="h-5 w-5 text-white" />} color="from-blue-500 to-blue-700" onClick={() => goToTab(0)} />
           <StatCard title="Active" value={stats.active} icon={<UserCheck className="h-5 w-5 text-white" />} color="from-lime-500 to-lime-700" onClick={() => { setStatusFilter('ACTIVE'); setPage(1); goToTab(0); }} />
-          <StatCard title="Inactive / Suspended" value={stats.inactive + stats.suspended} icon={<UserX className="h-5 w-5 text-white" />} color="from-pink-500 to-pink-700" onClick={() => { setStatusFilter('INACTIVE'); setPage(1); goToTab(0); }} />
+          <StatCard title="Inactive / Suspended" value={stats.inactive + stats.suspended} icon={<UserX className="h-5 w-5 text-white" />} color="from-pink-500 to-pink-700" onClick={() => { setStatusFilter('INACTIVE'); setPage(1); goToTab(0); }} className="hidden sm:flex" />
           <StatCard title="Logged In (7d)" value={stats.recentLogins} icon={<Shield className="h-5 w-5 text-white" />} color="from-amber-500 to-amber-700" onClick={() => goToTab(0)} />
           <StatCard title="Roles" value={stats.byRole.length} icon={<ScrollText className="h-5 w-5 text-white" />} color="from-slate-500 to-slate-700" onClick={() => goToTab(1)} />
         </StatGrid>

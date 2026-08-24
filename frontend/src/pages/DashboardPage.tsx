@@ -51,7 +51,7 @@ const CHART_DAYS_OPTIONS = [
   { value: '90', label: 'Last 90 days' },
 ];
 
-const FONT = 'Plus Jakarta Sans';
+const FONT = 'Inter';
 
 const chartDefaults = {
   responsive: true,
@@ -270,11 +270,11 @@ export function DashboardPage() {
   );
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       <StatGrid>
+        <StatCard title="Revenue (month)" value={formatCurrency(kpis.monthlyRevenue)} icon={<TrendingUp className="h-5 w-5 text-white" />} color="from-primary-500 to-primary-700" to="/finance" />
         <StatCard title="Sales today" value={formatCurrency(kpis.salesToday)} icon={<DollarSign className="h-5 w-5 text-white" />} color="from-emerald-500 to-emerald-700" to="/sales" />
-        <StatCard title="Monthly Sales" value={formatCurrency(kpis.monthlyRevenue)} icon={<TrendingUp className="h-5 w-5 text-white" />} color="from-sky-500 to-sky-700" to="/finance" />
-        <StatCard title="Production orders" value={kpis.productionOrders} icon={<Factory className="h-5 w-5 text-white" />} color="from-violet-500 to-violet-700" to="/production" />
+        <StatCard title="Production orders" value={kpis.productionOrders} icon={<Factory className="h-5 w-5 text-white" />} color="from-sky-500 to-sky-700" to="/production" className="hidden sm:flex" />
         <StatCard title="Inventory value" value={formatCurrency(kpis.inventoryValue)} icon={<Package className="h-5 w-5 text-white" />} color="from-amber-500 to-amber-700" to="/inventory" />
         <StatCard title="Low stock" value={kpis.rawMaterialsLow} icon={<AlertTriangle className="h-5 w-5 text-white" />} color="from-rose-500 to-rose-700" to="/inventory" />
       </StatGrid>
@@ -283,7 +283,7 @@ export function DashboardPage() {
 
       {accessDenied && (
         <Alert variant="warning">
-          That module is not assigned to your role. Use the sidebar or enabled shortcuts below.
+          That module is not assigned to your role. Use the sidebar to open a module you can access.
         </Alert>
       )}
 

@@ -369,6 +369,7 @@ export function InventoryPage() {
             icon={<Warehouse className="h-5 w-5 text-white" />}
             color="from-emerald-500 to-emerald-700"
             onClick={() => goToTab(2)}
+            className="hidden sm:flex"
           />
           <StatCard
             title="Low stock"

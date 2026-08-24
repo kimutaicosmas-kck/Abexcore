@@ -313,6 +313,8 @@ interface StatCardProps {
   to?: string;
   /** Same-page action (e.g. switch tab / apply filter). Ignored when `to` is set. */
   onClick?: () => void;
+  /** Extra classes (e.g. `hidden sm:flex` to hide on mobile). */
+  className?: string;
 }
 
 export function StatCard({
@@ -324,6 +326,7 @@ export function StatCard({
   dense = false,
   to,
   onClick,
+  className: classNameProp,
 }: StatCardProps) {
   const interactive = Boolean(to || onClick);
   const accent = resolveStatAccent(color);
@@ -388,7 +391,8 @@ export function StatCard({
     'stat-card flex snap-start text-left w-full',
     dense ? 'stat-card-dense flex-row items-center' : 'flex-col gap-1.5 sm:gap-2.5',
     interactive &&
-      'stat-card-interactive cursor-pointer transition-all duration-150 hover:border-primary-300 hover:shadow-md hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2'
+      'stat-card-interactive cursor-pointer transition-all duration-150 hover:border-primary-300 hover:shadow-md hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2',
+    classNameProp
   );
 
   if (to) {

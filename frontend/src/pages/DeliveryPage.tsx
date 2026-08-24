@@ -874,7 +874,7 @@ export function DeliveryPage() {
       {stats && (
         <StatGrid>
           <StatCard title="Pending" value={stats.pending} icon={<Package className="h-5 w-5 text-white" />} color="from-emerald-500 to-emerald-700" onClick={() => { setStatus('PENDING'); setPage(1); goToTab(0); }} />
-          <StatCard title="In Transit" value={stats.inTransit} icon={<Truck className="h-5 w-5 text-white" />} color="from-sky-500 to-sky-700" onClick={() => { setStatus('IN_TRANSIT'); setPage(1); goToTab(0); }} />
+          <StatCard title="In Transit" value={stats.inTransit} icon={<Truck className="h-5 w-5 text-white" />} color="from-sky-500 to-sky-700" onClick={() => { setStatus('IN_TRANSIT'); setPage(1); goToTab(0); }} className="hidden sm:flex" />
           <StatCard title="Delivered Today" value={stats.deliveredToday} icon={<MapPin className="h-5 w-5 text-white" />} color="from-violet-500 to-violet-700" onClick={() => { setStatus('DELIVERED'); setPage(1); goToTab(0); }} />
           <StatCard title="Motorcycles" value={stats.motorcycles ?? 0} icon={<Bike className="h-5 w-5 text-white" />} color="from-amber-500 to-amber-700" onClick={() => goToTab(1)} />
           <StatCard title="Trucks" value={stats.trucks ?? 0} icon={<Truck className="h-5 w-5 text-white" />} color="from-rose-500 to-rose-700" onClick={() => goToTab(1)} />

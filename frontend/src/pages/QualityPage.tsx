@@ -155,6 +155,7 @@ export function QualityPage() {
             icon={<XCircle className="h-5 w-5 text-white" />}
             color="from-emerald-500 to-emerald-700"
             onClick={() => { setStatus('FAILED'); setPage(1); goToTab(0); }}
+            className="hidden sm:flex"
           />
           <StatCard
             title="Pass Rate"

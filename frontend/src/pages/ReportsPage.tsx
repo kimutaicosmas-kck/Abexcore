@@ -183,6 +183,7 @@ export function ReportsPage() {
         icon={<Users className="h-5 w-5 text-white" />}
         color="from-orange-500 to-orange-700"
         to="/customers"
+        className="hidden sm:flex"
       />
       <StatCard
         title="Production completed"

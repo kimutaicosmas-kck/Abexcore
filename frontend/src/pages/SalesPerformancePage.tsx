@@ -59,6 +59,7 @@ function SalesPerformanceSummary({ data }: { data: SalesTeamPerformance }) {
         icon={<ShoppingCart className="h-5 w-5 text-white" />}
         color="from-emerald-500 to-emerald-700"
         to="/sales"
+        className="hidden sm:flex"
       />
       <StatCard
         title="Avg target hit"

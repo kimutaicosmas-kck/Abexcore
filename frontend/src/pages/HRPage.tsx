@@ -525,7 +525,7 @@ export function HRPage() {
               color="from-emerald-500 to-emerald-700"
               onClick={() => { setAdvStatus('ACTIVE'); setAdvPage(1); goToTab(3); }}
             />
-            <StatCard title="Payroll Due" value={formatCurrency(stats.payrollDue)} icon={<DollarSign className="h-5 w-5 text-white" />} color="from-orange-500 to-orange-700" onClick={() => goToTab(4)} />
+            <StatCard title="Payroll Due" value={formatCurrency(stats.payrollDue)} icon={<DollarSign className="h-5 w-5 text-white" />} color="from-orange-500 to-orange-700" onClick={() => goToTab(4)} className="hidden sm:flex" />
             <StatCard title="Present Today" value={stats.attendanceToday} icon={<UserCheck className="h-5 w-5 text-white" />} color="from-fuchsia-500 to-fuchsia-700" onClick={() => goToTab(1)} />
           </StatGrid>
         )

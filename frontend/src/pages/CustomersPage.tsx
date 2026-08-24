@@ -642,6 +642,7 @@ export function CustomersPage() {
             icon={<Shield className="h-5 w-5 text-white" />}
             color="from-amber-500 to-amber-700"
             onClick={() => goToTab(3)}
+            className="hidden sm:flex"
           />
           <StatCard
             title={myBook ? 'My Open Opportunities' : 'Open Opportunities'}

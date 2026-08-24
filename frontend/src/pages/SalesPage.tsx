@@ -538,6 +538,7 @@ export function SalesPage() {
             icon={<ShoppingCart className="h-5 w-5 text-white" />}
             color="from-indigo-500 to-indigo-700"
             onClick={() => applyOrderFilters({ date: '', status: '' })}
+            className="hidden sm:flex"
           />
           <StatCard
             title={`${statPrefix}Successful orders`}

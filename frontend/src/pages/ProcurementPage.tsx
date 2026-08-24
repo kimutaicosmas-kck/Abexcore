@@ -614,7 +614,7 @@ export function ProcurementPage() {
       {stats && (
         <StatGrid>
           <StatCard title="Pending Requisitions" value={stats.pendingRequisitions} icon={<ClipboardList className="h-5 w-5 text-white" />} color="from-teal-500 to-teal-700" onClick={() => goToTab(1)} />
-          <StatCard title="Open RFQs" value={stats.openRfqs} icon={<FileText className="h-5 w-5 text-white" />} color="from-indigo-500 to-indigo-700" onClick={() => goToTab(2)} />
+          <StatCard title="Open RFQs" value={stats.openRfqs} icon={<FileText className="h-5 w-5 text-white" />} color="from-indigo-500 to-indigo-700" onClick={() => goToTab(2)} className="hidden sm:flex" />
           <StatCard title="Active PO Value" value={formatCurrency(stats.activePoValue)} icon={<ShoppingCart className="h-5 w-5 text-white" />} color="from-orange-500 to-orange-700" onClick={() => goToTab(0)} />
           <StatCard title="Suppliers" value={stats.suppliers} icon={<Users className="h-5 w-5 text-white" />} color="from-fuchsia-500 to-fuchsia-700" onClick={() => goToTab(4)} />
           <StatCard title="Active POs" value={stats.activePurchaseOrders} icon={<PackageCheck className="h-5 w-5 text-white" />} color="from-cyan-500 to-cyan-700" onClick={() => goToTab(0)} />
