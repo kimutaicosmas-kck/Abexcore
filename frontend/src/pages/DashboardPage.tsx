@@ -51,6 +51,17 @@ const CHART_DAYS_OPTIONS = [
   { value: '90', label: 'Last 90 days' },
 ];
 
+const CATEGORY_CHART_COLORS = [
+  '#0ea5e9', // sky
+  '#10b981', // emerald
+  '#f59e0b', // amber
+  '#8b5cf6', // violet
+  '#f43f5e', // rose
+  '#14b8a6', // teal
+  '#f97316', // orange
+  '#6366f1', // indigo
+];
+
 const FONT = 'Inter';
 
 const chartDefaults = {
@@ -240,9 +251,12 @@ export function DashboardPage() {
     datasets: [
       {
         data: charts?.productCategories?.map((c) => c.count) || [],
-        backgroundColor: ['#0ea5e9', '#2563eb', '#38bdf8', '#0284c7', '#1d4ed8', '#0369a1', '#1e40af', '#0891b2'],
-        borderWidth: 0,
-        hoverOffset: 8,
+        backgroundColor: (charts?.productCategories || []).map(
+          (_, i) => CATEGORY_CHART_COLORS[i % CATEGORY_CHART_COLORS.length]
+        ),
+        borderColor: '#ffffff',
+        borderWidth: 2,
+        hoverOffset: 6,
       },
     ],
   };
