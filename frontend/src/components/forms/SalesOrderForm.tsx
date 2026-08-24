@@ -10,7 +10,6 @@ import { Customer } from '../../types';
 import { useAuth, useVatRate } from '../../contexts/AuthContext';
 import { isSalesBookOwner } from '../../utils/salesTargets';
 import { getApiErrorCode, getApiErrorMessage } from '../../utils/apiError';
-import { formatProductOptionLabel } from '../../utils/productDisplay';
 import { ProductSearchSelect } from './ProductSearchSelect';
 
 const orderItemSchema = z.object({
@@ -57,7 +56,6 @@ export function SalesOrderForm({ onSuccess, onCancel }: SalesOrderFormProps) {
   const [customerSearch, setCustomerSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [customerListOpen, setCustomerListOpen] = useState(false);
-  const [productLabels, setProductLabels] = useState<Record<string, string>>({});
   const customerBoxRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -365,8 +363,8 @@ export function SalesOrderForm({ onSuccess, onCancel }: SalesOrderFormProps) {
       )}
 
       <div>
-        <div className="flex items-center justify-between mb-2">
-          <label className="text-sm font-medium text-gray-700">Order Items *</label>
+        <div className="flex items-center justify-between gap-2 mb-3">
+          <label className="text-sm font-medium text-slate-800">Order Items *</label>
           <Button type="button" size="sm" variant="secondary" onClick={addItem}>
             <Plus className="h-3 w-3 mr-1" /> Add Item
           </Button>
@@ -376,65 +374,92 @@ export function SalesOrderForm({ onSuccess, onCancel }: SalesOrderFormProps) {
           <p className="text-sm text-red-600 mb-2">{errors.items.message}</p>
         )}
 
-        <div className="space-y-2">
+        <div className="space-y-3">
           {fields.map((field, index) => {
             const line = items[index];
             const lineTotal = Math.round(
               (line?.quantity || 0) * (line?.unitPrice || 0) * (1 - (line?.discount || 0) / 100)
             );
-
             return (
-              <div key={field.id} className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-end p-3 bg-gray-50 rounded-lg">
-                <div className="col-span-12 sm:col-span-5">
-                  <Controller
-                    name={`items.${index}.productId`}
-                    control={control}
-                    render={({ field: productField }) => (
-                      <ProductSearchSelect
-                        label={index === 0 ? 'Product' : undefined}
-                        value={productField.value}
-                        onChange={productField.onChange}
-                        onProductSelect={(product) => {
-                          if (product) {
-                            setProductLabels((prev) => ({
-                              ...prev,
-                              [product.id]: formatProductOptionLabel(product),
-                            }));
-                            if (!items[index]?.unitPrice || items[index].unitPrice === 0) {
-                              setValue(`items.${index}.unitPrice`, Number(product.sellingPrice));
-                            }
-                          }
-                        }}
-                        error={errors.items?.[index]?.productId?.message}
-                      />
-                    )}
-                  />
-                  {productLabels[line?.productId || ''] && (
-                    <p className="mt-1 text-xs text-slate-500 truncate">
-                      {productLabels[line.productId]} · line {formatCurrency(lineTotal)}
-                    </p>
-                  )}
-                </div>
-                <div className="col-span-6 sm:col-span-2">
-                  <Input label={index === 0 ? 'Qty' : undefined} type="number" min={1} {...register(`items.${index}.quantity`)} />
-                </div>
-                <div className="col-span-6 sm:col-span-2">
-                  <Input
-                    label={index === 0 ? (isVatCustomer ? 'Price (incl. VAT)' : 'Price') : undefined}
-                    type="number"
-                    step="1"
-                    {...register(`items.${index}.unitPrice`)}
-                  />
-                </div>
-                <div className="col-span-6 sm:col-span-2">
-                  <Input label={index === 0 ? 'Disc %' : undefined} type="number" min={0} max={100} {...register(`items.${index}.discount`)} />
-                </div>
-                <div className="col-span-6 sm:col-span-1 flex gap-1 justify-end">
+              <div
+                key={field.id}
+                className="rounded-2xl border border-slate-200 bg-slate-50/80 p-3 sm:p-4 space-y-3"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Item {index + 1}
+                  </p>
                   {fields.length > 1 && (
-                    <Button type="button" variant="ghost" size="sm" onClick={() => remove(index)}>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="!px-2 !py-1 shrink-0"
+                      onClick={() => remove(index)}
+                      aria-label={`Remove item ${index + 1}`}
+                    >
                       <Trash2 className="h-4 w-4 text-red-500" />
                     </Button>
                   )}
+                </div>
+
+                <Controller
+                  name={`items.${index}.productId`}
+                  control={control}
+                  render={({ field: productField }) => (
+                    <ProductSearchSelect
+                      label="Product"
+                      value={productField.value}
+                      onChange={productField.onChange}
+                      onProductSelect={(product) => {
+                        if (product) {
+                          if (!items[index]?.unitPrice || items[index].unitPrice === 0) {
+                            setValue(`items.${index}.unitPrice`, Number(product.sellingPrice));
+                          }
+                        }
+                      }}
+                      error={errors.items?.[index]?.productId?.message}
+                    />
+                  )}
+                />
+
+                <div className="grid grid-cols-3 gap-2 sm:gap-3">
+                  <Input
+                    label="Qty"
+                    type="number"
+                    min={1}
+                    inputMode="numeric"
+                    {...register(`items.${index}.quantity`)}
+                    error={errors.items?.[index]?.quantity?.message}
+                  />
+                  <Input
+                    label={isVatCustomer ? 'Price*' : 'Price'}
+                    type="number"
+                    step="1"
+                    inputMode="decimal"
+                    title={isVatCustomer ? 'Price includes VAT' : undefined}
+                    {...register(`items.${index}.unitPrice`)}
+                    error={errors.items?.[index]?.unitPrice?.message}
+                  />
+                  <Input
+                    label="Disc %"
+                    type="number"
+                    min={0}
+                    max={100}
+                    inputMode="decimal"
+                    {...register(`items.${index}.discount`)}
+                    error={errors.items?.[index]?.discount?.message}
+                  />
+                </div>
+                {isVatCustomer && (
+                  <p className="text-[11px] text-slate-500 -mt-1">* Price includes VAT</p>
+                )}
+
+                <div className="flex items-center justify-between border-t border-slate-200/80 pt-2">
+                  <span className="text-xs text-slate-500">Line total</span>
+                  <span className="text-sm font-semibold tabular-nums text-slate-900">
+                    {formatCurrency(lineTotal)}
+                  </span>
                 </div>
               </div>
             );
