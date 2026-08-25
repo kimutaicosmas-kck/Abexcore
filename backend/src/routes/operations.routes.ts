@@ -309,6 +309,10 @@ router.post(
           400
         );
       }
+    } else if (isSalesOfficer) {
+      if (customer.salesPersonId !== assignedSalesPersonId) {
+        throw new AppError('You can only sell to customers assigned to you.', 400);
+      }
     } else if (customer.salesPersonId && customer.salesPersonId !== assignedSalesPersonId) {
       throw new AppError('Select a customer assigned to this sales person (or an unassigned customer).', 400);
     }
@@ -336,7 +340,6 @@ router.post(
       });
 
       // Only an admin explicitly choosing an officer claims a free customer.
-      // Sales officers may sell to unassigned customers without locking ownership.
       if (!isSalesOfficer && !attributingToCreator && salesPersonId && !customer.salesPersonId) {
         await tx.customer.update({
           where: { id: customerId },
@@ -675,9 +678,7 @@ router.get(
     const where: Prisma.SalesQuotationWhereInput = {};
     if (status) where.status = status as Prisma.EnumApprovalStatusFilter['equals'];
     if (isSalesBookOwner(req.user!.roleName)) {
-      where.customer = {
-        OR: [{ salesPersonId: req.user!.id }, { salesPersonId: null }],
-      };
+      where.customer = { salesPersonId: req.user!.id };
     }
     if (search) {
       where.AND = [
@@ -750,7 +751,13 @@ router.post(
     const count = await prisma.salesQuotation.count();
     const quotationNo = generateNumber('QT', count + 1);
     const customer = await prisma.customer.findFirst({
-      where: { id: customerId, deletedAt: null },
+      where: {
+        id: customerId,
+        deletedAt: null,
+        ...(isSalesBookOwner(req.user!.roleName)
+          ? { salesPersonId: req.user!.id }
+          : {}),
+      },
       select: { id: true, vatStatus: true },
     });
     if (!customer) throw new AppError('Customer not found', 404);

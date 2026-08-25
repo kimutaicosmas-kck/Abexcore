@@ -103,10 +103,10 @@ router.get(
     if (vatStatus) where.vatStatus = vatStatus;
     if (isActive !== undefined) where.isActive = isActive;
 
-    // Sales officers/reps see their own customers plus unassigned accounts
-    // (not attached to any salesperson). They never see other officers' books.
+    // Sales officers/reps see only customers assigned to them — not the free pool
+    // and never other officers' books.
     if (isSalesBookOwner(req.user!.roleName)) {
-      where.OR = [{ salesPersonId: req.user!.id }, { salesPersonId: null }];
+      where.salesPersonId = req.user!.id;
     } else if (salesPersonId === 'none') {
       where.salesPersonId = null;
     } else if (salesPersonId) {
@@ -286,7 +286,12 @@ router.get(
   authorize('customers:read'),
   asyncHandler(async (req: AuthRequest, res: Response) => {
     const data = await prisma.customer.findFirst({
-      where: { id: getParam(req.params.id) },
+      where: {
+        id: getParam(req.params.id),
+        ...(isSalesBookOwner(req.user!.roleName)
+          ? { salesPersonId: req.user!.id }
+          : {}),
+      },
       include: {
         contacts: true,
         salesPerson: { select: { id: true, firstName: true, lastName: true } },
@@ -331,11 +336,11 @@ router.put(
   asyncHandler(async (req: AuthRequest, res: Response) => {
     const payload = { ...req.body };
     if (isSalesBookOwner(req.user!.roleName)) {
-      // Sales officers/reps may edit their own customers or free (unassigned) ones; cannot reassign.
+      // Sales officers/reps may only edit customers assigned to them.
       const existing = await prisma.customer.findFirst({
         where: {
           id: getParam(req.params.id),
-          OR: [{ salesPersonId: req.user!.id }, { salesPersonId: null }],
+          salesPersonId: req.user!.id,
         },
         select: { id: true },
       });
