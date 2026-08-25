@@ -650,7 +650,7 @@ export function FinancePage() {
     <div className="space-y-4">
       {stats && (
         <StatGrid>
-          <StatCard title="Monthly Revenue" value={formatCurrency(stats.monthlyRevenue)} icon={<TrendingUp className="h-5 w-5 text-white" />} color="from-blue-500 to-blue-700" onClick={() => goToTab(0)} />
+          <StatCard title="This month sales" value={formatCurrency(stats.monthlyRevenue)} icon={<TrendingUp className="h-5 w-5 text-white" />} color="from-blue-500 to-blue-700" onClick={() => goToTab(0)} />
           <StatCard title="Paid / Received" value={formatCurrency(stats.paymentsReceived ?? 0)} icon={<TrendingUp className="h-5 w-5 text-white" />} color="from-emerald-500 to-emerald-700" onClick={() => goToTab(1)} />
           <StatCard title="Receivable" value={formatCurrency(stats.accountsReceivable)} icon={<Wallet className="h-5 w-5 text-white" />} color="from-lime-500 to-lime-700" onClick={() => goToTab(0)} />
           <StatCard
