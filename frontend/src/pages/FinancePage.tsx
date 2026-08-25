@@ -16,7 +16,6 @@ import { Bar, Line } from 'react-chartjs-2';
 import {
   Plus,
   TrendingUp,
-  TrendingDown,
   Wallet,
   AlertCircle,
   FileText,
