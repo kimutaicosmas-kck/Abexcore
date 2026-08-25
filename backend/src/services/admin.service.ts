@@ -4,6 +4,10 @@ import {
   getNetAccountsReceivable,
   getNetAccountsPayable,
   getInvoicePaymentsReceived,
+  getDueCohortCollectionRate,
+  getCollectionRateTrend,
+  getMonthStart,
+  getMonthEnd,
 } from '../utils/finance-metrics';
 import { InvoiceMaintenanceService } from './invoice-maintenance.service';
 
@@ -11,7 +15,8 @@ export class FinanceService {
   static async getStats() {
     await InvoiceMaintenanceService.markOverdueInvoices();
 
-    const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+    const monthStart = getMonthStart();
+    const monthEnd = getMonthEnd();
 
     const [
       salesAgg,
@@ -22,6 +27,7 @@ export class FinanceService {
       accountsReceivable,
       accountsPayable,
       paymentsReceived,
+      collectionRate,
     ] = await Promise.all([
       prisma.invoice.aggregate({ where: { type: 'SALES' }, _sum: { totalAmount: true } }),
       prisma.invoice.aggregate({ where: { type: 'PURCHASE' }, _sum: { totalAmount: true } }),
@@ -36,6 +42,7 @@ export class FinanceService {
       getNetAccountsReceivable(),
       getNetAccountsPayable(),
       getInvoicePaymentsReceived(),
+      getDueCohortCollectionRate(monthStart, monthEnd),
     ]);
 
     return {
@@ -47,6 +54,7 @@ export class FinanceService {
       overdueInvoices: overdueCount,
       monthlyRevenue: monthlySales,
       journalEntries: journalCount,
+      collectionRate,
     };
   }
 
@@ -58,21 +66,25 @@ export class FinanceService {
     const start = new Date(today);
     start.setDate(start.getDate() - days + 1);
 
-    const openSalesInvoices = await prisma.invoice.findMany({
-      where: {
-        type: 'SALES',
-        status: { in: ['UNPAID', 'PARTIAL', 'OVERDUE'] },
-      },
-      select: {
-        id: true,
-        invoiceNumber: true,
-        totalAmount: true,
-        paidAmount: true,
-        dueDate: true,
-        invoiceDate: true,
-        customer: { select: { name: true } },
-      },
-    });
+    const [openSalesInvoices, collectionRate, collectionTrend] = await Promise.all([
+      prisma.invoice.findMany({
+        where: {
+          type: 'SALES',
+          status: { in: ['UNPAID', 'PARTIAL', 'OVERDUE'] },
+        },
+        select: {
+          id: true,
+          invoiceNumber: true,
+          totalAmount: true,
+          paidAmount: true,
+          dueDate: true,
+          invoiceDate: true,
+          customer: { select: { name: true } },
+        },
+      }),
+      getDueCohortCollectionRate(getMonthStart(), getMonthEnd()),
+      getCollectionRateTrend(6),
+    ]);
 
     type AgingBucket = { amount: number; count: number };
     const aging: Record<string, AgingBucket> = {
@@ -174,6 +186,8 @@ export class FinanceService {
         totalOutflow,
         net: totalInflow - totalOutflow,
       },
+      collectionRate,
+      collectionTrend,
     };
   }
 }

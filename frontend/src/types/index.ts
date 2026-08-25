@@ -746,6 +746,19 @@ export interface Notification {
   createdAt: string;
 }
 
+export interface CollectionRateSnapshot {
+  rate: number;
+  collected: number;
+  billed: number;
+  outstanding: number;
+  invoiceCount: number;
+  onTimeRate: number;
+  onTimeCollected: number;
+  periodStart: string;
+  periodEnd: string;
+  label: string;
+}
+
 export interface FinanceStats {
   totalSales: number;
   totalPurchases: number;
@@ -756,6 +769,8 @@ export interface FinanceStats {
   overdueInvoices: number;
   monthlyRevenue: number;
   journalEntries: number;
+  /** Due-cohort collection rate for the current month. */
+  collectionRate?: CollectionRateSnapshot;
 }
 
 export interface FinanceOverview {
@@ -784,6 +799,8 @@ export interface FinanceOverview {
     totalOutflow: number;
     net: number;
   };
+  collectionRate?: CollectionRateSnapshot;
+  collectionTrend?: CollectionRateSnapshot[];
 }
 
 export interface HrStats {
