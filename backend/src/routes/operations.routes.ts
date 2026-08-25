@@ -72,6 +72,42 @@ function salesPersonLabel(order: {
   return `${person.firstName} ${person.lastName}`.trim();
 }
 
+/** Front-line officers may only touch orders in their own sales book. */
+function assertSalesBookOrderAccess(
+  roleName: string | null | undefined,
+  userId: string,
+  order: { salesPersonId: string | null; createdById: string }
+) {
+  if (!isSalesBookOwner(roleName)) return;
+  const owns =
+    order.salesPersonId === userId ||
+    (!order.salesPersonId && order.createdById === userId);
+  if (!owns) {
+    throw new AppError('You can only access sales orders in your own book', 403);
+  }
+}
+
+/**
+ * Order-adjustment / cancel alerts go only to a real sales-book owner on the order —
+ * never to admins on house sales (avoids noisy or cross-book alerts).
+ */
+async function resolveSalesOrderNotifyUserId(order: {
+  salesPersonId: string | null;
+  createdById: string;
+}): Promise<string | null> {
+  const candidates = [order.salesPersonId, order.createdById].filter(
+    (id): id is string => !!id
+  );
+  for (const id of candidates) {
+    const user = await prisma.user.findUnique({
+      where: { id },
+      select: { id: true, role: { select: { name: true } } },
+    });
+    if (user && isSalesBookOwner(user.role?.name)) return user.id;
+  }
+  return null;
+}
+
 router.get(
   '/stats',
   authorize('sales:read'),
@@ -203,6 +239,7 @@ router.get(
       },
     });
     if (!data) throw new AppError('Sales order not found', 404);
+    assertSalesBookOrderAccess(req.user!.roleName, req.user!.id, data);
     res.json({ success: true, data });
   })
 );
@@ -361,6 +398,7 @@ router.patch(
       select: { id: true, status: true, orderNumber: true, salesPersonId: true, createdById: true },
     });
     if (!existing) throw new AppError('Sales order not found', 404);
+    assertSalesBookOrderAccess(req.user!.roleName, req.user!.id, existing);
 
     const isSalesOfficer = isSalesPersonRole(req.user!.roleName);
     if (isSalesOfficer && existing.status !== 'PENDING') {
@@ -405,12 +443,15 @@ router.patch(
       });
     });
 
-    const notifyUserId = order?.salesPersonId || existing.createdById;
+    const notifyUserId = await resolveSalesOrderNotifyUserId({
+      salesPersonId: order.salesPersonId,
+      createdById: existing.createdById,
+    });
     if (notifyUserId && notifyUserId !== req.user!.id) {
       await NotificationService.notifyUser(
         notifyUserId,
         'SYSTEM',
-        `Sales order ${order!.orderNumber} adjusted`,
+        `Sales order ${order.orderNumber} adjusted`,
         `${adjustmentReason}. Open the order to see updated quantities and totals.`,
         `/sales?orderId=${orderId}`
       );
@@ -432,6 +473,7 @@ router.patch(
       include: { items: { include: { product: true } }, customer: true },
     });
     if (!existing) throw new AppError('Sales order not found', 404);
+    assertSalesBookOrderAccess(req.user!.roleName, req.user!.id, existing);
 
     const isConfirm = status === 'CONFIRMED' && existing.status === 'PENDING';
     if (!isConfirm) {
@@ -577,7 +619,10 @@ router.patch(
         `/sales?orderId=${order.order.id}`
       );
     } else if (status === 'CANCELLED') {
-      const notifyUserId = order.order.salesPersonId || existing.createdById;
+      const notifyUserId = await resolveSalesOrderNotifyUserId({
+        salesPersonId: order.order.salesPersonId,
+        createdById: existing.createdById,
+      });
       if (notifyUserId && notifyUserId !== req.user!.id) {
         await NotificationService.notifyUser(
           notifyUserId,
