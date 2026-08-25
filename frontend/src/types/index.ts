@@ -600,6 +600,8 @@ export interface SalesStats {
   successfulMonthSales: number;
   monthlyOrderValue: number;
   allTimeOrders: number;
+  /** Sum of all sales order totals (all time). */
+  allTimeSales: number;
   openOrders: number;
   pipelineValue: number;
   pendingQuotations: number;

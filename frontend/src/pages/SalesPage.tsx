@@ -332,7 +332,7 @@ export function SalesPage() {
   const monthSalesTitle = `${statPrefix}Successful this month`;
   const monthOrdersTitle = `${statPrefix}Orders this month`;
   const successfulOrdersTitle = `${statPrefix}Successful orders`;
-  const allTimeTitle = `${statPrefix}All-time orders`;
+  const allTimeTitle = `${statPrefix}All-time sales`;
 
   const openOrderDetail = (order: SalesOrder) => {
     setStatusFeedback(null);
@@ -587,7 +587,7 @@ export function SalesPage() {
           />
           <StatCard
             title={allTimeTitle}
-            value={stats.allTimeOrders ?? 0}
+            value={formatCurrency(stats.allTimeSales ?? 0)}
             icon={<Layers className="h-5 w-5 text-white" />}
             color="from-violet-500 to-violet-700"
             onClick={() => applyOrderFilters({ date: '', status: '' })}
