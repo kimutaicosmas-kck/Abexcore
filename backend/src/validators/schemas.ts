@@ -822,9 +822,10 @@ export const salesListQuerySchema = paginationSchema.extend({
     (v) => (v === '' || v === undefined ? undefined : v),
     z.string().optional()
   ),
+  /** UUID of sales officer, or "unassigned" for orders with no sales person. */
   salesPersonId: z.preprocess(
     (v) => (v === '' || v === undefined ? undefined : v),
-    z.string().uuid().optional()
+    z.union([z.literal('unassigned'), z.string().uuid()]).optional()
   ),
   /** Local calendar day `YYYY-MM-DD` — filter by requiredDate (fallback orderDate). */
   date: z.preprocess(

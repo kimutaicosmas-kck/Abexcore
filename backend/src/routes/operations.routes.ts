@@ -114,6 +114,8 @@ router.get(
 
     if (isSalesBookOwner(req.user!.roleName)) {
       Object.assign(where, salesPersonOrderFilter(req.user!.id));
+    } else if (salesPersonId === 'unassigned') {
+      where.salesPersonId = null;
     } else if (salesPersonId) {
       Object.assign(where, salesPersonOrderFilter(salesPersonId));
     }

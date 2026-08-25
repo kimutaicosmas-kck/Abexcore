@@ -133,6 +133,7 @@ export function SalesPage() {
   const [orderSearch, setOrderSearch] = useState('');
   const [quoteSearch, setQuoteSearch] = useState('');
   const [orderStatus, setOrderStatus] = useState('');
+  const [orderSalesPersonId, setOrderSalesPersonId] = useState('');
   const [quoteStatus, setQuoteStatus] = useState('');
   const [orderDate, setOrderDate] = useState(() => todayDateInput());
   const [orderModalOpen, setOrderModalOpen] = useState(false);
@@ -221,7 +222,7 @@ export function SalesPage() {
   });
 
   const { data: orders, isLoading: ordersLoading } = useQuery({
-    queryKey: ['sales-orders', orderPage, orderSearch, orderStatus, orderDate],
+    queryKey: ['sales-orders', orderPage, orderSearch, orderStatus, orderDate, orderSalesPersonId],
     queryFn: () =>
       operationsApi
         .salesOrders({
@@ -230,10 +231,26 @@ export function SalesPage() {
           search: orderSearch || undefined,
           status: orderStatus || undefined,
           date: orderDate || undefined,
+          salesPersonId: orderSalesPersonId || undefined,
         })
         .then((r) => r.data),
     enabled: canReadSales && activeTab === 0,
   });
+
+  const { data: salesOfficers = [] } = useQuery({
+    queryKey: ['sales-officers'],
+    queryFn: () =>
+      operationsApi.salesOfficers().then(
+        (r) => r.data.data as { id: string; name: string }[]
+      ),
+    enabled: canReadSales && !myBook,
+  });
+
+  const salesPersonFilterOptions = [
+    { value: '', label: 'All sales persons' },
+    { value: 'unassigned', label: 'No sales person' },
+    ...salesOfficers.map((o) => ({ value: o.id, label: o.name })),
+  ];
 
   const { data: quotations, isLoading: quotesLoading } = useQuery({
     queryKey: ['quotations', quotePage, quoteSearch, quoteStatus],
@@ -396,9 +413,11 @@ export function SalesPage() {
       render: (_: unknown, row: Record<string, unknown>) => {
         const person =
           (row.salesPerson as { firstName?: string; lastName?: string } | null | undefined) ||
-          (row.createdBy as { firstName?: string; lastName?: string } | null | undefined);
-        if (!person) return <span className="text-slate-400">—</span>;
-        return `${person.firstName || ''} ${person.lastName || ''}`.trim() || '—';
+          null;
+        if (person?.firstName || person?.lastName) {
+          return `${person.firstName || ''} ${person.lastName || ''}`.trim();
+        }
+        return <span className="text-slate-400">Unassigned</span>;
       },
     },
     {
@@ -665,6 +684,19 @@ export function SalesPage() {
                 onChange={(e) => { setOrderStatus(e.target.value); setOrderPage(1); }}
               />
             </FilterField>
+            {!myBook && (
+              <FilterField>
+                <Select
+                  options={salesPersonFilterOptions}
+                  value={orderSalesPersonId}
+                  onChange={(e) => {
+                    setOrderSalesPersonId(e.target.value);
+                    setOrderPage(1);
+                  }}
+                  aria-label="Sales person"
+                />
+              </FilterField>
+            )}
             <FilterField>
               <Input
                 type="date"
