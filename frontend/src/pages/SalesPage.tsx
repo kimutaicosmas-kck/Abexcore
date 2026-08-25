@@ -5,7 +5,6 @@ import {
   Plus,
   ShoppingCart,
   FileText,
-  CalendarDays,
   Receipt,
   AlertTriangle,
   ChevronRight,
@@ -14,8 +13,9 @@ import {
   Pencil,
   XCircle,
   Truck,
-  Clock,
   CircleCheck,
+  DollarSign,
+  Layers,
 } from 'lucide-react';
 import { operationsApi } from '../services/api';
 import { downloadFile } from '../utils/download';
@@ -212,8 +212,11 @@ export function SalesPage() {
   const activeOrder = orderDetail ?? selectedOrder;
 
   const { data: stats } = useQuery({
-    queryKey: ['sales-stats'],
-    queryFn: () => operationsApi.stats().then((r) => r.data.data as SalesStats),
+    queryKey: ['sales-stats', orderDate || 'live'],
+    queryFn: () =>
+      operationsApi
+        .stats(orderDate ? { date: orderDate } : undefined)
+        .then((r) => r.data.data as SalesStats),
     enabled: canReadSales,
   });
 
@@ -321,6 +324,15 @@ export function SalesPage() {
 
   const todayStr = todayDateInput();
   const statPrefix = myBook ? 'My ' : '';
+  const focusDate = orderDate || stats?.focusDate || todayStr;
+  const isFocusToday = focusDate === todayStr;
+  const daySalesTitle = isFocusToday
+    ? `${statPrefix}Today's sales`
+    : `${statPrefix}Sales · ${formatDate(focusDate)}`;
+  const monthSalesTitle = `${statPrefix}Successful this month`;
+  const monthOrdersTitle = `${statPrefix}Orders this month`;
+  const successfulOrdersTitle = `${statPrefix}Successful orders`;
+  const allTimeTitle = `${statPrefix}All-time orders`;
 
   const openOrderDetail = (order: SalesOrder) => {
     setStatusFeedback(null);
@@ -545,21 +557,21 @@ export function SalesPage() {
       {stats && (
         <StatGrid>
           <StatCard
-            title={`${statPrefix}Today's orders`}
-            value={stats.todayOrders}
-            icon={<CalendarDays className="h-5 w-5 text-white" />}
-            color="from-teal-500 to-teal-700"
-            onClick={() => applyOrderFilters({ date: todayStr, status: '' })}
+            title={daySalesTitle}
+            value={formatCurrency(stats.todaySales)}
+            icon={<DollarSign className="h-5 w-5 text-white" />}
+            color="from-emerald-500 to-emerald-700"
+            onClick={() => applyOrderFilters({ date: focusDate, status: '' })}
           />
           <StatCard
-            title={`${statPrefix}Pending`}
-            value={stats.pendingOrders}
-            icon={<Clock className="h-5 w-5 text-white" />}
-            color="from-amber-500 to-amber-700"
-            onClick={() => applyOrderFilters({ date: '', status: 'PENDING' })}
+            title={monthSalesTitle}
+            value={formatCurrency(stats.successfulMonthSales ?? 0)}
+            icon={<Receipt className="h-5 w-5 text-white" />}
+            color="from-sky-500 to-sky-700"
+            onClick={() => applyOrderFilters({ date: '', status: 'COMPLETED' })}
           />
           <StatCard
-            title={`${statPrefix}Orders this month`}
+            title={monthOrdersTitle}
             value={stats.ordersThisMonth}
             icon={<ShoppingCart className="h-5 w-5 text-white" />}
             color="from-indigo-500 to-indigo-700"
@@ -567,17 +579,17 @@ export function SalesPage() {
             className="hidden sm:flex"
           />
           <StatCard
-            title={`${statPrefix}Successful orders`}
+            title={successfulOrdersTitle}
             value={stats.successfulOrders}
             icon={<CircleCheck className="h-5 w-5 text-white" />}
-            color="from-emerald-500 to-emerald-700"
+            color="from-teal-500 to-teal-700"
             onClick={() => applyOrderFilters({ date: '', status: 'COMPLETED' })}
           />
           <StatCard
-            title={`${statPrefix}Monthly orders`}
-            value={formatCurrency(stats.monthlyOrderValue)}
-            icon={<Receipt className="h-5 w-5 text-white" />}
-            color="from-fuchsia-500 to-fuchsia-700"
+            title={allTimeTitle}
+            value={stats.allTimeOrders ?? 0}
+            icon={<Layers className="h-5 w-5 text-white" />}
+            color="from-violet-500 to-violet-700"
             onClick={() => applyOrderFilters({ date: '', status: '' })}
           />
         </StatGrid>

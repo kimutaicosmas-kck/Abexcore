@@ -75,7 +75,11 @@ router.get(
   authorize('sales:read'),
   asyncHandler(async (req: AuthRequest, res: Response) => {
     const scopedId = isSalesBookOwner(req.user!.roleName) ? req.user!.id : undefined;
-    const data = await SalesService.getStats(scopedId);
+    const date =
+      typeof req.query.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(req.query.date)
+        ? req.query.date
+        : undefined;
+    const data = await SalesService.getStats(scopedId, { date });
     res.json({ success: true, data });
   })
 );

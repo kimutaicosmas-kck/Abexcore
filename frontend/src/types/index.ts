@@ -596,13 +596,18 @@ export interface SalesStats {
   pendingOrders: number;
   ordersThisMonth: number;
   successfulOrders: number;
+  /** Sum of COMPLETED/DELIVERED order totals in the focus month. */
+  successfulMonthSales: number;
   monthlyOrderValue: number;
+  allTimeOrders: number;
   openOrders: number;
   pipelineValue: number;
   pendingQuotations: number;
   quotationValue: number;
   monthlyRevenue: number;
   todaySales: number;
+  /** YYYY-MM-DD day used for day/month KPI windows. */
+  focusDate?: string;
 }
 
 export interface SalesQuotation {

@@ -328,7 +328,7 @@ export const searchApi = {
 };
 
 export const operationsApi = {
-  stats: () => api.get('/operations/stats'),
+  stats: (params?: object) => api.get('/operations/stats', { params }),
   productionStats: () => api.get('/operations/production-stats'),
   salesOfficers: () => api.get('/operations/sales-officers'),
   salesOrders: (params?: object) => api.get('/operations/orders', { params }),
