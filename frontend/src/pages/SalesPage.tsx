@@ -329,7 +329,7 @@ export function SalesPage() {
   const daySalesTitle = isFocusToday
     ? `${statPrefix}Today's sales`
     : `${statPrefix}Sales · ${formatDate(focusDate)}`;
-  const monthSalesTitle = `${statPrefix}Successful this month`;
+  const monthSalesTitle = `${statPrefix}This month sales`;
   const monthOrdersTitle = `${statPrefix}Orders this month`;
   const successfulOrdersTitle = `${statPrefix}Successful orders`;
   const allTimeTitle = `${statPrefix}All-time sales`;

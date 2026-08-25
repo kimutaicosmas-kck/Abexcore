@@ -2,7 +2,6 @@ import prisma from '../config/database';
 import { DeliveryStatus } from '@prisma/client';
 import { endOfDay, startOfDay } from '../utils/date';
 import { mergeTenantWhere, requireTenantId } from '../utils/tenant';
-import { getMonthlySalesRevenue } from '../utils/finance-metrics';
 import { salesPersonOrderFilter } from './my-sales.service';
 import { Prisma } from '@prisma/client';
 
@@ -66,6 +65,7 @@ export class SalesService {
   ) {
     const { salesOrderInDateRange } = await import('../utils/salesDate');
     const { parseLocalDateInput, toLocalDateKey } = await import('../utils/date');
+    const { sumInvoicedSales } = await import('../utils/finance-metrics');
     const personFilter = salesPersonId ? salesPersonOrderFilter(salesPersonId) : {};
     const openWhere: Prisma.SalesOrderWhereInput = {
       status: { notIn: ['COMPLETED', 'CANCELLED'] },
@@ -98,56 +98,42 @@ export class SalesService {
       AND: [salesOrderInDateRange({ gte: monthStart, lte: monthEnd })],
     };
     const allTimeWhere: Prisma.SalesOrderWhereInput = { ...personFilter };
+    const invoiceScope = { salesPersonId };
 
     const [
       todayOrders,
-      todayAgg,
       pendingOrders,
       ordersThisMonth,
       successfulOrders,
-      successfulMonthAgg,
       monthOrderAgg,
-      allTimeAgg,
+      allTimeOrderCount,
       openOrders,
       pipelineAgg,
       pendingQuotations,
       quoteAgg,
+      todaySales,
+      successfulMonthSales,
+      allTimeSales,
       monthlyRevenue,
     ] = await Promise.all([
       prisma.salesOrder.count({ where: dayWhere }),
-      prisma.salesOrder.aggregate({ where: dayWhere, _sum: { totalAmount: true } }),
       prisma.salesOrder.count({ where: pendingWhere }),
       prisma.salesOrder.count({ where: monthWhere }),
       prisma.salesOrder.count({ where: successfulMonthWhere }),
-      prisma.salesOrder.aggregate({
-        where: successfulMonthWhere,
-        _sum: { totalAmount: true },
-      }),
       prisma.salesOrder.aggregate({ where: monthWhere, _sum: { totalAmount: true } }),
-      prisma.salesOrder.aggregate({
-        where: allTimeWhere,
-        _sum: { totalAmount: true },
-        _count: { _all: true },
-      }),
+      prisma.salesOrder.count({ where: allTimeWhere }),
       prisma.salesOrder.count({ where: openWhere }),
       prisma.salesOrder.aggregate({ where: openWhere, _sum: { totalAmount: true } }),
       salesPersonId ? Promise.resolve(0) : prisma.salesQuotation.count({ where: quoteWhere }),
       salesPersonId
         ? Promise.resolve({ _sum: { totalAmount: null } })
         : prisma.salesQuotation.aggregate({ where: quoteWhere, _sum: { totalAmount: true } }),
+      sumInvoicedSales({ from: dayStart, to: dayEnd, ...invoiceScope }),
+      sumInvoicedSales({ from: monthStart, to: monthEnd, ...invoiceScope }),
+      sumInvoicedSales({ ...invoiceScope }),
       salesPersonId
-        ? prisma.invoice
-            .aggregate({
-              where: {
-                type: 'SALES',
-                status: { not: 'REFUNDED' },
-                invoiceDate: { gte: monthStart, lte: monthEnd },
-                salesOrder: salesPersonOrderFilter(salesPersonId),
-              },
-              _sum: { totalAmount: true },
-            })
-            .then((r) => Number(r._sum.totalAmount || 0))
-        : getMonthlySalesRevenue(monthStart),
+        ? sumInvoicedSales({ from: monthStart, to: monthEnd, salesPersonId })
+        : sumInvoicedSales({ from: monthStart, to: monthEnd }),
     ]);
 
     return {
@@ -155,16 +141,16 @@ export class SalesService {
       pendingOrders,
       ordersThisMonth,
       successfulOrders,
-      successfulMonthSales: Number(successfulMonthAgg._sum?.totalAmount || 0),
+      successfulMonthSales,
       monthlyOrderValue: Number(monthOrderAgg._sum?.totalAmount || 0),
-      allTimeOrders: allTimeAgg._count._all,
-      allTimeSales: Number(allTimeAgg._sum?.totalAmount || 0),
+      allTimeOrders: allTimeOrderCount,
+      allTimeSales,
       openOrders,
       pipelineValue: Number(pipelineAgg._sum?.totalAmount || 0),
       pendingQuotations,
       quotationValue: Number(quoteAgg._sum?.totalAmount || 0),
       monthlyRevenue,
-      todaySales: Number(todayAgg._sum?.totalAmount || 0),
+      todaySales,
       focusDate: toLocalDateKey(now),
     };
   }

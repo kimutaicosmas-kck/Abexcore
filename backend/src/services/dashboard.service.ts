@@ -1,6 +1,6 @@
 import prisma from '../config/database';
 import { startOfDay, startOfMonth, endOfDay, subDays, toLocalDateKey } from '../utils/date';
-import { getNetAccountsReceivable } from '../utils/finance-metrics';
+import { getNetAccountsReceivable, sumInvoicedSales } from '../utils/finance-metrics';
 import { InvoiceMaintenanceService } from './invoice-maintenance.service';
 import { mergeTenantWarehouseWhere, requireTenantId } from '../utils/tenant';
 import { isLowStock, sumStockQuantities, toStockQty } from '../utils/stock';
@@ -14,17 +14,9 @@ export class DashboardService {
     const monthStart = startOfMonth(new Date());
     const monthEnd = endOfDay(new Date());
 
-    const invoicedSalesWhere = (from: Date, to: Date) => ({
-      type: 'SALES' as const,
-      invoiceDate: { gte: from, lte: to },
-      status: { not: 'REFUNDED' as const },
-      // Drop invoices tied to cancelled orders; keep stand-alone invoices.
-      OR: [{ salesOrderId: null }, { salesOrder: { status: { not: 'CANCELLED' as const } } }],
-    });
-
     const [
-      salesToday,
-      salesMonth,
+      salesTodayAmount,
+      salesMonthAmount,
       purchaseOrders,
       productionOrders,
       awaitingProduction,
@@ -45,14 +37,8 @@ export class DashboardService {
       pipelineAgg,
       netAccountsReceivable,
     ] = await Promise.all([
-      prisma.invoice.aggregate({
-        where: invoicedSalesWhere(today, endOfDay(new Date())),
-        _sum: { totalAmount: true },
-      }),
-      prisma.invoice.aggregate({
-        where: invoicedSalesWhere(monthStart, monthEnd),
-        _sum: { totalAmount: true },
-      }),
+      sumInvoicedSales({ from: today, to: endOfDay(new Date()) }),
+      sumInvoicedSales({ from: monthStart, to: monthEnd }),
       prisma.purchaseOrder.count({ where: { status: { in: ['PENDING', 'CONFIRMED'] } } }),
       prisma.productionOrder.count({ where: { status: { in: ['PLANNED', 'SCHEDULED', 'IN_PROGRESS'] } } }),
       prisma.salesOrder.count({ where: { status: 'CONFIRMED' } }),
@@ -200,7 +186,7 @@ export class DashboardService {
       }),
     ]);
 
-    const revenue = Number(salesMonth._sum.totalAmount || 0);
+    const revenue = salesMonthAmount;
     const expenses =
       Number(monthPurchaseExpenses._sum.totalAmount || 0) +
       Number(monthOperatingExpenses._sum.totalAmount || 0);
@@ -216,7 +202,7 @@ export class DashboardService {
     ].filter((a) => a.count > 0);
 
     return {
-      salesToday: Number(salesToday._sum.totalAmount || 0),
+      salesToday: salesTodayAmount,
       salesThisMonth: revenue,
       purchaseOrders,
       productionOrders,

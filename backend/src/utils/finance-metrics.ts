@@ -1,4 +1,5 @@
 import prisma from '../config/database';
+import { Prisma } from '@prisma/client';
 import { endOfDay, startOfDay, toLocalDateKey } from './date';
 
 export function getMonthStart(date = new Date()): Date {
@@ -9,16 +10,62 @@ export function getMonthEnd(date = new Date()): Date {
   return endOfDay(new Date(date.getFullYear(), date.getMonth() + 1, 0));
 }
 
-export async function getMonthlySalesRevenue(from = getMonthStart()): Promise<number> {
+/**
+ * Source-of-truth sales: sales invoices that are not refunded and not tied to a cancelled order.
+ */
+export function buildInvoicedSalesWhere(opts?: {
+  from?: Date;
+  to?: Date;
+  salesPersonId?: string;
+}): Prisma.InvoiceWhereInput {
+  const where: Prisma.InvoiceWhereInput = {
+    type: 'SALES',
+    status: { not: 'REFUNDED' },
+  };
+
+  if (opts?.from || opts?.to) {
+    where.invoiceDate = {};
+    if (opts.from) where.invoiceDate.gte = opts.from;
+    if (opts.to) where.invoiceDate.lte = opts.to;
+  }
+
+  if (opts?.salesPersonId) {
+    const salesPersonId = opts.salesPersonId;
+    where.salesOrder = {
+      AND: [
+        {
+          OR: [
+            { salesPersonId },
+            { salesPersonId: null, createdById: salesPersonId },
+          ],
+        },
+        { status: { not: 'CANCELLED' } },
+      ],
+    };
+  } else {
+    where.OR = [
+      { salesOrderId: null },
+      { salesOrder: { status: { not: 'CANCELLED' } } },
+    ];
+  }
+
+  return where;
+}
+
+export async function sumInvoicedSales(opts?: {
+  from?: Date;
+  to?: Date;
+  salesPersonId?: string;
+}): Promise<number> {
   const agg = await prisma.invoice.aggregate({
-    where: {
-      type: 'SALES',
-      invoiceDate: { gte: from },
-      status: { not: 'REFUNDED' },
-    },
+    where: buildInvoicedSalesWhere(opts),
     _sum: { totalAmount: true },
   });
   return Number(agg._sum.totalAmount || 0);
+}
+
+export async function getMonthlySalesRevenue(from = getMonthStart()): Promise<number> {
+  return sumInvoicedSales({ from, to: getMonthEnd(from) });
 }
 
 export async function getNetAccountsReceivable(): Promise<number> {
