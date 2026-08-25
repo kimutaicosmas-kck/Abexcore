@@ -658,176 +658,13 @@ export function FinancePage() {
             value={`${(stats.collectionRate?.rate ?? 0).toFixed(stats.collectionRate?.rate != null && stats.collectionRate.rate % 1 ? 1 : 0)}%`}
             icon={<Percent className="h-5 w-5 text-white" />}
             color="from-sky-500 to-sky-700"
-            onClick={() => goToTab(1)}
+            onClick={() => {
+              document.getElementById('finance-collection-rate')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }}
           />
           <StatCard title="Overdue" value={stats.overdueInvoices} icon={<AlertCircle className="h-5 w-5 text-white" />} color="from-amber-500 to-amber-700" onClick={() => goToTab(0)} className="hidden sm:flex" />
           <StatCard title="Paid / Received" value={formatCurrency(stats.paymentsReceived ?? 0)} icon={<TrendingDown className="h-5 w-5 text-white" />} color="from-pink-500 to-pink-700" onClick={() => goToTab(1)} />
         </StatGrid>
-      )}
-
-      {(collection || overview) && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          <Card
-            title="Collection rate (due cohort)"
-            action={
-              collection ? (
-                <span className="text-xs font-medium text-slate-500">{collection.label}</span>
-              ) : undefined
-            }
-          >
-            {overviewLoading && !collection ? (
-              <p className="text-sm text-slate-500 py-8 text-center">Loading…</p>
-            ) : collection && collection.billed > 0 ? (
-              <div className="space-y-3">
-                <div className="flex items-end justify-between gap-3">
-                  <div>
-                    <p className="text-3xl font-semibold tabular-nums text-slate-900">
-                      {collection.rate % 1 ? collection.rate.toFixed(1) : collection.rate}%
-                    </p>
-                    <p className="text-xs text-slate-500 mt-1">
-                      Cleared of invoices due this month
-                    </p>
-                  </div>
-                  <div className="text-right text-xs text-slate-500 space-y-0.5">
-                    <p>
-                      On-time{' '}
-                      <span className="font-semibold text-emerald-700 tabular-nums">
-                        {collection.onTimeRate % 1
-                          ? collection.onTimeRate.toFixed(1)
-                          : collection.onTimeRate}
-                        %
-                      </span>
-                    </p>
-                    <p>{collection.invoiceCount} invoices</p>
-                  </div>
-                </div>
-                <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
-                  <div
-                    className="h-full rounded-full bg-sky-500"
-                    style={{ width: `${Math.min(100, collection.rate)}%` }}
-                  />
-                </div>
-                <div className="grid grid-cols-3 gap-2 text-xs">
-                  <div className="rounded-lg bg-slate-50 px-2.5 py-2">
-                    <p className="text-slate-500">Billed due</p>
-                    <p className="font-semibold tabular-nums text-slate-900">
-                      {formatCurrency(collection.billed)}
-                    </p>
-                  </div>
-                  <div className="rounded-lg bg-emerald-50 px-2.5 py-2">
-                    <p className="text-emerald-700/80">Collected</p>
-                    <p className="font-semibold tabular-nums text-emerald-800">
-                      {formatCurrency(collection.collected)}
-                    </p>
-                  </div>
-                  <div className="rounded-lg bg-amber-50 px-2.5 py-2">
-                    <p className="text-amber-700/80">Still open</p>
-                    <p className="font-semibold tabular-nums text-amber-800">
-                      {formatCurrency(collection.outstanding)}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <EmptyState title="No invoices due this month" />
-            )}
-          </Card>
-
-          <Card title="Collection trend" className="lg:col-span-2">
-            {overviewLoading && !collectionTrendChartData ? (
-              <p className="text-sm text-slate-500 py-16 text-center">Loading…</p>
-            ) : collectionTrendChartData ? (
-              <div className="h-52">
-                <Line
-                  data={collectionTrendChartData}
-                  options={{
-                    ...chartDefaults,
-                    scales: {
-                      y: {
-                        min: 0,
-                        max: 100,
-                        ticks: {
-                          callback: (v) => `${v}%`,
-                          color: '#64748b',
-                          font: { size: 11 },
-                        },
-                        grid: { color: 'rgba(148, 163, 184, 0.18)' },
-                      },
-                      x: {
-                        ticks: { color: '#64748b', font: { size: 11 } },
-                        grid: { display: false },
-                      },
-                    },
-                    plugins: {
-                      ...chartDefaults.plugins,
-                      tooltip: {
-                        callbacks: {
-                          label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y}%`,
-                        },
-                      },
-                    },
-                  }}
-                />
-              </div>
-            ) : (
-              <EmptyState title="Not enough history yet" />
-            )}
-          </Card>
-        </div>
-      )}
-
-      {overview && agingChartData && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          <Card title="AR aging" className="lg:col-span-2">
-            <div className="h-52">
-              <Bar
-                data={agingChartData}
-                options={{
-                  ...chartDefaults,
-                  plugins: {
-                    ...chartDefaults.plugins,
-                    legend: { display: false },
-                  },
-                  scales: {
-                    y: {
-                      ticks: {
-                        callback: (v) => formatCurrency(Number(v)),
-                        color: '#64748b',
-                        font: { size: 10 },
-                      },
-                      grid: { color: 'rgba(148, 163, 184, 0.18)' },
-                    },
-                    x: {
-                      ticks: { color: '#64748b', font: { size: 11 } },
-                      grid: { display: false },
-                    },
-                  },
-                }}
-              />
-            </div>
-          </Card>
-          <Card title="Top overdue">
-            {(overview.arAging.topOverdue?.length || 0) === 0 ? (
-              <EmptyState title="No overdue balances" />
-            ) : (
-              <ul className="divide-y divide-slate-100">
-                {overview.arAging.topOverdue.slice(0, 6).map((row) => (
-                  <li key={row.id} className="flex items-center justify-between gap-2 py-2 text-sm">
-                    <div className="min-w-0">
-                      <p className="font-medium text-slate-900 truncate">{row.invoiceNumber}</p>
-                      <p className="text-xs text-slate-500 truncate">
-                        {row.customerName} · {row.daysPastDue}d past due
-                      </p>
-                    </div>
-                    <span className="font-semibold tabular-nums text-amber-700 shrink-0">
-                      {formatCurrency(row.balance)}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Card>
-        </div>
       )}
 
       <PageHeader
@@ -1188,6 +1025,171 @@ export function FinancePage() {
             />
           )}
         </>
+      )}
+
+      {(collection || overview) && (
+        <div id="finance-collection-rate" className="grid grid-cols-1 lg:grid-cols-3 gap-4 scroll-mt-4">
+          <Card
+            title="Collection rate (due cohort)"
+            action={
+              collection ? (
+                <span className="text-xs font-medium text-slate-500">{collection.label}</span>
+              ) : undefined
+            }
+          >
+            {overviewLoading && !collection ? (
+              <p className="text-sm text-slate-500 py-8 text-center">Loading…</p>
+            ) : collection && collection.billed > 0 ? (
+              <div className="space-y-3">
+                <div className="flex items-end justify-between gap-3">
+                  <div>
+                    <p className="text-3xl font-semibold tabular-nums text-slate-900">
+                      {collection.rate % 1 ? collection.rate.toFixed(1) : collection.rate}%
+                    </p>
+                    <p className="text-xs text-slate-500 mt-1">
+                      Cleared of invoices due this month
+                    </p>
+                  </div>
+                  <div className="text-right text-xs text-slate-500 space-y-0.5">
+                    <p>
+                      On-time{' '}
+                      <span className="font-semibold text-emerald-700 tabular-nums">
+                        {collection.onTimeRate % 1
+                          ? collection.onTimeRate.toFixed(1)
+                          : collection.onTimeRate}
+                        %
+                      </span>
+                    </p>
+                    <p>{collection.invoiceCount} invoices</p>
+                  </div>
+                </div>
+                <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
+                  <div
+                    className="h-full rounded-full bg-sky-500"
+                    style={{ width: `${Math.min(100, collection.rate)}%` }}
+                  />
+                </div>
+                <div className="grid grid-cols-3 gap-2 text-xs">
+                  <div className="rounded-lg bg-slate-50 px-2.5 py-2">
+                    <p className="text-slate-500">Billed due</p>
+                    <p className="font-semibold tabular-nums text-slate-900">
+                      {formatCurrency(collection.billed)}
+                    </p>
+                  </div>
+                  <div className="rounded-lg bg-emerald-50 px-2.5 py-2">
+                    <p className="text-emerald-700/80">Collected</p>
+                    <p className="font-semibold tabular-nums text-emerald-800">
+                      {formatCurrency(collection.collected)}
+                    </p>
+                  </div>
+                  <div className="rounded-lg bg-amber-50 px-2.5 py-2">
+                    <p className="text-amber-700/80">Still open</p>
+                    <p className="font-semibold tabular-nums text-amber-800">
+                      {formatCurrency(collection.outstanding)}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <EmptyState title="No invoices due this month" />
+            )}
+          </Card>
+
+          <Card title="Collection trend" className="lg:col-span-2">
+            {overviewLoading && !collectionTrendChartData ? (
+              <p className="text-sm text-slate-500 py-16 text-center">Loading…</p>
+            ) : collectionTrendChartData ? (
+              <div className="h-52">
+                <Line
+                  data={collectionTrendChartData}
+                  options={{
+                    ...chartDefaults,
+                    scales: {
+                      y: {
+                        min: 0,
+                        max: 100,
+                        ticks: {
+                          callback: (v) => `${v}%`,
+                          color: '#64748b',
+                          font: { size: 11 },
+                        },
+                        grid: { color: 'rgba(148, 163, 184, 0.18)' },
+                      },
+                      x: {
+                        ticks: { color: '#64748b', font: { size: 11 } },
+                        grid: { display: false },
+                      },
+                    },
+                    plugins: {
+                      ...chartDefaults.plugins,
+                      tooltip: {
+                        callbacks: {
+                          label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y}%`,
+                        },
+                      },
+                    },
+                  }}
+                />
+              </div>
+            ) : (
+              <EmptyState title="Not enough history yet" />
+            )}
+          </Card>
+        </div>
+      )}
+
+      {overview && agingChartData && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <Card title="AR aging" className="lg:col-span-2">
+            <div className="h-52">
+              <Bar
+                data={agingChartData}
+                options={{
+                  ...chartDefaults,
+                  plugins: {
+                    ...chartDefaults.plugins,
+                    legend: { display: false },
+                  },
+                  scales: {
+                    y: {
+                      ticks: {
+                        callback: (v) => formatCurrency(Number(v)),
+                        color: '#64748b',
+                        font: { size: 10 },
+                      },
+                      grid: { color: 'rgba(148, 163, 184, 0.18)' },
+                    },
+                    x: {
+                      ticks: { color: '#64748b', font: { size: 11 } },
+                      grid: { display: false },
+                    },
+                  },
+                }}
+              />
+            </div>
+          </Card>
+          <Card title="Top overdue">
+            {(overview.arAging.topOverdue?.length || 0) === 0 ? (
+              <EmptyState title="No overdue balances" />
+            ) : (
+              <ul className="divide-y divide-slate-100">
+                {overview.arAging.topOverdue.slice(0, 6).map((row) => (
+                  <li key={row.id} className="flex items-center justify-between gap-2 py-2 text-sm">
+                    <div className="min-w-0">
+                      <p className="font-medium text-slate-900 truncate">{row.invoiceNumber}</p>
+                      <p className="text-xs text-slate-500 truncate">
+                        {row.customerName} · {row.daysPastDue}d past due
+                      </p>
+                    </div>
+                    <span className="font-semibold tabular-nums text-amber-700 shrink-0">
+                      {formatCurrency(row.balance)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Card>
+        </div>
       )}
 
       {/* Modals */}
