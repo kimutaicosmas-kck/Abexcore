@@ -64,8 +64,14 @@ export function ProductionPage() {
   const canCreate = hasPermission('production:create');
 
   const { data: stats } = useQuery({
-    queryKey: ['production-stats'],
-    queryFn: () => operationsApi.productionStats().then((r) => r.data.data as ProductionStats),
+    queryKey: ['production-stats', search, statusFilter],
+    queryFn: () =>
+      operationsApi
+        .productionStats({
+          search: search || undefined,
+          status: statusFilter || undefined,
+        })
+        .then((r) => r.data.data as ProductionStats),
   });
 
   const { data, isLoading, isError, error, refetch } = useQuery({

@@ -213,10 +213,21 @@ export function SalesPage() {
   const activeOrder = orderDetail ?? selectedOrder;
 
   const { data: stats } = useQuery({
-    queryKey: ['sales-stats', orderDate || 'live'],
+    queryKey: [
+      'sales-stats',
+      orderDate || 'live',
+      orderSalesPersonId || 'all',
+      orderStatus || 'all',
+      orderSearch || '',
+    ],
     queryFn: () =>
       operationsApi
-        .stats(orderDate ? { date: orderDate } : undefined)
+        .stats({
+          date: orderDate || undefined,
+          salesPersonId: orderSalesPersonId || undefined,
+          status: orderStatus || undefined,
+          search: orderSearch || undefined,
+        })
         .then((r) => r.data.data as SalesStats),
     enabled: canReadSales,
   });

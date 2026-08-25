@@ -834,6 +834,23 @@ export const salesListQuerySchema = paginationSchema.extend({
   ),
 });
 
+/** KPI cards — same dimension filters as the sales order list (no pagination). */
+export const salesStatsQuerySchema = z.object({
+  search: z.preprocess((v) => (v === '' ? undefined : v), z.string().optional()),
+  status: z.preprocess(
+    (v) => (v === '' || v === undefined ? undefined : v),
+    z.string().optional()
+  ),
+  salesPersonId: z.preprocess(
+    (v) => (v === '' || v === undefined ? undefined : v),
+    z.union([z.literal('unassigned'), z.string().uuid()]).optional()
+  ),
+  date: z.preprocess(
+    (v) => (v === '' || v === undefined ? undefined : v),
+    z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional()
+  ),
+});
+
 export const productionListQuerySchema = paginationSchema.extend({
   status: z.preprocess(
     (v) => (v === '' || v === undefined ? undefined : v),

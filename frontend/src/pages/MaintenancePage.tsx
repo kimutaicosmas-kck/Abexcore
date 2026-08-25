@@ -55,8 +55,14 @@ export function MaintenancePage() {
   const canCreate = hasPermission('maintenance:create');
   const canUpdate = hasPermission('maintenance:update');
   const { data: stats } = useQuery({
-    queryKey: ['maintenance-stats'],
-    queryFn: () => maintenanceApi.stats().then((r) => r.data.data as MaintenanceStats),
+    queryKey: ['maintenance-stats', search, status],
+    queryFn: () =>
+      maintenanceApi
+        .stats({
+          search: search || undefined,
+          status: status || undefined,
+        })
+        .then((r) => r.data.data as MaintenanceStats),
   });
 
   const { data: machines, isLoading: machLoading, isError: machError, error: machErr, refetch: refetchMachines } = useQuery({

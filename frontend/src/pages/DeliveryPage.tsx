@@ -219,8 +219,15 @@ export function DeliveryPage() {
   };
 
   const { data: stats } = useQuery({
-    queryKey: ['delivery-stats'],
-    queryFn: () => deliveryApi.stats().then((r) => r.data.data as DeliveryStats),
+    queryKey: ['delivery-stats', search, status, deliveryDate],
+    queryFn: () =>
+      deliveryApi
+        .stats({
+          search: search || undefined,
+          status: status || undefined,
+          date: deliveryDate || undefined,
+        })
+        .then((r) => r.data.data as DeliveryStats),
   });
 
   const { data: deliveries, isLoading, isError: deliveriesError, error: deliveriesErr, refetch: refetchDeliveries } = useQuery({

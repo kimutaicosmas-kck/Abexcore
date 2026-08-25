@@ -64,8 +64,15 @@ export function QualityPage() {
   const canCreate = hasPermission('quality:create');
   const canUpdate = hasPermission('quality:update');
   const { data: stats } = useQuery({
-    queryKey: ['quality-stats'],
-    queryFn: () => qualityApi.stats().then((r) => r.data.data as QualityStats),
+    queryKey: ['quality-stats', search, status, type],
+    queryFn: () =>
+      qualityApi
+        .stats({
+          search: search || undefined,
+          status: status || undefined,
+          type: type || undefined,
+        })
+        .then((r) => r.data.data as QualityStats),
   });
 
   const { data, isLoading, isError, refetch } = useQuery({

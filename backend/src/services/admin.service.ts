@@ -1,4 +1,5 @@
 import prisma from '../config/database';
+import { Prisma } from '@prisma/client';
 import {
   getMonthlySalesRevenue,
   getNetAccountsReceivable,
@@ -12,11 +13,45 @@ import {
 import { InvoiceMaintenanceService } from './invoice-maintenance.service';
 
 export class FinanceService {
-  static async getStats() {
+  static async getStats(opts?: { type?: string; status?: string; search?: string }) {
     await InvoiceMaintenanceService.markOverdueInvoices();
 
     const monthStart = getMonthStart();
     const monthEnd = getMonthEnd();
+
+    const invScope: Prisma.InvoiceWhereInput = {};
+    if (opts?.type) {
+      invScope.type = opts.type as Prisma.EnumInvoiceTypeFilter['equals'];
+    }
+    if (opts?.status) {
+      invScope.status = opts.status as Prisma.EnumPaymentStatusFilter['equals'];
+    }
+    if (opts?.search?.trim()) {
+      const q = opts.search.trim();
+      invScope.OR = [
+        { invoiceNumber: { contains: q } },
+        { customer: { name: { contains: q } } },
+        { supplier: { name: { contains: q } } },
+      ];
+    }
+    const hasScope = Object.keys(invScope).length > 0;
+
+    const salesWhere: Prisma.InvoiceWhereInput = {
+      ...invScope,
+      ...(opts?.type ? {} : { type: 'SALES' }),
+    };
+    const purchaseWhere: Prisma.InvoiceWhereInput = {
+      ...invScope,
+      ...(opts?.type ? {} : { type: 'PURCHASE' }),
+    };
+
+    const includeSales = !opts?.type || opts.type === 'SALES';
+    const includePurchases = !opts?.type || opts.type === 'PURCHASE';
+    const includeOverdue = !opts?.status || opts.status === 'OVERDUE';
+
+    const openStatuses = (
+      opts?.status ? [opts.status] : ['UNPAID', 'PARTIAL', 'OVERDUE']
+    ) as Prisma.EnumPaymentStatusFilter['in'];
 
     const [
       salesAgg,
@@ -29,19 +64,70 @@ export class FinanceService {
       paymentsReceived,
       collectionRate,
     ] = await Promise.all([
-      prisma.invoice.aggregate({ where: { type: 'SALES' }, _sum: { totalAmount: true } }),
-      prisma.invoice.aggregate({ where: { type: 'PURCHASE' }, _sum: { totalAmount: true } }),
-      prisma.invoice.count({
-        where: {
-          type: 'SALES',
-          status: 'OVERDUE',
-        },
-      }),
-      getMonthlySalesRevenue(monthStart),
+      includeSales
+        ? prisma.invoice.aggregate({ where: salesWhere, _sum: { totalAmount: true } })
+        : Promise.resolve({ _sum: { totalAmount: null } }),
+      includePurchases
+        ? prisma.invoice.aggregate({ where: purchaseWhere, _sum: { totalAmount: true } })
+        : Promise.resolve({ _sum: { totalAmount: null } }),
+      includeSales && includeOverdue
+        ? prisma.invoice.count({ where: { ...salesWhere, status: 'OVERDUE' } })
+        : Promise.resolve(0),
+      hasScope
+        ? includeSales
+          ? prisma.invoice
+              .aggregate({
+                where: {
+                  ...salesWhere,
+                  invoiceDate: { gte: monthStart, lte: monthEnd },
+                  status: { not: 'REFUNDED' },
+                },
+                _sum: { totalAmount: true },
+              })
+              .then((a) => Number(a._sum.totalAmount || 0))
+          : Promise.resolve(0)
+        : getMonthlySalesRevenue(monthStart),
       prisma.journalEntry.count(),
-      getNetAccountsReceivable(),
-      getNetAccountsPayable(),
-      getInvoicePaymentsReceived(),
+      hasScope
+        ? includeSales
+          ? prisma.invoice
+              .findMany({
+                where: { ...salesWhere, status: { in: openStatuses } },
+                select: { totalAmount: true, paidAmount: true },
+              })
+              .then((rows) =>
+                rows.reduce(
+                  (sum, inv) => sum + Math.max(0, Number(inv.totalAmount) - Number(inv.paidAmount)),
+                  0
+                )
+              )
+          : Promise.resolve(0)
+        : getNetAccountsReceivable(),
+      hasScope
+        ? includePurchases
+          ? prisma.invoice
+              .findMany({
+                where: { ...purchaseWhere, status: { in: openStatuses } },
+                select: { totalAmount: true, paidAmount: true },
+              })
+              .then((rows) =>
+                rows.reduce(
+                  (sum, inv) => sum + Math.max(0, Number(inv.totalAmount) - Number(inv.paidAmount)),
+                  0
+                )
+              )
+          : Promise.resolve(0)
+        : getNetAccountsPayable(),
+      hasScope
+        ? includeSales
+          ? prisma.invoice
+              .aggregate({
+                where: { ...salesWhere, status: { not: 'REFUNDED' } },
+                _sum: { paidAmount: true },
+              })
+              .then((a) => Number(a._sum.paidAmount || 0))
+          : Promise.resolve(0)
+        : getInvoicePaymentsReceived(),
       getDueCohortCollectionRate(monthStart, monthEnd),
     ]);
 
@@ -239,26 +325,58 @@ export class HrService {
 }
 
 export class MaintenanceService {
-  static async getStats() {
+  static async getStats(opts?: { search?: string; status?: string }) {
+    const reqScope: Prisma.MaintenanceRequestWhereInput = {};
+    if (opts?.search?.trim()) {
+      const q = opts.search.trim();
+      reqScope.OR = [
+        { description: { contains: q } },
+        { type: { contains: q } },
+        { machine: { name: { contains: q } } },
+        { machine: { code: { contains: q } } },
+      ];
+    }
+    if (opts?.status) {
+      reqScope.status = opts.status as Prisma.EnumMaintenanceStatusFilter['equals'];
+    }
+
+    const statusOk = (bucket: string | string[]) => {
+      if (!opts?.status) return true;
+      return Array.isArray(bucket) ? bucket.includes(opts.status) : opts.status === bucket;
+    };
+
     const [totalMachines, operational, openRequests, completedMonth, overdueRequests] =
       await Promise.all([
         prisma.machine.count({ where: { isActive: true } }),
         prisma.machine.count({ where: { isActive: true, status: 'operational' } }),
-        prisma.maintenanceRequest.count({
-          where: { status: { in: ['SCHEDULED', 'IN_PROGRESS'] } },
-        }),
-        prisma.maintenanceRequest.count({
-          where: {
-            status: 'COMPLETED',
-            completedDate: { gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1) },
-          },
-        }),
-        prisma.maintenanceRequest.count({
-          where: {
-            status: { in: ['SCHEDULED', 'IN_PROGRESS'] },
-            scheduledDate: { lt: new Date() },
-          },
-        }),
+        statusOk(['SCHEDULED', 'IN_PROGRESS'])
+          ? prisma.maintenanceRequest.count({
+              where: {
+                ...reqScope,
+                status: opts?.status
+                  ? (opts.status as Prisma.EnumMaintenanceStatusFilter['equals'])
+                  : { in: ['SCHEDULED', 'IN_PROGRESS'] },
+              },
+            })
+          : Promise.resolve(0),
+        statusOk('COMPLETED')
+          ? prisma.maintenanceRequest.count({
+              where: {
+                ...reqScope,
+                status: 'COMPLETED',
+                completedDate: { gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1) },
+              },
+            })
+          : Promise.resolve(0),
+        statusOk(['SCHEDULED', 'IN_PROGRESS', 'OVERDUE'])
+          ? prisma.maintenanceRequest.count({
+              where: {
+                ...reqScope,
+                status: { in: ['SCHEDULED', 'IN_PROGRESS'] },
+                scheduledDate: { lt: new Date() },
+              },
+            })
+          : Promise.resolve(0),
       ]);
 
     return {

@@ -75,8 +75,15 @@ export function UsersPage() {
   const canDelete = hasPermission('users:delete');
 
   const { data: stats } = useQuery({
-    queryKey: ['user-stats'],
-    queryFn: () => usersApi.stats().then((r) => r.data.data as UserStats),
+    queryKey: ['user-stats', search, statusFilter, roleFilter],
+    queryFn: () =>
+      usersApi
+        .stats({
+          search: search || undefined,
+          status: statusFilter || undefined,
+          roleId: roleFilter || undefined,
+        })
+        .then((r) => r.data.data as UserStats),
   });
 
   const { data: rolesResponse } = useQuery({

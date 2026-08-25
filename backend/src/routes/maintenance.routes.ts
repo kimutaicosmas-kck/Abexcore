@@ -20,8 +20,10 @@ router.use(authenticate);
 router.get(
   '/stats',
   authorize('maintenance:read'),
-  asyncHandler(async (_req: AuthRequest, res: Response) => {
-    const data = await MaintenanceService.getStats();
+  validate(maintenanceListQuerySchema, 'query'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const { search, status } = getQuery<{ search?: string; status?: string }>(req.query);
+    const data = await MaintenanceService.getStats({ search, status });
     res.json({ success: true, data });
   })
 );

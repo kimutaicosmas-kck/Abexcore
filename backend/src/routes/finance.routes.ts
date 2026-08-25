@@ -228,8 +228,14 @@ router.get(
 router.get(
   '/stats',
   authorize('finance:read'),
-  asyncHandler(async (_req: AuthRequest, res: Response) => {
-    const data = await FinanceService.getStats();
+  validate(financeListQuerySchema, 'query'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const { search, type, status } = getQuery<{
+      search?: string;
+      type?: string;
+      status?: string;
+    }>(req.query);
+    const data = await FinanceService.getStats({ search, type, status });
     res.json({ success: true, data });
   })
 );

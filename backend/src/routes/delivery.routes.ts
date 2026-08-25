@@ -95,8 +95,14 @@ async function assertActiveDriver(driverId: string) {
 router.get(
   '/stats',
   authorize('delivery:read'),
-  asyncHandler(async (_req: AuthRequest, res: Response) => {
-    const data = await DeliveryService.getStats();
+  validate(deliveryListQuerySchema, 'query'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const { search, status, date } = getQuery<{
+      search?: string;
+      status?: string;
+      date?: string;
+    }>(req.query);
+    const data = await DeliveryService.getStats({ search, status, date });
     res.json({ success: true, data });
   })
 );

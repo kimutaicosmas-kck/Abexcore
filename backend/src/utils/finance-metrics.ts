@@ -17,6 +17,8 @@ export function buildInvoicedSalesWhere(opts?: {
   from?: Date;
   to?: Date;
   salesPersonId?: string;
+  /** Extra sales-order scope (status, house filter, search, etc.). */
+  salesOrderWhere?: Prisma.SalesOrderWhereInput;
 }): Prisma.InvoiceWhereInput {
   const where: Prisma.InvoiceWhereInput = {
     type: 'SALES',
@@ -29,19 +31,22 @@ export function buildInvoicedSalesWhere(opts?: {
     if (opts.to) where.invoiceDate.lte = opts.to;
   }
 
+  const orderClauses: Prisma.SalesOrderWhereInput[] = [{ status: { not: 'CANCELLED' } }];
   if (opts?.salesPersonId) {
     const salesPersonId = opts.salesPersonId;
-    where.salesOrder = {
-      AND: [
-        {
-          OR: [
-            { salesPersonId },
-            { salesPersonId: null, createdById: salesPersonId },
-          ],
-        },
-        { status: { not: 'CANCELLED' } },
+    orderClauses.push({
+      OR: [
+        { salesPersonId },
+        { salesPersonId: null, createdById: salesPersonId },
       ],
-    };
+    });
+  }
+  if (opts?.salesOrderWhere) {
+    orderClauses.push(opts.salesOrderWhere);
+  }
+
+  if (opts?.salesPersonId || opts?.salesOrderWhere) {
+    where.salesOrder = { AND: orderClauses };
   } else {
     where.OR = [
       { salesOrderId: null },
@@ -56,6 +61,7 @@ export async function sumInvoicedSales(opts?: {
   from?: Date;
   to?: Date;
   salesPersonId?: string;
+  salesOrderWhere?: Prisma.SalesOrderWhereInput;
 }): Promise<number> {
   const agg = await prisma.invoice.aggregate({
     where: buildInvoicedSalesWhere(opts),

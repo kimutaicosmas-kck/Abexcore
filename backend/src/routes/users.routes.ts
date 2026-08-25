@@ -33,22 +33,49 @@ function sanitizeUser<T extends { passwordHash?: string; twoFactorSecret?: strin
 router.get(
   '/stats',
   authorize('users:read'),
-  asyncHandler(async (_req: AuthRequest, res: Response) => {
-    const baseWhere = { deletedAt: null };
+  validate(userListQuerySchema, 'query'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const { search, status, roleId } = getQuery<{
+      search?: string;
+      status?: 'ACTIVE' | 'INACTIVE' | 'SUSPENDED';
+      roleId?: string;
+    }>(req.query);
+
+    const baseWhere: Prisma.UserWhereInput = { deletedAt: null };
+    if (roleId) baseWhere.roleId = roleId;
+    if (search?.trim()) {
+      const q = search.trim();
+      baseWhere.OR = [
+        { email: { contains: q } },
+        { firstName: { contains: q } },
+        { lastName: { contains: q } },
+      ];
+    }
+
+    const statusOk = (bucket: string) => !status || status === bucket;
+    const filteredWhere: Prisma.UserWhereInput = status
+      ? { ...baseWhere, status }
+      : baseWhere;
 
     const [total, active, inactive, suspended, roleCounts, recentLogins] = await Promise.all([
-      prisma.user.count({ where: baseWhere }),
-      prisma.user.count({ where: { ...baseWhere, status: 'ACTIVE' } }),
-      prisma.user.count({ where: { ...baseWhere, status: 'INACTIVE' } }),
-      prisma.user.count({ where: { ...baseWhere, status: 'SUSPENDED' } }),
+      prisma.user.count({ where: filteredWhere }),
+      statusOk('ACTIVE')
+        ? prisma.user.count({ where: { ...baseWhere, status: 'ACTIVE' } })
+        : Promise.resolve(0),
+      statusOk('INACTIVE')
+        ? prisma.user.count({ where: { ...baseWhere, status: 'INACTIVE' } })
+        : Promise.resolve(0),
+      statusOk('SUSPENDED')
+        ? prisma.user.count({ where: { ...baseWhere, status: 'SUSPENDED' } })
+        : Promise.resolve(0),
       prisma.user.groupBy({
         by: ['roleId'],
-        where: { ...baseWhere, status: 'ACTIVE' },
+        where: { ...filteredWhere, ...(status ? {} : { status: 'ACTIVE' }) },
         _count: { id: true },
       }),
       prisma.user.count({
         where: {
-          ...baseWhere,
+          ...filteredWhere,
           lastLoginAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
         },
       }),

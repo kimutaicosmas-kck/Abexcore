@@ -2,19 +2,40 @@ import prisma from '../config/database';
 import { DeliveryStatus } from '@prisma/client';
 import { endOfDay, startOfDay } from '../utils/date';
 import { mergeTenantWhere, requireTenantId } from '../utils/tenant';
-import { salesPersonOrderFilter } from './my-sales.service';
 import { Prisma } from '@prisma/client';
 
 export class QualityService {
-  static async getStats() {
+  static async getStats(opts?: { search?: string; status?: string; type?: string }) {
     const companyId = requireTenantId();
+    const base: Prisma.QualityInspectionWhereInput = { companyId };
+    if (opts?.type) base.type = opts.type;
+    if (opts?.search?.trim()) {
+      const q = opts.search.trim();
+      base.OR = [
+        { inspectionNo: { contains: q } },
+        { type: { contains: q } },
+        { result: { contains: q } },
+      ];
+    }
+
+    const statusOk = (bucket: string) => !opts?.status || opts.status === bucket;
 
     const [total, pending, passed, failed, conditional] = await Promise.all([
-      prisma.qualityInspection.count({ where: { companyId } }),
-      prisma.qualityInspection.count({ where: { companyId, status: 'PENDING' } }),
-      prisma.qualityInspection.count({ where: { companyId, status: 'PASSED' } }),
-      prisma.qualityInspection.count({ where: { companyId, status: 'FAILED' } }),
-      prisma.qualityInspection.count({ where: { companyId, status: 'CONDITIONAL' } }),
+      prisma.qualityInspection.count({
+        where: opts?.status ? { ...base, status: opts.status as Prisma.EnumQualityStatusFilter['equals'] } : base,
+      }),
+      statusOk('PENDING')
+        ? prisma.qualityInspection.count({ where: { ...base, status: 'PENDING' } })
+        : Promise.resolve(0),
+      statusOk('PASSED')
+        ? prisma.qualityInspection.count({ where: { ...base, status: 'PASSED' } })
+        : Promise.resolve(0),
+      statusOk('FAILED')
+        ? prisma.qualityInspection.count({ where: { ...base, status: 'FAILED' } })
+        : Promise.resolve(0),
+      statusOk('CONDITIONAL')
+        ? prisma.qualityInspection.count({ where: { ...base, status: 'CONDITIONAL' } })
+        : Promise.resolve(0),
     ]);
 
     const inspected = passed + failed + conditional;
@@ -60,18 +81,28 @@ export class QualityService {
 
 export class SalesService {
   static async getStats(
-    salesPersonId?: string,
-    opts?: { date?: string }
+    bookOwnerId?: string,
+    opts?: {
+      date?: string;
+      salesPersonId?: string;
+      status?: string;
+      search?: string;
+    }
   ) {
     const { salesOrderInDateRange } = await import('../utils/salesDate');
     const { parseLocalDateInput, toLocalDateKey } = await import('../utils/date');
     const { sumInvoicedSales } = await import('../utils/finance-metrics');
-    const personFilter = salesPersonId ? salesPersonOrderFilter(salesPersonId) : {};
-    const openWhere: Prisma.SalesOrderWhereInput = {
-      status: { notIn: ['COMPLETED', 'CANCELLED'] },
-      ...personFilter,
-    };
-    const quoteWhere = { status: { in: ['DRAFT', 'PENDING'] as ('DRAFT' | 'PENDING')[] } };
+    const { buildSalesOrdersWhere } = await import('../utils/sales-list-where');
+
+    const scope = await buildSalesOrdersWhere({
+      bookOwnerId,
+      salesPersonId: bookOwnerId ? undefined : opts?.salesPersonId,
+      status: opts?.status,
+      search: opts?.search,
+      includeDate: false,
+    });
+    const hasScope = Object.keys(scope).length > 0;
+    const invoiceOrderWhere = hasScope ? scope : undefined;
 
     const focusDay = opts?.date ? parseLocalDateInput(opts.date) : null;
     const now = focusDay || new Date();
@@ -80,25 +111,27 @@ export class SalesService {
     const dayEnd = endOfDay(now);
     const monthEnd = endOfDay(new Date(now.getFullYear(), now.getMonth() + 1, 0));
 
-    const dayWhere: Prisma.SalesOrderWhereInput = {
-      ...personFilter,
-      AND: [salesOrderInDateRange({ gte: dayStart, lte: dayEnd })],
-    };
-    const monthWhere: Prisma.SalesOrderWhereInput = {
-      ...personFilter,
-      AND: [salesOrderInDateRange({ gte: monthStart, lte: monthEnd })],
-    };
-    const pendingWhere: Prisma.SalesOrderWhereInput = {
-      ...personFilter,
-      status: 'PENDING',
-    };
-    const successfulMonthWhere: Prisma.SalesOrderWhereInput = {
-      ...personFilter,
-      status: { in: ['COMPLETED', 'DELIVERED'] },
-      AND: [salesOrderInDateRange({ gte: monthStart, lte: monthEnd })],
-    };
-    const allTimeWhere: Prisma.SalesOrderWhereInput = { ...personFilter };
-    const invoiceScope = { salesPersonId };
+    const withScope = (...extra: Prisma.SalesOrderWhereInput[]): Prisma.SalesOrderWhereInput =>
+      hasScope || extra.length > 0 ? { AND: [scope, ...extra] } : { AND: extra };
+
+    const dayWhere = withScope(salesOrderInDateRange({ gte: dayStart, lte: dayEnd }));
+    const monthWhere = withScope(salesOrderInDateRange({ gte: monthStart, lte: monthEnd }));
+    const pendingWhere = opts?.status
+      ? withScope()
+      : withScope({ status: 'PENDING' });
+    const successfulMonthWhere = opts?.status
+      ? withScope(salesOrderInDateRange({ gte: monthStart, lte: monthEnd }))
+      : withScope(
+          { status: { in: ['COMPLETED', 'DELIVERED'] } },
+          salesOrderInDateRange({ gte: monthStart, lte: monthEnd })
+        );
+    const allTimeWhere = withScope();
+    const openWhere = opts?.status
+      ? withScope()
+      : withScope({ status: { notIn: ['COMPLETED', 'CANCELLED'] } });
+
+    const quoteWhere = { status: { in: ['DRAFT', 'PENDING'] as ('DRAFT' | 'PENDING')[] } };
+    const skipQuotes = !!(bookOwnerId || opts?.salesPersonId || opts?.status || opts?.search);
 
     const [
       todayOrders,
@@ -124,16 +157,14 @@ export class SalesService {
       prisma.salesOrder.count({ where: allTimeWhere }),
       prisma.salesOrder.count({ where: openWhere }),
       prisma.salesOrder.aggregate({ where: openWhere, _sum: { totalAmount: true } }),
-      salesPersonId ? Promise.resolve(0) : prisma.salesQuotation.count({ where: quoteWhere }),
-      salesPersonId
+      skipQuotes ? Promise.resolve(0) : prisma.salesQuotation.count({ where: quoteWhere }),
+      skipQuotes
         ? Promise.resolve({ _sum: { totalAmount: null } })
         : prisma.salesQuotation.aggregate({ where: quoteWhere, _sum: { totalAmount: true } }),
-      sumInvoicedSales({ from: dayStart, to: dayEnd, ...invoiceScope }),
-      sumInvoicedSales({ from: monthStart, to: monthEnd, ...invoiceScope }),
-      sumInvoicedSales({ ...invoiceScope }),
-      salesPersonId
-        ? sumInvoicedSales({ from: monthStart, to: monthEnd, salesPersonId })
-        : sumInvoicedSales({ from: monthStart, to: monthEnd }),
+      sumInvoicedSales({ from: dayStart, to: dayEnd, salesOrderWhere: invoiceOrderWhere }),
+      sumInvoicedSales({ from: monthStart, to: monthEnd, salesOrderWhere: invoiceOrderWhere }),
+      sumInvoicedSales({ salesOrderWhere: invoiceOrderWhere }),
+      sumInvoicedSales({ from: monthStart, to: monthEnd, salesOrderWhere: invoiceOrderWhere }),
     ]);
 
     return {
@@ -157,30 +188,78 @@ export class SalesService {
 }
 
 export class DeliveryService {
-  static async getStats() {
+  static async getStats(opts?: { search?: string; date?: string; status?: string }) {
     const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
     const todayStart = new Date(new Date().setHours(0, 0, 0, 0));
+    const { dayRangeFromInput } = await import('../utils/date');
+
+    const scope: Prisma.DeliveryNoteWhereInput = {};
+    if (opts?.status) {
+      scope.status = opts.status as Prisma.EnumDeliveryStatusFilter['equals'];
+    }
+    if (opts?.date) {
+      const range = dayRangeFromInput(opts.date);
+      if (range) {
+        scope.AND = [
+          {
+            OR: [
+              { scheduledDate: range },
+              { AND: [{ scheduledDate: null }, { createdAt: range }] },
+              { deliveredAt: range },
+            ],
+          },
+        ];
+      }
+    }
+    if (opts?.search?.trim()) {
+      const q = opts.search.trim();
+      scope.OR = [
+        { deliveryNo: { contains: q } },
+        { salesOrder: { orderNumber: { contains: q } } },
+        { salesOrder: { customer: { name: { contains: q } } } },
+      ];
+    }
+
+    const statusOk = (bucket: string | string[]) => {
+      if (!opts?.status) return true;
+      return Array.isArray(bucket) ? bucket.includes(opts.status) : opts.status === bucket;
+    };
 
     const [pending, inTransit, deliveredToday, deliveredMonth, activeVehicles, motorcycles, trucks, lorries] =
       await Promise.all([
-        prisma.deliveryNote.count({
-          where: mergeTenantWhere({ status: { in: ['PENDING', 'ASSIGNED'] as DeliveryStatus[] } }),
-        }),
-        prisma.deliveryNote.count({
-          where: mergeTenantWhere({ status: 'IN_TRANSIT' as DeliveryStatus }),
-        }),
-        prisma.deliveryNote.count({
-          where: mergeTenantWhere({
-            status: 'DELIVERED' as DeliveryStatus,
-            deliveredAt: { gte: todayStart },
-          }),
-        }),
-        prisma.deliveryNote.count({
-          where: mergeTenantWhere({
-            status: 'DELIVERED' as DeliveryStatus,
-            deliveredAt: { gte: monthStart },
-          }),
-        }),
+        statusOk(['PENDING', 'ASSIGNED'])
+          ? prisma.deliveryNote.count({
+              where: mergeTenantWhere({
+                ...scope,
+                status: opts?.status
+                  ? (opts.status as Prisma.EnumDeliveryStatusFilter['equals'])
+                  : { in: ['PENDING', 'ASSIGNED'] as DeliveryStatus[] },
+              }),
+            })
+          : Promise.resolve(0),
+        statusOk('IN_TRANSIT')
+          ? prisma.deliveryNote.count({
+              where: mergeTenantWhere({ ...scope, status: 'IN_TRANSIT' as DeliveryStatus }),
+            })
+          : Promise.resolve(0),
+        statusOk('DELIVERED')
+          ? prisma.deliveryNote.count({
+              where: mergeTenantWhere({
+                ...scope,
+                status: 'DELIVERED' as DeliveryStatus,
+                deliveredAt: { gte: todayStart },
+              }),
+            })
+          : Promise.resolve(0),
+        statusOk('DELIVERED')
+          ? prisma.deliveryNote.count({
+              where: mergeTenantWhere({
+                ...scope,
+                status: 'DELIVERED' as DeliveryStatus,
+                deliveredAt: { gte: monthStart },
+              }),
+            })
+          : Promise.resolve(0),
         prisma.vehicle.count({ where: { isActive: true } }),
         prisma.vehicle.count({ where: { isActive: true, type: 'MOTORCYCLE' } }),
         prisma.vehicle.count({ where: { isActive: true, type: 'TRUCK' } }),
@@ -201,22 +280,55 @@ export class DeliveryService {
 }
 
 export class ProductionStatsService {
-  static async getStats() {
+  static async getStats(opts?: { search?: string; status?: string }) {
     const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+    const scope: Prisma.ProductionOrderWhereInput = {};
+    if (opts?.search?.trim()) {
+      const q = opts.search.trim();
+      scope.OR = [
+        { orderNumber: { contains: q } },
+        { product: { name: { contains: q } } },
+      ];
+    }
+    if (opts?.status) {
+      scope.status = opts.status as Prisma.EnumProductionStatusFilter['equals'];
+    }
+
+    const statusOk = (bucket: string | string[]) => {
+      if (!opts?.status) return true;
+      return Array.isArray(bucket) ? bucket.includes(opts.status) : opts.status === bucket;
+    };
 
     const [activeOrders, inProgress, scheduled, completedInPeriod, awaitingProduction] = await Promise.all([
-      prisma.productionOrder.count({
-        where: { status: { in: ['PLANNED', 'SCHEDULED', 'IN_PROGRESS'] } },
-      }),
-      prisma.productionOrder.count({ where: { status: 'IN_PROGRESS' } }),
-      prisma.productionOrder.count({ where: { status: 'SCHEDULED' } }),
-      prisma.productionOrder.count({
-        where: {
-          status: 'COMPLETED',
-          actualEnd: { gte: monthStart },
-        },
-      }),
-      prisma.salesOrder.count({ where: { status: 'CONFIRMED' } }),
+      statusOk(['PLANNED', 'SCHEDULED', 'IN_PROGRESS'])
+        ? prisma.productionOrder.count({
+            where: {
+              ...scope,
+              status: opts?.status
+                ? (opts.status as Prisma.EnumProductionStatusFilter['equals'])
+                : { in: ['PLANNED', 'SCHEDULED', 'IN_PROGRESS'] },
+            },
+          })
+        : Promise.resolve(0),
+      statusOk('IN_PROGRESS')
+        ? prisma.productionOrder.count({ where: { ...scope, status: 'IN_PROGRESS' } })
+        : Promise.resolve(0),
+      statusOk('SCHEDULED')
+        ? prisma.productionOrder.count({ where: { ...scope, status: 'SCHEDULED' } })
+        : Promise.resolve(0),
+      statusOk('COMPLETED')
+        ? prisma.productionOrder.count({
+            where: {
+              ...scope,
+              status: 'COMPLETED',
+              actualEnd: { gte: monthStart },
+            },
+          })
+        : Promise.resolve(0),
+      // Awaiting production is sales-side; only respect search via order number/customer loosely — keep global when no status filter
+      !opts?.status
+        ? prisma.salesOrder.count({ where: { status: 'CONFIRMED' } })
+        : Promise.resolve(0),
     ]);
 
     return {

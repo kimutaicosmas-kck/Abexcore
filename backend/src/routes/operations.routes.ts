@@ -10,6 +10,7 @@ import {
   completeProductionSchema,
   createQuotationSchema,
   salesListQuerySchema,
+  salesStatsQuerySchema,
   paginationSchema,
   productionListQuerySchema,
 } from '../validators/schemas';
@@ -36,6 +37,7 @@ import {
   isSalesPersonRole,
   SALES_PERSON_ROLE_NAMES,
 } from '../config/rolePermissions';
+import { buildSalesOrdersWhere } from '../utils/sales-list-where';
 import { Prisma } from '@prisma/client';
 
 const router = Router();
@@ -73,13 +75,21 @@ function salesPersonLabel(order: {
 router.get(
   '/stats',
   authorize('sales:read'),
+  validate(salesStatsQuerySchema, 'query'),
   asyncHandler(async (req: AuthRequest, res: Response) => {
-    const scopedId = isSalesBookOwner(req.user!.roleName) ? req.user!.id : undefined;
-    const date =
-      typeof req.query.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(req.query.date)
-        ? req.query.date
-        : undefined;
-    const data = await SalesService.getStats(scopedId, { date });
+    const bookOwnerId = isSalesBookOwner(req.user!.roleName) ? req.user!.id : undefined;
+    const { date, salesPersonId, status, search } = getQuery<{
+      date?: string;
+      salesPersonId?: string;
+      status?: string;
+      search?: string;
+    }>(req.query);
+    const data = await SalesService.getStats(bookOwnerId, {
+      date,
+      salesPersonId: bookOwnerId ? undefined : salesPersonId,
+      status,
+      search,
+    });
     res.json({ success: true, data });
   })
 );
@@ -87,8 +97,10 @@ router.get(
 router.get(
   '/production-stats',
   authorize('production:read'),
-  asyncHandler(async (_req: AuthRequest, res: Response) => {
-    const data = await ProductionStatsService.getStats();
+  validate(productionListQuerySchema, 'query'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const { search, status } = getQuery<{ search?: string; status?: string }>(req.query);
+    const data = await ProductionStatsService.getStats({ search, status });
     res.json({ success: true, data });
   })
 );
@@ -109,45 +121,14 @@ router.get(
     }>(req.query);
     const skip = (page - 1) * limit;
 
-    const where: Prisma.SalesOrderWhereInput = {};
-    if (status) where.status = status as Prisma.EnumOrderStatusFilter['equals'];
-
-    if (isSalesBookOwner(req.user!.roleName)) {
-      Object.assign(where, salesPersonOrderFilter(req.user!.id));
-    } else if (salesPersonId === 'unassigned') {
-      // House / company sales: no officer assigned, or assigned to a non-sales role (e.g. admin).
-      where.OR = [
-        { salesPersonId: null },
-        { salesPerson: { role: { name: { notIn: [...SALES_PERSON_ROLE_NAMES] } } } },
-      ];
-    } else if (salesPersonId) {
-      Object.assign(where, salesPersonOrderFilter(salesPersonId));
-    }
-
-    if (date) {
-      const range = dayRangeFromInput(date);
-      // Filter by required (sale) date; fall back to orderDate when requiredDate is unset.
-      if (range) {
-        const { salesOrderInDateRange } = await import('../utils/salesDate');
-        where.AND = [
-          ...(Array.isArray(where.AND) ? where.AND : where.AND ? [where.AND] : []),
-          salesOrderInDateRange(range),
-        ];
-      }
-    }
-
-    if (search) {
-      where.AND = [
-        ...(Array.isArray(where.AND) ? where.AND : where.AND ? [where.AND] : []),
-        {
-          OR: [
-            { orderNumber: { contains: search } },
-            { customer: { name: { contains: search } } },
-            { customer: { code: { contains: search } } },
-          ],
-        },
-      ];
-    }
+    const where = await buildSalesOrdersWhere({
+      status,
+      salesPersonId,
+      date,
+      search,
+      bookOwnerId: isSalesBookOwner(req.user!.roleName) ? req.user!.id : undefined,
+      includeDate: true,
+    });
 
     const [data, total] = await Promise.all([
       prisma.salesOrder.findMany({

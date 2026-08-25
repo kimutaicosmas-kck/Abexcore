@@ -21,8 +21,14 @@ router.use(authenticate);
 router.get(
   '/stats',
   authorize('quality:read'),
-  asyncHandler(async (_req: AuthRequest, res: Response) => {
-    const data = await QualityService.getStats();
+  validate(qualityListQuerySchema, 'query'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const { search, status, type } = getQuery<{
+      search?: string;
+      status?: string;
+      type?: string;
+    }>(req.query);
+    const data = await QualityService.getStats({ search, status, type });
     res.json({ success: true, data });
   })
 );

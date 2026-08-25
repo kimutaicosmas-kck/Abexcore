@@ -190,7 +190,7 @@ export const usersApi = {
   create: (data: object) => api.post('/users', data),
   update: (id: string, data: object) => api.put(`/users/${id}`, data),
   delete: (id: string) => api.delete(`/users/${id}`),
-  stats: () => api.get('/users/stats'),
+  stats: (params?: object) => api.get('/users/stats', { params }),
   roles: () => api.get('/users/roles'),
   departments: () => api.get('/users/departments'),
   branches: () => api.get('/users/branches'),
@@ -329,7 +329,7 @@ export const searchApi = {
 
 export const operationsApi = {
   stats: (params?: object) => api.get('/operations/stats', { params }),
-  productionStats: () => api.get('/operations/production-stats'),
+  productionStats: (params?: object) => api.get('/operations/production-stats', { params }),
   salesOfficers: () => api.get('/operations/sales-officers'),
   salesOrders: (params?: object) => api.get('/operations/orders', { params }),
   getSalesOrder: (id: string) => api.get(`/operations/orders/${id}`),
@@ -353,7 +353,7 @@ export const operationsApi = {
 };
 
 export const deliveryApi = {
-  stats: () => api.get('/delivery/stats'),
+  stats: (params?: object) => api.get('/delivery/stats', { params }),
   list: (params?: object) => api.get('/delivery', { params }),
   trips: (params?: object) => api.get('/delivery/trips', { params }),
   getTrip: (id: string) => api.get(`/delivery/trips/${id}`),
@@ -429,7 +429,7 @@ export const hrApi = {
 };
 
 export const maintenanceApi = {
-  stats: () => api.get('/maintenance/stats'),
+  stats: (params?: object) => api.get('/maintenance/stats', { params }),
   machines: (params?: object) => api.get('/maintenance/machines', { params }),
   createMachine: (data: object) => api.post('/maintenance/machines', data),
   requests: (params?: object) => api.get('/maintenance/requests', { params }),
@@ -440,7 +440,7 @@ export const maintenanceApi = {
 };
 
 export const financeApi = {
-  stats: () => api.get('/finance/stats'),
+  stats: (params?: object) => api.get('/finance/stats', { params }),
   overview: (days = 30) => api.get('/finance/overview', { params: { days } }),
   config: () => api.get('/finance/config'),
   company: () => api.get('/finance/company'),
@@ -563,7 +563,7 @@ export const platformApi = {
 };
 
 export const qualityApi = {
-  stats: () => api.get('/quality/stats'),
+  stats: (params?: object) => api.get('/quality/stats', { params }),
   list: (params?: object) => api.get('/quality', { params }),
   get: (id: string) => api.get(`/quality/${id}`),
   create: (data: object) => api.post('/quality', data),

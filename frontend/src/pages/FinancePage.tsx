@@ -162,8 +162,15 @@ export function FinancePage() {
   const canUpdate = hasPermission('finance:update');
 
   const { data: stats } = useQuery({
-    queryKey: ['finance-stats'],
-    queryFn: () => financeApi.stats().then((r) => r.data.data as FinanceStats),
+    queryKey: ['finance-stats', search, type, status],
+    queryFn: () =>
+      financeApi
+        .stats({
+          search: search || undefined,
+          type: type || undefined,
+          status: status || undefined,
+        })
+        .then((r) => r.data.data as FinanceStats),
   });
 
   const { data: overview, isLoading: overviewLoading } = useQuery({
