@@ -14,6 +14,17 @@ export class DashboardService {
     const monthStart = startOfMonth(new Date());
     const monthEnd = endOfDay(new Date());
 
+    const { salesOrderInDateRange } = await import('../utils/salesDate');
+    const successfulStatus = { in: ['COMPLETED', 'DELIVERED'] as const };
+    const todaySuccessfulWhere = {
+      status: successfulStatus,
+      AND: [salesOrderInDateRange({ gte: today, lte: endOfDay(new Date()) })],
+    };
+    const monthSuccessfulWhere = {
+      status: successfulStatus,
+      AND: [salesOrderInDateRange({ gte: monthStart, lte: monthEnd })],
+    };
+
     const [
       salesToday,
       salesMonth,
@@ -37,16 +48,12 @@ export class DashboardService {
       pipelineAgg,
       netAccountsReceivable,
     ] = await Promise.all([
-      prisma.invoice.aggregate({
-        where: { type: 'SALES', invoiceDate: { gte: today }, status: { not: 'REFUNDED' } },
+      prisma.salesOrder.aggregate({
+        where: todaySuccessfulWhere,
         _sum: { totalAmount: true },
       }),
-      prisma.invoice.aggregate({
-        where: {
-          type: 'SALES',
-          invoiceDate: { gte: monthStart, lte: monthEnd },
-          status: { not: 'REFUNDED' },
-        },
+      prisma.salesOrder.aggregate({
+        where: monthSuccessfulWhere,
         _sum: { totalAmount: true },
       }),
       prisma.purchaseOrder.count({ where: { status: { in: ['PENDING', 'CONFIRMED'] } } }),
