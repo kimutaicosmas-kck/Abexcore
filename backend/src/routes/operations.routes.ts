@@ -115,7 +115,11 @@ router.get(
     if (isSalesBookOwner(req.user!.roleName)) {
       Object.assign(where, salesPersonOrderFilter(req.user!.id));
     } else if (salesPersonId === 'unassigned') {
-      where.salesPersonId = null;
+      // House / company sales: no officer assigned, or assigned to a non-sales role (e.g. admin).
+      where.OR = [
+        { salesPersonId: null },
+        { salesPerson: { role: { name: { notIn: [...SALES_PERSON_ROLE_NAMES] } } } },
+      ];
     } else if (salesPersonId) {
       Object.assign(where, salesPersonOrderFilter(salesPersonId));
     }

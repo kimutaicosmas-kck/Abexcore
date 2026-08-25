@@ -121,11 +121,18 @@ export class SalesPerformanceService {
       }
     );
 
+    // Company total (same source-of-truth as Dashboard "This month sales") vs team-only.
+    const { sumInvoicedSales } = await import('../utils/finance-metrics');
+    const companyInvoiced = await sumInvoicedSales({ from: period.from, to: period.to });
+    const houseInvoiced = Math.max(0, Math.round((companyInvoiced - summary.invoiced) * 100) / 100);
+
     return {
       period: { from: period.fromDate, to: period.toDate },
       summary: {
         ...summary,
         salesPeople: ranked.length,
+        companyInvoiced,
+        houseInvoiced,
         avgAchievement:
           summary.withTarget > 0
             ? Math.round(summary.achievementTotal / summary.withTarget)

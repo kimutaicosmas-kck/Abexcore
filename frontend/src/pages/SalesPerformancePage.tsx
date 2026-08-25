@@ -37,6 +37,8 @@ function useSalesPerformancePeriod() {
 }
 
 function SalesPerformanceSummary({ data }: { data: SalesTeamPerformance }) {
+  const house = data.summary.houseInvoiced ?? 0;
+  const company = data.summary.companyInvoiced ?? data.summary.invoiced;
   return (
     <StatGrid>
       <StatCard
@@ -47,26 +49,26 @@ function SalesPerformanceSummary({ data }: { data: SalesTeamPerformance }) {
         to="/finance"
       />
       <StatCard
+        title="House / company"
+        value={formatCurrency(house)}
+        icon={<Wallet className="h-5 w-5 text-white" />}
+        color="from-slate-500 to-slate-700"
+        to="/sales"
+      />
+      <StatCard
+        title="Company invoiced"
+        value={formatCurrency(company)}
+        icon={<TrendingUp className="h-5 w-5 text-white" />}
+        color="from-sky-500 to-sky-700"
+        to="/finance"
+        className="hidden sm:flex"
+      />
+      <StatCard
         title="Collected"
         value={formatCurrency(data.summary.collected)}
         icon={<Wallet className="h-5 w-5 text-white" />}
         color="from-violet-500 to-violet-700"
         to="/finance"
-      />
-      <StatCard
-        title="Orders"
-        value={data.summary.orderCount}
-        icon={<ShoppingCart className="h-5 w-5 text-white" />}
-        color="from-emerald-500 to-emerald-700"
-        to="/sales"
-        className="hidden sm:flex"
-      />
-      <StatCard
-        title="Avg target hit"
-        value={data.summary.avgAchievement != null ? `${data.summary.avgAchievement}%` : '—'}
-        icon={<Target className="h-5 w-5 text-white" />}
-        color="from-orange-500 to-orange-700"
-        to="/sales-performance?tab=targets"
       />
       <StatCard
         title="Outstanding"

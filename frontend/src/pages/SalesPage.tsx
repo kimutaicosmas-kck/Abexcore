@@ -248,7 +248,7 @@ export function SalesPage() {
 
   const salesPersonFilterOptions = [
     { value: '', label: 'All sales persons' },
-    { value: 'unassigned', label: 'No sales person' },
+    { value: 'unassigned', label: 'No sales person / house' },
     ...salesOfficers.map((o) => ({ value: o.id, label: o.name })),
   ];
 

@@ -1006,6 +1006,10 @@ export interface SalesTeamPerformance {
     orderValue: number;
     invoiceCount: number;
     invoiced: number;
+    /** Company-wide invoiced (same rule as Dashboard this-month sales). */
+    companyInvoiced?: number;
+    /** Invoiced not attributed to any sales officer (house / admin sales). */
+    houseInvoiced?: number;
     collected: number;
     outstanding: number;
     avgAchievement: number | null;
