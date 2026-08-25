@@ -14,16 +14,13 @@ export class DashboardService {
     const monthStart = startOfMonth(new Date());
     const monthEnd = endOfDay(new Date());
 
-    const { salesOrderInDateRange } = await import('../utils/salesDate');
-    const successfulStatus = { in: ['COMPLETED', 'DELIVERED'] as const };
-    const todaySuccessfulWhere = {
-      status: successfulStatus,
-      AND: [salesOrderInDateRange({ gte: today, lte: endOfDay(new Date()) })],
-    };
-    const monthSuccessfulWhere = {
-      status: successfulStatus,
-      AND: [salesOrderInDateRange({ gte: monthStart, lte: monthEnd })],
-    };
+    const invoicedSalesWhere = (from: Date, to: Date) => ({
+      type: 'SALES' as const,
+      invoiceDate: { gte: from, lte: to },
+      status: { not: 'REFUNDED' as const },
+      // Drop invoices tied to cancelled orders; keep stand-alone invoices.
+      OR: [{ salesOrderId: null }, { salesOrder: { status: { not: 'CANCELLED' as const } } }],
+    });
 
     const [
       salesToday,
@@ -48,12 +45,12 @@ export class DashboardService {
       pipelineAgg,
       netAccountsReceivable,
     ] = await Promise.all([
-      prisma.salesOrder.aggregate({
-        where: todaySuccessfulWhere,
+      prisma.invoice.aggregate({
+        where: invoicedSalesWhere(today, endOfDay(new Date())),
         _sum: { totalAmount: true },
       }),
-      prisma.salesOrder.aggregate({
-        where: monthSuccessfulWhere,
+      prisma.invoice.aggregate({
+        where: invoicedSalesWhere(monthStart, monthEnd),
         _sum: { totalAmount: true },
       }),
       prisma.purchaseOrder.count({ where: { status: { in: ['PENDING', 'CONFIRMED'] } } }),
