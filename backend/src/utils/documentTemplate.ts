@@ -403,7 +403,14 @@ export function drawDocTable(
 export function drawSignatureBlock(
   doc: PDFKit.PDFDocument,
   y: number,
-  opts?: { confirmLabel?: string; receiveLabel?: string; instruction?: string }
+  opts?: {
+    confirmLabel?: string;
+    /** Pre-filled name on the Confirmed by line (e.g. sales person). */
+    confirmName?: string;
+    receiveLabel?: string;
+    receiveName?: string;
+    instruction?: string;
+  }
 ): number {
   if (opts?.instruction) {
     doc
@@ -425,7 +432,14 @@ export function drawSignatureBlock(
     .strokeColor(DOC_LINE)
     .lineWidth(0.8)
     .stroke();
-  doc.text('Sign:', 270, y);
+  if (opts?.confirmName) {
+    doc
+      .font('Helvetica')
+      .fontSize(9)
+      .fillColor('#0f172a')
+      .text(opts.confirmName, PAGE_LEFT + 82, y, { width: 175 });
+  }
+  doc.font('Helvetica-Bold').fontSize(9).fillColor(DOC_BLUE).text('Sign:', 270, y);
   doc
     .moveTo(300, y + 11)
     .lineTo(PAGE_RIGHT, y + 11)
@@ -441,7 +455,14 @@ export function drawSignatureBlock(
     .strokeColor(DOC_LINE)
     .lineWidth(0.8)
     .stroke();
-  doc.text('Sign:', 270, y);
+  if (opts?.receiveName) {
+    doc
+      .font('Helvetica')
+      .fontSize(9)
+      .fillColor('#0f172a')
+      .text(opts.receiveName, PAGE_LEFT + 82, y, { width: 175 });
+  }
+  doc.font('Helvetica-Bold').fontSize(9).fillColor(DOC_BLUE).text('Sign:', 270, y);
   doc
     .moveTo(300, y + 11)
     .lineTo(PAGE_RIGHT, y + 11)

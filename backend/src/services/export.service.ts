@@ -299,6 +299,8 @@ export class ExportService {
         salesOrder: {
           include: {
             customer: true,
+            salesPerson: { select: { id: true, firstName: true, lastName: true } },
+            createdBy: { select: { id: true, firstName: true, lastName: true } },
             items: { include: { product: true } },
           },
         },
@@ -335,9 +337,16 @@ export class ExportService {
       doc.on('error', reject);
 
       const customer = delivery.salesOrder.customer;
-      const partyAddress = [customer?.address, customer?.city, customer?.phone]
+      const location = [customer?.address, customer?.city].filter(Boolean).join(', ');
+      const partyAddress = [location, customer?.phone ? `Tel: ${customer.phone}` : null]
         .filter(Boolean)
         .join(', ');
+
+      const salesPerson =
+        delivery.salesOrder.salesPerson || delivery.salesOrder.createdBy;
+      const salesPersonName = salesPerson
+        ? `${salesPerson.firstName} ${salesPerson.lastName}`.trim()
+        : '';
 
       let y = drawAmazonStyleHeader(doc, company, 'DELIVERY', { showPaybill: true });
       y = drawPartyAndRefs(doc, y, customer?.name || 'N/A', partyAddress, [
@@ -413,6 +422,7 @@ export class ExportService {
       drawSignatureBlock(doc, Math.max(y + 4, 700), {
         instruction: 'Please receive the following goods in good order and condition.',
         confirmLabel: 'Confirmed by:',
+        confirmName: salesPersonName || undefined,
         receiveLabel: 'Received by:',
       });
 
