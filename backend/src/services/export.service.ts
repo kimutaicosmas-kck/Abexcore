@@ -101,9 +101,15 @@ export class ExportService {
       doc.on('error', reject);
 
       const party = invoice.customer || invoice.supplier;
-      const partyAddress = [party && 'address' in party ? party.address : null, party && 'city' in party ? party.city : null]
+      const location = [
+        party && 'address' in party ? party.address : null,
+        party && 'city' in party ? party.city : null,
+      ]
         .filter(Boolean)
         .join(', ');
+      const phone =
+        party && 'phone' in party && party.phone ? `Tel: ${party.phone}` : null;
+      const partyAddress = [location, phone].filter(Boolean).join(', ');
 
       let y = drawAmazonStyleHeader(doc, company, 'INVOICE', {
         showPaybill: invoice.type !== 'PURCHASE',
