@@ -325,6 +325,8 @@ export interface RawMaterial {
   materialType?: { id: string; name: string };
   unit: string;
   unitCost: number;
+  /** Unit weight in kg (optional). */
+  weight?: number | null;
   minStockLevel: number;
   supplier?: { id: string; name: string };
   stockLevels?: StockLevel[];

@@ -267,12 +267,6 @@ export function InventoryPage() {
         return <Badge variant="info">{material.materialType?.name || 'Uncategorized'}</Badge>;
       },
     },
-    { key: 'unit', label: 'Unit' },
-    {
-      key: 'unitCost',
-      label: 'Unit cost',
-      render: (val: unknown) => formatCurrency(val as number),
-    },
     {
       key: 'onHand',
       label: 'On hand',
@@ -301,6 +295,22 @@ export function InventoryPage() {
           </div>
         );
       },
+    },
+    {
+      key: 'weight',
+      label: 'Weight (kg)',
+      render: (val: unknown) =>
+        val === null || val === undefined || val === '' ? (
+          <span className="text-slate-400">—</span>
+        ) : (
+          <span className="tabular-nums">{Number(val).toLocaleString(undefined, { maximumFractionDigits: 3 })}</span>
+        ),
+    },
+    { key: 'unit', label: 'Unit' },
+    {
+      key: 'unitCost',
+      label: 'Unit cost',
+      render: (val: unknown) => formatCurrency(val as number),
     },
     {
       key: 'minStockLevel',
@@ -571,6 +581,8 @@ export function InventoryPage() {
               loading={matLoading}
               onRowClick={(row) => openEditMaterial(row as unknown as RawMaterial)}
               embedded
+              responsive
+              mobileSummaryCount={5}
             />
           )}
           {renderPagination(materials?.pagination, matPage, setMatPage)}

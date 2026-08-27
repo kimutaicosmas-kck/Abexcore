@@ -13,6 +13,10 @@ const rawMaterialSchema = z.object({
   typeId: z.string().uuid('Select a material type'),
   unit: z.string().optional(),
   unitCost: z.coerce.number().min(0).optional(),
+  weight: z.preprocess(
+    (v) => (v === '' || v === null || v === undefined ? undefined : v),
+    z.coerce.number().min(0).optional()
+  ),
   supplierId: z.string().optional(),
   minStockLevel: z.coerce.number().min(0).optional(),
   reorderQty: z.coerce.number().min(0).optional(),
@@ -34,6 +38,14 @@ interface RawMaterialFormProps {
   onCancel: () => void;
 }
 
+function asWarehouseList(value: unknown): Warehouse[] {
+  if (Array.isArray(value)) return value as Warehouse[];
+  if (value && typeof value === 'object' && Array.isArray((value as { data?: unknown }).data)) {
+    return (value as { data: Warehouse[] }).data;
+  }
+  return [];
+}
+
 export function RawMaterialForm({ material, onSuccess, onCancel }: RawMaterialFormProps) {
   const queryClient = useQueryClient();
   const isEdit = !!material;
@@ -49,14 +61,6 @@ export function RawMaterialForm({ material, onSuccess, onCancel }: RawMaterialFo
     queryKey: ['material-types'],
     queryFn: () => inventoryApi.materialTypes().then((r) => r.data.data as MaterialTypeOption[]),
   });
-
-  const asWarehouseList = (value: unknown): Warehouse[] => {
-    if (Array.isArray(value)) return value as Warehouse[];
-    if (value && typeof value === 'object' && Array.isArray((value as { data?: unknown }).data)) {
-      return (value as { data: Warehouse[] }).data;
-    }
-    return [];
-  };
 
   const { data: warehousesData } = useQuery({
     queryKey: ['warehouses'],
@@ -77,6 +81,9 @@ export function RawMaterialForm({ material, onSuccess, onCancel }: RawMaterialFo
   }));
 
   const defaultTypeId = material?.typeId || material?.materialType?.id || materialTypesData?.[0]?.id || '';
+  const currentOnHand = Array.isArray(material?.stockLevels)
+    ? material!.stockLevels!.reduce((s, l) => s + Number(l.quantity || 0), 0)
+    : 0;
 
   const { register, handleSubmit, setValue, formState: { errors } } = useForm<RawMaterialFormData>({
     resolver: zodResolver(rawMaterialSchema),
@@ -86,11 +93,20 @@ export function RawMaterialForm({ material, onSuccess, onCancel }: RawMaterialFo
           typeId: defaultTypeId,
           unit: material.unit,
           unitCost: Number(material.unitCost),
+          weight: material.weight != null ? Number(material.weight) : undefined,
           supplierId: material.supplier?.id || '',
-          minStockLevel: material.minStockLevel,
+          minStockLevel: Number(material.minStockLevel || 0),
           reorderQty: 0,
         }
-      : { typeId: defaultTypeId, unit: 'pcs', minStockLevel: 0, reorderQty: 0, initialQuantity: 0 },
+      : {
+          typeId: defaultTypeId,
+          unit: 'pcs',
+          unitCost: 0,
+          weight: undefined,
+          minStockLevel: 0,
+          reorderQty: 0,
+          initialQuantity: 0,
+        },
   });
 
   useEffect(() => {
@@ -117,9 +133,15 @@ export function RawMaterialForm({ material, onSuccess, onCancel }: RawMaterialFo
   const mutation = useMutation({
     mutationFn: (data: RawMaterialFormData) => {
       const payload = {
-        ...data,
+        name: data.name,
+        typeId: data.typeId,
+        unit: data.unit || 'pcs',
+        unitCost: data.unitCost ?? 0,
+        weight: data.weight === undefined ? null : data.weight,
         supplierId: data.supplierId || undefined,
-        initialQuantity: isEdit ? undefined : data.initialQuantity || undefined,
+        minStockLevel: data.minStockLevel ?? 0,
+        reorderQty: data.reorderQty ?? 0,
+        ...(isEdit ? {} : { initialQuantity: data.initialQuantity ?? 0 }),
       };
       return isEdit
         ? inventoryApi.updateMaterial(material!.id, payload)
@@ -128,6 +150,7 @@ export function RawMaterialForm({ material, onSuccess, onCancel }: RawMaterialFo
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['materials'] });
       queryClient.invalidateQueries({ queryKey: ['inventory-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['inventory-warehouses'] });
       queryClient.invalidateQueries({ queryKey: ['low-stock'] });
       queryClient.invalidateQueries({ queryKey: ['stock-levels'] });
       queryClient.invalidateQueries({ queryKey: ['warehouses'] });
@@ -150,9 +173,11 @@ export function RawMaterialForm({ material, onSuccess, onCancel }: RawMaterialFo
         </p>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <Input label="Name *" {...register('name')} error={errors.name?.message} />
-        <div className="md:col-span-2 space-y-2">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="sm:col-span-2">
+          <Input label="Name *" {...register('name')} error={errors.name?.message} />
+        </div>
+        <div className="sm:col-span-2 space-y-2">
           <Select
             label="Type *"
             options={typeOptions.length ? typeOptions : [{ value: '', label: 'No types yet' }]}
@@ -180,30 +205,49 @@ export function RawMaterialForm({ material, onSuccess, onCancel }: RawMaterialFo
             </Button>
           </div>
         </div>
+
         <Input label="Unit" {...register('unit')} placeholder="kg, rolls, pcs…" />
+        <Input
+          label="Weight (kg)"
+          type="number"
+          step="0.001"
+          min={0}
+          {...register('weight')}
+          error={errors.weight?.message}
+          placeholder="e.g. 0.250"
+        />
         <Input label="Unit Cost (KES)" type="number" step="0.01" {...register('unitCost')} />
         <Select label="Supplier" options={supplierOptions} {...register('supplierId')} />
+
+        {!isEdit ? (
+          <Input
+            label="Stock on hand *"
+            type="number"
+            step="0.001"
+            min={0}
+            {...register('initialQuantity')}
+            error={errors.initialQuantity?.message}
+            placeholder="Opening quantity"
+          />
+        ) : (
+          <div>
+            <p className="text-sm font-medium text-slate-700 mb-1">Stock on hand</p>
+            <p className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold tabular-nums text-slate-900">
+              {currentOnHand.toLocaleString()}
+            </p>
+            <p className="text-xs text-slate-500 mt-1">Change quantity with Adjust stock on the Movements tab.</p>
+          </div>
+        )}
+
         <Input label="Min Stock Level" type="number" {...register('minStockLevel')} />
         <Input label="Reorder Qty" type="number" {...register('reorderQty')} />
       </div>
 
       {!isEdit && (
-        <div className="rounded-xl border border-amber-200/80 bg-amber-50/60 p-4 space-y-3">
-          <div>
-            <p className="text-sm font-medium text-slate-800">Opening stock</p>
-            <p className="text-xs text-slate-500 mt-0.5">
-              Posted to the raw materials warehouse
-              {rawWarehouses[0] ? ` (${rawWarehouses[0].code})` : ' (created automatically if needed)'}.
-            </p>
-          </div>
-          <Input
-            label="Initial quantity"
-            type="number"
-            step="0.001"
-            {...register('initialQuantity')}
-            error={errors.initialQuantity?.message}
-          />
-        </div>
+        <p className="text-xs text-slate-500">
+          Stock on hand is posted to the raw materials warehouse
+          {rawWarehouses[0] ? ` (${rawWarehouses[0].code})` : ' (created automatically if needed)'}.
+        </p>
       )}
 
       <div className="flex justify-end gap-3 pt-4 border-t">
