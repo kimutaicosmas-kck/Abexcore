@@ -299,7 +299,8 @@ router.get('/materials/low-stock', authorize('inventory:read'), asyncHandler(asy
 }));
 
 router.post('/materials', authorize('inventory:create'), validate(createRawMaterialSchema), asyncHandler(async (req: AuthRequest, res: Response) => {
-  const payload = { ...req.body };
+  const { initialQuantity, warehouseId, ...rest } = req.body;
+  const payload = { ...rest };
   const materialType = await prisma.materialType.findFirst({
     where: { id: payload.typeId, isActive: true },
   });
@@ -309,7 +310,80 @@ router.post('/materials', authorize('inventory:create'), validate(createRawMater
     const count = await prisma.rawMaterial.count();
     payload.code = generateNumber('RM', count + 1);
   }
-  const data = await materialService.create(payload);
+
+  const openingQty = Number(initialQuantity || 0);
+
+  const data = await prisma.$transaction(async (tx) => {
+    const material = await tx.rawMaterial.create({
+      data: injectTenantData(payload),
+      include: {
+        materialType: true,
+        supplier: { select: { id: true, name: true, code: true } },
+      },
+    });
+
+    if (openingQty > 0) {
+      let targetWarehouseId = warehouseId as string | undefined;
+      if (!targetWarehouseId) {
+        targetWarehouseId = await StockMovementService.getRawMaterialsWarehouseId(tx);
+      } else {
+        await StockMovementService.assertWarehouseMatchesItem(tx, {
+          warehouseId: targetWarehouseId,
+          rawMaterialId: material.id,
+        });
+      }
+
+      const unitCost = Number(material.unitCost || 0);
+      await tx.stockLevel.create({
+        data: {
+          warehouseId: targetWarehouseId,
+          rawMaterialId: material.id,
+          quantity: openingQty,
+          unitCost,
+        },
+      });
+
+      const invTx = await tx.inventoryTransaction.create({
+        data: {
+          warehouseId: targetWarehouseId,
+          type: 'RECEIPT',
+          rawMaterialId: material.id,
+          quantity: openingQty,
+          unitCost,
+          notes: 'Opening stock on raw material creation',
+          createdById: req.user!.id,
+        },
+      });
+
+      const glAmount = openingQty * unitCost;
+      if (glAmount > 0) {
+        try {
+          await AccountingService.postInventoryAdjustment(tx, {
+            reference: invTx.id,
+            amount: glAmount,
+            direction: 'increase',
+            reason: `Opening stock — ${material.code}`,
+          });
+        } catch (err) {
+          if (!(err instanceof AppError) || !String(err.message).includes('not found')) {
+            throw err;
+          }
+        }
+      }
+
+      return tx.rawMaterial.findUniqueOrThrow({
+        where: { id: material.id },
+        include: {
+          materialType: true,
+          supplier: { select: { id: true, name: true, code: true } },
+          stockLevels: { include: { warehouse: { select: { id: true, name: true, code: true, type: true } } } },
+        },
+      });
+    }
+
+    return material;
+  });
+
   res.status(201).json({ success: true, data });
 }));
 
@@ -320,7 +394,8 @@ router.put('/materials/:id', authorize('inventory:update'), validate(createRawMa
     });
     if (!materialType) throw new AppError('Invalid material type', 400);
   }
-  const data = await materialService.update(getParam(req.params.id), req.body);
+  const { initialQuantity: _iq, warehouseId: _wh, ...payload } = req.body;
+  const data = await materialService.update(getParam(req.params.id), payload);
   res.json({ success: true, data });
 }));
 
@@ -487,6 +562,12 @@ router.post('/adjust', authorize('inventory:update'), validate(stockAdjustSchema
   const { warehouseId, productId, rawMaterialId, quantity, type, notes, batchNumber } = req.body;
 
   const transaction = await prisma.$transaction(async (tx) => {
+    await StockMovementService.assertWarehouseMatchesItem(tx, {
+      warehouseId,
+      productId,
+      rawMaterialId,
+    });
+
     const existing = await tx.stockLevel.findFirst({
       where: {
         warehouseId,
@@ -1153,6 +1234,14 @@ router.post('/goods-receipts', authorize('procurement:create'), validate(createG
   const { purchaseOrderId, supplierId, warehouseId, notes, items } = req.body;
   const count = await prisma.goodsReceipt.count();
   const grnNumber = generateNumber('GRN', count + 1);
+
+  const hasRaw = (items as Array<{ rawMaterialId?: string }>).some((i) => i.rawMaterialId);
+  if (hasRaw) {
+    await StockMovementService.assertWarehouseMatchesItem(prisma, {
+      warehouseId,
+      rawMaterialId: (items as Array<{ rawMaterialId?: string }>).find((i) => i.rawMaterialId)?.rawMaterialId,
+    });
+  }
 
   const normalizedItems = (
     items as Array<{

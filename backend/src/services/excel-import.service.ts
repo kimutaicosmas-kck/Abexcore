@@ -419,17 +419,28 @@ export class ExcelImportService {
           deletedAt: null,
         },
       });
-      if (byCode) return byCode;
+      if (byCode) {
+        if (byCode.type !== opts.preferredType) {
+          throw new Error(
+            `Warehouse ${byCode.code} is type "${byCode.type}" but ${opts.preferredType} is required`
+          );
+        }
+        return byCode;
+      }
     }
     const preferred = await prisma.warehouse.findFirst({
       where: { type: opts.preferredType, isActive: true, deletedAt: null },
       orderBy: { createdAt: 'asc' },
     });
     if (preferred) return preferred;
-    return prisma.warehouse.findFirst({
-      where: { isActive: true, deletedAt: null },
-      orderBy: { createdAt: 'asc' },
-    });
+
+    if (opts.preferredType === 'raw_materials') {
+      const { StockMovementService } = await import('./inventory.service');
+      const id = await StockMovementService.getRawMaterialsWarehouseId();
+      return prisma.warehouse.findUniqueOrThrow({ where: { id } });
+    }
+
+    throw new Error(`No ${opts.preferredType.replace('_', ' ')} warehouse configured`);
   }
 
   private static async postOpeningStock(opts: {

@@ -1060,17 +1060,20 @@ router.post(
         throw new AppError('Production output must be posted to the finished goods warehouse', 400);
       }
 
-      let rawMaterialsWarehouseId: string | null = null;
+      let rawMaterialsWarehouseId: string;
       try {
         rawMaterialsWarehouseId = await StockMovementService.getRawMaterialsWarehouseId(tx);
-      } catch {
-        rawMaterialsWarehouseId = null;
+      } catch (err) {
+        throw new AppError(
+          'Raw materials warehouse is required before completing production. Create WH-RM (raw_materials) first.',
+          400
+        );
       }
 
       let totalMaterialCost = 0;
 
       for (const consumption of order.consumption) {
-        const consumeWarehouseId = rawMaterialsWarehouseId ?? fgWarehouseId;
+        const consumeWarehouseId = rawMaterialsWarehouseId;
         const stockLevel = await tx.stockLevel.findFirst({
           where: { rawMaterialId: consumption.rawMaterialId, warehouseId: consumeWarehouseId },
         });

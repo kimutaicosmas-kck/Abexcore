@@ -150,6 +150,9 @@ export const createRawMaterialSchema = z.object({
   minStockLevel: z.coerce.number().min(0).optional(),
   reorderQty: z.coerce.number().min(0).optional(),
   shelfLifeDays: z.number().int().optional(),
+  /** Optional opening quantity — always posted to the raw materials warehouse. */
+  initialQuantity: z.coerce.number().min(0).optional(),
+  warehouseId: z.string().uuid().optional(),
 });
 
 export const createMaterialTypeSchema = z.object({

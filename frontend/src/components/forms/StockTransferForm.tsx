@@ -1,7 +1,9 @@
-import { Controller, useForm } from 'react-hook-form';
+import { useEffect } from 'react';
+import { Controller, useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { AxiosError } from 'axios';
 import { inventoryApi } from '../../services/api';
 import { Button, Input, Select } from '../ui';
 import { RawMaterial } from '../../types';
@@ -25,6 +27,13 @@ const transferSchema = z.object({
 
 type TransferFormData = z.infer<typeof transferSchema>;
 
+interface Warehouse {
+  id: string;
+  code: string;
+  name: string;
+  type?: string;
+}
+
 interface StockTransferFormProps {
   onSuccess: () => void;
   onCancel: () => void;
@@ -35,7 +44,7 @@ export function StockTransferForm({ onSuccess, onCancel }: StockTransferFormProp
 
   const { data: warehouses } = useQuery({
     queryKey: ['warehouses'],
-    queryFn: () => inventoryApi.warehouses().then((r) => r.data.data as { id: string; code: string; name: string }[]),
+    queryFn: () => inventoryApi.warehouses().then((r) => r.data.data as Warehouse[]),
   });
 
   const { data: materials } = useQuery({
@@ -43,12 +52,37 @@ export function StockTransferForm({ onSuccess, onCancel }: StockTransferFormProp
     queryFn: () => inventoryApi.materials({ limit: 100 }).then((r) => r.data.data as RawMaterial[]),
   });
 
-  const whOpts = [{ value: '', label: 'Select...' }, ...(warehouses || []).map((w) => ({ value: w.id, label: `${w.code} - ${w.name}` }))];
-
-  const { register, control, handleSubmit, formState: { errors } } = useForm<TransferFormData>({
+  const { register, control, handleSubmit, setValue, formState: { errors } } = useForm<TransferFormData>({
     resolver: zodResolver(transferSchema),
     defaultValues: { quantity: 1, productId: '', rawMaterialId: '' },
   });
+
+  const rawMaterialId = useWatch({ control, name: 'rawMaterialId' });
+  const productId = useWatch({ control, name: 'productId' });
+  const allowedType = rawMaterialId
+    ? 'raw_materials'
+    : productId
+      ? 'finished_goods'
+      : null;
+
+  const filtered = (warehouses || []).filter((w) =>
+    allowedType ? w.type === allowedType : true
+  );
+  const whOpts = [
+    { value: '', label: allowedType ? 'Select...' : 'Select material or product first...' },
+    ...filtered.map((w) => ({ value: w.id, label: `${w.code} - ${w.name}` })),
+  ];
+
+  useEffect(() => {
+    if (!allowedType) {
+      setValue('fromWarehouseId', '');
+      setValue('toWarehouseId', '');
+      return;
+    }
+    if (filtered[0]) setValue('fromWarehouseId', filtered[0].id);
+    if (filtered[1]) setValue('toWarehouseId', filtered[1].id);
+    else if (filtered[0]) setValue('toWarehouseId', '');
+  }, [allowedType, filtered[0]?.id, filtered[1]?.id, setValue]);
 
   const mutation = useMutation({
     mutationFn: (data: TransferFormData) => inventoryApi.transferStock(data),
@@ -64,16 +98,17 @@ export function StockTransferForm({ onSuccess, onCancel }: StockTransferFormProp
   return (
     <form onSubmit={handleSubmit((d) => mutation.mutate(d))} className="space-y-4">
       {mutation.isError && (
-        <div className="p-3 rounded-lg bg-red-50 text-red-700 text-sm">Transfer failed. Check stock at source warehouse.</div>
+        <div className="p-3 rounded-lg bg-red-50 text-red-700 text-sm">
+          {(mutation.error as AxiosError<{ message?: string }>)?.response?.data?.message ||
+            'Transfer failed. Check stock at source warehouse.'}
+        </div>
       )}
-      <div className="grid grid-cols-2 gap-4">
-        <Select label="From Warehouse *" options={whOpts} {...register('fromWarehouseId')} error={errors.fromWarehouseId?.message} />
-        <Select label="To Warehouse *" options={whOpts} {...register('toWarehouseId')} error={errors.toWarehouseId?.message} />
-      </div>
       <Select
         label="Raw Material"
         options={[{ value: '', label: 'None' }, ...(materials || []).map((m) => ({ value: m.id, label: `${m.code} - ${m.name}` }))]}
-        {...register('rawMaterialId')}
+        {...register('rawMaterialId', {
+          onChange: () => setValue('productId', ''),
+        })}
         error={errors.rawMaterialId?.message}
       />
       <Controller
@@ -83,16 +118,28 @@ export function StockTransferForm({ onSuccess, onCancel }: StockTransferFormProp
           <ProductSearchSelect
             label="Product"
             value={field.value || ''}
-            onChange={field.onChange}
+            onChange={(id) => {
+              field.onChange(id);
+              if (id) setValue('rawMaterialId', '');
+            }}
           />
         )}
       />
-      <Input label="Quantity *" type="number" step="0.001" min={0.001} {...register('quantity')} error={errors.quantity?.message} />
-      <Input label="Batch Number" {...register('batchNumber')} />
+      <div className="grid grid-cols-2 gap-4">
+        <Select label="From Warehouse *" options={whOpts} {...register('fromWarehouseId')} error={errors.fromWarehouseId?.message} disabled={!allowedType} />
+        <Select label="To Warehouse *" options={whOpts} {...register('toWarehouseId')} error={errors.toWarehouseId?.message} disabled={!allowedType} />
+      </div>
+      {allowedType && (
+        <p className="text-xs text-slate-500">
+          Transfers stay within the same warehouse type ({allowedType === 'raw_materials' ? 'raw materials' : 'finished goods'}).
+        </p>
+      )}
+      <Input label="Quantity *" type="number" step="0.001" {...register('quantity')} error={errors.quantity?.message} />
+      <Input label="Batch No" {...register('batchNumber')} />
       <Input label="Notes" {...register('notes')} />
-      <div className="flex justify-end gap-2 pt-4 border-t">
+      <div className="flex justify-end gap-3 pt-4 border-t">
         <Button type="button" variant="secondary" onClick={onCancel}>Cancel</Button>
-        <Button type="submit" loading={mutation.isPending}>Transfer Stock</Button>
+        <Button type="submit" loading={mutation.isPending}>Transfer</Button>
       </div>
     </form>
   );

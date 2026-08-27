@@ -1,4 +1,5 @@
 import { useFieldArray, useForm } from 'react-hook-form';
+import { useEffect } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -30,6 +31,7 @@ interface Warehouse {
   id: string;
   name: string;
   code: string;
+  type?: string;
 }
 
 interface GoodsReceiptFormProps {
@@ -67,7 +69,9 @@ export function GoodsReceiptForm({ onSuccess, onCancel }: GoodsReceiptFormProps)
 
   const warehouseOptions = [
     { value: '', label: 'Select warehouse...' },
-    ...(warehousesData || []).map((w) => ({ value: w.id, label: `${w.code} - ${w.name}` })),
+    ...(warehousesData || [])
+      .filter((w) => w.type === 'raw_materials')
+      .map((w) => ({ value: w.id, label: `${w.code} - ${w.name}` })),
   ];
 
   const poOptions = [
@@ -91,6 +95,11 @@ export function GoodsReceiptForm({ onSuccess, onCancel }: GoodsReceiptFormProps)
   });
 
   const { fields, append, remove } = useFieldArray({ control, name: 'items' });
+
+  useEffect(() => {
+    const rm = (warehousesData || []).find((w) => w.type === 'raw_materials');
+    if (rm) setValue('warehouseId', rm.id);
+  }, [warehousesData, setValue]);
 
   const handleMaterialChange = (index: number, materialId: string) => {
     const material = materialsData?.find((m) => m.id === materialId);
@@ -149,6 +158,9 @@ export function GoodsReceiptForm({ onSuccess, onCancel }: GoodsReceiptFormProps)
           {...register('warehouseId')}
           error={errors.warehouseId?.message}
         />
+        <p className="md:col-span-3 -mt-2 text-xs text-slate-500">
+          Goods receipts for materials post to the raw materials warehouse only.
+        </p>
         <Select label="Purchase Order" options={poOptions} {...register('purchaseOrderId')} />
       </div>
 

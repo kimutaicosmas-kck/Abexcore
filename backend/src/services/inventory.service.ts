@@ -1,6 +1,7 @@
 import { Prisma } from '@prisma/client';
 import prisma from '../config/database';
 import { AppError } from '../middleware/errorHandler';
+import { injectTenantData } from '../utils/tenant';
 
 type TxClient = Prisma.TransactionClient;
 
@@ -23,13 +24,67 @@ export class StockMovementService {
     return warehouse.id;
   }
 
+  /** Returns (and creates if missing) the tenant's raw materials warehouse. */
   static async getRawMaterialsWarehouseId(tx: TxClient = prisma): Promise<string> {
-    const warehouse = await tx.warehouse.findFirst({
+    const existing = await tx.warehouse.findFirst({
       where: { isActive: true, deletedAt: null, type: 'raw_materials' },
       orderBy: { createdAt: 'asc' },
     });
-    if (!warehouse) throw new AppError('No raw materials warehouse configured', 400);
-    return warehouse.id;
+    if (existing) return existing.id;
+
+    const branch = await tx.branch.findFirst({
+      where: { isActive: true },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true },
+    });
+    if (!branch) {
+      throw new AppError('No branch configured — cannot create raw materials warehouse', 400);
+    }
+
+    const created = await tx.warehouse.create({
+      data: injectTenantData({
+        code: 'WH-RM',
+        name: 'Raw Materials Warehouse',
+        type: 'raw_materials',
+        isActive: true,
+        branchId: branch.id,
+      }),
+    });
+    return created.id;
+  }
+
+  /** Raw materials → raw_materials warehouse; finished products → finished_goods. */
+  static async assertWarehouseMatchesItem(
+    tx: TxClient,
+    opts: { warehouseId: string; productId?: string | null; rawMaterialId?: string | null }
+  ) {
+    const warehouse = await tx.warehouse.findFirst({
+      where: { id: opts.warehouseId, isActive: true, deletedAt: null },
+      select: { id: true, type: true, name: true, code: true },
+    });
+    if (!warehouse) throw new AppError('Warehouse not found', 404);
+
+    if (opts.rawMaterialId && !opts.productId) {
+      if (warehouse.type !== 'raw_materials') {
+        throw new AppError(
+          `Raw materials must be stocked in a raw materials warehouse (got ${warehouse.code} · ${warehouse.type})`,
+          400
+        );
+      }
+      return warehouse;
+    }
+
+    if (opts.productId && !opts.rawMaterialId) {
+      if (warehouse.type !== 'finished_goods') {
+        throw new AppError(
+          `Finished products must be stocked in a finished goods warehouse (got ${warehouse.code} · ${warehouse.type})`,
+          400
+        );
+      }
+      return warehouse;
+    }
+
+    return warehouse;
   }
 
   static async reserveProductStock(
@@ -226,6 +281,14 @@ export class StockMovementService {
       userId?: string;
     }
   ) {
+    const hasRaw = opts.items.some((i) => i.rawMaterialId);
+    if (hasRaw) {
+      await this.assertWarehouseMatchesItem(tx, {
+        warehouseId: opts.warehouseId,
+        rawMaterialId: opts.items.find((i) => i.rawMaterialId)?.rawMaterialId,
+      });
+    }
+
     for (const item of opts.items) {
       const existing = await tx.stockLevel.findFirst({
         where: {

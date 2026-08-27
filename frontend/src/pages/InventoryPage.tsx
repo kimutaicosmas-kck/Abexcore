@@ -58,9 +58,12 @@ const TX_TYPE_FILTER = [
 ];
 
 const WAREHOUSE_TYPE_COLORS: Record<string, string> = {
+  raw_materials: 'from-amber-500 to-orange-600',
+  finished_goods: 'from-emerald-500 to-teal-600',
   RAW_MATERIAL: 'from-amber-500 to-orange-600',
   FINISHED_GOODS: 'from-emerald-500 to-teal-600',
   WIP: 'from-primary-600 to-primary-800',
+  general: 'from-slate-500 to-slate-700',
   GENERAL: 'from-slate-500 to-slate-700',
 };
 

@@ -36,8 +36,8 @@ const ROLES = [
 ];
 
 const MODULES = [
-  'dashboard', 'users', 'customers', 'crm', 'products', 'inventory', 'procurement',
-  'production', 'quality', 'sales', 'delivery', 'finance', 'hr', 'maintenance', 'reports', 'settings',
+  'dashboard', 'users', 'customers', 'products', 'inventory', 'procurement',
+  'production', 'quality', 'sales', 'pos', 'delivery', 'finance', 'hr', 'maintenance', 'reports', 'settings',
 ];
 
 const ACTIONS = ['read', 'create', 'update', 'delete', 'approve'];
@@ -134,6 +134,18 @@ async function main() {
       code: 'WH-FG',
       name: 'Finished Goods Warehouse',
       type: 'finished_goods',
+    },
+  });
+
+  await prisma.warehouse.upsert({
+    where: { companyId_code: { companyId, code: 'WH-RM' } },
+    update: { type: 'raw_materials', isActive: true },
+    create: {
+      companyId,
+      branchId: branch.id,
+      code: 'WH-RM',
+      name: 'Raw Materials Warehouse',
+      type: 'raw_materials',
     },
   });
 

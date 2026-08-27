@@ -16,9 +16,17 @@ const rawMaterialSchema = z.object({
   supplierId: z.string().optional(),
   minStockLevel: z.coerce.number().min(0).optional(),
   reorderQty: z.coerce.number().min(0).optional(),
+  initialQuantity: z.coerce.number().min(0).optional(),
 });
 
 type RawMaterialFormData = z.infer<typeof rawMaterialSchema>;
+
+interface Warehouse {
+  id: string;
+  name: string;
+  code: string;
+  type?: string;
+}
 
 interface RawMaterialFormProps {
   material?: RawMaterial | null;
@@ -41,6 +49,14 @@ export function RawMaterialForm({ material, onSuccess, onCancel }: RawMaterialFo
     queryKey: ['material-types'],
     queryFn: () => inventoryApi.materialTypes().then((r) => r.data.data as MaterialTypeOption[]),
   });
+
+  const { data: warehousesData } = useQuery({
+    queryKey: ['warehouses'],
+    queryFn: () => inventoryApi.warehouses().then((r) => r.data.data as Warehouse[]),
+    enabled: !isEdit,
+  });
+
+  const rawWarehouses = (warehousesData || []).filter((w) => w.type === 'raw_materials');
 
   const supplierOptions = [
     { value: '', label: 'None' },
@@ -66,7 +82,7 @@ export function RawMaterialForm({ material, onSuccess, onCancel }: RawMaterialFo
           minStockLevel: material.minStockLevel,
           reorderQty: 0,
         }
-      : { typeId: defaultTypeId, unit: 'pcs', minStockLevel: 0, reorderQty: 0 },
+      : { typeId: defaultTypeId, unit: 'pcs', minStockLevel: 0, reorderQty: 0, initialQuantity: 0 },
   });
 
   useEffect(() => {
@@ -92,7 +108,11 @@ export function RawMaterialForm({ material, onSuccess, onCancel }: RawMaterialFo
 
   const mutation = useMutation({
     mutationFn: (data: RawMaterialFormData) => {
-      const payload = { ...data, supplierId: data.supplierId || undefined };
+      const payload = {
+        ...data,
+        supplierId: data.supplierId || undefined,
+        initialQuantity: isEdit ? undefined : data.initialQuantity || undefined,
+      };
       return isEdit
         ? inventoryApi.updateMaterial(material!.id, payload)
         : inventoryApi.createMaterial(payload);
@@ -101,6 +121,8 @@ export function RawMaterialForm({ material, onSuccess, onCancel }: RawMaterialFo
       queryClient.invalidateQueries({ queryKey: ['materials'] });
       queryClient.invalidateQueries({ queryKey: ['inventory-stats'] });
       queryClient.invalidateQueries({ queryKey: ['low-stock'] });
+      queryClient.invalidateQueries({ queryKey: ['stock-levels'] });
+      queryClient.invalidateQueries({ queryKey: ['warehouses'] });
       onSuccess();
     },
   });
@@ -109,7 +131,8 @@ export function RawMaterialForm({ material, onSuccess, onCancel }: RawMaterialFo
     <form onSubmit={handleSubmit((data) => mutation.mutate(data))} className="space-y-4">
       {mutation.isError && (
         <div className="p-3 rounded-lg bg-red-50 text-red-700 text-sm">
-          Failed to save raw material. Please try again.
+          {(mutation.error as AxiosError<{ message?: string }>)?.response?.data?.message ||
+            'Failed to save raw material. Please try again.'}
         </div>
       )}
 
@@ -155,6 +178,25 @@ export function RawMaterialForm({ material, onSuccess, onCancel }: RawMaterialFo
         <Input label="Min Stock Level" type="number" {...register('minStockLevel')} />
         <Input label="Reorder Qty" type="number" {...register('reorderQty')} />
       </div>
+
+      {!isEdit && (
+        <div className="rounded-xl border border-amber-200/80 bg-amber-50/60 p-4 space-y-3">
+          <div>
+            <p className="text-sm font-medium text-slate-800">Opening stock</p>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Posted to the raw materials warehouse
+              {rawWarehouses[0] ? ` (${rawWarehouses[0].code})` : ' (created automatically if needed)'}.
+            </p>
+          </div>
+          <Input
+            label="Initial quantity"
+            type="number"
+            step="0.001"
+            {...register('initialQuantity')}
+            error={errors.initialQuantity?.message}
+          />
+        </div>
+      )}
 
       <div className="flex justify-end gap-3 pt-4 border-t">
         <Button type="button" variant="secondary" onClick={onCancel}>Cancel</Button>
