@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 
 const companySlug = process.env.E2E_COMPANY_SLUG || 'owner';
 const adminEmail = process.env.E2E_ADMIN_EMAIL || 'info.abexcore@gmail.com';
-const adminPassword = process.env.E2E_ADMIN_PASSWORD || 'Kimutai@44!';
+const adminPassword = process.env.E2E_ADMIN_PASSWORD || 'CiOnly-ChangeMe-NotForProd!';
 
 async function signIn(page: import('@playwright/test').Page) {
   await page.goto('/login');

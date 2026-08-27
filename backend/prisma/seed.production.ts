@@ -13,7 +13,10 @@ import bcrypt from 'bcrypt';
 const PLATFORM_OWNER_SLUG = process.env.PLATFORM_COMPANY_SLUG?.trim() || 'owner';
 const PLATFORM_OWNER_EMAIL =
   process.env.PLATFORM_OWNER_EMAIL?.trim().toLowerCase() || 'info.abexcore@gmail.com';
-const PLATFORM_OWNER_DEFAULT_PASSWORD = process.env.PLATFORM_OWNER_PASSWORD || 'Kimutai@44!';
+const PLATFORM_OWNER_DEFAULT_PASSWORD =
+  process.env.PLATFORM_OWNER_PASSWORD ||
+  process.env.SEED_ADMIN_PASSWORD ||
+  'CiOnly-ChangeMe-NotForProd!';
 
 const prisma = new PrismaClient();
 

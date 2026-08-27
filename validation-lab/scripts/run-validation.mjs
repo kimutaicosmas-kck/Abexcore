@@ -16,7 +16,7 @@ const BASE = process.env.API_BASE || 'http://localhost:3001';
 const FE_BASE = process.env.FE_BASE || 'http://localhost:5173';
 const COMPANY = process.env.TEST_COMPANY_SLUG || 'owner';
 const EMAIL = process.env.TEST_EMAIL || 'kimutaicosmas547@gmail.com';
-const PASSWORD = process.env.TEST_PASSWORD || 'Kimutai@44!';
+const PASSWORD = process.env.TEST_PASSWORD || 'CiOnly-ChangeMe-NotForProd!';
 
 fs.mkdirSync(EVIDENCE, { recursive: true });
 
