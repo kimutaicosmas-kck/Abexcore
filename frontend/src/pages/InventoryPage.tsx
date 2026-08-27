@@ -139,8 +139,16 @@ export function InventoryPage() {
   const { data: warehousesResponse } = useQuery({
     queryKey: ['warehouses'],
     queryFn: () => inventoryApi.warehouses().then((r) => r.data as {
-      data: { id: string; code: string; name: string; type: string; address?: string; stockLevels: { quantity?: number }[] }[];
-      meta?: { relocated?: number };
+      data: {
+        id: string;
+        code: string;
+        name: string;
+        type: string;
+        address?: string;
+        stockLevels: { quantity?: number }[];
+        materialsCount?: number;
+      }[];
+      meta?: { relocated?: number; materialsCount?: number };
     }),
     enabled: activeTab === 0 || activeTab === 2,
   });
@@ -173,6 +181,12 @@ export function InventoryPage() {
     setStockPage(1);
     setStockSearch('');
     setActiveTab(0);
+  };
+
+  const viewWarehouseMaterials = () => {
+    setMatPage(1);
+    setMatSearch('');
+    setActiveTab(1);
   };
 
   const filteredTransactions = (transactions?.data as InventoryTransaction[] | undefined)?.filter((tx) =>
@@ -468,7 +482,9 @@ export function InventoryPage() {
           </div>
           {stockWarehouseId && (
             <Alert variant="info" className="mb-4">
-              Showing stock for one warehouse.{' '}
+              {warehouseList.find((w) => w.id === stockWarehouseId)?.type === 'raw_materials'
+                ? 'Showing raw materials for this warehouse (on-hand qty may be 0 until you receive or adjust stock). '
+                : 'Showing stock for one warehouse. '}
               <button
                 type="button"
                 className="underline font-medium"
@@ -491,7 +507,9 @@ export function InventoryPage() {
               title="No stock records"
               description={
                 stockWarehouseId
-                  ? 'This warehouse has no on-hand stock lines yet.'
+                  ? warehouseList.find((w) => w.id === stockWarehouseId)?.type === 'raw_materials'
+                    ? 'No raw materials in the catalog yet. Add them under Materials, then receive or adjust stock into WH-RM.'
+                    : 'This warehouse has no on-hand stock lines yet.'
                   : 'Try a different search or receive goods via Procurement.'
               }
             />
@@ -557,10 +575,12 @@ export function InventoryPage() {
             <EmptyState title="No warehouses configured" description="Warehouses are set up during system seeding or in Settings." />
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-              {warehouseList.map(
-                (wh) => {
+              {warehouseList.map((wh) => {
                   const gradient = WAREHOUSE_TYPE_COLORS[wh.type] || WAREHOUSE_TYPE_COLORS.GENERAL;
-                  const itemCount = (wh.stockLevels || []).filter((l) => Number(l.quantity) !== 0).length;
+                  const isRaw = wh.type === 'raw_materials';
+                  const stockLines = (wh.stockLevels || []).filter((l) => Number(l.quantity) !== 0).length;
+                  const itemCount = isRaw ? (wh.materialsCount ?? stockLines) : stockLines;
+                  const countLabel = isRaw ? 'materials' : 'stock lines';
                   return (
                     <div
                       key={wh.id}
@@ -582,20 +602,31 @@ export function InventoryPage() {
                             {wh.address}
                           </p>
                         )}
-                        <div className="mt-4 pt-4 border-t border-slate-100 flex items-center justify-between">
+                        {isRaw && (
+                          <p className="text-xs text-slate-500 mt-3">
+                            {stockLines} stock line{stockLines === 1 ? '' : 's'} with quantity on hand
+                          </p>
+                        )}
+                        <div className="mt-4 pt-4 border-t border-slate-100 flex items-center justify-between gap-2">
                           <div>
                             <p className="text-2xl font-bold text-slate-900 tabular-nums">{itemCount}</p>
-                            <p className="text-xs text-slate-500">stock lines</p>
+                            <p className="text-xs text-slate-500">{countLabel}</p>
                           </div>
-                          <Button variant="secondary" size="sm" onClick={() => viewWarehouseStock(wh.id)}>
-                            View stock
-                          </Button>
+                          <div className="flex flex-col sm:flex-row gap-2">
+                            {isRaw && (
+                              <Button variant="secondary" size="sm" onClick={() => viewWarehouseMaterials()}>
+                                View materials
+                              </Button>
+                            )}
+                            <Button variant="secondary" size="sm" onClick={() => viewWarehouseStock(wh.id)}>
+                              View stock
+                            </Button>
+                          </div>
                         </div>
                       </div>
                     </div>
                   );
-                }
-              )}
+                })}
             </div>
           )}
         </>

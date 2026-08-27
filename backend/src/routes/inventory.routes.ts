@@ -518,15 +518,27 @@ router.get(
 router.get('/warehouses', authorize('inventory:read'), asyncHandler(async (_req: AuthRequest, res: Response) => {
   const relocated = await StockMovementService.relocateMisplacedRawMaterialStock();
 
-  const warehouses = await prisma.warehouse.findMany({
-    where: { deletedAt: null, isActive: true },
-    include: {
-      branch: true,
-      locations: true,
-      stockLevels: { where: { quantity: { not: 0 } } },
-    },
+  const [warehouses, materialsCount] = await Promise.all([
+    prisma.warehouse.findMany({
+      where: { deletedAt: null, isActive: true },
+      include: {
+        branch: true,
+        locations: true,
+        stockLevels: { where: { quantity: { not: 0 } } },
+      },
+    }),
+    prisma.rawMaterial.count({ where: { deletedAt: null, isActive: true } }),
+  ]);
+
+  res.json({
+    success: true,
+    data: warehouses.map((wh) => ({
+      ...wh,
+      // Catalog size for RM warehouse cards (stock lines alone stay 0 until qty is received).
+      materialsCount: wh.type === 'raw_materials' ? materialsCount : undefined,
+    })),
+    meta: { relocated, materialsCount },
   });
-  res.json({ success: true, data: warehouses, meta: { relocated } });
 }));
 
 const listStockLevels = asyncHandler(async (req: AuthRequest, res: Response) => {
@@ -539,6 +551,80 @@ const listStockLevels = asyncHandler(async (req: AuthRequest, res: Response) => 
     warehouseId?: string;
   }>(req.query);
   const skip = (page - 1) * limit;
+
+  // Raw-materials warehouse: show the materials catalog with on-hand qty in that warehouse
+  // (including 0), so users can open materials from the warehouse card — not only from Materials.
+  if (warehouseId) {
+    const warehouse = await prisma.warehouse.findFirst({
+      where: { id: warehouseId, deletedAt: null, isActive: true },
+    });
+    if (!warehouse) throw new AppError('Warehouse not found', 404);
+
+    if (warehouse.type === 'raw_materials') {
+      const materialWhere: Prisma.RawMaterialWhereInput = {
+        isActive: true,
+        deletedAt: null,
+        ...(search
+          ? {
+              OR: [
+                { name: { contains: search } },
+                { code: { contains: search } },
+              ],
+            }
+          : {}),
+      };
+
+      const [materials, total] = await Promise.all([
+        prisma.rawMaterial.findMany({
+          where: materialWhere,
+          skip,
+          take: limit,
+          orderBy: { name: 'asc' },
+          include: {
+            stockLevels: {
+              where: { warehouseId },
+              orderBy: { updatedAt: 'desc' },
+            },
+          },
+        }),
+        prisma.rawMaterial.count({ where: materialWhere }),
+      ]);
+
+      const data = materials.map((m) => {
+        const levels = m.stockLevels;
+        const quantity = levels.reduce((s, l) => s + Number(l.quantity), 0);
+        const reservedQty = levels.reduce((s, l) => s + Number(l.reservedQty || 0), 0);
+        const primary = levels[0];
+        const unitCost =
+          quantity > 0
+            ? levels.reduce((s, l) => s + Number(l.unitCost) * Number(l.quantity), 0) / quantity
+            : Number(m.unitCost || 0);
+
+        return {
+          id: primary?.id || `material-${m.id}`,
+          warehouseId: warehouse.id,
+          warehouse,
+          productId: null,
+          product: null,
+          rawMaterialId: m.id,
+          rawMaterial: m,
+          batchNumber: levels.length === 1 ? primary?.batchNumber : levels.length > 1 ? `${levels.length} batches` : null,
+          quantity,
+          reservedQty,
+          unitCost,
+          expiryDate: primary?.expiryDate ?? null,
+          updatedAt: primary?.updatedAt ?? m.updatedAt,
+        };
+      });
+
+      res.json({
+        success: true,
+        data,
+        pagination: { page, limit, total, totalPages: Math.ceil(total / limit) || 1 },
+      });
+      return;
+    }
+  }
 
   const where: Prisma.StockLevelWhereInput = mergeTenantWarehouseWhere({
     ...(warehouseId ? { warehouseId } : {}),
