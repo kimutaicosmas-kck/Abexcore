@@ -42,9 +42,17 @@ interface StockTransferFormProps {
 export function StockTransferForm({ onSuccess, onCancel }: StockTransferFormProps) {
   const queryClient = useQueryClient();
 
+  const asWarehouseList = (value: unknown): Warehouse[] => {
+    if (Array.isArray(value)) return value as Warehouse[];
+    if (value && typeof value === 'object' && Array.isArray((value as { data?: unknown }).data)) {
+      return (value as { data: Warehouse[] }).data;
+    }
+    return [];
+  };
+
   const { data: warehouses } = useQuery({
     queryKey: ['warehouses'],
-    queryFn: () => inventoryApi.warehouses().then((r) => r.data.data as Warehouse[]),
+    queryFn: async () => asWarehouseList((await inventoryApi.warehouses()).data),
   });
 
   const { data: materials } = useQuery({
@@ -65,7 +73,7 @@ export function StockTransferForm({ onSuccess, onCancel }: StockTransferFormProp
       ? 'finished_goods'
       : null;
 
-  const filtered = (warehouses || []).filter((w) =>
+  const filtered = asWarehouseList(warehouses).filter((w) =>
     allowedType ? w.type === allowedType : true
   );
   const whOpts = [

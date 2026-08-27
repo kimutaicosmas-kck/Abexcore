@@ -52,11 +52,21 @@ export function RawMaterialForm({ material, onSuccess, onCancel }: RawMaterialFo
 
   const { data: warehousesData } = useQuery({
     queryKey: ['warehouses'],
-    queryFn: () => inventoryApi.warehouses().then((r) => r.data.data as Warehouse[]),
+    queryFn: async () => {
+      const body = (await inventoryApi.warehouses()).data as {
+        data?: Warehouse[];
+      } & Warehouse[];
+      // Support both `{ data: Warehouse[] }` and a bare array (legacy cache shapes).
+      if (Array.isArray(body)) return body;
+      if (Array.isArray(body?.data)) return body.data;
+      return [] as Warehouse[];
+    },
     enabled: !isEdit,
   });
 
-  const rawWarehouses = (warehousesData || []).filter((w) => w.type === 'raw_materials');
+  const rawWarehouses = (Array.isArray(warehousesData) ? warehousesData : []).filter(
+    (w) => w.type === 'raw_materials'
+  );
 
   const supplierOptions = [
     { value: '', label: 'None' },

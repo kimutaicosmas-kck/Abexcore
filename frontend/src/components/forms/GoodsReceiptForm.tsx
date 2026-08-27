@@ -47,9 +47,17 @@ export function GoodsReceiptForm({ onSuccess, onCancel }: GoodsReceiptFormProps)
     queryFn: () => inventoryApi.suppliers({ limit: 100 }).then((r) => r.data.data as Supplier[]),
   });
 
+  const asWarehouseList = (value: unknown): Warehouse[] => {
+    if (Array.isArray(value)) return value as Warehouse[];
+    if (value && typeof value === 'object' && Array.isArray((value as { data?: unknown }).data)) {
+      return (value as { data: Warehouse[] }).data;
+    }
+    return [];
+  };
+
   const { data: warehousesData } = useQuery({
     queryKey: ['warehouses'],
-    queryFn: () => inventoryApi.warehouses().then((r) => r.data.data as Warehouse[]),
+    queryFn: async () => asWarehouseList((await inventoryApi.warehouses()).data),
   });
 
   const { data: purchaseOrdersData } = useQuery({
@@ -69,7 +77,7 @@ export function GoodsReceiptForm({ onSuccess, onCancel }: GoodsReceiptFormProps)
 
   const warehouseOptions = [
     { value: '', label: 'Select warehouse...' },
-    ...(warehousesData || [])
+    ...asWarehouseList(warehousesData)
       .filter((w) => w.type === 'raw_materials')
       .map((w) => ({ value: w.id, label: `${w.code} - ${w.name}` })),
   ];
@@ -97,7 +105,7 @@ export function GoodsReceiptForm({ onSuccess, onCancel }: GoodsReceiptFormProps)
   const { fields, append, remove } = useFieldArray({ control, name: 'items' });
 
   useEffect(() => {
-    const rm = (warehousesData || []).find((w) => w.type === 'raw_materials');
+    const rm = asWarehouseList(warehousesData).find((w) => w.type === 'raw_materials');
     if (rm) setValue('warehouseId', rm.id);
   }, [warehousesData, setValue]);
 

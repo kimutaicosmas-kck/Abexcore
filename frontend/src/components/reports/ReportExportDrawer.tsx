@@ -93,7 +93,12 @@ export function ReportExportDrawer({
 
   const { data: warehouses } = useQuery({
     queryKey: ['warehouses'],
-    queryFn: () => inventoryApi.warehouses().then((r) => r.data.data as WarehouseOption[]),
+    queryFn: async () => {
+      const body = (await inventoryApi.warehouses()).data as { data?: WarehouseOption[] } | WarehouseOption[];
+      if (Array.isArray(body)) return body;
+      if (Array.isArray(body?.data)) return body.data;
+      return [] as WarehouseOption[];
+    },
     enabled: open && !!report?.filters.includes('warehouseId'),
   });
 
@@ -108,7 +113,10 @@ export function ReportExportDrawer({
   const warehouseOptions = useMemo(
     () => [
       { value: '', label: 'All warehouses' },
-      ...(warehouses || []).map((w) => ({ value: w.id, label: `${w.code} — ${w.name}` })),
+      ...(Array.isArray(warehouses) ? warehouses : []).map((w) => ({
+        value: w.id,
+        label: `${w.code} — ${w.name}`,
+      })),
     ],
     [warehouses]
   );

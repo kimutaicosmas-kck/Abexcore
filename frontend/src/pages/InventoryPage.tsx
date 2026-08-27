@@ -137,19 +137,23 @@ export function InventoryPage() {
   });
 
   const { data: warehousesResponse } = useQuery({
-    queryKey: ['warehouses'],
-    queryFn: () => inventoryApi.warehouses().then((r) => r.data as {
-      data: {
-        id: string;
-        code: string;
-        name: string;
-        type: string;
-        address?: string;
-        stockLevels: { quantity?: number }[];
-        materialsCount?: number;
-      }[];
-      meta?: { relocated?: number; materialsCount?: number };
-    }),
+    queryKey: ['inventory-warehouses'],
+    queryFn: () =>
+      inventoryApi.warehouses().then(
+        (r) =>
+          r.data as {
+            data: {
+              id: string;
+              code: string;
+              name: string;
+              type: string;
+              address?: string;
+              stockLevels: { quantity?: number }[];
+              materialsCount?: number;
+            }[];
+            meta?: { relocated?: number; materialsCount?: number };
+          }
+      ),
     enabled: activeTab === 0 || activeTab === 2,
   });
   const warehouseList = warehousesResponse?.data || [];
@@ -273,9 +277,19 @@ export function InventoryPage() {
       key: 'onHand',
       label: 'On hand',
       render: (_: unknown, row: Record<string, unknown>) => {
-        const levels = (row.stockLevels as { quantity?: number; warehouse?: { code?: string } }[] | undefined) || [];
+        const rawLevels = row.stockLevels;
+        const levels = Array.isArray(rawLevels)
+          ? (rawLevels as { quantity?: number; warehouse?: { code?: string } }[])
+          : [];
         const total = levels.reduce((s, l) => s + Number(l.quantity || 0), 0);
-        const warehouses = [...new Set(levels.filter((l) => Number(l.quantity) !== 0).map((l) => l.warehouse?.code).filter(Boolean))];
+        const warehouses = [
+          ...new Set(
+            levels
+              .filter((l) => Number(l.quantity) !== 0)
+              .map((l) => l.warehouse?.code)
+              .filter(Boolean)
+          ),
+        ];
         return (
           <div>
             <span className={`font-semibold tabular-nums ${total <= 0 ? 'text-red-600' : ''}`}>
@@ -578,7 +592,9 @@ export function InventoryPage() {
               {warehouseList.map((wh) => {
                   const gradient = WAREHOUSE_TYPE_COLORS[wh.type] || WAREHOUSE_TYPE_COLORS.GENERAL;
                   const isRaw = wh.type === 'raw_materials';
-                  const stockLines = (wh.stockLevels || []).filter((l) => Number(l.quantity) !== 0).length;
+                  const stockLines = (Array.isArray(wh.stockLevels) ? wh.stockLevels : []).filter(
+                    (l) => Number(l.quantity) !== 0
+                  ).length;
                   const itemCount = isRaw ? (wh.materialsCount ?? stockLines) : stockLines;
                   const countLabel = isRaw ? 'materials' : 'stock lines';
                   return (
@@ -787,6 +803,8 @@ export function InventoryPage() {
           queryClient.invalidateQueries({ queryKey: ['materials'] });
           queryClient.invalidateQueries({ queryKey: ['material-types'] });
           queryClient.invalidateQueries({ queryKey: ['inventory-stats'] });
+          queryClient.invalidateQueries({ queryKey: ['inventory-warehouses'] });
+          queryClient.invalidateQueries({ queryKey: ['warehouses'] });
           queryClient.invalidateQueries({ queryKey: ['stock-levels'] });
           queryClient.invalidateQueries({ queryKey: ['low-stock'] });
         }}

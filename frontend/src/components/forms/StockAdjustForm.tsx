@@ -43,9 +43,20 @@ interface StockAdjustFormProps {
 export function StockAdjustForm({ onSuccess, onCancel }: StockAdjustFormProps) {
   const queryClient = useQueryClient();
 
+  const asWarehouseList = (value: unknown): Warehouse[] => {
+    if (Array.isArray(value)) return value as Warehouse[];
+    if (value && typeof value === 'object' && Array.isArray((value as { data?: unknown }).data)) {
+      return (value as { data: Warehouse[] }).data;
+    }
+    return [];
+  };
+
   const { data: warehousesData } = useQuery({
     queryKey: ['warehouses'],
-    queryFn: () => inventoryApi.warehouses().then((r) => r.data.data as Warehouse[]),
+    queryFn: async () => {
+      const body = (await inventoryApi.warehouses()).data;
+      return asWarehouseList(body);
+    },
   });
 
   const { data: materialsData } = useQuery({
@@ -73,7 +84,7 @@ export function StockAdjustForm({ onSuccess, onCancel }: StockAdjustFormProps) {
       ? 'finished_goods'
       : null;
 
-  const filteredWarehouses = (warehousesData || []).filter((w) =>
+  const filteredWarehouses = asWarehouseList(warehousesData).filter((w) =>
     allowedType ? w.type === allowedType : true
   );
 
