@@ -36,6 +36,7 @@ import {
   isSalesBookOwner,
   isSalesPersonRole,
   SALES_PERSON_ROLE_NAMES,
+  SALES_TARGET_MANAGER_ROLES,
 } from '../config/rolePermissions';
 import { buildSalesOrdersWhere } from '../utils/sales-list-where';
 import { Prisma } from '@prisma/client';
@@ -70,6 +71,34 @@ function salesPersonLabel(order: {
   const person = order.salesPerson || order.createdBy;
   if (!person) return 'Unassigned';
   return `${person.firstName} ${person.lastName}`.trim();
+}
+
+/** Alert managers who can confirm / adjust when a front-line sales officer places a PENDING order. */
+async function notifyPendingSalesOrderForConfirm(opts: {
+  order: {
+    id: string;
+    orderNumber: string;
+    totalAmount: unknown;
+    customer?: { name?: string | null } | null;
+    salesPerson?: PersonName | null;
+  };
+  actorUserId: string;
+  actorRoleName: string | null | undefined;
+}) {
+  if (!isSalesBookOwner(opts.actorRoleName)) return;
+
+  const total = Number(opts.order.totalAmount).toLocaleString('en-KE');
+  const salesperson = salesPersonLabel(opts.order);
+  const customerName = opts.order.customer?.name || 'Customer';
+
+  await NotificationService.notifyRolesExcept(
+    [...SALES_TARGET_MANAGER_ROLES],
+    'APPROVAL',
+    `New sales order ${opts.order.orderNumber} pending confirm — ${salesperson}`,
+    `${customerName} · Sales: ${salesperson} — KES ${total}. Confirm or adjust quantities in Sales.`,
+    `/sales?orderId=${opts.order.id}`,
+    opts.actorUserId
+  );
 }
 
 /** Front-line officers may only touch orders in their own sales book. */
@@ -381,6 +410,12 @@ router.post(
 
       await syncCustomerCreditUsed(customerId, tx);
       return created;
+    });
+
+    await notifyPendingSalesOrderForConfirm({
+      order,
+      actorUserId: req.user!.id,
+      actorRoleName: req.user!.roleName,
     });
 
     res.status(201).json({ success: true, data: order });
@@ -867,6 +902,12 @@ router.post(
 
       await syncCustomerCreditUsed(quotation.customerId, tx);
       return so;
+    });
+
+    await notifyPendingSalesOrderForConfirm({
+      order,
+      actorUserId: req.user!.id,
+      actorRoleName: req.user!.roleName,
     });
 
     res.status(201).json({ success: true, data: order });

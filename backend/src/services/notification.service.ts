@@ -75,6 +75,54 @@ export class NotificationService {
     return this.notifyRole('Super Admin', type, title, message, link);
   }
 
+  /**
+   * Notify active users in any of the given roles (deduped), optionally skipping one user
+   * (e.g. the actor who triggered the event).
+   */
+  static async notifyRolesExcept(
+    roleNames: string[],
+    type: NotificationType,
+    title: string,
+    message: string,
+    link?: string,
+    excludeUserId?: string | null
+  ) {
+    const companyId = requireTenantId();
+    const users = await prisma.user.findMany({
+      where: {
+        companyId,
+        status: 'ACTIVE',
+        deletedAt: null,
+        ...(excludeUserId ? { id: { not: excludeUserId } } : {}),
+        role: { name: { in: roleNames } },
+      },
+      select: { id: true, email: true },
+    });
+
+    if (users.length === 0) return [];
+
+    await prisma.notification.createMany({
+      data: users.map((user) => ({
+        companyId,
+        userId: user.id,
+        type,
+        title,
+        message,
+        link,
+      })),
+    });
+
+    await Promise.all(
+      users
+        .filter((user) => user.email)
+        .map((user) =>
+          EmailService.sendNotificationEmail(user.email!, title, message, link, companyId)
+        )
+    );
+
+    return users.map((user) => user.id);
+  }
+
   static async runLowStockCheck() {
     const companyId = getTenantId();
     if (!companyId) return;
