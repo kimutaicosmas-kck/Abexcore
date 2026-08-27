@@ -53,6 +53,90 @@ export class StockMovementService {
     return created.id;
   }
 
+  /** Move any raw-material stock that landed in the wrong warehouse into WH-RM. */
+  static async relocateMisplacedRawMaterialStock(tx: TxClient = prisma): Promise<number> {
+    const rmWarehouseId = await this.getRawMaterialsWarehouseId(tx);
+    const misplaced = await tx.stockLevel.findMany({
+      where: {
+        rawMaterialId: { not: null },
+        quantity: { not: 0 },
+        warehouse: { type: { not: 'raw_materials' }, deletedAt: null },
+      },
+      include: { warehouse: { select: { id: true, code: true } } },
+    });
+
+    let moved = 0;
+    for (const level of misplaced) {
+      const qty = Number(level.quantity);
+      if (!level.rawMaterialId || qty === 0) continue;
+
+      const dest = await tx.stockLevel.findFirst({
+        where: {
+          warehouseId: rmWarehouseId,
+          rawMaterialId: level.rawMaterialId,
+          batchNumber: level.batchNumber,
+        },
+      });
+
+      if (dest) {
+        await tx.stockLevel.update({
+          where: { id: dest.id },
+          data: {
+            quantity: { increment: qty },
+            reservedQty: { increment: Number(level.reservedQty || 0) },
+          },
+        });
+      } else {
+        await tx.stockLevel.create({
+          data: {
+            warehouseId: rmWarehouseId,
+            rawMaterialId: level.rawMaterialId,
+            batchNumber: level.batchNumber,
+            quantity: qty,
+            reservedQty: level.reservedQty,
+            unitCost: level.unitCost,
+            expiryDate: level.expiryDate,
+          },
+        });
+      }
+
+      await tx.stockLevel.update({
+        where: { id: level.id },
+        data: { quantity: 0, reservedQty: 0 },
+      });
+
+      await tx.inventoryTransaction.create({
+        data: {
+          warehouseId: level.warehouseId,
+          type: 'TRANSFER',
+          rawMaterialId: level.rawMaterialId,
+          batchNumber: level.batchNumber,
+          quantity: -Math.abs(qty),
+          unitCost: Number(level.unitCost || 0),
+          notes: `Auto-relocate raw material from ${level.warehouse.code} to WH-RM`,
+          referenceType: 'warehouse_repair',
+          referenceId: rmWarehouseId,
+        },
+      });
+      await tx.inventoryTransaction.create({
+        data: {
+          warehouseId: rmWarehouseId,
+          type: 'TRANSFER',
+          rawMaterialId: level.rawMaterialId,
+          batchNumber: level.batchNumber,
+          quantity: Math.abs(qty),
+          unitCost: Number(level.unitCost || 0),
+          notes: `Auto-relocate raw material from ${level.warehouse.code} to WH-RM`,
+          referenceType: 'warehouse_repair',
+          referenceId: level.warehouseId,
+        },
+      });
+      moved += 1;
+    }
+
+    return moved;
+  }
+
   /** Raw materials → raw_materials warehouse; finished products → finished_goods. */
   static async assertWarehouseMatchesItem(
     tx: TxClient,
@@ -84,6 +168,22 @@ export class StockMovementService {
       return warehouse;
     }
 
+    return warehouse;
+  }
+
+  /** Goods receipts always land in a raw materials warehouse. */
+  static async assertGoodsReceiptWarehouse(tx: TxClient, warehouseId: string) {
+    const warehouse = await tx.warehouse.findFirst({
+      where: { id: warehouseId, isActive: true, deletedAt: null },
+      select: { id: true, type: true, code: true },
+    });
+    if (!warehouse) throw new AppError('Warehouse not found', 404);
+    if (warehouse.type !== 'raw_materials') {
+      throw new AppError(
+        `Goods receipts must use a raw materials warehouse (got ${warehouse.code} · ${warehouse.type})`,
+        400
+      );
+    }
     return warehouse;
   }
 
@@ -281,13 +381,7 @@ export class StockMovementService {
       userId?: string;
     }
   ) {
-    const hasRaw = opts.items.some((i) => i.rawMaterialId);
-    if (hasRaw) {
-      await this.assertWarehouseMatchesItem(tx, {
-        warehouseId: opts.warehouseId,
-        rawMaterialId: opts.items.find((i) => i.rawMaterialId)?.rawMaterialId,
-      });
-    }
+    await this.assertGoodsReceiptWarehouse(tx, opts.warehouseId);
 
     for (const item of opts.items) {
       const existing = await tx.stockLevel.findFirst({

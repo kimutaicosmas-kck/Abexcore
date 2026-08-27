@@ -516,6 +516,9 @@ router.get(
 
 // Warehouses
 router.get('/warehouses', authorize('inventory:read'), asyncHandler(async (_req: AuthRequest, res: Response) => {
+  // One-time style repair: move any RM qty that previously landed in FG (or other) into WH-RM.
+  await StockMovementService.relocateMisplacedRawMaterialStock();
+
   const warehouses = await prisma.warehouse.findMany({
     where: { deletedAt: null, isActive: true },
     include: { branch: true, locations: true, stockLevels: true },
@@ -524,6 +527,8 @@ router.get('/warehouses', authorize('inventory:read'), asyncHandler(async (_req:
 }));
 
 const listStockLevels = asyncHandler(async (req: AuthRequest, res: Response) => {
+  await StockMovementService.relocateMisplacedRawMaterialStock();
+
   const { page, limit, search } = getQuery<{ page: number; limit: number; search?: string }>(req.query);
   const skip = (page - 1) * limit;
 
@@ -637,6 +642,12 @@ router.post('/cycle-counts', authorize('inventory:update'), validate(cycleCountS
   const adjustments = await prisma.$transaction(async (tx) => {
     const results = [];
     for (const count of counts) {
+      await StockMovementService.assertWarehouseMatchesItem(tx, {
+        warehouseId,
+        productId: count.productId,
+        rawMaterialId: count.rawMaterialId,
+      });
+
       const existing = await tx.stockLevel.findFirst({
         where: {
           warehouseId,
@@ -714,6 +725,17 @@ router.post('/transfers', authorize('inventory:update'), validate(stockTransferS
   const { fromWarehouseId, toWarehouseId, productId, rawMaterialId, quantity, notes, batchNumber } = req.body;
 
   const result = await prisma.$transaction(async (tx) => {
+    await StockMovementService.assertWarehouseMatchesItem(tx, {
+      warehouseId: fromWarehouseId,
+      productId,
+      rawMaterialId,
+    });
+    await StockMovementService.assertWarehouseMatchesItem(tx, {
+      warehouseId: toWarehouseId,
+      productId,
+      rawMaterialId,
+    });
+
     const [source, fromWarehouse, toWarehouse] = await Promise.all([
       tx.stockLevel.findFirst({
         where: {
@@ -1235,13 +1257,7 @@ router.post('/goods-receipts', authorize('procurement:create'), validate(createG
   const count = await prisma.goodsReceipt.count();
   const grnNumber = generateNumber('GRN', count + 1);
 
-  const hasRaw = (items as Array<{ rawMaterialId?: string }>).some((i) => i.rawMaterialId);
-  if (hasRaw) {
-    await StockMovementService.assertWarehouseMatchesItem(prisma, {
-      warehouseId,
-      rawMaterialId: (items as Array<{ rawMaterialId?: string }>).find((i) => i.rawMaterialId)?.rawMaterialId,
-    });
-  }
+  await StockMovementService.assertGoodsReceiptWarehouse(prisma, warehouseId);
 
   const normalizedItems = (
     items as Array<{
