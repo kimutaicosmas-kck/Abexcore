@@ -476,4 +476,83 @@ export class StockMovementService {
       });
     }
   }
+
+  /** Set absolute on-hand qty for a raw material in WH-RM (catalog create/edit). */
+  static async setRawMaterialOnHand(
+    tx: TxClient,
+    opts: {
+      rawMaterialId: string;
+      quantity: number;
+      unitCost?: number;
+      userId?: string;
+      notes?: string;
+    }
+  ) {
+    const desired = Math.max(0, Number(opts.quantity));
+    if (Number.isNaN(desired)) throw new AppError('Invalid stock quantity', 400);
+
+    const warehouseId = await this.getRawMaterialsWarehouseId(tx);
+    const levels = await tx.stockLevel.findMany({
+      where: { warehouseId, rawMaterialId: opts.rawMaterialId },
+      orderBy: { updatedAt: 'asc' },
+    });
+
+    const current = levels.reduce((s, l) => s + Number(l.quantity), 0);
+    const delta = desired - current;
+    if (delta === 0 && levels.length > 0) return { warehouseId, quantity: desired, adjusted: false };
+
+    const unitCost =
+      opts.unitCost !== undefined
+        ? opts.unitCost
+        : levels[0]
+          ? Number(levels[0].unitCost)
+          : 0;
+
+    if (levels.length === 0) {
+      if (desired > 0) {
+        await tx.stockLevel.create({
+          data: {
+            warehouseId,
+            rawMaterialId: opts.rawMaterialId,
+            quantity: desired,
+            unitCost,
+          },
+        });
+      }
+    } else {
+      const [primary, ...rest] = levels;
+      await tx.stockLevel.update({
+        where: { id: primary.id },
+        data: { quantity: desired, ...(opts.unitCost !== undefined ? { unitCost } : {}) },
+      });
+      for (const level of rest) {
+        if (Number(level.quantity) !== 0 || Number(level.reservedQty || 0) !== 0) {
+          await tx.stockLevel.update({
+            where: { id: level.id },
+            data: { quantity: 0, reservedQty: 0 },
+          });
+        }
+      }
+    }
+
+    if (delta !== 0) {
+      await tx.inventoryTransaction.create({
+        data: {
+          warehouseId,
+          type: 'ADJUSTMENT',
+          rawMaterialId: opts.rawMaterialId,
+          quantity: Math.abs(delta),
+          unitCost,
+          notes:
+            opts.notes ||
+            `Material stock set to ${desired} (was ${current})`,
+          referenceType: 'raw_material',
+          referenceId: opts.rawMaterialId,
+          createdById: opts.userId,
+        },
+      });
+    }
+
+    return { warehouseId, quantity: desired, adjusted: delta !== 0 };
+  }
 }

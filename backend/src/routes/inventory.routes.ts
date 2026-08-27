@@ -394,8 +394,51 @@ router.put('/materials/:id', authorize('inventory:update'), validate(createRawMa
     });
     if (!materialType) throw new AppError('Invalid material type', 400);
   }
-  const { initialQuantity: _iq, warehouseId: _wh, ...payload } = req.body;
-  const data = await materialService.update(getParam(req.params.id), payload);
+
+  const materialId = getParam(req.params.id);
+  const { initialQuantity, warehouseId: _wh, ...payload } = req.body;
+  const setStock = initialQuantity !== undefined && initialQuantity !== null;
+
+  const data = await prisma.$transaction(async (tx) => {
+    const existing = await tx.rawMaterial.findFirst({
+      where: { id: materialId, deletedAt: null },
+    });
+    if (!existing) throw new AppError('Raw material not found', 404);
+
+    const updated = await tx.rawMaterial.update({
+      where: { id: materialId },
+      data: {
+        ...payload,
+        ...(payload.weight === null ? { weight: null } : {}),
+      },
+      include: {
+        materialType: true,
+        supplier: { select: { id: true, name: true, code: true } },
+        stockLevels: { include: { warehouse: true } },
+      },
+    });
+
+    if (setStock) {
+      await StockMovementService.setRawMaterialOnHand(tx, {
+        rawMaterialId: materialId,
+        quantity: Number(initialQuantity),
+        unitCost: Number(updated.unitCost || 0),
+        userId: req.user!.id,
+        notes: 'Stock on hand updated from material edit',
+      });
+    }
+
+    return tx.rawMaterial.findFirst({
+      where: { id: materialId },
+      include: {
+        materialType: true,
+        supplier: { select: { id: true, name: true, code: true } },
+        stockLevels: { include: { warehouse: true } },
+      },
+    });
+  });
+
+  if (setStock) checkLowStockAlerts();
   res.json({ success: true, data });
 }));
 

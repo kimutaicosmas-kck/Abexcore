@@ -145,12 +145,16 @@ export const createRawMaterialSchema = z.object({
   typeId: z.string().uuid('Select a valid material type'),
   description: z.string().optional(),
   unit: z.string().optional(),
-  unitCost: z.number().min(0).optional(),
-  supplierId: z.string().uuid().optional(),
+  unitCost: z.coerce.number().min(0).optional(),
+  weight: z.coerce.number().min(0).optional().nullable(),
+  supplierId: z.preprocess(
+    (v) => (v === '' || v === null || v === undefined ? undefined : v),
+    z.string().uuid().optional()
+  ),
   minStockLevel: z.coerce.number().min(0).optional(),
   reorderQty: z.coerce.number().min(0).optional(),
   shelfLifeDays: z.number().int().optional(),
-  /** Optional opening quantity — always posted to the raw materials warehouse. */
+  /** Opening / absolute on-hand qty in the raw materials warehouse. */
   initialQuantity: z.coerce.number().min(0).optional(),
   warehouseId: z.string().uuid().optional(),
 });
