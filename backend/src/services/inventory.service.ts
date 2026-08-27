@@ -1,7 +1,7 @@
 import { Prisma } from '@prisma/client';
 import prisma from '../config/database';
 import { AppError } from '../middleware/errorHandler';
-import { injectTenantData } from '../utils/tenant';
+import { injectTenantData, requireTenantId } from '../utils/tenant';
 
 type TxClient = Prisma.TransactionClient;
 
@@ -26,14 +26,15 @@ export class StockMovementService {
 
   /** Returns (and creates if missing) the tenant's raw materials warehouse. */
   static async getRawMaterialsWarehouseId(tx: TxClient = prisma): Promise<string> {
+    const companyId = requireTenantId();
     const existing = await tx.warehouse.findFirst({
-      where: { isActive: true, deletedAt: null, type: 'raw_materials' },
+      where: { companyId, isActive: true, deletedAt: null, type: 'raw_materials' },
       orderBy: { createdAt: 'asc' },
     });
     if (existing) return existing.id;
 
     const branch = await tx.branch.findFirst({
-      where: { isActive: true },
+      where: { companyId, isActive: true },
       orderBy: { createdAt: 'asc' },
       select: { id: true },
     });
@@ -53,30 +54,75 @@ export class StockMovementService {
     return created.id;
   }
 
-  /** Move any raw-material stock that landed in the wrong warehouse into WH-RM. */
-  static async relocateMisplacedRawMaterialStock(client: TxClient | typeof prisma = prisma): Promise<number> {
-    const run = async (tx: TxClient) => {
-      const rmWarehouseId = await this.getRawMaterialsWarehouseId(tx);
-      const misplaced = await tx.stockLevel.findMany({
-        where: {
-          rawMaterialId: { not: null },
-          OR: [{ quantity: { not: 0 } }, { reservedQty: { not: 0 } }],
-          warehouse: { type: { not: 'raw_materials' } },
-        },
-        include: { warehouse: { select: { id: true, code: true } } },
-      });
+  /**
+   * Move any raw-material stock that landed in the wrong warehouse into WH-RM.
+   * Uses explicit company warehouse IDs so nested filters / tx extensions cannot miss rows.
+   */
+  static async relocateMisplacedRawMaterialStock(): Promise<number> {
+    const companyId = requireTenantId();
 
-      let moved = 0;
-      for (const level of misplaced) {
-        const qty = Number(level.quantity);
-        const reserved = Number(level.reservedQty || 0);
-        if (!level.rawMaterialId || (qty === 0 && reserved === 0)) continue;
+    // Normalize known warehouse codes so type mismatches cannot hide stock.
+    await Promise.all([
+      prisma.warehouse.updateMany({
+        where: { companyId, code: 'WH-RM' },
+        data: { type: 'raw_materials', isActive: true },
+      }),
+      prisma.warehouse.updateMany({
+        where: { companyId, code: 'WH-FG' },
+        data: { type: 'finished_goods', isActive: true },
+      }),
+    ]);
+
+    const [rmWarehouseId, wrongWarehouses] = await Promise.all([
+      this.getRawMaterialsWarehouseId(),
+      prisma.warehouse.findMany({
+        where: {
+          companyId,
+          deletedAt: null,
+          type: { not: 'raw_materials' },
+        },
+        select: { id: true, code: true },
+      }),
+    ]);
+
+    if (wrongWarehouses.length === 0) return 0;
+
+    const wrongIds = wrongWarehouses.map((w) => w.id);
+    const codeById = new Map(wrongWarehouses.map((w) => [w.id, w.code]));
+
+    const misplaced = await prisma.stockLevel.findMany({
+      where: {
+        rawMaterialId: { not: null },
+        warehouseId: { in: wrongIds },
+        OR: [{ quantity: { not: 0 } }, { reservedQty: { not: 0 } }],
+      },
+    });
+
+    if (misplaced.length === 0) return 0;
+
+    let moved = 0;
+
+    for (const level of misplaced) {
+      const qty = Number(level.quantity);
+      const reserved = Number(level.reservedQty || 0);
+      if (!level.rawMaterialId || (qty === 0 && reserved === 0)) continue;
+
+      const fromCode = codeById.get(level.warehouseId) || 'unknown';
+
+      await prisma.$transaction(async (tx) => {
+        const current = await tx.stockLevel.findUnique({ where: { id: level.id } });
+        if (!current || current.warehouseId === rmWarehouseId) return;
+        if (Number(current.quantity) === 0 && Number(current.reservedQty || 0) === 0) return;
+        if (!wrongIds.includes(current.warehouseId)) return;
+
+        const moveQty = Number(current.quantity);
+        const moveReserved = Number(current.reservedQty || 0);
 
         const dest = await tx.stockLevel.findFirst({
           where: {
             warehouseId: rmWarehouseId,
-            rawMaterialId: level.rawMaterialId,
-            batchNumber: level.batchNumber ?? null,
+            rawMaterialId: current.rawMaterialId,
+            batchNumber: current.batchNumber ?? null,
           },
         });
 
@@ -84,38 +130,38 @@ export class StockMovementService {
           await tx.stockLevel.update({
             where: { id: dest.id },
             data: {
-              quantity: { increment: qty },
-              reservedQty: { increment: reserved },
-              unitCost: level.unitCost ?? dest.unitCost,
-              expiryDate: level.expiryDate ?? dest.expiryDate,
+              quantity: { increment: moveQty },
+              reservedQty: { increment: moveReserved },
+              unitCost: current.unitCost ?? dest.unitCost,
+              expiryDate: current.expiryDate ?? dest.expiryDate,
             },
           });
         } else {
           await tx.stockLevel.create({
             data: {
               warehouseId: rmWarehouseId,
-              rawMaterialId: level.rawMaterialId,
-              batchNumber: level.batchNumber,
-              quantity: qty,
-              reservedQty: reserved,
-              unitCost: level.unitCost,
-              expiryDate: level.expiryDate,
+              rawMaterialId: current.rawMaterialId,
+              batchNumber: current.batchNumber,
+              quantity: moveQty,
+              reservedQty: moveReserved,
+              unitCost: current.unitCost,
+              expiryDate: current.expiryDate,
             },
           });
         }
 
-        await tx.stockLevel.delete({ where: { id: level.id } });
+        await tx.stockLevel.delete({ where: { id: current.id } });
 
-        if (qty !== 0) {
+        if (moveQty !== 0) {
           await tx.inventoryTransaction.create({
             data: {
-              warehouseId: level.warehouseId,
+              warehouseId: current.warehouseId,
               type: 'TRANSFER',
-              rawMaterialId: level.rawMaterialId,
-              batchNumber: level.batchNumber,
-              quantity: -Math.abs(qty),
-              unitCost: Number(level.unitCost || 0),
-              notes: `Auto-relocate raw material from ${level.warehouse.code} to WH-RM`,
+              rawMaterialId: current.rawMaterialId,
+              batchNumber: current.batchNumber,
+              quantity: -Math.abs(moveQty),
+              unitCost: Number(current.unitCost || 0),
+              notes: `Auto-relocate raw material from ${fromCode} to WH-RM`,
               referenceType: 'warehouse_repair',
               referenceId: rmWarehouseId,
             },
@@ -124,27 +170,22 @@ export class StockMovementService {
             data: {
               warehouseId: rmWarehouseId,
               type: 'TRANSFER',
-              rawMaterialId: level.rawMaterialId,
-              batchNumber: level.batchNumber,
-              quantity: Math.abs(qty),
-              unitCost: Number(level.unitCost || 0),
-              notes: `Auto-relocate raw material from ${level.warehouse.code} to WH-RM`,
+              rawMaterialId: current.rawMaterialId,
+              batchNumber: current.batchNumber,
+              quantity: Math.abs(moveQty),
+              unitCost: Number(current.unitCost || 0),
+              notes: `Auto-relocate raw material from ${fromCode} to WH-RM`,
               referenceType: 'warehouse_repair',
-              referenceId: level.warehouseId,
+              referenceId: current.warehouseId,
             },
           });
         }
-        moved += 1;
-      }
+      });
 
-      return moved;
-    };
-
-    // Already inside a transaction → run directly; otherwise wrap.
-    if ('$transaction' in client && typeof client.$transaction === 'function') {
-      return client.$transaction((tx) => run(tx));
+      moved += 1;
     }
-    return run(client as TxClient);
+
+    return moved;
   }
 
   /** Raw materials → raw_materials warehouse; finished products → finished_goods. */

@@ -136,11 +136,16 @@ export function InventoryPage() {
     enabled: activeTab === 1,
   });
 
-  const { data: warehouses } = useQuery({
+  const { data: warehousesResponse } = useQuery({
     queryKey: ['warehouses'],
-    queryFn: () => inventoryApi.warehouses().then((r) => r.data.data),
+    queryFn: () => inventoryApi.warehouses().then((r) => r.data as {
+      data: { id: string; code: string; name: string; type: string; address?: string; stockLevels: { quantity?: number }[] }[];
+      meta?: { relocated?: number };
+    }),
     enabled: activeTab === 0 || activeTab === 2,
   });
+  const warehouseList = warehousesResponse?.data || [];
+  const relocatedCount = warehousesResponse?.meta?.relocated ?? 0;
 
   const { data: lowStock } = useQuery({
     queryKey: ['low-stock'],
@@ -249,6 +254,25 @@ export function InventoryPage() {
       key: 'unitCost',
       label: 'Unit cost',
       render: (val: unknown) => formatCurrency(val as number),
+    },
+    {
+      key: 'onHand',
+      label: 'On hand',
+      render: (_: unknown, row: Record<string, unknown>) => {
+        const levels = (row.stockLevels as { quantity?: number; warehouse?: { code?: string } }[] | undefined) || [];
+        const total = levels.reduce((s, l) => s + Number(l.quantity || 0), 0);
+        const warehouses = [...new Set(levels.filter((l) => Number(l.quantity) !== 0).map((l) => l.warehouse?.code).filter(Boolean))];
+        return (
+          <div>
+            <span className={`font-semibold tabular-nums ${total <= 0 ? 'text-red-600' : ''}`}>
+              {total.toLocaleString()}
+            </span>
+            {warehouses.length > 0 && (
+              <p className="text-xs text-slate-500">{warehouses.join(', ')}</p>
+            )}
+          </div>
+        );
+      },
     },
     {
       key: 'minStockLevel',
@@ -432,10 +456,10 @@ export function InventoryPage() {
             <Select
               options={[
                 { value: '', label: 'All warehouses' },
-                ...((warehouses as { id: string; name: string; code: string }[] | undefined)?.map((wh) => ({
+                ...warehouseList.map((wh) => ({
                   value: wh.id,
                   label: `${wh.code} · ${wh.name}`,
-                })) || []),
+                })),
               ]}
               value={stockWarehouseId}
               onChange={(e) => { setStockWarehouseId(e.target.value); setStockPage(1); }}
@@ -524,19 +548,17 @@ export function InventoryPage() {
       {/* Warehouses */}
       {activeTab === 2 && (
         <>
-          {(warehouses?.length || 0) === 0 ? (
+          {relocatedCount > 0 && (
+            <Alert variant="success" className="mb-4">
+              Moved {relocatedCount} raw material stock line(s) into the Raw Materials warehouse.
+            </Alert>
+          )}
+          {(warehouseList.length || 0) === 0 ? (
             <EmptyState title="No warehouses configured" description="Warehouses are set up during system seeding or in Settings." />
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-              {warehouses?.map(
-                (wh: {
-                  id: string;
-                  code: string;
-                  name: string;
-                  type: string;
-                  address: string;
-                  stockLevels: { quantity?: number }[];
-                }) => {
+              {warehouseList.map(
+                (wh) => {
                   const gradient = WAREHOUSE_TYPE_COLORS[wh.type] || WAREHOUSE_TYPE_COLORS.GENERAL;
                   const itemCount = (wh.stockLevels || []).filter((l) => Number(l.quantity) !== 0).length;
                   return (

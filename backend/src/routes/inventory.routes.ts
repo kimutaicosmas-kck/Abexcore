@@ -516,19 +516,17 @@ router.get(
 
 // Warehouses
 router.get('/warehouses', authorize('inventory:read'), asyncHandler(async (_req: AuthRequest, res: Response) => {
-  // One-time style repair: move any RM qty that previously landed in FG (or other) into WH-RM.
-  await StockMovementService.relocateMisplacedRawMaterialStock();
+  const relocated = await StockMovementService.relocateMisplacedRawMaterialStock();
 
   const warehouses = await prisma.warehouse.findMany({
     where: { deletedAt: null, isActive: true },
     include: {
       branch: true,
       locations: true,
-      // Only non-empty lines so warehouse cards match what users expect to see.
       stockLevels: { where: { quantity: { not: 0 } } },
     },
   });
-  res.json({ success: true, data: warehouses });
+  res.json({ success: true, data: warehouses, meta: { relocated } });
 }));
 
 const listStockLevels = asyncHandler(async (req: AuthRequest, res: Response) => {
