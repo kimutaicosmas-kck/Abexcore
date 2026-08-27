@@ -176,11 +176,18 @@ export const paginationSchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(20),
   search: z.preprocess((v) => (v === '' ? undefined : v), z.string().optional()),
-  cursor: z.preprocess((v) => (v === '' ? undefined : v), z.string().uuid().optional()),
+  cursor: z.preprocess((v) => (v === '' || v === undefined ? undefined : v), z.string().uuid().optional()),
   sortBy: z.preprocess((v) => (v === '' ? undefined : v), z.string().optional()),
   sortOrder: z.preprocess(
     (v) => (v === '' || v === undefined ? undefined : v),
     z.enum(['asc', 'desc']).default('desc')
+  ),
+});
+
+export const stockLevelListQuerySchema = paginationSchema.extend({
+  warehouseId: z.preprocess(
+    (v) => (v === '' || v === undefined ? undefined : v),
+    z.string().uuid().optional()
   ),
 });
 

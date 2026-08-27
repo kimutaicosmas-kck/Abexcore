@@ -4,7 +4,7 @@ import { validate } from '../middleware/validate';
 import { asyncHandler, AppError } from '../middleware/errorHandler';
 import { mutationAudit } from '../middleware/mutationAudit';
 import { auditLog } from '../middleware/auditLog';
-import { createRawMaterialSchema, createSupplierSchema, createRequisitionSchema, createGoodsReceiptSchema, createPurchaseOrderSchema, stockAdjustSchema, stockTransferSchema, cycleCountSchema, updateSupplierQuotationSchema, paginationSchema, materialListQuerySchema, procurementListQuerySchema, createMaterialTypeSchema, updateCatalogItemSchema, reorderCatalogSchema, customerStatementQuerySchema } from '../validators/schemas';
+import { createRawMaterialSchema, createSupplierSchema, createRequisitionSchema, createGoodsReceiptSchema, createPurchaseOrderSchema, stockAdjustSchema, stockTransferSchema, cycleCountSchema, updateSupplierQuotationSchema, paginationSchema, stockLevelListQuerySchema, materialListQuerySchema, procurementListQuerySchema, createMaterialTypeSchema, updateCatalogItemSchema, reorderCatalogSchema, customerStatementQuerySchema } from '../validators/schemas';
 import { VendorStatementService } from '../services/vendorStatement.service';
 import { createCrudService } from '../utils/crud';
 import prisma from '../config/database';
@@ -521,7 +521,12 @@ router.get('/warehouses', authorize('inventory:read'), asyncHandler(async (_req:
 
   const warehouses = await prisma.warehouse.findMany({
     where: { deletedAt: null, isActive: true },
-    include: { branch: true, locations: true, stockLevels: true },
+    include: {
+      branch: true,
+      locations: true,
+      // Only non-empty lines so warehouse cards match what users expect to see.
+      stockLevels: { where: { quantity: { not: 0 } } },
+    },
   });
   res.json({ success: true, data: warehouses });
 }));
@@ -529,11 +534,17 @@ router.get('/warehouses', authorize('inventory:read'), asyncHandler(async (_req:
 const listStockLevels = asyncHandler(async (req: AuthRequest, res: Response) => {
   await StockMovementService.relocateMisplacedRawMaterialStock();
 
-  const { page, limit, search } = getQuery<{ page: number; limit: number; search?: string }>(req.query);
+  const { page, limit, search, warehouseId } = getQuery<{
+    page: number;
+    limit: number;
+    search?: string;
+    warehouseId?: string;
+  }>(req.query);
   const skip = (page - 1) * limit;
 
-  const where: Prisma.StockLevelWhereInput = mergeTenantWarehouseWhere(
-    search
+  const where: Prisma.StockLevelWhereInput = mergeTenantWarehouseWhere({
+    ...(warehouseId ? { warehouseId } : {}),
+    ...(search
       ? {
           OR: [
             { product: { name: { contains: search } } },
@@ -542,8 +553,8 @@ const listStockLevels = asyncHandler(async (req: AuthRequest, res: Response) => 
             { batchNumber: { contains: search } },
           ],
         }
-      : {}
-  );
+      : {}),
+  });
 
   const [data, total] = await Promise.all([
     prisma.stockLevel.findMany({
@@ -559,9 +570,9 @@ const listStockLevels = asyncHandler(async (req: AuthRequest, res: Response) => 
   res.json({ success: true, data, pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } });
 });
 
-router.get('/stock-levels', authorize('inventory:read'), validate(paginationSchema, 'query'), listStockLevels);
+router.get('/stock-levels', authorize('inventory:read'), validate(stockLevelListQuerySchema, 'query'), listStockLevels);
 /** Compatibility alias — validation probes used /stock. */
-router.get('/stock', authorize('inventory:read'), validate(paginationSchema, 'query'), listStockLevels);
+router.get('/stock', authorize('inventory:read'), validate(stockLevelListQuerySchema, 'query'), listStockLevels);
 
 router.post('/adjust', authorize('inventory:update'), validate(stockAdjustSchema), asyncHandler(async (req: AuthRequest, res: Response) => {
   const { warehouseId, productId, rawMaterialId, quantity, type, notes, batchNumber } = req.body;

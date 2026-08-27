@@ -54,87 +54,97 @@ export class StockMovementService {
   }
 
   /** Move any raw-material stock that landed in the wrong warehouse into WH-RM. */
-  static async relocateMisplacedRawMaterialStock(tx: TxClient = prisma): Promise<number> {
-    const rmWarehouseId = await this.getRawMaterialsWarehouseId(tx);
-    const misplaced = await tx.stockLevel.findMany({
-      where: {
-        rawMaterialId: { not: null },
-        quantity: { not: 0 },
-        warehouse: { type: { not: 'raw_materials' }, deletedAt: null },
-      },
-      include: { warehouse: { select: { id: true, code: true } } },
-    });
-
-    let moved = 0;
-    for (const level of misplaced) {
-      const qty = Number(level.quantity);
-      if (!level.rawMaterialId || qty === 0) continue;
-
-      const dest = await tx.stockLevel.findFirst({
+  static async relocateMisplacedRawMaterialStock(client: TxClient | typeof prisma = prisma): Promise<number> {
+    const run = async (tx: TxClient) => {
+      const rmWarehouseId = await this.getRawMaterialsWarehouseId(tx);
+      const misplaced = await tx.stockLevel.findMany({
         where: {
-          warehouseId: rmWarehouseId,
-          rawMaterialId: level.rawMaterialId,
-          batchNumber: level.batchNumber,
+          rawMaterialId: { not: null },
+          OR: [{ quantity: { not: 0 } }, { reservedQty: { not: 0 } }],
+          warehouse: { type: { not: 'raw_materials' } },
         },
+        include: { warehouse: { select: { id: true, code: true } } },
       });
 
-      if (dest) {
-        await tx.stockLevel.update({
-          where: { id: dest.id },
-          data: {
-            quantity: { increment: qty },
-            reservedQty: { increment: Number(level.reservedQty || 0) },
-          },
-        });
-      } else {
-        await tx.stockLevel.create({
-          data: {
+      let moved = 0;
+      for (const level of misplaced) {
+        const qty = Number(level.quantity);
+        const reserved = Number(level.reservedQty || 0);
+        if (!level.rawMaterialId || (qty === 0 && reserved === 0)) continue;
+
+        const dest = await tx.stockLevel.findFirst({
+          where: {
             warehouseId: rmWarehouseId,
             rawMaterialId: level.rawMaterialId,
-            batchNumber: level.batchNumber,
-            quantity: qty,
-            reservedQty: level.reservedQty,
-            unitCost: level.unitCost,
-            expiryDate: level.expiryDate,
+            batchNumber: level.batchNumber ?? null,
           },
         });
+
+        if (dest) {
+          await tx.stockLevel.update({
+            where: { id: dest.id },
+            data: {
+              quantity: { increment: qty },
+              reservedQty: { increment: reserved },
+              unitCost: level.unitCost ?? dest.unitCost,
+              expiryDate: level.expiryDate ?? dest.expiryDate,
+            },
+          });
+        } else {
+          await tx.stockLevel.create({
+            data: {
+              warehouseId: rmWarehouseId,
+              rawMaterialId: level.rawMaterialId,
+              batchNumber: level.batchNumber,
+              quantity: qty,
+              reservedQty: reserved,
+              unitCost: level.unitCost,
+              expiryDate: level.expiryDate,
+            },
+          });
+        }
+
+        await tx.stockLevel.delete({ where: { id: level.id } });
+
+        if (qty !== 0) {
+          await tx.inventoryTransaction.create({
+            data: {
+              warehouseId: level.warehouseId,
+              type: 'TRANSFER',
+              rawMaterialId: level.rawMaterialId,
+              batchNumber: level.batchNumber,
+              quantity: -Math.abs(qty),
+              unitCost: Number(level.unitCost || 0),
+              notes: `Auto-relocate raw material from ${level.warehouse.code} to WH-RM`,
+              referenceType: 'warehouse_repair',
+              referenceId: rmWarehouseId,
+            },
+          });
+          await tx.inventoryTransaction.create({
+            data: {
+              warehouseId: rmWarehouseId,
+              type: 'TRANSFER',
+              rawMaterialId: level.rawMaterialId,
+              batchNumber: level.batchNumber,
+              quantity: Math.abs(qty),
+              unitCost: Number(level.unitCost || 0),
+              notes: `Auto-relocate raw material from ${level.warehouse.code} to WH-RM`,
+              referenceType: 'warehouse_repair',
+              referenceId: level.warehouseId,
+            },
+          });
+        }
+        moved += 1;
       }
 
-      await tx.stockLevel.update({
-        where: { id: level.id },
-        data: { quantity: 0, reservedQty: 0 },
-      });
+      return moved;
+    };
 
-      await tx.inventoryTransaction.create({
-        data: {
-          warehouseId: level.warehouseId,
-          type: 'TRANSFER',
-          rawMaterialId: level.rawMaterialId,
-          batchNumber: level.batchNumber,
-          quantity: -Math.abs(qty),
-          unitCost: Number(level.unitCost || 0),
-          notes: `Auto-relocate raw material from ${level.warehouse.code} to WH-RM`,
-          referenceType: 'warehouse_repair',
-          referenceId: rmWarehouseId,
-        },
-      });
-      await tx.inventoryTransaction.create({
-        data: {
-          warehouseId: rmWarehouseId,
-          type: 'TRANSFER',
-          rawMaterialId: level.rawMaterialId,
-          batchNumber: level.batchNumber,
-          quantity: Math.abs(qty),
-          unitCost: Number(level.unitCost || 0),
-          notes: `Auto-relocate raw material from ${level.warehouse.code} to WH-RM`,
-          referenceType: 'warehouse_repair',
-          referenceId: level.warehouseId,
-        },
-      });
-      moved += 1;
+    // Already inside a transaction → run directly; otherwise wrap.
+    if ('$transaction' in client && typeof client.$transaction === 'function') {
+      return client.$transaction((tx) => run(tx));
     }
-
-    return moved;
+    return run(client as TxClient);
   }
 
   /** Raw materials → raw_materials warehouse; finished products → finished_goods. */

@@ -82,6 +82,7 @@ export function InventoryPage() {
   const [matPage, setMatPage] = useState(1);
   const [txPage, setTxPage] = useState(1);
   const [stockSearch, setStockSearch] = useState('');
+  const [stockWarehouseId, setStockWarehouseId] = useState('');
   const [matSearch, setMatSearch] = useState('');
   const [matType, setMatType] = useState('');
   const [txSearch, setTxSearch] = useState('');
@@ -113,9 +114,16 @@ export function InventoryPage() {
   ];
 
   const { data: stockLevels, isLoading: stockLoading, isError: stockError, refetch: refetchStock } = useQuery({
-    queryKey: ['stock-levels', stockPage, stockSearch],
+    queryKey: ['stock-levels', stockPage, stockSearch, stockWarehouseId],
     queryFn: () =>
-      inventoryApi.stockLevels({ page: stockPage, limit: 15, search: stockSearch || undefined }).then((r) => r.data),
+      inventoryApi
+        .stockLevels({
+          page: stockPage,
+          limit: 15,
+          search: stockSearch || undefined,
+          warehouseId: stockWarehouseId || undefined,
+        })
+        .then((r) => r.data),
     enabled: activeTab === 0,
   });
 
@@ -131,7 +139,7 @@ export function InventoryPage() {
   const { data: warehouses } = useQuery({
     queryKey: ['warehouses'],
     queryFn: () => inventoryApi.warehouses().then((r) => r.data.data),
-    enabled: activeTab === 2,
+    enabled: activeTab === 0 || activeTab === 2,
   });
 
   const { data: lowStock } = useQuery({
@@ -153,6 +161,13 @@ export function InventoryPage() {
 
   const goToTab = (index: number) => {
     setActiveTab(index);
+  };
+
+  const viewWarehouseStock = (warehouseId: string) => {
+    setStockWarehouseId(warehouseId);
+    setStockPage(1);
+    setStockSearch('');
+    setActiveTab(0);
   };
 
   const filteredTransactions = (transactions?.data as InventoryTransaction[] | undefined)?.filter((tx) =>
@@ -414,7 +429,31 @@ export function InventoryPage() {
               onChange={(e) => { setStockSearch(e.target.value); setStockPage(1); }}
               className="sm:max-w-md"
             />
+            <Select
+              options={[
+                { value: '', label: 'All warehouses' },
+                ...((warehouses as { id: string; name: string; code: string }[] | undefined)?.map((wh) => ({
+                  value: wh.id,
+                  label: `${wh.code} · ${wh.name}`,
+                })) || []),
+              ]}
+              value={stockWarehouseId}
+              onChange={(e) => { setStockWarehouseId(e.target.value); setStockPage(1); }}
+              className="sm:w-64"
+            />
           </div>
+          {stockWarehouseId && (
+            <Alert variant="info" className="mb-4">
+              Showing stock for one warehouse.{' '}
+              <button
+                type="button"
+                className="underline font-medium"
+                onClick={() => { setStockWarehouseId(''); setStockPage(1); }}
+              >
+                Clear filter
+              </button>
+            </Alert>
+          )}
           {stockError && (
             <Alert variant="error" className="mb-4">
               Failed to load stock.{' '}
@@ -424,7 +463,14 @@ export function InventoryPage() {
             </Alert>
           )}
           {(stockLevels?.data?.length || 0) === 0 && !stockLoading ? (
-            <EmptyState title="No stock records" description="Try a different search or receive goods via Procurement." />
+            <EmptyState
+              title="No stock records"
+              description={
+                stockWarehouseId
+                  ? 'This warehouse has no on-hand stock lines yet.'
+                  : 'Try a different search or receive goods via Procurement.'
+              }
+            />
           ) : (
             <Table columns={stockColumns} data={stockLevels?.data || []} loading={stockLoading} embedded />
           )}
@@ -489,10 +535,10 @@ export function InventoryPage() {
                   name: string;
                   type: string;
                   address: string;
-                  stockLevels: unknown[];
+                  stockLevels: { quantity?: number }[];
                 }) => {
                   const gradient = WAREHOUSE_TYPE_COLORS[wh.type] || WAREHOUSE_TYPE_COLORS.GENERAL;
-                  const itemCount = wh.stockLevels?.length || 0;
+                  const itemCount = (wh.stockLevels || []).filter((l) => Number(l.quantity) !== 0).length;
                   return (
                     <div
                       key={wh.id}
@@ -519,7 +565,7 @@ export function InventoryPage() {
                             <p className="text-2xl font-bold text-slate-900 tabular-nums">{itemCount}</p>
                             <p className="text-xs text-slate-500">stock lines</p>
                           </div>
-                          <Button variant="secondary" size="sm" onClick={() => goToTab(0)}>
+                          <Button variant="secondary" size="sm" onClick={() => viewWarehouseStock(wh.id)}>
                             View stock
                           </Button>
                         </div>
