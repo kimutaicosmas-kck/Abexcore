@@ -290,7 +290,9 @@ describe('Procure-to-pay workflow (integration)', () => {
     expect(materialsRes.status).toBe(200);
 
     const supplierId = suppliersRes.body.data[0]?.id;
-    const warehouseId = warehousesRes.body.data[0]?.id;
+    const warehouseId =
+      (warehousesRes.body.data as { id: string; type?: string }[]).find((w) => w.type === 'raw_materials')?.id ||
+      warehousesRes.body.data[0]?.id;
     const rawMaterialId = materialsRes.body.data[0]?.id;
     expect(supplierId).toBeTruthy();
     expect(warehouseId).toBeTruthy();
