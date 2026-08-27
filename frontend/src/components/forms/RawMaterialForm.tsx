@@ -50,23 +50,21 @@ export function RawMaterialForm({ material, onSuccess, onCancel }: RawMaterialFo
     queryFn: () => inventoryApi.materialTypes().then((r) => r.data.data as MaterialTypeOption[]),
   });
 
+  const asWarehouseList = (value: unknown): Warehouse[] => {
+    if (Array.isArray(value)) return value as Warehouse[];
+    if (value && typeof value === 'object' && Array.isArray((value as { data?: unknown }).data)) {
+      return (value as { data: Warehouse[] }).data;
+    }
+    return [];
+  };
+
   const { data: warehousesData } = useQuery({
     queryKey: ['warehouses'],
-    queryFn: async () => {
-      const body = (await inventoryApi.warehouses()).data as {
-        data?: Warehouse[];
-      } & Warehouse[];
-      // Support both `{ data: Warehouse[] }` and a bare array (legacy cache shapes).
-      if (Array.isArray(body)) return body;
-      if (Array.isArray(body?.data)) return body.data;
-      return [] as Warehouse[];
-    },
+    queryFn: async () => asWarehouseList((await inventoryApi.warehouses()).data),
     enabled: !isEdit,
   });
 
-  const rawWarehouses = (Array.isArray(warehousesData) ? warehousesData : []).filter(
-    (w) => w.type === 'raw_materials'
-  );
+  const rawWarehouses = asWarehouseList(warehousesData).filter((w) => w.type === 'raw_materials');
 
   const supplierOptions = [
     { value: '', label: 'None' },

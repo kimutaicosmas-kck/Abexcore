@@ -46,9 +46,11 @@ export function CompleteProductionForm({
   const { data: warehousesData } = useQuery({
     queryKey: ['warehouses'],
     queryFn: async () => {
-      const body = (await inventoryApi.warehouses()).data as { data?: Warehouse[] } | Warehouse[];
-      if (Array.isArray(body)) return body;
-      if (Array.isArray(body?.data)) return body.data;
+      const body: unknown = (await inventoryApi.warehouses()).data;
+      if (Array.isArray(body)) return body as Warehouse[];
+      if (body && typeof body === 'object' && Array.isArray((body as { data?: unknown }).data)) {
+        return (body as { data: Warehouse[] }).data;
+      }
       return [] as Warehouse[];
     },
   });

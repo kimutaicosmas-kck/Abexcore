@@ -94,9 +94,11 @@ export function ReportExportDrawer({
   const { data: warehouses } = useQuery({
     queryKey: ['warehouses'],
     queryFn: async () => {
-      const body = (await inventoryApi.warehouses()).data as { data?: WarehouseOption[] } | WarehouseOption[];
-      if (Array.isArray(body)) return body;
-      if (Array.isArray(body?.data)) return body.data;
+      const body: unknown = (await inventoryApi.warehouses()).data;
+      if (Array.isArray(body)) return body as WarehouseOption[];
+      if (body && typeof body === 'object' && Array.isArray((body as { data?: unknown }).data)) {
+        return (body as { data: WarehouseOption[] }).data;
+      }
       return [] as WarehouseOption[];
     },
     enabled: open && !!report?.filters.includes('warehouseId'),
