@@ -1011,7 +1011,7 @@ export const bulkAssignDeliveriesSchema = z.object({
       })
     )
     .min(1)
-    .max(50),
+    .max(100),
   driverId: z.string().uuid(),
   vehicleId: z.preprocess(
     (v) => (v === '' || v === null || v === undefined ? undefined : v),
@@ -1032,7 +1032,7 @@ export const bulkDeliverDeliveriesSchema = z.object({
       })
     )
     .min(1)
-    .max(50),
+    .max(100),
   proofOfDelivery: z.string().max(500).optional(),
 });
 

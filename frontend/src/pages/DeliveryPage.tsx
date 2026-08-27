@@ -662,7 +662,7 @@ export function DeliveryPage() {
       ? [
           {
             key: 'select',
-            label: '',
+            label: 'Select',
             render: (_: unknown, row: Record<string, unknown>) => {
               const listRow = row as unknown as DeliveryListRow;
               if (!isOpenDeliveryStatus(rowStatus(listRow))) {
@@ -846,6 +846,32 @@ export function DeliveryPage() {
           Mark delivered ({selectedDeliverable.length})
         </Button>
       )}
+      {!isDriver && canUpdate && selectedPending.length === 0 && selectableRows.some((r) => rowStatus(r) === 'PENDING') && (
+        <Button
+          size="sm"
+          variant="secondary"
+          onClick={() => {
+            const pending = listRows.filter((row) => rowStatus(row) === 'PENDING');
+            setSelectedKeys(pending.map((row) => selectionKey(row.kind, row.id)));
+            const items = pending.map((row) => ({
+              id: row.id,
+              kind: row.kind,
+              title: rowTitle(row),
+              status: rowStatus(row),
+            }));
+            if (!items.length) return;
+            setAssignDialog({
+              items,
+              mode: 'assign',
+              driverId: '',
+              vehicleId: '',
+              scheduledDate: '',
+            });
+          }}
+        >
+          Assign all pending ({listRows.filter((r) => rowStatus(r) === 'PENDING').length})
+        </Button>
+      )}
       {canCreate && showDeliveries && (
         <Button
           size="sm"
@@ -855,7 +881,7 @@ export function DeliveryPage() {
           }}
         >
           <Plus className="h-4 w-4 mr-1.5" />
-          Bulk Delivery Trip
+          Bulk delivery / assign
         </Button>
       )}
       {canCreate && showVehicles && (
@@ -1058,7 +1084,7 @@ export function DeliveryPage() {
                       }}
                     >
                       <Plus className="h-4 w-4 mr-2" />
-                      Bulk Delivery Trip
+                      Bulk delivery / assign
                     </Button>
                   ) : undefined
                 }
@@ -1134,7 +1160,7 @@ export function DeliveryPage() {
       <Modal
         open={deliveryModalOpen}
         onClose={closeDeliveryModal}
-        title="Create Delivery Notes (bulk trip)"
+        title="Bulk delivery / assign trip"
         size="xl"
       >
         <DeliveryForm
