@@ -146,7 +146,12 @@ export const createRawMaterialSchema = z.object({
   description: z.string().optional(),
   unit: z.string().optional(),
   unitCost: z.coerce.number().min(0).optional(),
-  weight: z.coerce.number().min(0).optional().nullable(),
+  weight: z.preprocess((val) => {
+    if (val === '' || val === undefined) return undefined;
+    if (val === null) return null;
+    const n = Number(val);
+    return Number.isFinite(n) ? n : undefined;
+  }, z.union([z.number().min(0), z.null()]).optional()),
   supplierId: z.preprocess(
     (v) => (v === '' || v === null || v === undefined ? undefined : v),
     z.string().uuid().optional()

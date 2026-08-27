@@ -722,6 +722,8 @@ model RawMaterial {
   description   String?  @db.Text
   unit          String          @default("pcs")
   unitCost      Decimal         @default(0) @map("unit_cost") @db.Decimal(15, 4)
+  /** Unit weight in kg (optional). */
+  weight        Decimal?        @db.Decimal(10, 3)
   supplierId    String?         @map("supplier_id")
   minStockLevel Decimal         @default(0) @map("min_stock_level") @db.Decimal(15, 3)
   reorderQty    Decimal         @default(0) @map("reorder_qty") @db.Decimal(15, 3)

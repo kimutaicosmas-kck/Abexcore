@@ -299,23 +299,48 @@ router.get('/materials/low-stock', authorize('inventory:read'), asyncHandler(asy
 }));
 
 router.post('/materials', authorize('inventory:create'), validate(createRawMaterialSchema), asyncHandler(async (req: AuthRequest, res: Response) => {
-  const { initialQuantity, warehouseId, ...rest } = req.body;
-  const payload = { ...rest };
+  const { initialQuantity, warehouseId: _warehouseId, ...rest } = req.body;
   const materialType = await prisma.materialType.findFirst({
-    where: { id: payload.typeId, isActive: true },
+    where: { id: rest.typeId, isActive: true },
   });
   if (!materialType) throw new AppError('Invalid material type', 400);
 
-  if (!payload.code?.trim()) {
-    const count = await prisma.rawMaterial.count();
-    payload.code = generateNumber('RM', count + 1);
+  let unit = String(rest.unit || 'pcs').trim() || 'pcs';
+  let openingQty = Number(initialQuantity || 0);
+  const unitQtyMatch = unit.match(/^(\d+(?:\.\d+)?)\s*([a-zA-Z%]*)$/i);
+  if (unitQtyMatch && (!openingQty || openingQty === 0)) {
+    const qty = Number(unitQtyMatch[1]);
+    const suffix = (unitQtyMatch[2] || 'pcs').toLowerCase() || 'pcs';
+    if (Number.isFinite(qty) && qty > 0) {
+      openingQty = qty;
+      unit = suffix;
+    }
   }
 
-  const openingQty = Number(initialQuantity || 0);
+  const code = rest.code?.trim()
+    ? String(rest.code).trim()
+    : generateNumber('RM', (await prisma.rawMaterial.count()) + 1);
+
+  const createData = {
+    code,
+    name: String(rest.name).trim(),
+    typeId: rest.typeId as string,
+    description: rest.description,
+    unit,
+    unitCost: Number(rest.unitCost ?? 0),
+    weight:
+      rest.weight === undefined || rest.weight === null || rest.weight === ''
+        ? null
+        : Number(rest.weight),
+    supplierId: rest.supplierId || null,
+    minStockLevel: Number(rest.minStockLevel ?? 0),
+    reorderQty: Number(rest.reorderQty ?? 0),
+    shelfLifeDays: rest.shelfLifeDays,
+  };
 
   const data = await prisma.$transaction(async (tx) => {
     const material = await tx.rawMaterial.create({
-      data: injectTenantData(payload),
+      data: injectTenantData(createData),
       include: {
         materialType: true,
         supplier: { select: { id: true, name: true, code: true } },
@@ -323,53 +348,13 @@ router.post('/materials', authorize('inventory:create'), validate(createRawMater
     });
 
     if (openingQty > 0) {
-      let targetWarehouseId = warehouseId as string | undefined;
-      if (!targetWarehouseId) {
-        targetWarehouseId = await StockMovementService.getRawMaterialsWarehouseId(tx);
-      } else {
-        await StockMovementService.assertWarehouseMatchesItem(tx, {
-          warehouseId: targetWarehouseId,
-          rawMaterialId: material.id,
-        });
-      }
-
-      const unitCost = Number(material.unitCost || 0);
-      await tx.stockLevel.create({
-        data: {
-          warehouseId: targetWarehouseId,
-          rawMaterialId: material.id,
-          quantity: openingQty,
-          unitCost,
-        },
+      await StockMovementService.setRawMaterialOnHand(tx, {
+        rawMaterialId: material.id,
+        quantity: openingQty,
+        unitCost: Number(material.unitCost || 0),
+        userId: req.user!.id,
+        notes: 'Opening stock on raw material creation',
       });
-
-      const invTx = await tx.inventoryTransaction.create({
-        data: {
-          warehouseId: targetWarehouseId,
-          type: 'RECEIPT',
-          rawMaterialId: material.id,
-          quantity: openingQty,
-          unitCost,
-          notes: 'Opening stock on raw material creation',
-          createdById: req.user!.id,
-        },
-      });
-
-      const glAmount = openingQty * unitCost;
-      if (glAmount > 0) {
-        try {
-          await AccountingService.postInventoryAdjustment(tx, {
-            reference: invTx.id,
-            amount: glAmount,
-            direction: 'increase',
-            reason: `Opening stock — ${material.code}`,
-          });
-        } catch (err) {
-          if (!(err instanceof AppError) || !String(err.message).includes('not found')) {
-            throw err;
-          }
-        }
-      }
 
       return tx.rawMaterial.findUniqueOrThrow({
         where: { id: material.id },
@@ -384,6 +369,7 @@ router.post('/materials', authorize('inventory:create'), validate(createRawMater
     return material;
   });
 
+  if (openingQty > 0) checkLowStockAlerts();
   res.status(201).json({ success: true, data });
 }));
 
@@ -396,8 +382,8 @@ router.put('/materials/:id', authorize('inventory:update'), validate(createRawMa
   }
 
   const materialId = getParam(req.params.id);
-  const { initialQuantity, warehouseId: _wh, ...payload } = req.body;
-  const setStock = initialQuantity !== undefined && initialQuantity !== null;
+  const { initialQuantity, warehouseId: _wh, code: _code, ...rest } = req.body;
+  const setStock = initialQuantity !== undefined && initialQuantity !== null && initialQuantity !== '';
 
   const data = await prisma.$transaction(async (tx) => {
     const existing = await tx.rawMaterial.findFirst({
@@ -405,23 +391,50 @@ router.put('/materials/:id', authorize('inventory:update'), validate(createRawMa
     });
     if (!existing) throw new AppError('Raw material not found', 404);
 
+    const updateData: Record<string, unknown> = {};
+    if (rest.name !== undefined) updateData.name = String(rest.name).trim();
+    if (rest.typeId !== undefined) updateData.typeId = rest.typeId;
+    if (rest.description !== undefined) updateData.description = rest.description;
+    if (rest.unit !== undefined) updateData.unit = String(rest.unit).trim() || 'pcs';
+    if (rest.unitCost !== undefined) updateData.unitCost = Number(rest.unitCost);
+    if (rest.weight !== undefined) {
+      updateData.weight = rest.weight === null || rest.weight === '' ? null : Number(rest.weight);
+    }
+    if (rest.supplierId !== undefined) {
+      updateData.supplierId = rest.supplierId || null;
+    }
+    if (rest.minStockLevel !== undefined) updateData.minStockLevel = Number(rest.minStockLevel);
+    if (rest.reorderQty !== undefined) updateData.reorderQty = Number(rest.reorderQty);
+    if (rest.shelfLifeDays !== undefined) updateData.shelfLifeDays = rest.shelfLifeDays;
+
+    // If unit looks like "35pcs" and stock wasn't provided, recover qty into on-hand.
+    let stockQty =
+      setStock ? Number(initialQuantity) : undefined;
+    if (typeof updateData.unit === 'string') {
+      const matched = updateData.unit.match(/^(\d+(?:\.\d+)?)\s*([a-zA-Z%]*)$/i);
+      if (matched) {
+        const qty = Number(matched[1]);
+        const suffix = (matched[2] || 'pcs').toLowerCase() || 'pcs';
+        updateData.unit = suffix;
+        if (stockQty === undefined || stockQty === 0) {
+          stockQty = qty;
+        }
+      }
+    }
+
     const updated = await tx.rawMaterial.update({
       where: { id: materialId },
-      data: {
-        ...payload,
-        ...(payload.weight === null ? { weight: null } : {}),
-      },
+      data: updateData,
       include: {
         materialType: true,
         supplier: { select: { id: true, name: true, code: true } },
-        stockLevels: { include: { warehouse: true } },
       },
     });
 
-    if (setStock) {
+    if (stockQty !== undefined && !Number.isNaN(stockQty)) {
       await StockMovementService.setRawMaterialOnHand(tx, {
         rawMaterialId: materialId,
-        quantity: Number(initialQuantity),
+        quantity: stockQty,
         unitCost: Number(updated.unitCost || 0),
         userId: req.user!.id,
         notes: 'Stock on hand updated from material edit',
@@ -438,7 +451,7 @@ router.put('/materials/:id', authorize('inventory:update'), validate(createRawMa
     });
   });
 
-  if (setStock) checkLowStockAlerts();
+  checkLowStockAlerts();
   res.json({ success: true, data });
 }));
 
