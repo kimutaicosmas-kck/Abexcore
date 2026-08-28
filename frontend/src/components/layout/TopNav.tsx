@@ -26,6 +26,7 @@ const routeTitles: Record<string, string> = {
   '/production': 'Production',
   '/quality': 'Quality',
   '/sales': 'Sales',
+  '/pos': 'POS',
   '/my-sales': 'My Sales',
   '/sales-performance': 'Sales Performance',
   '/delivery': 'Delivery',

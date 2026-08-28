@@ -22,6 +22,7 @@ export const TRADING_COMPANY_MODULES: readonly CompanyModule[] = [
   'products',
   'inventory',
   'sales',
+  'pos',
   'delivery',
   'finance',
   'hr',
@@ -32,16 +33,28 @@ export const MANUFACTURING_COMPANY_MODULES: readonly CompanyModule[] = [...COMPA
 
 export type CompanyModulePreset = 'manufacturing' | 'trading' | 'custom';
 
+/** POS checkout creates sales orders — keep sales when POS is selected.
+ * Trading-style packages (sales, no production) get POS for counter / collection sales.
+ */
+function withModuleDependencies(modules: string[]): string[] {
+  const next = [...modules];
+  if (next.includes('pos') && !next.includes('sales')) next.push('sales');
+  if (next.includes('sales') && !next.includes('production') && !next.includes('pos')) {
+    next.push('pos');
+  }
+  return next;
+}
+
 export function normalizeCompanyModules(raw: unknown): string[] | null {
   if (raw == null) return null;
   if (!Array.isArray(raw)) return null;
-  const modules = [
+  const modules = withModuleDependencies([
     ...new Set(
       raw
         .map((m) => String(m).trim().toLowerCase())
         .filter((m) => VALID.has(m))
     ),
-  ];
+  ]);
   for (const core of CORE_COMPANY_MODULES) {
     if (!modules.includes(core)) modules.unshift(core);
   }

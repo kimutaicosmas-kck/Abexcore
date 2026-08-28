@@ -13,6 +13,7 @@ export const TRADING_COMPANY_MODULES = [
   'products',
   'inventory',
   'sales',
+  'pos',
   'delivery',
   'finance',
   'hr',
@@ -29,12 +30,12 @@ export const PACKAGE_PRESET_OPTIONS: {
   {
     value: 'manufacturing',
     label: 'Manufacturing (full)',
-    description: 'Production, procurement, quality, maintenance, and sales.',
+    description: 'Production, procurement, quality, maintenance, sales, and POS.',
   },
   {
     value: 'trading',
     label: 'Trading / finished goods',
-    description: 'Sell stock without running production — lower package price.',
+    description: 'Sell stock (including POS) without running production — lower package price.',
   },
   {
     value: 'custom',
@@ -43,18 +44,27 @@ export const PACKAGE_PRESET_OPTIONS: {
   },
 ];
 
+function withModuleDependencies(modules: string[]): string[] {
+  const next = [...modules];
+  if (next.includes('pos') && !next.includes('sales')) next.push('sales');
+  if (next.includes('sales') && !next.includes('production') && !next.includes('pos')) {
+    next.push('pos');
+  }
+  return next;
+}
+
 export function resolveCompanyModules(raw: unknown): string[] {
   if (!Array.isArray(raw) || raw.length === 0) {
     return [...MANUFACTURING_COMPANY_MODULES];
   }
   const valid = new Set<string>(ASSIGNABLE_MODULES);
-  const modules = [
+  const modules = withModuleDependencies([
     ...new Set(
       raw
         .map((m) => String(m).trim().toLowerCase())
         .filter((m) => valid.has(m))
     ),
-  ];
+  ]);
   for (const core of CORE_COMPANY_MODULES) {
     if (!modules.includes(core)) modules.unshift(core);
   }

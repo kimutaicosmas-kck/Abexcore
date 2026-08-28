@@ -14,6 +14,7 @@ export const ROUTE_PERMISSIONS: Record<string, string | string[] | undefined> = 
   '/production': 'production:read',
   '/quality': 'quality:read',
   '/sales': ['sales:read', 'finance:read', 'finance:create'],
+  '/pos': ['pos:read', 'sales:read'],
   '/my-sales': ['sales:read', 'reports:read', 'finance:read'],
   '/sales-performance': ['reports:read', 'finance:read', 'settings:read'],
   '/delivery': ['delivery:read', 'delivery:create'],

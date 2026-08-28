@@ -22,6 +22,9 @@ else
   fi
 fi
 
+echo "Syncing role permissions (ensures new modules like POS)..."
+npm run db:refresh-roles || echo "WARN: db:refresh-roles failed — run manually if POS/menus look empty"
+
 if [ "$(printf '%s' "${SEED_ON_START:-false}" | tr -d '\r' | tr '[:upper:]' '[:lower:]')" = "true" ]; then
   echo "Seeding database..."
   if [ "$(printf '%s' "${SEED_PRODUCTION:-false}" | tr -d '\r' | tr '[:upper:]' '[:lower:]')" = "true" ]; then

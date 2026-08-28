@@ -16,6 +16,7 @@ const RegisterCompanyPage = lazy(() =>
 const DashboardPage = lazy(() =>
   import('./pages/DashboardPage').then((m) => ({ default: m.DashboardPage }))
 );
+const PosPage = lazy(() => import('./pages/PosPage').then((m) => ({ default: m.PosPage })));
 const UsersPage = lazy(() => import('./pages/UsersPage').then((m) => ({ default: m.UsersPage })));
 const CustomersPage = lazy(() =>
   import('./pages/CustomersPage').then((m) => ({ default: m.CustomersPage }))
@@ -160,6 +161,7 @@ function AppRoutes() {
           <Route path="production" element={<PermissionRoute><ProductionPage /></PermissionRoute>} />
           <Route path="quality" element={<PermissionRoute><QualityPage /></PermissionRoute>} />
           <Route path="sales" element={<PermissionRoute><SalesPage /></PermissionRoute>} />
+          <Route path="pos" element={<PermissionRoute><PosPage /></PermissionRoute>} />
           <Route path="my-sales" element={<PermissionRoute><MySalesPage /></PermissionRoute>} />
           <Route path="available-products" element={<Navigate to="/products?tab=available" replace />} />
           <Route
