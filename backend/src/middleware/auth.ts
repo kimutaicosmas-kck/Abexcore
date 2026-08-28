@@ -82,8 +82,7 @@ export const authorize = (...requiredPermissions: string[]) => {
   return (req: AuthRequest, _res: Response, next: NextFunction) => {
     if (!req.user) return next(new AppError('Authentication required', 401));
 
-    if (req.user.roleName === 'Super Admin') return next();
-
+    // Permissions are already clamped to the company package (including Super Admin).
     const hasPermission = requiredPermissions.some((p) =>
       req.user!.permissions.includes(p)
     );
@@ -148,7 +147,6 @@ export const requirePlatformOwner = async (
 export const authorizeAny = (...requiredPermissions: string[]) => {
   return (req: AuthRequest, _res: Response, next: NextFunction) => {
     if (!req.user) return next(new AppError('Authentication required', 401));
-    if (req.user.roleName === 'Super Admin') return next();
 
     const hasPermission = requiredPermissions.some((p) =>
       req.user!.permissions.includes(p)
@@ -164,6 +162,5 @@ export const authorizeAny = (...requiredPermissions: string[]) => {
 
 export function userHasPermission(user: AuthRequest['user'], permission: string): boolean {
   if (!user) return false;
-  if (user.roleName === 'Super Admin') return true;
   return user.permissions.includes(permission);
 }

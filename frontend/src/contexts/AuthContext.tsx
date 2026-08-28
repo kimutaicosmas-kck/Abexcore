@@ -233,7 +233,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const hasPermission = (permission: string) => {
     if (!user) return false;
-    if (user.role.name === 'Super Admin') return true;
+    // Super Admin is still limited to the company's enabled package (backend clamps permissions).
     return user.permissions.includes(permission);
   };
 
