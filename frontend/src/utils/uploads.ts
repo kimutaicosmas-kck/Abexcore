@@ -1,6 +1,11 @@
 import { API_BASE_URL } from '../config/api';
 
-/** Resolve a stored upload path to a full URL for <img src> (auth via access_token query). */
+/** Company logos are publicly readable (login branding); other uploads need a token. */
+function isPublicUploadPath(normalizedPath: string): boolean {
+  return /^\/uploads\/companies\//i.test(normalizedPath);
+}
+
+/** Resolve a stored upload path to a full URL for <img src> (auth via access_token query when required). */
 export function resolveUploadUrl(path?: string | null): string | null {
   if (!path) return null;
   if (path.startsWith('http://') || path.startsWith('https://')) return path;
@@ -13,6 +18,8 @@ export function resolveUploadUrl(path?: string | null): string | null {
   } else {
     url = normalized;
   }
+
+  if (isPublicUploadPath(normalized)) return url;
 
   const token = typeof localStorage !== 'undefined' ? localStorage.getItem('accessToken') : null;
   if (!token) return url;

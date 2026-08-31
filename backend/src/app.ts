@@ -85,9 +85,14 @@ export function createApp() {
       dotfiles: 'deny',
       maxAge: config.nodeEnv === 'production' ? '7d' : 0,
       setHeaders: (res, filePath) => {
+        const isCompanyLogo = /[/\\]companies[/\\]/i.test(filePath);
         res.setHeader(
           'Cache-Control',
-          config.nodeEnv === 'production' ? 'private, max-age=604800' : 'no-cache'
+          config.nodeEnv === 'production'
+            ? isCompanyLogo
+              ? 'public, max-age=604800'
+              : 'private, max-age=604800'
+            : 'no-cache'
         );
         res.setHeader('X-Content-Type-Options', 'nosniff');
         // Prefer not serving executable SVG as a script vector

@@ -7,12 +7,26 @@ import { AuthRequest } from './auth';
 import { runWithTenant } from '../utils/tenant';
 import { resolveUserPermissionStrings } from '../utils/userPermissions';
 
+/** Company logos must load on the public login page (no session yet). */
+function isPublicCompanyLogo(req: AuthRequest): boolean {
+  const pathOnly = (req.originalUrl || req.url || '').split('?')[0];
+  return (
+    /^\/uploads\/companies\//i.test(pathOnly) ||
+    /^\/companies\//i.test(req.path || '')
+  );
+}
+
 /**
  * Auth for /uploads — accepts Bearer header or ?access_token= (for <img src>).
- * Blocks anonymous access to stored files (audit S-01 / validation CF uploads risk).
+ * Company logos under /uploads/companies/ are public (login / tenant branding).
+ * All other uploads stay authenticated (audit S-01 / validation CF uploads risk).
  */
 export async function authenticateUpload(req: AuthRequest, _res: Response, next: NextFunction) {
   try {
+    if (isPublicCompanyLogo(req)) {
+      return next();
+    }
+
     const header = req.headers.authorization;
     const queryToken =
       typeof req.query.access_token === 'string' ? req.query.access_token : undefined;
