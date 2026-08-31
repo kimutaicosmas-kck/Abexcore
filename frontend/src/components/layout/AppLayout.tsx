@@ -6,6 +6,8 @@ import { MobileBottomNav } from './MobileBottomNav';
 import { RealtimeSync } from './RealtimeSync';
 import { LoginWelcomeToast } from './LoginWelcomeToast';
 import { TableScrollTouchFix } from './TableScrollTouchFix';
+import { useAuth } from '../../contexts/AuthContext';
+import { applyCompanyBrandToDocument } from '../../utils/companyBrand';
 
 const SIDEBAR_WIDTH = '16rem';
 const SIDEBAR_COLLAPSED = '4.5rem';
@@ -14,12 +16,17 @@ export function AppLayout() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const location = useLocation();
+  const { company } = useAuth();
 
   const isMobileOverlay = mobileOpen && !sidebarCollapsed;
 
   useEffect(() => {
     setMobileOpen(false);
   }, [location.pathname]);
+
+  useEffect(() => {
+    applyCompanyBrandToDocument(company);
+  }, [company?.brandPrimary, company?.brandAccent, company?.id, company?.slug]);
 
   useEffect(() => {
     const onResize = () => {

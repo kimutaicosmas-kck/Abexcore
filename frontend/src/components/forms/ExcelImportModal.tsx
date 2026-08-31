@@ -93,7 +93,12 @@ export function ExcelImportModal({ open, onClose, entity, onSuccess }: ExcelImpo
 
   const runImport = async () => {
     if (!file) {
-      setError('Choose an Excel file (.xlsx) to upload.');
+      setError('Choose an .xlsx or .csv file to upload.');
+      return;
+    }
+    const name = file.name.toLowerCase();
+    if (!name.endsWith('.xlsx') && !name.endsWith('.xls') && !name.endsWith('.csv')) {
+      setError('Unsupported file type. Upload an .xlsx Excel file or a .csv file.');
       return;
     }
     setLoading(true);
@@ -159,10 +164,13 @@ export function ExcelImportModal({ open, onClose, entity, onSuccess }: ExcelImpo
 
           <div className="border-t border-slate-200 pt-3">
             <p className="font-medium text-slate-900">Upload file</p>
+            <p className="mt-0.5 text-xs text-slate-500">
+              Excel (.xlsx) or CSV (.csv). Prefer the downloaded template for correct columns.
+            </p>
             <input
               ref={inputRef}
               type="file"
-              accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
+              accept=".xlsx,.xls,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
               className="mt-2 block w-full text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-primary-50 file:px-3 file:py-2 file:text-sm file:font-medium file:text-primary-700 hover:file:bg-primary-100"
               onChange={(e) => {
                 setFile(e.target.files?.[0] || null);

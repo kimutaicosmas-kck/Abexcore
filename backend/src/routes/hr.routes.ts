@@ -67,7 +67,7 @@ router.post(
   auditLog('hr', 'import', 'employee'),
   asyncHandler(async (req: AuthRequest, res: Response) => {
     if (!req.file?.buffer) throw new AppError('Spreadsheet file is required', 400);
-    const data = await ExcelImportService.import('employees', req.file.buffer, req.user!.id);
+    const data = await ExcelImportService.import('employees', req.file.buffer, req.user!.id, req.user!.companyId);
     res.json({ success: true, data });
   })
 );

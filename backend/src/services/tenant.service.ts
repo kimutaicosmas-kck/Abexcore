@@ -5,6 +5,7 @@ import { slugifyCompany, runWithoutTenant } from '../utils/tenant';
 import { sanitizeCompanyBrand } from '../utils/platform';
 import { PLATFORM_OWNER_SLUG } from '../config/platformOwner';
 import { seedTenantDefaults } from '../utils/tenantSetup';
+import { generateCompanyBrandPalette } from '../utils/companyBrandPalette';
 import { CompanyModulePreset, modulesForPreset } from '../config/companyModules';
 
 const SALT_ROUNDS = 12;
@@ -49,10 +50,38 @@ export class TenantService {
 
     const company = await prisma.company.findFirst({
       where: { slug: normalized, isActive: true },
-      select: { id: true, slug: true, name: true, logo: true },
+      select: {
+        id: true,
+        slug: true,
+        name: true,
+        logo: true,
+        welcomeMessage: true,
+        brandPrimary: true,
+        brandAccent: true,
+        docPrimaryColor: true,
+      },
     });
     if (!company) throw new AppError('Company not found or inactive', 404);
-    return sanitizeCompanyBrand(company);
+
+    const { ensureCompanyBrandColors } = await import('../utils/ensureCompanyBrand');
+    const brand = await ensureCompanyBrandColors({
+      id: company.id,
+      slug: company.slug,
+      brandPrimary: company.brandPrimary,
+      brandAccent: company.brandAccent,
+      docPrimaryColor: company.docPrimaryColor,
+    });
+
+    return sanitizeCompanyBrand({
+      id: company.id,
+      slug: company.slug,
+      name: company.name,
+      logo: company.logo,
+      welcomeMessage: company.welcomeMessage,
+      brandPrimary: brand.brandPrimary,
+      brandAccent: brand.brandAccent,
+      docPrimaryColor: brand.docPrimaryColor,
+    });
   }
 
   static resolvePackageModules(input: {
@@ -84,6 +113,7 @@ export class TenantService {
     return runWithoutTenant(() =>
       prisma.$transaction(async (tx) => {
         const companyName = input.companyName.trim();
+        const brand = generateCompanyBrandPalette(slug);
         const company = await tx.company.create({
           data: {
             name: companyName,
@@ -97,6 +127,9 @@ export class TenantService {
             email: email,
             enabledModules,
             qualityModuleEnabled,
+            brandPrimary: brand.brandPrimary,
+            brandAccent: brand.brandAccent,
+            docPrimaryColor: brand.docPrimaryColor,
             welcomeMessage: `Welcome to ${companyName}. Your team workspace is ready — let's make today count.`,
           },
         });
@@ -193,6 +226,71 @@ export class TenantService {
         isActive: true,
         enabledModules: true,
         qualityModuleEnabled: true,
+        brandPrimary: true,
+        brandAccent: true,
+        docPrimaryColor: true,
+        createdAt: true,
+        _count: { select: { users: { where: { deletedAt: null } } } },
+      },
+    });
+
+    const { _count, ...rest } = company;
+    return sanitizeCompanyBrand({
+      ...rest,
+      userCount: _count.users,
+    });
+  }
+
+  static async updateCompanyBranding(
+    companyId: string,
+    input: {
+      brandPrimary?: string | null;
+      brandAccent?: string | null;
+      docPrimaryColor?: string | null;
+      regenerate?: boolean;
+    }
+  ) {
+    const target = await prisma.company.findUnique({
+      where: { id: companyId },
+      select: { id: true, slug: true },
+    });
+    if (!target) throw new AppError('Company not found', 404);
+    if (target.slug === PLATFORM_OWNER_SLUG) {
+      throw new AppError('Platform company branding cannot be changed here', 400);
+    }
+
+    const generated = input.regenerate ? generateCompanyBrandPalette(`${target.slug}-${Date.now()}`) : null;
+    const company = await prisma.company.update({
+      where: { id: companyId },
+      data: {
+        brandPrimary: generated
+          ? generated.brandPrimary
+          : input.brandPrimary === undefined
+            ? undefined
+            : input.brandPrimary,
+        brandAccent: generated
+          ? generated.brandAccent
+          : input.brandAccent === undefined
+            ? undefined
+            : input.brandAccent,
+        docPrimaryColor: generated
+          ? generated.docPrimaryColor
+          : input.docPrimaryColor === undefined
+            ? undefined
+            : input.docPrimaryColor,
+      },
+      select: {
+        id: true,
+        slug: true,
+        name: true,
+        logo: true,
+        email: true,
+        isActive: true,
+        enabledModules: true,
+        qualityModuleEnabled: true,
+        brandPrimary: true,
+        brandAccent: true,
+        docPrimaryColor: true,
         createdAt: true,
         _count: { select: { users: { where: { deletedAt: null } } } },
       },

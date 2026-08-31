@@ -10,6 +10,7 @@ import {
   SESSION_EXPIRED_EVENT,
 } from '../services/api';
 import { canAccessRoute as checkRouteAccess } from '../config/routeAccess';
+import { resolveCompanyModules } from '../utils/companyModules';
 import {
   clearUserActivity,
   isInactivityExpired,
@@ -18,6 +19,13 @@ import {
 } from '../config/session';
 import { PLATFORM_COMPANY_SLUG } from '../constants/platform';
 import { unlockWelcomeAudio } from '../utils/welcomeSound';
+
+function moduleKeyFromPermission(permission: string): string {
+  return permission.split(':')[0] || '';
+}
+
+/** Routes/modules always available once signed in (package CORE). */
+const ALWAYS_ALLOWED_MODULES = new Set(['dashboard', 'users', 'settings']);
 
 function parseCompany(data: unknown): CompanyConfig | null {
   if (!data || typeof data !== 'object') return null;
@@ -36,6 +44,9 @@ export interface CompanyConfig {
   welcomeMessage?: string | null;
   /** null/undefined = full manufacturing suite (legacy). */
   enabledModules?: string[] | null;
+  brandPrimary?: string | null;
+  brandAccent?: string | null;
+  docPrimaryColor?: string | null;
 }
 
 interface AuthContextType {
@@ -231,11 +242,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const isPlatformOwner =
     user?.role?.name === 'Super Admin' && company?.slug === PLATFORM_COMPANY_SLUG;
 
+  const companyModules = resolveCompanyModules(company?.enabledModules);
+
   const hasPermission = (permission: string) => {
     if (!user) return false;
-    // Super Admin is still limited to the company's enabled package (backend clamps permissions).
-    return user.permissions.includes(permission);
+    if (!user.permissions.includes(permission)) return false;
+    const moduleKey = moduleKeyFromPermission(permission);
+    if (!moduleKey || ALWAYS_ALLOWED_MODULES.has(moduleKey)) return true;
+    // Enforce company package even if session permissions are stale after an owner edit.
+    return companyModules.includes(moduleKey);
   };
+
+  // Pick up package / branding changes without requiring a full re-login.
+  useEffect(() => {
+    if (!user) return;
+    const onFocus = () => {
+      void refreshUser().catch(() => undefined);
+    };
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  }, [user, refreshUser]);
 
   const canAccessRoute = (pathname: string) => checkRouteAccess(pathname, hasPermission);
 

@@ -68,20 +68,24 @@ export async function resolveUserPermissionStrings(user: {
   let permissions: string[];
 
   if (user.role.name === 'Super Admin') {
-    permissions = user.role.permissions.map(
-      (rp) => `${rp.permission.module}:${rp.permission.action}`
-    );
+    // Always derive from canonical modules so new modules (e.g. POS) appear
+    // without requiring a RolePermission refresh — still clamped by company package.
+    permissions = await permissionStringsForModules([...PERMISSION_MODULES]);
   } else {
-    const modules = normalizeAllowedModules(user.allowedModules);
-    if (modules?.length) {
-      permissions = await permissionStringsForModules(modules);
+    const stored = normalizeAllowedModules(user.allowedModules);
+    const roleMods = modulesForRoleName(user.role.name);
+    if (stored?.length) {
+      // Merge role defaults so enabling a company module (e.g. POS) unlocks it
+      // for roles that include it, even if allowedModules was frozen earlier.
+      const merged = [...new Set([...roleMods, ...stored])];
+      permissions = await permissionStringsForModules(merged);
     } else {
       const rolePerms = user.role.permissions.map(
         (rp) => `${rp.permission.module}:${rp.permission.action}`
       );
       permissions = rolePerms.length
         ? rolePerms
-        : await permissionStringsForModules(modulesForRoleName(user.role.name));
+        : await permissionStringsForModules(roleMods);
     }
   }
 

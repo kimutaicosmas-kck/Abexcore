@@ -50,15 +50,16 @@ const STATUS_OPTIONS = [
 
 export function ProductsPage() {
   const queryClient = useQueryClient();
-  const { hasPermission, user } = useAuth();
+  const { hasPermission, user, isSuperAdmin } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
 
   const salesCatalogViewOnly = isSalesBookOwner(user?.role?.name);
   const canManageProducts = hasPermission('products:read');
   const canViewAvailable = hasPermission('sales:read');
-  const canCreate = hasPermission('products:create') && !salesCatalogViewOnly;
-  const canUpdate = hasPermission('products:update') && !salesCatalogViewOnly;
-  const canDelete = hasPermission('products:delete') && !salesCatalogViewOnly;
+  // Catalog mutations: company Super Admin only (protects prices, SKUs, and revenue).
+  const canCreate = isSuperAdmin && hasPermission('products:create') && !salesCatalogViewOnly;
+  const canUpdate = isSuperAdmin && hasPermission('products:update') && !salesCatalogViewOnly;
+  const canDelete = isSuperAdmin && hasPermission('products:delete') && !salesCatalogViewOnly;
 
   const tabs = useMemo(() => {
     const items: string[] = [];

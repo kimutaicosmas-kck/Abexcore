@@ -334,6 +334,7 @@ export const operationsApi = {
   salesOrders: (params?: object) => api.get('/operations/orders', { params }),
   getSalesOrder: (id: string) => api.get(`/operations/orders/${id}`),
   createSalesOrder: (data: object) => api.post('/operations/orders', data),
+  posCheckout: (data: object) => api.post('/operations/pos/checkout', data),
   updateOrderStatus: (id: string, status: string) =>
     api.patch(`/operations/orders/${id}/status`, { status }),
   updateOrderItems: (id: string, data: object) => api.patch(`/operations/orders/${id}/items`, data),
@@ -536,6 +537,15 @@ export const tenantApi = {
     id: string,
     data: { modulePreset?: string; enabledModules?: string[] }
   ) => api.patch(`/tenant/companies/${id}/modules`, data),
+  updateCompanyBranding: (
+    id: string,
+    data: {
+      brandPrimary?: string | null;
+      brandAccent?: string | null;
+      docPrimaryColor?: string | null;
+      regenerate?: boolean;
+    }
+  ) => api.patch(`/tenant/companies/${id}/branding`, data),
   deleteCompany: (id: string, confirmSlug: string) =>
     api.delete(`/tenant/companies/${id}`, { data: { confirmSlug } }),
   registerCompany: (formData: FormData) => api.post('/tenant/companies', formData),

@@ -36,6 +36,7 @@ router.get(
 router.get(
   '/import/template',
   authorize('products:create'),
+  requireSuperAdmin,
   asyncHandler(async (_req: AuthRequest, res: Response) => {
     const buffer = await ExcelImportService.buildTemplate('products');
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
@@ -47,11 +48,12 @@ router.get(
 router.post(
   '/import',
   authorize('products:create'),
+  requireSuperAdmin,
   acceptExcelUpload,
   auditLog('products', 'import', 'product'),
   asyncHandler(async (req: AuthRequest, res: Response) => {
     if (!req.file?.buffer) throw new AppError('Spreadsheet file is required', 400);
-    const data = await ExcelImportService.import('products', req.file.buffer, req.user!.id);
+    const data = await ExcelImportService.import('products', req.file.buffer, req.user!.id, req.user!.companyId);
     res.json({ success: true, data });
   })
 );
@@ -96,6 +98,7 @@ router.get('/categories', authorizeProductPicker, listProductCategories);
 router.post(
   '/categories',
   authorize('products:create'),
+  requireSuperAdmin,
   validate(createProductCategorySchema),
   asyncHandler(async (req: AuthRequest, res: Response) => {
     const name = req.body.name.trim();
@@ -141,6 +144,7 @@ router.get(
 router.put(
   '/categories/reorder',
   authorize('products:update'),
+  requireSuperAdmin,
   validate(reorderCatalogSchema),
   asyncHandler(async (req: AuthRequest, res: Response) => {
     const { ids } = req.body as { ids: string[] };
@@ -165,6 +169,7 @@ router.put(
 router.patch(
   '/categories/:id',
   authorize('products:update'),
+  requireSuperAdmin,
   validate(updateCatalogItemSchema),
   asyncHandler(async (req: AuthRequest, res: Response) => {
     const id = getParam(req.params.id);
@@ -376,6 +381,7 @@ function normalizeProductBarcode(value: unknown): string | null {
 router.post(
   '/',
   authorize('products:create'),
+  requireSuperAdmin,
   validate(createProductSchema),
   auditLog('products', 'create', 'product'),
   asyncHandler(async (req: AuthRequest, res: Response) => {
@@ -475,6 +481,7 @@ router.post(
 router.put(
   '/:id',
   authorize('products:update'),
+  requireSuperAdmin,
   validate(updateProductSchema),
   auditLog('products', 'update', 'product'),
   asyncHandler(async (req: AuthRequest, res: Response) => {
@@ -623,6 +630,7 @@ router.put(
 router.delete(
   '/:id',
   authorize('products:delete'),
+  requireSuperAdmin,
   auditLog('products', 'delete', 'product'),
   asyncHandler(async (req: AuthRequest, res: Response) => {
     await productService.update(getParam(req.params.id), { isActive: false });
@@ -634,6 +642,7 @@ router.delete(
 router.post(
   '/:id/image',
   authorize('products:update'),
+  requireSuperAdmin,
   productImageUpload.single('image'),
   asyncHandler(async (req: AuthRequest, res: Response) => {
     if (!req.file) {

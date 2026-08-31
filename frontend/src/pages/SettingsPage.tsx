@@ -77,7 +77,7 @@ interface InviteFormData {
 
 export function SettingsPage() {
   const queryClient = useQueryClient();
-  const { hasPermission, user, isPlatformOwner, isSuperAdmin, company: authCompany, setCompany } = useAuth();
+  const { hasPermission, user, isPlatformOwner, isSuperAdmin, company: authCompany, setCompany, refreshUser } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const canAssignSuperAdmin = canAssignCompanySuperAdmin(user?.role?.name);
   const canAccessTrash = TRASH_ACCESS_PERMISSIONS.some((permission) => hasPermission(permission));
@@ -93,6 +93,10 @@ export function SettingsPage() {
   const [statusUpdatingId, setStatusUpdatingId] = useState<string | null>(null);
   const [deletingCompanyId, setDeletingCompanyId] = useState<string | null>(null);
   const [modulesEditing, setModulesEditing] = useState<RegisteredCompany | null>(null);
+  const [brandingEditing, setBrandingEditing] = useState<RegisteredCompany | null>(null);
+  const [editBrandPrimary, setEditBrandPrimary] = useState('#2563eb');
+  const [editBrandAccent, setEditBrandAccent] = useState('#0284c7');
+  const [editDocPrimary, setEditDocPrimary] = useState('#1e6bb8');
   const [editModulePreset, setEditModulePreset] = useState<CompanyModulePreset>('manufacturing');
   const [editCustomModules, setEditCustomModules] = useState<string[]>([...TRADING_COMPANY_MODULES]);
   const [resettingDemo, setResettingDemo] = useState(false);
@@ -128,7 +132,8 @@ export function SettingsPage() {
   const canInvite = hasPermission('users:create');
   const canReadTeam = hasPermission('users:read');
   const canReadCatalog = hasPermission('products:read') || hasPermission('inventory:read');
-  const canEditCategories = hasPermission('products:update') || hasPermission('products:create');
+  const canEditCategories =
+    isSuperAdmin && (hasPermission('products:update') || hasPermission('products:create'));
   const canEditMaterialTypes = hasPermission('inventory:update') || hasPermission('inventory:create');
   const twoFaEnabled = !!(user as { twoFactorEnabled?: boolean } | null)?.twoFactorEnabled;
 
@@ -361,11 +366,56 @@ export function SettingsPage() {
         modulePreset,
         ...(modulePreset === 'custom' ? { enabledModules } : {}),
       }),
-    onSuccess: (res) => {
+    onSuccess: async (res) => {
       queryClient.invalidateQueries({ queryKey: ['tenant-companies'] });
       setModulesEditing(null);
       setSuccessMessage(res.data.message || 'Company modules updated.');
       setTimeout(() => setSuccessMessage(''), 4000);
+      try {
+        await refreshUser();
+      } catch {
+        // ignore
+      }
+    },
+  });
+
+  const companyBrandingMutation = useMutation({
+    mutationFn: ({
+      id,
+      brandPrimary,
+      brandAccent,
+      docPrimaryColor,
+      regenerate,
+    }: {
+      id: string;
+      brandPrimary?: string;
+      brandAccent?: string;
+      docPrimaryColor?: string;
+      regenerate?: boolean;
+    }) =>
+      tenantApi.updateCompanyBranding(id, {
+        ...(regenerate
+          ? { regenerate: true }
+          : { brandPrimary, brandAccent, docPrimaryColor }),
+      }),
+    onSuccess: async (res, vars) => {
+      queryClient.invalidateQueries({ queryKey: ['tenant-companies'] });
+      const data = res.data.data as RegisteredCompany | undefined;
+      if (data?.brandPrimary) {
+        // Update Brand modal swatches only — never paint platform owner UI with another company's theme.
+        setEditBrandPrimary(data.brandPrimary);
+        setEditBrandAccent(data.brandAccent || data.brandPrimary);
+        setEditDocPrimary(data.docPrimaryColor || data.brandPrimary);
+        setBrandingEditing((prev) => (prev ? { ...prev, ...data } : prev));
+      }
+      if (!vars.regenerate) setBrandingEditing(null);
+      setSuccessMessage(
+        res.data.message ||
+          (vars.regenerate
+            ? 'Unique design saved for that company. It appears when users log into that company — not on AbexCore owner.'
+            : 'Company brand colors saved. Visible only in that company workspace.')
+      );
+      setTimeout(() => setSuccessMessage(''), 6000);
     },
   });
 
@@ -374,6 +424,13 @@ export function SettingsPage() {
     setEditModulePreset(preset);
     setEditCustomModules(resolveCompanyModules(entry.enabledModules));
     setModulesEditing(entry);
+  };
+
+  const openBrandingEditor = (entry: RegisteredCompany) => {
+    setEditBrandPrimary(entry.brandPrimary || '#2563eb');
+    setEditBrandAccent(entry.brandAccent || '#0284c7');
+    setEditDocPrimary(entry.docPrimaryColor || entry.brandPrimary || '#1e6bb8');
+    setBrandingEditing(entry);
   };
 
   const saveCompanyModules = () => {
@@ -385,6 +442,21 @@ export function SettingsPage() {
         editModulePreset === 'custom'
           ? modulesForPreset('custom', editCustomModules)
           : undefined,
+    });
+  };
+
+  const saveCompanyBranding = () => {
+    if (!brandingEditing) return;
+    const hexOk = (v: string) => /^#[0-9A-Fa-f]{6}$/.test(v);
+    if (!hexOk(editBrandPrimary) || !hexOk(editBrandAccent) || !hexOk(editDocPrimary)) {
+      window.alert('Use hex colors like #2563eb for all three fields.');
+      return;
+    }
+    companyBrandingMutation.mutate({
+      id: brandingEditing.id,
+      brandPrimary: editBrandPrimary,
+      brandAccent: editBrandAccent,
+      docPrimaryColor: editDocPrimary,
     });
   };
 
@@ -793,6 +865,14 @@ export function SettingsPage() {
                               </Button>
                               <Button
                                 type="button"
+                                variant="secondary"
+                                size="sm"
+                                onClick={() => openBrandingEditor(entry)}
+                              >
+                                Brand
+                              </Button>
+                              <Button
+                                type="button"
                                 variant={entry.isActive ? 'ghost' : 'secondary'}
                                 size="sm"
                                 loading={statusUpdatingId === entry.id}
@@ -874,7 +954,9 @@ export function SettingsPage() {
                       checked={editModulePreset === opt.value}
                       onChange={() => {
                         setEditModulePreset(opt.value);
-                        if (opt.value === 'custom' && modulesEditing) {
+                        if (opt.value === 'manufacturing' || opt.value === 'trading') {
+                          setEditCustomModules(modulesForPreset(opt.value));
+                        } else if (modulesEditing) {
                           setEditCustomModules(resolveCompanyModules(modulesEditing.enabledModules));
                         }
                       }}
@@ -886,14 +968,162 @@ export function SettingsPage() {
                   </label>
                 ))}
               </div>
-              {editModulePreset === 'custom' && (
-                <ModuleAccessPicker
-                  value={editCustomModules}
-                  roleBaseline={[...CORE_COMPANY_MODULES]}
-                  onChange={setEditCustomModules}
-                  label="Included modules *"
-                />
+              <p className="text-xs text-slate-500">
+                Uncheck any module this company should not use. Saving a partial list switches the package to Custom.
+              </p>
+              <ModuleAccessPicker
+                value={editCustomModules}
+                roleBaseline={[...CORE_COMPANY_MODULES]}
+                onChange={(mods) => {
+                  setEditModulePreset('custom');
+                  setEditCustomModules(mods);
+                }}
+                label="Included modules *"
+              />
+            </ModalFormBody>
+          </Modal>
+
+          <Modal
+            open={!!brandingEditing}
+            onClose={() => !companyBrandingMutation.isPending && setBrandingEditing(null)}
+            title={brandingEditing ? `Brand — ${brandingEditing.name}` : 'Brand'}
+            size="md"
+          >
+            <ModalFormBody
+              footer={
+                <div className="flex justify-end gap-2">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    disabled={companyBrandingMutation.isPending}
+                    onClick={() => setBrandingEditing(null)}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="button"
+                    loading={companyBrandingMutation.isPending}
+                    onClick={saveCompanyBranding}
+                  >
+                    Save brand colors
+                  </Button>
+                </div>
+              }
+            >
+              {companyBrandingMutation.isError && (
+                <Alert variant="error">{getApiErrorMessage(companyBrandingMutation.error)}</Alert>
               )}
+              <Alert variant="info" className="mb-3">
+                These colors apply only to <strong>{brandingEditing?.name}</strong> when their users
+                sign in (app + login page). AbexCore platform owner design is never changed.
+              </Alert>
+              <div className="mb-4 grid gap-3 sm:grid-cols-2">
+                <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  <div
+                    className="h-14 w-10 rounded-lg shadow-inner"
+                    style={{
+                      background: `linear-gradient(165deg, ${editBrandAccent} 0%, ${editBrandPrimary} 55%, #0a0b14 100%)`,
+                      boxShadow: `inset 3px 0 0 ${editBrandPrimary}`,
+                    }}
+                    title="Sidebar preview for this company only"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-slate-900">App sidebar</p>
+                    <p className="text-xs text-slate-500">Inside the ERP after login</p>
+                  </div>
+                </div>
+                <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+                  <div
+                    className="px-3 py-4 text-center text-white"
+                    style={{
+                      background: `linear-gradient(155deg, ${editBrandPrimary} 0%, ${editBrandAccent} 100%)`,
+                    }}
+                  >
+                    <p className="text-[10px] font-semibold uppercase tracking-wide opacity-90">Login</p>
+                    <p className="truncate text-sm font-bold">{brandingEditing?.name}</p>
+                  </div>
+                  <div className="space-y-1.5 p-3">
+                    <div className="h-2 rounded bg-slate-100" />
+                    <div className="h-2 w-2/3 rounded bg-slate-100" />
+                    <div
+                      className="mt-2 h-6 rounded-md"
+                      style={{ backgroundColor: editBrandPrimary }}
+                    />
+                  </div>
+                  <p className="border-t border-slate-100 px-3 py-1.5 text-[10px] text-slate-500">
+                    Tenant login page preview
+                  </p>
+                </div>
+              </div>
+              <div className="mb-4">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  loading={companyBrandingMutation.isPending}
+                  onClick={() => {
+                    if (!brandingEditing) return;
+                    companyBrandingMutation.mutate({
+                      id: brandingEditing.id,
+                      regenerate: true,
+                    });
+                  }}
+                >
+                  Generate unique design
+                </Button>
+              </div>
+              <div className="space-y-4">
+                <label className="flex items-center justify-between gap-3">
+                  <span className="text-sm font-medium text-slate-800">UI primary</span>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="color"
+                      value={editBrandPrimary}
+                      onChange={(e) => setEditBrandPrimary(e.target.value)}
+                      className="h-9 w-12 cursor-pointer rounded border border-slate-200 bg-white p-0.5"
+                    />
+                    <input
+                      type="text"
+                      value={editBrandPrimary}
+                      onChange={(e) => setEditBrandPrimary(e.target.value)}
+                      className="h-9 w-28 rounded-lg border border-slate-200 px-2 font-mono text-xs"
+                    />
+                  </div>
+                </label>
+                <label className="flex items-center justify-between gap-3">
+                  <span className="text-sm font-medium text-slate-800">UI accent</span>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="color"
+                      value={editBrandAccent}
+                      onChange={(e) => setEditBrandAccent(e.target.value)}
+                      className="h-9 w-12 cursor-pointer rounded border border-slate-200 bg-white p-0.5"
+                    />
+                    <input
+                      type="text"
+                      value={editBrandAccent}
+                      onChange={(e) => setEditBrandAccent(e.target.value)}
+                      className="h-9 w-28 rounded-lg border border-slate-200 px-2 font-mono text-xs"
+                    />
+                  </div>
+                </label>
+                <label className="flex items-center justify-between gap-3">
+                  <span className="text-sm font-medium text-slate-800">Quotes / DN / invoices</span>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="color"
+                      value={editDocPrimary}
+                      onChange={(e) => setEditDocPrimary(e.target.value)}
+                      className="h-9 w-12 cursor-pointer rounded border border-slate-200 bg-white p-0.5"
+                    />
+                    <input
+                      type="text"
+                      value={editDocPrimary}
+                      onChange={(e) => setEditDocPrimary(e.target.value)}
+                      className="h-9 w-28 rounded-lg border border-slate-200 px-2 font-mono text-xs"
+                    />
+                  </div>
+                </label>
+              </div>
             </ModalFormBody>
           </Modal>
         </Card>

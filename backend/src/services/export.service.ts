@@ -174,7 +174,7 @@ export class ExportService {
       ]);
 
       if (invoice.notes) {
-        doc.font('Helvetica').fontSize(8).fillColor(DOC_BLUE).text(`Notes: ${invoice.notes}`, PAGE_LEFT, y, {
+        doc.font('Helvetica').fontSize(8).fillColor(company.primaryColor || DOC_BLUE).text(`Notes: ${invoice.notes}`, PAGE_LEFT, y, {
           width: PAGE_WIDTH,
         });
         y = doc.y + 10;
@@ -282,7 +282,7 @@ export class ExportService {
       ]);
 
       if (quotation.notes) {
-        doc.font('Helvetica').fontSize(8).fillColor(DOC_BLUE).text(`Notes: ${quotation.notes}`, PAGE_LEFT, y, {
+        doc.font('Helvetica').fontSize(8).fillColor(company.primaryColor || DOC_BLUE).text(`Notes: ${quotation.notes}`, PAGE_LEFT, y, {
           width: PAGE_WIDTH,
         });
         y = doc.y + 10;
@@ -395,7 +395,7 @@ export class ExportService {
       );
 
       if (delivery.notes) {
-        doc.font('Helvetica').fontSize(8).fillColor(DOC_BLUE).text(`Notes: ${delivery.notes}`, PAGE_LEFT, y, {
+        doc.font('Helvetica').fontSize(8).fillColor(company.primaryColor || DOC_BLUE).text(`Notes: ${delivery.notes}`, PAGE_LEFT, y, {
           width: PAGE_WIDTH,
         });
         y = doc.y + 8;
@@ -515,7 +515,7 @@ export class ExportService {
       ]);
 
       if (po.notes) {
-        doc.font('Helvetica').fontSize(8).fillColor(DOC_BLUE).text(`Notes: ${po.notes}`, PAGE_LEFT, y, {
+        doc.font('Helvetica').fontSize(8).fillColor(company.primaryColor || DOC_BLUE).text(`Notes: ${po.notes}`, PAGE_LEFT, y, {
           width: PAGE_WIDTH,
         });
         y = doc.y + 8;

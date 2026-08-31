@@ -1076,6 +1076,9 @@ export interface RegisteredCompany {
   createdAt: string;
   enabledModules?: string[] | null;
   qualityModuleEnabled?: boolean;
+  brandPrimary?: string | null;
+  brandAccent?: string | null;
+  docPrimaryColor?: string | null;
 }
 
 export interface TenantTeamMember {

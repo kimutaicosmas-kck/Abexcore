@@ -69,28 +69,46 @@ export const me = asyncHandler(async (req: AuthRequest, res: Response) => {
           currency: true,
           welcomeMessage: true,
           enabledModules: true,
+          brandPrimary: true,
+          brandAccent: true,
+          docPrimaryColor: true,
         },
       },
     },
   });
   const { passwordHash, twoFactorSecret, company, ...safeUser } = user!;
+
+  let companyPayload = null;
+  if (company) {
+    const { ensureCompanyBrandColors } = await import('../utils/ensureCompanyBrand');
+    const brand = await ensureCompanyBrandColors({
+      id: company.id,
+      slug: company.slug,
+      brandPrimary: company.brandPrimary,
+      brandAccent: company.brandAccent,
+      docPrimaryColor: company.docPrimaryColor,
+    });
+    companyPayload = sanitizeCompanyBrand({
+      id: company.id,
+      slug: company.slug,
+      name: company.name,
+      logo: company.logo,
+      vatRate: Number(company.vatRate),
+      currency: company.currency,
+      welcomeMessage: company.welcomeMessage,
+      enabledModules: company.enabledModules,
+      brandPrimary: brand.brandPrimary,
+      brandAccent: brand.brandAccent,
+      docPrimaryColor: brand.docPrimaryColor,
+    });
+  }
+
   res.json({
     success: true,
     data: {
       ...safeUser,
       permissions: req.user!.permissions,
-      company: company
-        ? sanitizeCompanyBrand({
-            id: company.id,
-            slug: company.slug,
-            name: company.name,
-            logo: company.logo,
-            vatRate: Number(company.vatRate),
-            currency: company.currency,
-            welcomeMessage: company.welcomeMessage,
-            enabledModules: company.enabledModules,
-          })
-        : null,
+      company: companyPayload,
     },
   });
 });

@@ -29,7 +29,66 @@ export type CompanyDocHeader = {
   accountNumber: string;
   vatRate: number;
   logoPng: Buffer | null;
+  /** Hex primary used for stationery (quotes, invoices, delivery notes). */
+  primaryColor: string;
+  primaryDark: string;
+  mutedColor: string;
 };
+
+type DocInk = {
+  primary: string;
+  dark: string;
+  line: string;
+  muted: string;
+};
+
+const docInkByPdf = new WeakMap<object, DocInk>();
+
+function inkFor(doc: PDFKit.PDFDocument): DocInk {
+  return (
+    docInkByPdf.get(doc) || {
+      primary: DOC_BLUE,
+      dark: DOC_BLUE_DARK,
+      line: DOC_LINE,
+      muted: DOC_MUTED,
+    }
+  );
+}
+
+export function bindDocInk(doc: PDFKit.PDFDocument, company: CompanyDocHeader): DocInk {
+  const ink: DocInk = {
+    primary: company.primaryColor || DOC_BLUE,
+    dark: company.primaryDark || DOC_BLUE_DARK,
+    muted: company.mutedColor || DOC_MUTED,
+    line: lightenHex(company.primaryColor || DOC_BLUE, 0.28),
+  };
+  docInkByPdf.set(doc, ink);
+  return ink;
+}
+
+function normalizeHexColor(raw: string | null | undefined, fallback: string): string {
+  const v = String(raw || '').trim();
+  if (/^#[0-9A-Fa-f]{6}$/.test(v)) return v.toLowerCase();
+  return fallback;
+}
+
+function darkenHex(hex: string, amount = 0.18): string {
+  const h = hex.replace('#', '');
+  const n = parseInt(h, 16);
+  const r = Math.max(0, Math.round(((n >> 16) & 255) * (1 - amount)));
+  const g = Math.max(0, Math.round(((n >> 8) & 255) * (1 - amount)));
+  const b = Math.max(0, Math.round((n & 255) * (1 - amount)));
+  return `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1)}`;
+}
+
+function lightenHex(hex: string, amount = 0.35): string {
+  const h = hex.replace('#', '');
+  const n = parseInt(h, 16);
+  const r = Math.min(255, Math.round(((n >> 16) & 255) + (255 - ((n >> 16) & 255)) * amount));
+  const g = Math.min(255, Math.round(((n >> 8) & 255) + (255 - ((n >> 8) & 255)) * amount));
+  const b = Math.min(255, Math.round((n & 255) + (255 - (n & 255)) * amount));
+  return `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1)}`;
+}
 
 async function buildPlatformLogoPng(): Promise<Buffer> {
   const faviconCandidates = [
@@ -90,6 +149,15 @@ export async function resolveCompanyDocHeader(companyId: string): Promise<Compan
   const company = await getCompanySettings(companyId);
   if (!company) throw new AppError('Company not found for this document', 404);
 
+  const { ensureCompanyBrandColors } = await import('./ensureCompanyBrand');
+  const brand = await ensureCompanyBrandColors({
+    id: company.id,
+    slug: company.slug,
+    brandPrimary: (company as { brandPrimary?: string | null }).brandPrimary,
+    brandAccent: (company as { brandAccent?: string | null }).brandAccent,
+    docPrimaryColor: (company as { docPrimaryColor?: string | null }).docPrimaryColor,
+  });
+
   const displayName = company.name?.trim() || company.legalName?.trim() || 'Company';
   const legalName = company.legalName?.trim() || displayName;
   const addressParts = [company.address?.trim(), company.city?.trim()].filter(Boolean) as string[];
@@ -109,6 +177,7 @@ export async function resolveCompanyDocHeader(companyId: string): Promise<Compan
 
   const paybillNumber = company.coopPaybillNumber?.trim() || '';
   const accountNumber = company.mpesaAccountNumber?.trim() || '';
+  const primaryColor = normalizeHexColor(brand.docPrimaryColor || brand.brandPrimary, DOC_BLUE);
 
   return {
     name: displayName,
@@ -122,6 +191,9 @@ export async function resolveCompanyDocHeader(companyId: string): Promise<Compan
     accountNumber,
     vatRate: Number(company.vatRate),
     logoPng: await resolveCompanyLogoPng({ logo: company.logo, slug: company.slug }),
+    primaryColor,
+    primaryDark: darkenHex(primaryColor),
+    mutedColor: lightenHex(primaryColor, 0.25),
   };
 }
 
@@ -157,6 +229,9 @@ export function drawAmazonStyleHeader(
 ): number {
   const top = 40;
   const logoSize = DOC_LOGO_SIZE;
+  const ink = bindDocInk(doc, company);
+  const primary = ink.primary;
+  const muted = ink.muted;
 
   if (company.logoPng) {
     try {
@@ -176,7 +251,7 @@ export function drawAmazonStyleHeader(
   doc
     .font('Helvetica-Bold')
     .fontSize(16)
-    .fillColor(DOC_BLUE)
+    .fillColor(primary)
     .text(company.name.toUpperCase(), nameX, top + 6, { width: Math.max(nameWidth, 180), align: 'left' });
 
   let y = doc.y + 2;
@@ -184,7 +259,7 @@ export function drawAmazonStyleHeader(
     doc
       .font('Helvetica')
       .fontSize(8)
-      .fillColor(DOC_MUTED)
+      .fillColor(muted)
       .text(company.contactLine, nameX, y, { width: Math.max(nameWidth, 180), align: 'left' });
     y = doc.y;
   }
@@ -199,7 +274,7 @@ export function drawAmazonStyleHeader(
   const badgeW = Math.min(DOC_BADGE_MAX_W, Math.max(DOC_BADGE_MIN_W, longestLine * 7.2));
   const badgeX = PAGE_RIGHT - badgeW;
   const badgeY = top + 4;
-  doc.rect(badgeX, badgeY, badgeW, badgeH).fill(DOC_BLUE);
+  doc.rect(badgeX, badgeY, badgeW, badgeH).fill(primary);
   badgeLines.forEach((line, index) => {
     doc
       .font('Helvetica-Bold')
@@ -216,9 +291,9 @@ export function drawAmazonStyleHeader(
   y = Math.max(y, top + logoSize) + 10;
   const showPaybill = options?.showPaybill === true && !!company.paybillNumber;
   if (showPaybill) {
-    doc.font('Helvetica-Bold').fontSize(8).fillColor(DOC_BLUE).text('LIPA NA MPESA', PAGE_LEFT, y);
+    doc.font('Helvetica-Bold').fontSize(8).fillColor(primary).text('LIPA NA MPESA', PAGE_LEFT, y);
     y = doc.y + 1;
-    doc.font('Helvetica').fontSize(8).fillColor(DOC_BLUE);
+    doc.font('Helvetica').fontSize(8).fillColor(primary);
     doc.text(`PAYBILL NUMBER: ${company.paybillNumber}`, PAGE_LEFT, y);
     y = doc.y;
     if (company.accountNumber) {
@@ -228,7 +303,7 @@ export function drawAmazonStyleHeader(
     doc.text(`B/S NAME: ${company.legalName.toUpperCase()}`, PAGE_LEFT, y);
     y = doc.y + 6;
   } else if (company.taxPin) {
-    doc.font('Helvetica').fontSize(8).fillColor(DOC_BLUE).text(`TAX PIN: ${company.taxPin}`, PAGE_LEFT, y);
+    doc.font('Helvetica').fontSize(8).fillColor(primary).text(`TAX PIN: ${company.taxPin}`, PAGE_LEFT, y);
     y = doc.y + 6;
   }
 
@@ -244,13 +319,14 @@ export function drawPartyAndRefs(
   refs: DocRefField[]
 ): number {
   let y = startY;
+  const ink = inkFor(doc);
 
-  doc.font('Helvetica-Bold').fontSize(10).fillColor(DOC_BLUE).text('M/s', PAGE_LEFT, y);
+  doc.font('Helvetica-Bold').fontSize(10).fillColor(ink.primary).text('M/s', PAGE_LEFT, y);
   const nameLineX = PAGE_LEFT + 28;
   doc
     .moveTo(nameLineX, y + 12)
     .lineTo(300, y + 12)
-    .strokeColor(DOC_LINE)
+    .strokeColor(ink.line)
     .lineWidth(0.8)
     .stroke();
   doc.font('Helvetica-Bold').fontSize(10).fillColor('#0f172a').text(partyName || '—', nameLineX + 2, y, {
@@ -261,7 +337,7 @@ export function drawPartyAndRefs(
   doc
     .moveTo(PAGE_LEFT, y + 12)
     .lineTo(300, y + 12)
-    .strokeColor(DOC_LINE)
+    .strokeColor(ink.line)
     .lineWidth(0.8)
     .stroke();
   if (partyAddress) {
@@ -276,14 +352,14 @@ export function drawPartyAndRefs(
   const refX = 330;
   const refW = PAGE_RIGHT - refX;
   for (const ref of refs) {
-    doc.font('Helvetica-Bold').fontSize(9).fillColor(DOC_BLUE).text(ref.label, refX, refY, {
+    doc.font('Helvetica-Bold').fontSize(9).fillColor(ink.primary).text(ref.label, refX, refY, {
       width: 70,
       continued: false,
     });
     doc
       .moveTo(refX + 72, refY + 11)
       .lineTo(PAGE_RIGHT, refY + 11)
-      .strokeColor(DOC_LINE)
+      .strokeColor(ink.line)
       .lineWidth(0.8)
       .stroke();
     doc.font('Helvetica').fontSize(9).fillColor('#0f172a').text(ref.value || '—', refX + 74, refY, {
@@ -296,10 +372,11 @@ export function drawPartyAndRefs(
 }
 
 export function drawInstructionLine(doc: PDFKit.PDFDocument, y: number, text: string): number {
+  const ink = inkFor(doc);
   doc
     .font('Helvetica-Oblique')
     .fontSize(9)
-    .fillColor(DOC_BLUE)
+    .fillColor(ink.primary)
     .text(text, PAGE_LEFT, y, { width: PAGE_WIDTH, align: 'left' });
   return doc.y + 8;
 }
@@ -311,7 +388,7 @@ type TableColumn = {
   align?: 'left' | 'right' | 'center';
 };
 
-/** Blue-header table matching the delivery note Qty | Description layout. */
+/** Colored-header table matching the delivery note Qty | Description layout. */
 export function drawDocTable(
   doc: PDFKit.PDFDocument,
   startY: number,
@@ -319,6 +396,7 @@ export function drawDocTable(
   rows: Record<string, string>[],
   opts?: { minBodyRows?: number; footerLeft?: string; footerCenter?: string }
 ): number {
+  const ink = inkFor(doc);
   const headerH = 22;
   const rowH = 18;
   const minRows = opts?.minBodyRows ?? Math.max(rows.length, 8);
@@ -330,10 +408,10 @@ export function drawDocTable(
   const bodyH = minRows * rowH;
   const totalH = headerH + bodyH;
 
-  doc.rect(tableX, y, tableW, totalH).strokeColor(DOC_BLUE).lineWidth(1.2).stroke();
+  doc.rect(tableX, y, tableW, totalH).strokeColor(ink.primary).lineWidth(1.2).stroke();
 
   // Header bar
-  doc.rect(tableX, y, tableW, headerH).fill(DOC_BLUE);
+  doc.rect(tableX, y, tableW, headerH).fill(ink.primary);
   let x = tableX;
   doc.font('Helvetica-Bold').fontSize(10).fillColor('#ffffff');
   for (const col of columns) {
@@ -352,7 +430,7 @@ export function drawDocTable(
     doc
       .moveTo(x, startY)
       .lineTo(x, startY + totalH)
-      .strokeColor(DOC_BLUE)
+      .strokeColor(ink.primary)
       .lineWidth(0.8)
       .stroke();
   }
@@ -362,7 +440,7 @@ export function drawDocTable(
     doc
       .moveTo(tableX, ly)
       .lineTo(tableX + tableW, ly)
-      .strokeColor(DOC_LINE)
+      .strokeColor(ink.line)
       .lineWidth(0.5)
       .stroke();
   }
@@ -387,7 +465,7 @@ export function drawDocTable(
   // Footer inside table bottom
   const footerY = startY + totalH - 16;
   if (opts?.footerLeft) {
-    doc.font('Helvetica-Bold').fontSize(9).fillColor(DOC_BLUE).text(opts.footerLeft, tableX + 6, footerY);
+    doc.font('Helvetica-Bold').fontSize(9).fillColor(ink.primary).text(opts.footerLeft, tableX + 6, footerY);
   }
   if (opts?.footerCenter) {
     doc
@@ -412,11 +490,12 @@ export function drawSignatureBlock(
     instruction?: string;
   }
 ): number {
+  const ink = inkFor(doc);
   if (opts?.instruction) {
     doc
       .font('Helvetica-Bold')
       .fontSize(9)
-      .fillColor(DOC_BLUE)
+      .fillColor(ink.primary)
       .text(opts.instruction, PAGE_LEFT, y, { width: PAGE_WIDTH, align: 'center' });
     y = doc.y + 12;
   }
@@ -424,12 +503,12 @@ export function drawSignatureBlock(
   const confirm = opts?.confirmLabel || 'Confirmed by:';
   const receive = opts?.receiveLabel || 'Received by:';
 
-  doc.font('Helvetica-Bold').fontSize(9).fillColor(DOC_BLUE);
+  doc.font('Helvetica-Bold').fontSize(9).fillColor(ink.primary);
   doc.text(confirm, PAGE_LEFT, y);
   doc
     .moveTo(PAGE_LEFT + 80, y + 11)
     .lineTo(260, y + 11)
-    .strokeColor(DOC_LINE)
+    .strokeColor(ink.line)
     .lineWidth(0.8)
     .stroke();
   if (opts?.confirmName) {
@@ -439,11 +518,11 @@ export function drawSignatureBlock(
       .fillColor('#0f172a')
       .text(opts.confirmName, PAGE_LEFT + 82, y, { width: 175 });
   }
-  doc.font('Helvetica-Bold').fontSize(9).fillColor(DOC_BLUE).text('Sign:', 270, y);
+  doc.font('Helvetica-Bold').fontSize(9).fillColor(ink.primary).text('Sign:', 270, y);
   doc
     .moveTo(300, y + 11)
     .lineTo(PAGE_RIGHT, y + 11)
-    .strokeColor(DOC_LINE)
+    .strokeColor(ink.line)
     .lineWidth(0.8)
     .stroke();
 
@@ -452,7 +531,7 @@ export function drawSignatureBlock(
   doc
     .moveTo(PAGE_LEFT + 80, y + 11)
     .lineTo(260, y + 11)
-    .strokeColor(DOC_LINE)
+    .strokeColor(ink.line)
     .lineWidth(0.8)
     .stroke();
   if (opts?.receiveName) {
@@ -462,11 +541,11 @@ export function drawSignatureBlock(
       .fillColor('#0f172a')
       .text(opts.receiveName, PAGE_LEFT + 82, y, { width: 175 });
   }
-  doc.font('Helvetica-Bold').fontSize(9).fillColor(DOC_BLUE).text('Sign:', 270, y);
+  doc.font('Helvetica-Bold').fontSize(9).fillColor(ink.primary).text('Sign:', 270, y);
   doc
     .moveTo(300, y + 11)
     .lineTo(PAGE_RIGHT, y + 11)
-    .strokeColor(DOC_LINE)
+    .strokeColor(ink.line)
     .lineWidth(0.8)
     .stroke();
 
@@ -479,11 +558,12 @@ export function drawMoneyTotals(
   y: number,
   lines: { label: string; value: string; bold?: boolean }[]
 ): number {
+  const ink = inkFor(doc);
   for (const line of lines) {
     doc
       .font(line.bold ? 'Helvetica-Bold' : 'Helvetica')
       .fontSize(line.bold ? 11 : 9)
-      .fillColor(DOC_BLUE)
+      .fillColor(ink.primary)
       .text(line.label, 320, y, { width: 100, align: 'right' });
     doc
       .font(line.bold ? 'Helvetica-Bold' : 'Helvetica')

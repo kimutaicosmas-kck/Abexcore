@@ -311,6 +311,9 @@ router.get(
         isActive: true,
         enabledModules: true,
         qualityModuleEnabled: true,
+        brandPrimary: true,
+        brandAccent: true,
+        docPrimaryColor: true,
         createdAt: true,
         _count: { select: { users: { where: { deletedAt: null } } } },
       },
@@ -351,6 +354,49 @@ router.patch(
       success: true,
       data: company,
       message: `Module access updated for ${company.name}.`,
+    });
+  })
+);
+
+const hexColorSchema = z
+  .string()
+  .regex(/^#[0-9A-Fa-f]{6}$/, 'Use a hex color like #1e6bb8')
+  .nullable()
+  .optional();
+
+const companyBrandingSchema = z.object({
+  brandPrimary: hexColorSchema,
+  brandAccent: hexColorSchema,
+  docPrimaryColor: hexColorSchema,
+  regenerate: z.boolean().optional(),
+}).refine(
+  (body) =>
+    body.regenerate === true ||
+    body.brandPrimary !== undefined ||
+    body.brandAccent !== undefined ||
+    body.docPrimaryColor !== undefined,
+  { message: 'Provide brand colors or regenerate: true' }
+);
+
+router.patch(
+  '/companies/:id/branding',
+  requirePlatformOwner,
+  validate(companyBrandingSchema),
+  auditLog('tenant', 'update', 'company_branding'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const companyId = getParam(req.params.id);
+    const company = await TenantService.updateCompanyBranding(companyId, {
+      brandPrimary: req.body.brandPrimary,
+      brandAccent: req.body.brandAccent,
+      docPrimaryColor: req.body.docPrimaryColor,
+      regenerate: req.body.regenerate === true,
+    });
+    res.json({
+      success: true,
+      data: company,
+      message: req.body.regenerate
+        ? `A new unique design was generated for ${company.name}.`
+        : `Brand colors updated for ${company.name}.`,
     });
   })
 );

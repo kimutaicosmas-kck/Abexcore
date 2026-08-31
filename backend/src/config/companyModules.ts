@@ -34,14 +34,11 @@ export const MANUFACTURING_COMPANY_MODULES: readonly CompanyModule[] = [...COMPA
 export type CompanyModulePreset = 'manufacturing' | 'trading' | 'custom';
 
 /** POS checkout creates sales orders — keep sales when POS is selected.
- * Trading-style packages (sales, no production) get POS for counter / collection sales.
+ * Do not auto-add POS back when a company intentionally disables it.
  */
 function withModuleDependencies(modules: string[]): string[] {
   const next = [...modules];
   if (next.includes('pos') && !next.includes('sales')) next.push('sales');
-  if (next.includes('sales') && !next.includes('production') && !next.includes('pos')) {
-    next.push('pos');
-  }
   return next;
 }
 

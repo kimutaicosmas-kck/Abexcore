@@ -1,8 +1,9 @@
 import ExcelJS from 'exceljs';
+import { Readable } from 'stream';
 import prisma from '../config/database';
 import { AppError } from '../middleware/errorHandler';
 import { generateNumber } from '../utils/date';
-import { injectTenantData, requireTenantId } from '../utils/tenant';
+import { injectTenantData, requireTenantId, getTenantStore, runWithTenant } from '../utils/tenant';
 import { AccountingService } from './accounting.service';
 
 export type ImportEntity = 'products' | 'customers' | 'materials' | 'suppliers' | 'employees';
@@ -286,16 +287,53 @@ function parseIntQty(value: string | undefined): number | undefined {
   return Math.max(0, Math.round(n));
 }
 
+function looksLikeCsv(buffer: Buffer): boolean {
+  // .xlsx is a ZIP (PK…); classic .xls is OLE (D0 CF…).
+  if (buffer.length >= 2 && buffer[0] === 0x50 && buffer[1] === 0x4b) return false;
+  if (buffer.length >= 2 && buffer[0] === 0xd0 && buffer[1] === 0xcf) return false;
+
+  const sample = buffer
+    .slice(0, Math.min(buffer.length, 8192))
+    .toString('utf8')
+    .replace(/^\uFEFF/, '');
+  const firstLine = sample.split(/\r?\n/)[0] || '';
+  return (
+    firstLine.includes(',') ||
+    firstLine.includes(';') ||
+    firstLine.includes('\t') ||
+    /^sku\b/i.test(firstLine)
+  );
+}
+
+function detectCsvDelimiter(buffer: Buffer): ',' | ';' | '\t' {
+  const firstLine = buffer
+    .slice(0, Math.min(buffer.length, 8192))
+    .toString('utf8')
+    .replace(/^\uFEFF/, '')
+    .split(/\r?\n/)[0] || '';
+  const counts = {
+    ',': (firstLine.match(/,/g) || []).length,
+    ';': (firstLine.match(/;/g) || []).length,
+    '\t': (firstLine.match(/\t/g) || []).length,
+  };
+  if (counts['\t'] >= counts[','] && counts['\t'] >= counts[';']) return '\t';
+  if (counts[';'] > counts[',']) return ';';
+  return ',';
+}
+
 async function loadRows(buffer: Buffer): Promise<RowMap[]> {
   const workbook = new ExcelJS.Workbook();
-  const lower = buffer.slice(0, 5).toString('utf8');
-  if (lower.startsWith('sku') || lower.includes(',') || lower.includes(';')) {
-    // Likely CSV — ExcelJS can still load many CSVs via xlsx; fall through.
-  }
   try {
-    await workbook.xlsx.load(buffer as unknown as ExcelJS.Buffer);
+    if (looksLikeCsv(buffer)) {
+      const delimiter = detectCsvDelimiter(buffer);
+      await workbook.csv.read(Readable.from(buffer), {
+        parserOptions: { delimiter },
+      });
+    } else {
+      await workbook.xlsx.load(buffer as unknown as ExcelJS.Buffer);
+    }
   } catch {
-    throw new AppError('Could not read spreadsheet. Upload an .xlsx Excel file.', 400);
+    throw new AppError('Could not read spreadsheet. Upload an .xlsx or .csv file.', 400);
   }
 
   const sheet = workbook.worksheets[0];
@@ -356,27 +394,36 @@ export class ExcelImportService {
   static async import(
     entity: ImportEntity,
     buffer: Buffer,
-    userId: string
+    userId: string,
+    companyId?: string
   ): Promise<ImportResult> {
+    // Prefer explicit companyId — multer / CSV streams can drop AsyncLocalStorage.
+    const tenant = getTenantStore() ?? (companyId ? { companyId } : undefined);
+    if (!tenant?.companyId) {
+      throw new AppError('Tenant context is required for this operation', 500);
+    }
+
     const rows = await loadRows(buffer);
     if (rows.length === 0) {
       return { created: 0, updated: 0, skipped: 0, errors: [{ row: 1, message: 'No data rows found' }] };
     }
 
-    switch (entity) {
-      case 'products':
-        return this.importProducts(rows, userId);
-      case 'customers':
-        return this.importCustomers(rows);
-      case 'materials':
-        return this.importMaterials(rows, userId);
-      case 'suppliers':
-        return this.importSuppliers(rows);
-      case 'employees':
-        return this.importEmployees(rows);
-      default:
-        throw new AppError('Unsupported import type', 400);
-    }
+    return runWithTenant(tenant, () => {
+      switch (entity) {
+        case 'products':
+          return this.importProducts(rows, userId);
+        case 'customers':
+          return this.importCustomers(rows);
+        case 'materials':
+          return this.importMaterials(rows, userId);
+        case 'suppliers':
+          return this.importSuppliers(rows);
+        case 'employees':
+          return this.importEmployees(rows);
+        default:
+          throw new AppError('Unsupported import type', 400);
+      }
+    });
   }
 
   private static async resolveOrCreateCategory(name: string) {

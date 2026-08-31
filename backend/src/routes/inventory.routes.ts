@@ -47,7 +47,7 @@ router.post(
   auditLog('inventory', 'import', 'raw_material'),
   asyncHandler(async (req: AuthRequest, res: Response) => {
     if (!req.file?.buffer) throw new AppError('Spreadsheet file is required', 400);
-    const data = await ExcelImportService.import('materials', req.file.buffer, req.user!.id);
+    const data = await ExcelImportService.import('materials', req.file.buffer, req.user!.id, req.user!.companyId);
     checkLowStockAlerts();
     res.json({ success: true, data });
   })
@@ -71,7 +71,7 @@ router.post(
   auditLog('procurement', 'import', 'supplier'),
   asyncHandler(async (req: AuthRequest, res: Response) => {
     if (!req.file?.buffer) throw new AppError('Spreadsheet file is required', 400);
-    const data = await ExcelImportService.import('suppliers', req.file.buffer, req.user!.id);
+    const data = await ExcelImportService.import('suppliers', req.file.buffer, req.user!.id, req.user!.companyId);
     res.json({ success: true, data });
   })
 );

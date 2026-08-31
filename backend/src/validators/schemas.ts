@@ -343,6 +343,23 @@ export const createSalesOrderSchema = z.object({
   })).min(1),
 });
 
+/** Counter POS checkout — creates order, dispatches collection DN, marks delivered. */
+export const posCheckoutSchema = z.object({
+  customerId: z.string().uuid(),
+  notes: z.string().max(500).optional(),
+  items: z
+    .array(
+      z.object({
+        productId: z.string().uuid(),
+        quantity: z.coerce.number().int().min(1),
+        unitPrice: z.coerce.number().min(0),
+        discount: z.coerce.number().min(0).max(100).optional(),
+      })
+    )
+    .min(1)
+    .max(100),
+});
+
 export const upsertSalesTargetSchema = z.object({
   salesPersonId: z.string().uuid(),
   year: z.coerce.number().int().min(2020).max(2100),

@@ -26,13 +26,6 @@ type CartLine = {
   imageUrl?: string;
 };
 
-function todayLocal() {
-  const d = new Date();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${d.getFullYear()}-${m}-${day}`;
-}
-
 function productImageSrc(url?: string) {
   if (!url) return null;
   if (url.startsWith('http') || url.startsWith('data:')) return url;
@@ -122,12 +115,9 @@ export function PosPage() {
     mutationFn: async () => {
       if (!customerId) throw new Error('Select a customer before checkout');
       if (!cart.length) throw new Error('Add at least one product');
-      const today = todayLocal();
-      const res = await operationsApi.createSalesOrder({
+      const res = await operationsApi.posCheckout({
         customerId,
-        orderDate: today,
-        requiredDate: today,
-        notes: 'Created from POS',
+        notes: 'POS counter sale',
         items: cart.map((l) => ({
           productId: l.productId,
           quantity: l.quantity,
@@ -135,14 +125,22 @@ export function PosPage() {
           discount: 0,
         })),
       });
-      return res.data.data as { id: string; orderNumber: string };
+      const data = res.data.data as {
+        order: { id: string; orderNumber: string };
+        invoice?: { id: string; invoiceNumber?: string } | null;
+        deliveryNote?: { id: string; deliveryNo?: string } | null;
+      };
+      return data;
     },
-    onSuccess: (order) => {
+    onSuccess: (data) => {
       setCheckoutError(null);
       setCart([]);
-      setSuccessOrderNo(order.orderNumber);
-      setSuccessOrderId(order.id);
+      setSuccessOrderNo(data.order.orderNumber);
+      setSuccessOrderId(data.order.id);
       queryClient.invalidateQueries({ queryKey: ['sales-orders'] });
+      queryClient.invalidateQueries({ queryKey: ['delivery'] });
+      queryClient.invalidateQueries({ queryKey: ['invoices'] });
+      queryClient.invalidateQueries({ queryKey: ['products'] });
     },
     onError: (err) => setCheckoutError(getApiErrorMessage(err) || 'Checkout failed'),
   });
@@ -353,9 +351,9 @@ export function PosPage() {
           {checkoutError && <Alert variant="error">{checkoutError}</Alert>}
           {successOrderNo && (
             <Alert variant="success">
-              <p className="font-medium">Order {successOrderNo} created.</p>
+              <p className="font-medium">Sale {successOrderNo} completed.</p>
               <p className="mt-1 text-xs opacity-90">
-                Next: open Sales → Confirm → Ready → create a delivery note (leave vehicle/driver blank for customer collection) → mark Delivered.
+                Stock issued, customer-collection delivery note marked delivered, and invoice created.
               </p>
               <button
                 type="button"

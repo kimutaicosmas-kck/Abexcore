@@ -123,6 +123,9 @@ export class AuthService {
             isActive: true,
             welcomeMessage: true,
             enabledModules: true,
+            brandPrimary: true,
+            brandAccent: true,
+            docPrimaryColor: true,
           },
         },
       },
@@ -217,24 +220,43 @@ export class AuthService {
     const company = user!.company;
     const permissions = await resolveUserPermissionStrings(user!);
 
+    let companyPayload: Record<string, unknown> = {
+      name: 'Company',
+      vatRate: 16,
+      currency: 'KES',
+      welcomeMessage: null,
+    };
+    if (company) {
+      const { ensureCompanyBrandColors } = await import('../utils/ensureCompanyBrand');
+      const brand = await ensureCompanyBrandColors({
+        id: company.id,
+        slug: company.slug,
+        brandPrimary: company.brandPrimary,
+        brandAccent: company.brandAccent,
+        docPrimaryColor: company.docPrimaryColor,
+      });
+      companyPayload = sanitizeCompanyBrand({
+        id: company.id,
+        slug: company.slug,
+        name: company.name,
+        logo: company.logo,
+        vatRate: Number(company.vatRate),
+        currency: company.currency,
+        welcomeMessage: company.welcomeMessage,
+        enabledModules: company.enabledModules,
+        brandPrimary: brand.brandPrimary,
+        brandAccent: brand.brandAccent,
+        docPrimaryColor: brand.docPrimaryColor,
+      });
+    }
+
     return {
       user: {
         ...safeUser,
         permissions,
       },
       mustChangePassword: user!.mustChangePassword,
-      company: company
-        ? sanitizeCompanyBrand({
-            id: company.id,
-            slug: company.slug,
-            name: company.name,
-            logo: company.logo,
-            vatRate: Number(company.vatRate),
-            currency: company.currency,
-            welcomeMessage: company.welcomeMessage,
-            enabledModules: company.enabledModules,
-          })
-        : { name: 'Company', vatRate: 16, currency: 'KES', welcomeMessage: null },
+      company: companyPayload,
       ...tokens,
     };
   }

@@ -28,6 +28,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { accountNavLabel, isSidebarNavActive } from '../../config/routeAccess';
 import { CompanyBrand } from '../brand/CompanyBrand';
 import { PoweredBy } from '../brand/PoweredBy';
+import { sidebarBrandStyle } from '../../utils/companyBrand';
 
 type NavItem = {
   name: string;
@@ -68,7 +69,7 @@ const navigationGroups: NavGroup[] = [
       { name: 'Production', href: '/production', icon: Factory, permission: 'production:read' },
       { name: 'Quality', href: '/quality', icon: ClipboardCheck, permission: 'quality:read' },
       { name: 'Sales', href: '/sales', icon: TrendingUp, permission: 'sales:read' },
-      { name: 'POS', href: '/pos', icon: Store, permissions: ['pos:read', 'sales:read'] },
+      { name: 'POS', href: '/pos', icon: Store, permission: 'pos:read' },
       { name: 'Delivery', href: '/delivery', icon: Truck, permissions: ['delivery:read', 'delivery:create'] },
     ],
   },
@@ -151,7 +152,7 @@ export function Sidebar({ collapsed, mobileOpen, onToggle }: SidebarProps) {
   return (
     <aside
       className={clsx(
-        'sidebar-shell fixed inset-y-0 left-0 z-50 flex flex-col min-h-0 transition-[width,transform] duration-300 ease-out overflow-hidden',
+        'sidebar-shell fixed inset-y-0 left-0 z-50 flex flex-col min-h-0 transition-[width,transform,background,box-shadow] duration-300 ease-out overflow-hidden',
         'border-r border-sidebar-border',
         collapsed ? 'sidebar-collapsed w-[4.5rem]' : 'w-64',
         // Off-canvas drawer must not steal touch/scroll when closed (mobile/PWA).
@@ -159,6 +160,7 @@ export function Sidebar({ collapsed, mobileOpen, onToggle }: SidebarProps) {
           ? 'translate-x-0'
           : '-translate-x-full lg:translate-x-0 max-lg:pointer-events-none'
       )}
+      style={sidebarBrandStyle(company)}
     >
       <div className="sidebar-header flex min-h-14 shrink-0 items-center justify-between gap-1.5 px-2.5 py-2.5">
         {!collapsed ? (

@@ -13,6 +13,7 @@ import {
   salesStatsQuerySchema,
   paginationSchema,
   productionListQuerySchema,
+  posCheckoutSchema,
 } from '../validators/schemas';
 import prisma from '../config/database';
 import {
@@ -28,6 +29,7 @@ import { getCustomerVatRate, roundMoney, splitInclusiveAmount } from '../utils/c
 import { assertCreditLimit, assertOrderStatusTransition, syncCustomerCreditUsed } from '../utils/credit';
 import { StockMovementService } from '../services/inventory.service';
 import { SalesOrderService, StockShortage } from '../services/sales-order.service';
+import { PosCheckoutService } from '../services/pos-checkout.service';
 import { AccountingService } from '../services/accounting.service';
 import { salesPersonOrderFilter } from '../services/my-sales.service';
 import { NotificationService } from '../services/notification.service';
@@ -270,6 +272,27 @@ router.get(
     if (!data) throw new AppError('Sales order not found', 404);
     assertSalesBookOrderAccess(req.user!.roleName, req.user!.id, data);
     res.json({ success: true, data });
+  })
+);
+
+router.post(
+  '/pos/checkout',
+  authorizeAny('pos:create', 'pos:update'),
+  validate(posCheckoutSchema),
+  auditLog('sales', 'create', 'pos_checkout'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const result = await PosCheckoutService.checkout({
+      customerId: req.body.customerId,
+      items: req.body.items,
+      notes: req.body.notes,
+      userId: req.user!.id,
+      roleName: req.user!.roleName,
+    });
+    res.status(201).json({
+      success: true,
+      data: result,
+      message: `Sale ${result.order.orderNumber} completed — stock issued and invoice created.`,
+    });
   })
 );
 

@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import {
@@ -25,7 +25,13 @@ import {
   isStandalonePwa,
 } from '../utils/tenant';
 import { CompanyLogoMark } from '../components/brand/CompanyBrand';
-import { PLATFORM_COMPANY_SLUG } from '../constants/platform';
+import { PLATFORM_COMPANY_SLUG, isPlatformCompanySlug } from '../constants/platform';
+import {
+  ABEXCORE_PLATFORM_BRAND,
+  isPlatformBrandSlug,
+  normalizeBrandHex,
+  sidebarShellFromPrimary,
+} from '../utils/companyBrand';
 
 const loginSchema = z.object({
   companySlug: z.string().min(2, 'Company code is required'),
@@ -35,6 +41,16 @@ const loginSchema = z.object({
 });
 
 type LoginForm = z.infer<typeof loginSchema>;
+
+type ResolvedTenant = {
+  slug: string;
+  name: string;
+  logo?: string | null;
+  welcomeMessage?: string | null;
+  brandPrimary?: string | null;
+  brandAccent?: string | null;
+  docPrimaryColor?: string | null;
+};
 
 const FEATURES = [
   {
@@ -63,6 +79,19 @@ const FEATURES = [
   },
 ];
 
+function tenantLoginTheme(tenant: ResolvedTenant | null) {
+  if (!tenant || isPlatformBrandSlug(tenant.slug)) {
+    return null;
+  }
+  const primary = normalizeBrandHex(
+    tenant.brandPrimary || tenant.docPrimaryColor,
+    ABEXCORE_PLATFORM_BRAND.brandPrimary
+  );
+  const accent = normalizeBrandHex(tenant.brandAccent, ABEXCORE_PLATFORM_BRAND.brandAccent);
+  const shell = sidebarShellFromPrimary(primary);
+  return { primary, accent, shell };
+}
+
 export function LoginPage() {
   const { login } = useAuth();
   const navigate = useNavigate();
@@ -74,24 +103,22 @@ export function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [needs2FA, setNeeds2FA] = useState(false);
   const [savedCredentials, setSavedCredentials] = useState({ companySlug: '', email: '', password: '' });
-  const [resolvedTenant, setResolvedTenant] = useState<{ slug: string; name: string; logo?: string | null } | null>(null);
+  const [resolvedTenant, setResolvedTenant] = useState<ResolvedTenant | null>(null);
   const [tenantLoading, setTenantLoading] = useState(false);
   const [tenantError, setTenantError] = useState('');
 
   const installedPwa = isStandalonePwa();
 
-  // Browser: ?tenant= or subdomain can lock the company. Installed PWA must stay multi-company —
-  // old installs still open /login?tenant=owner which hid the company field and blocked other tenants.
   const hostSlug = useMemo(() => {
     const fromHost = resolveTenantSlugFromHost();
-    if (installedPwa) return fromHost; // ignore ?tenant= in the installed app
+    if (installedPwa) return fromHost;
     return resolveTenantSlugFromQuery(window.location.search) || fromHost;
   }, [searchParams, installedPwa]);
   const tenantLocked = !!hostSlug;
   const isPlatformLogin = hostSlug === PLATFORM_COMPANY_SLUG;
   const platformLoginUrl = buildTenantLoginUrl(PLATFORM_COMPANY_SLUG);
 
-  const { register, handleSubmit, formState: { errors }, setValue } = useForm<LoginForm>({
+  const { register, handleSubmit, formState: { errors }, setValue, control } = useForm<LoginForm>({
     resolver: zodResolver(loginSchema),
     defaultValues: {
       companySlug: hostSlug || localStorage.getItem('companySlug') || (import.meta.env.DEV ? 'owner' : ''),
@@ -100,7 +127,8 @@ export function LoginPage() {
     },
   });
 
-  // Strip legacy ?tenant=owner from installed-app URLs so company code stays visible.
+  const typedSlug = useWatch({ control, name: 'companySlug' });
+
   useEffect(() => {
     if (!installedPwa) return;
     const params = new URLSearchParams(window.location.search);
@@ -113,6 +141,7 @@ export function LoginPage() {
     setTenantError('');
   }, [installedPwa, setValue]);
 
+  // Resolve locked tenant (subdomain / ?tenant=)
   useEffect(() => {
     if (!hostSlug) return;
 
@@ -123,7 +152,7 @@ export function LoginPage() {
     authApi
       .resolveTenant(hostSlug)
       .then(({ data }) => {
-        setResolvedTenant({ slug: data.data.slug, name: data.data.name, logo: data.data.logo });
+        setResolvedTenant(data.data as ResolvedTenant);
       })
       .catch(() => {
         setResolvedTenant(null);
@@ -132,12 +161,55 @@ export function LoginPage() {
       .finally(() => setTenantLoading(false));
   }, [hostSlug, setValue]);
 
+  // When company code is typed (multi-company login), brand the page for that tenant only.
+  useEffect(() => {
+    if (hostSlug) return;
+    const slug = (typedSlug || '').trim().toLowerCase();
+    if (slug.length < 2) {
+      setResolvedTenant(null);
+      setTenantError('');
+      return;
+    }
+    if (isPlatformCompanySlug(slug)) {
+      setResolvedTenant(null);
+      setTenantError('');
+      return;
+    }
+
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      setTenantLoading(true);
+      authApi
+        .resolveTenant(slug)
+        .then(({ data }) => {
+          if (cancelled) return;
+          setResolvedTenant(data.data as ResolvedTenant);
+          setTenantError('');
+        })
+        .catch(() => {
+          if (cancelled) return;
+          setResolvedTenant(null);
+          // Don't show error while typing incomplete codes — only clear branding.
+        })
+        .finally(() => {
+          if (!cancelled) setTenantLoading(false);
+        });
+    }, 350);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [typedSlug, hostSlug]);
+
+  const theme = tenantLoginTheme(resolvedTenant);
+  const brandedTenant = !!theme;
+
   const onSubmit = async (data: LoginForm) => {
     setLoading(true);
     setLoginError(null);
     setValidationError('');
     const email = data.email.trim();
-    // Do not trim password — spaces can be intentional; trimming broke some mobile autofills.
     const password = data.password;
     const companySlug = (hostSlug || data.companySlug).trim().toLowerCase();
     if (!companySlug) {
@@ -154,7 +226,7 @@ export function LoginPage() {
         setNeeds2FA(true);
         setSavedCredentials({ companySlug, email, password });
         setLoginError(null);
-    setValidationError('');
+        setValidationError('');
       } else {
         setLoginError(err);
       }
@@ -178,55 +250,146 @@ export function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex">
+    <div
+      className="min-h-screen flex"
+      style={
+        theme
+          ? ({
+              ['--login-primary' as string]: theme.primary,
+              ['--login-accent' as string]: theme.accent,
+              ['--color-primary-600' as string]: theme.primary,
+              ['--color-primary-500' as string]: theme.primary,
+              ['--color-accent-500' as string]: theme.accent,
+            } as CSSProperties)
+          : undefined
+      }
+    >
       <div className="hidden lg:flex lg:w-[52%] relative overflow-hidden items-center justify-center p-12">
-        <div className="absolute inset-0 bg-gradient-to-br from-[#0c1929] via-primary-900 to-[#0c4a6e]" />
-        <div className="absolute inset-0 opacity-40 bg-[radial-gradient(circle_at_20%_30%,rgba(139,92,246,0.45),transparent_45%)]" />
-        <div className="absolute inset-0 opacity-30 bg-[radial-gradient(circle_at_80%_70%,rgba(6,182,212,0.35),transparent_40%)]" />
-        <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-primary-400/50 to-transparent" />
-        <div className="relative text-white max-w-lg w-full flex flex-col min-h-[min(640px,80vh)] items-center text-center">
-          <div className="flex-1 w-full flex flex-col items-center">
-            <AbexCoreLogo inverted size="lg" className="mb-8" />
-            <p className="text-primary-100 text-lg leading-relaxed mb-8 max-w-md">{APP_TAGLINE}</p>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full">
-              {FEATURES.map((feature) => (
+        {theme ? (
+          <>
+            <div
+              className="absolute inset-0"
+              style={{
+                background: `linear-gradient(155deg, ${theme.shell.bgDeep} 0%, ${theme.shell.bg} 45%, ${theme.primary} 140%)`,
+              }}
+            />
+            <div
+              className="absolute inset-0 opacity-50"
+              style={{
+                background: `radial-gradient(circle at 20% 30%, ${theme.primary}66, transparent 48%)`,
+              }}
+            />
+            <div
+              className="absolute inset-0 opacity-35"
+              style={{
+                background: `radial-gradient(circle at 80% 70%, ${theme.accent}55, transparent 42%)`,
+              }}
+            />
+            <div
+              className="absolute bottom-0 left-0 right-0 h-px"
+              style={{
+                background: `linear-gradient(90deg, transparent, ${theme.primary}88, transparent)`,
+              }}
+            />
+            <div className="relative text-white max-w-lg w-full flex flex-col min-h-[min(640px,80vh)] items-center text-center">
+              <div className="flex-1 w-full flex flex-col items-center justify-center">
+                <CompanyLogoMark
+                  logo={resolvedTenant?.logo}
+                  name={resolvedTenant?.name || 'Company'}
+                  companySlug={resolvedTenant?.slug}
+                  size="lg"
+                  className="mb-6 scale-125"
+                />
+                <h1 className="text-3xl font-bold tracking-tight mb-3">{resolvedTenant?.name}</h1>
+                <p className="text-white/85 text-lg leading-relaxed max-w-md">
+                  {resolvedTenant?.welcomeMessage?.trim() ||
+                    `Sign in to your ${resolvedTenant?.name} workspace.`}
+                </p>
                 <div
-                  key={feature.label}
-                  className={`flex items-start gap-3 p-4 rounded-xl border backdrop-blur-sm ${feature.color}`}
+                  className="mt-10 rounded-2xl border px-5 py-4 text-sm text-white/90 backdrop-blur-sm"
+                  style={{
+                    borderColor: `${theme.primary}55`,
+                    background: 'rgba(255,255,255,0.08)',
+                  }}
                 >
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/10">
-                    <feature.icon className="h-5 w-5" />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="font-semibold text-sm text-white">{feature.label}</p>
-                    <p className="text-xs text-primary-100/80 mt-0.5">{feature.desc}</p>
-                  </div>
+                  Secure access for your team — sales, inventory, finance, and more.
                 </div>
-              ))}
+              </div>
+              <PoweredBy className="text-white/70 mt-8 w-full" />
             </div>
+          </>
+        ) : (
+          <>
+            <div className="absolute inset-0 bg-gradient-to-br from-[#0c1929] via-primary-900 to-[#0c4a6e]" />
+            <div className="absolute inset-0 opacity-40 bg-[radial-gradient(circle_at_20%_30%,rgba(139,92,246,0.45),transparent_45%)]" />
+            <div className="absolute inset-0 opacity-30 bg-[radial-gradient(circle_at_80%_70%,rgba(6,182,212,0.35),transparent_40%)]" />
+            <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-primary-400/50 to-transparent" />
+            <div className="relative text-white max-w-lg w-full flex flex-col min-h-[min(640px,80vh)] items-center text-center">
+              <div className="flex-1 w-full flex flex-col items-center">
+                <AbexCoreLogo inverted size="lg" className="mb-8" />
+                <p className="text-primary-100 text-lg leading-relaxed mb-8 max-w-md">{APP_TAGLINE}</p>
 
-            <div className="mt-8 flex items-center gap-2 text-sm text-primary-200/90">
-              <BarChart3 className="h-4 w-4" />
-              <span>Unified dashboard for manufacturing ERP operations</span>
-              <ChevronRight className="h-4 w-4 opacity-60" />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full">
+                  {FEATURES.map((feature) => (
+                    <div
+                      key={feature.label}
+                      className={`flex items-start gap-3 p-4 rounded-xl border backdrop-blur-sm ${feature.color}`}
+                    >
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/10">
+                        <feature.icon className="h-5 w-5" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="font-semibold text-sm text-white">{feature.label}</p>
+                        <p className="text-xs text-primary-100/80 mt-0.5">{feature.desc}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="mt-8 flex items-center gap-2 text-sm text-primary-200/90">
+                  <BarChart3 className="h-4 w-4" />
+                  <span>Unified dashboard for manufacturing ERP operations</span>
+                  <ChevronRight className="h-4 w-4 opacity-60" />
+                </div>
+              </div>
+              <PoweredBy className="text-primary-200/80 mt-8 w-full" />
             </div>
-          </div>
-          <PoweredBy className="text-primary-200/80 mt-8 w-full" />
-        </div>
+          </>
+        )}
       </div>
 
       <div className="flex-1 flex flex-col items-center justify-center p-6 sm:p-10 bg-transparent">
         <div className="lg:hidden text-center mb-6 w-full flex flex-col items-center">
-          <AbexCoreLogo size="md" className="mb-2" />
+          {brandedTenant && resolvedTenant ? (
+            <CompanyLogoMark
+              logo={resolvedTenant.logo}
+              name={resolvedTenant.name}
+              companySlug={resolvedTenant.slug}
+              size="md"
+              className="mb-2"
+            />
+          ) : (
+            <AbexCoreLogo size="md" className="mb-2" />
+          )}
         </div>
 
         <div className="w-full max-w-md">
           <div className="bg-white/90 backdrop-blur-xl rounded-2xl border border-white/60 shadow-panel overflow-hidden ring-1 ring-slate-900/[0.04]">
-            <div className="h-1 bg-gradient-to-r from-primary-500 via-primary-600 to-accent-500" />
+            <div
+              className="h-1"
+              style={
+                theme
+                  ? {
+                      background: `linear-gradient(90deg, ${theme.primary}, ${theme.accent})`,
+                    }
+                  : undefined
+              }
+            >
+              {!theme && <div className="h-full bg-gradient-to-r from-primary-500 via-primary-600 to-accent-500" />}
+            </div>
             <div className="p-8">
               <div className="text-center mb-8">
-                {resolvedTenant && !needs2FA ? (
+                {resolvedTenant && !needs2FA && brandedTenant ? (
                   <div className="mx-auto mb-4 flex justify-center">
                     <CompanyLogoMark
                       logo={resolvedTenant.logo}
@@ -246,12 +409,17 @@ export function LoginPage() {
                 <p className="text-slate-500 mt-1.5 text-sm">
                   {needs2FA
                     ? 'Enter the 6-digit code from your authenticator app'
-                    : resolvedTenant
+                    : brandedTenant && resolvedTenant
                       ? `Sign in to ${resolvedTenant.name}`
                       : tenantLocked && tenantLoading
                         ? 'Loading workspace…'
                         : `Access your ${APP_NAME} workspace`}
                 </p>
+                {brandedTenant && resolvedTenant?.welcomeMessage?.trim() && !needs2FA && (
+                  <p className="mt-2 text-xs text-slate-500 leading-relaxed">
+                    {resolvedTenant.welcomeMessage}
+                  </p>
+                )}
               </div>
 
               {!needs2FA ? (
@@ -295,7 +463,19 @@ export function LoginPage() {
                     {...register('password')}
                     error={errors.password?.message}
                   />
-                  <Button type="submit" loading={loading || tenantLoading} className="w-full mt-2">
+                  <Button
+                    type="submit"
+                    loading={loading || tenantLoading}
+                    className="w-full mt-2"
+                    style={
+                      theme
+                        ? {
+                            backgroundColor: theme.primary,
+                            borderColor: theme.primary,
+                          }
+                        : undefined
+                    }
+                  >
                     Sign in
                   </Button>
                 </form>
@@ -320,7 +500,19 @@ export function LoginPage() {
                     autoComplete="one-time-code"
                     onChange={(e) => setValue('totpCode', e.target.value)}
                   />
-                  <Button type="submit" loading={loading} className="w-full">
+                  <Button
+                    type="submit"
+                    loading={loading}
+                    className="w-full"
+                    style={
+                      theme
+                        ? {
+                            backgroundColor: theme.primary,
+                            borderColor: theme.primary,
+                          }
+                        : undefined
+                    }
+                  >
                     Verify
                   </Button>
                   <button

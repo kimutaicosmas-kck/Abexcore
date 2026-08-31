@@ -47,9 +47,6 @@ export const PACKAGE_PRESET_OPTIONS: {
 function withModuleDependencies(modules: string[]): string[] {
   const next = [...modules];
   if (next.includes('pos') && !next.includes('sales')) next.push('sales');
-  if (next.includes('sales') && !next.includes('production') && !next.includes('pos')) {
-    next.push('pos');
-  }
   return next;
 }
 
