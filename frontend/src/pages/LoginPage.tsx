@@ -28,9 +28,9 @@ import { CompanyLogoMark } from '../components/brand/CompanyBrand';
 import { PLATFORM_COMPANY_SLUG, isPlatformCompanySlug } from '../constants/platform';
 import {
   ABEXCORE_PLATFORM_BRAND,
-  isPlatformBrandSlug,
   normalizeBrandHex,
   sidebarShellFromPrimary,
+  usesAbexCoreDesign,
 } from '../utils/companyBrand';
 
 const loginSchema = z.object({
@@ -47,6 +47,7 @@ type ResolvedTenant = {
   name: string;
   logo?: string | null;
   welcomeMessage?: string | null;
+  brandMode?: string | null;
   brandPrimary?: string | null;
   brandAccent?: string | null;
   docPrimaryColor?: string | null;
@@ -80,7 +81,7 @@ const FEATURES = [
 ];
 
 function tenantLoginTheme(tenant: ResolvedTenant | null) {
-  if (!tenant || isPlatformBrandSlug(tenant.slug)) {
+  if (!tenant || usesAbexCoreDesign(tenant)) {
     return null;
   }
   const primary = normalizeBrandHex(

@@ -153,6 +153,7 @@ export async function resolveCompanyDocHeader(companyId: string): Promise<Compan
   const brand = await ensureCompanyBrandColors({
     id: company.id,
     slug: company.slug,
+    brandMode: (company as { brandMode?: string | null }).brandMode,
     brandPrimary: (company as { brandPrimary?: string | null }).brandPrimary,
     brandAccent: (company as { brandAccent?: string | null }).brandAccent,
     docPrimaryColor: (company as { docPrimaryColor?: string | null }).docPrimaryColor,

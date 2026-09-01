@@ -540,6 +540,7 @@ export const tenantApi = {
   updateCompanyBranding: (
     id: string,
     data: {
+      brandMode?: 'abexcore' | 'unique';
       brandPrimary?: string | null;
       brandAccent?: string | null;
       docPrimaryColor?: string | null;

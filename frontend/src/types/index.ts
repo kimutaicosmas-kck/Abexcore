@@ -1076,6 +1076,7 @@ export interface RegisteredCompany {
   createdAt: string;
   enabledModules?: string[] | null;
   qualityModuleEnabled?: boolean;
+  brandMode?: 'abexcore' | 'unique' | string | null;
   brandPrimary?: string | null;
   brandAccent?: string | null;
   docPrimaryColor?: string | null;

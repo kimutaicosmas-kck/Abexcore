@@ -61,10 +61,16 @@ export function sidebarShellFromPrimary(primary: string) {
 
 export type CompanyBrandInput = {
   slug?: string | null;
+  brandMode?: string | null;
   brandPrimary?: string | null;
   brandAccent?: string | null;
   docPrimaryColor?: string | null;
 } | null;
+
+export function usesAbexCoreDesign(brand: CompanyBrandInput): boolean {
+  if (isPlatformBrandSlug(brand?.slug)) return true;
+  return (brand?.brandMode || '').toLowerCase() === 'abexcore';
+}
 
 function clearInlineBrandVars(root: HTMLElement) {
   const keys = [
@@ -112,9 +118,9 @@ export function platformSidebarStyle(): CSSProperties {
   };
 }
 
-/** Inline styles for tenant sidebars only. Platform owner uses platformSidebarStyle(). */
+/** Inline styles for tenant sidebars only. Platform owner / AbexCore-mode use platformSidebarStyle(). */
 export function sidebarBrandStyle(brand: CompanyBrandInput): CSSProperties {
-  if (isPlatformBrandSlug(brand?.slug)) {
+  if (usesAbexCoreDesign(brand)) {
     return platformSidebarStyle();
   }
 
@@ -138,10 +144,10 @@ export function sidebarBrandStyle(brand: CompanyBrandInput): CSSProperties {
 
 /**
  * Apply theme for the *logged-in* company only.
- * Platform owner always gets the fixed AbexCore design.
+ * Platform owner and tenants on AbexCore design get the fixed product tokens.
  */
 export function applyCompanyBrandToDocument(brand: CompanyBrandInput) {
-  if (isPlatformBrandSlug(brand?.slug)) {
+  if (usesAbexCoreDesign(brand)) {
     applyPlatformOwnerBrand();
     return;
   }

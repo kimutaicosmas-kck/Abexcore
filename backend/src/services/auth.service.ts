@@ -123,6 +123,7 @@ export class AuthService {
             isActive: true,
             welcomeMessage: true,
             enabledModules: true,
+            brandMode: true,
             brandPrimary: true,
             brandAccent: true,
             docPrimaryColor: true,
@@ -231,6 +232,7 @@ export class AuthService {
       const brand = await ensureCompanyBrandColors({
         id: company.id,
         slug: company.slug,
+        brandMode: (company as { brandMode?: string | null }).brandMode,
         brandPrimary: company.brandPrimary,
         brandAccent: company.brandAccent,
         docPrimaryColor: company.docPrimaryColor,
@@ -244,6 +246,7 @@ export class AuthService {
         currency: company.currency,
         welcomeMessage: company.welcomeMessage,
         enabledModules: company.enabledModules,
+        brandMode: brand.brandMode,
         brandPrimary: brand.brandPrimary,
         brandAccent: brand.brandAccent,
         docPrimaryColor: brand.docPrimaryColor,

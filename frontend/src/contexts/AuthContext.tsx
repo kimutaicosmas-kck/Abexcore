@@ -44,6 +44,7 @@ export interface CompanyConfig {
   welcomeMessage?: string | null;
   /** null/undefined = full manufacturing suite (legacy). */
   enabledModules?: string[] | null;
+  brandMode?: string | null;
   brandPrimary?: string | null;
   brandAccent?: string | null;
   docPrimaryColor?: string | null;

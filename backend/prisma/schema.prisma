@@ -223,6 +223,12 @@ model Company {
   qualityModuleEnabled Boolean @default(false) @map("quality_module_enabled")
   /** Package modules for this tenant. null = full manufacturing suite (legacy). */
   enabledModules Json? @map("enabled_modules")
+  /**
+   * Tenant UI design source:
+   * - abexcore = fixed AbexCore product colors
+   * - unique = auto-generated or manually set colors
+   */
+  brandMode      String   @default("unique") @map("brand_mode") @db.VarChar(20)
   /** UI / sidebar primary brand color (hex, e.g. #1e6bb8). Set by platform owner. */
   brandPrimary   String?  @map("brand_primary") @db.VarChar(7)
   /** Secondary / accent brand color (hex). */

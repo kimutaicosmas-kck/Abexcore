@@ -1,19 +1,58 @@
 import prisma from '../config/database';
-import { generateCompanyBrandPalette } from './companyBrandPalette';
+import {
+  ABEXCORE_PLATFORM_PALETTE,
+  generateCompanyBrandPalette,
+  normalizeBrandMode,
+  type CompanyBrandMode,
+} from './companyBrandPalette';
 import { isPlatformCompanySlug } from './platform';
 
-/** Persist a unique palette when a company has none yet (registration or legacy tenants). */
+/** Persist a palette when a company has none yet (registration or legacy tenants). */
 export async function ensureCompanyBrandColors(company: {
   id: string;
   slug: string;
+  brandMode?: string | null;
   brandPrimary?: string | null;
   brandAccent?: string | null;
   docPrimaryColor?: string | null;
 }): Promise<{
+  brandMode: CompanyBrandMode;
   brandPrimary: string;
   brandAccent: string;
   docPrimaryColor: string;
 }> {
+  const mode: CompanyBrandMode = isPlatformCompanySlug(company.slug)
+    ? 'abexcore'
+    : normalizeBrandMode(company.brandMode);
+
+  if (mode === 'abexcore' || isPlatformCompanySlug(company.slug)) {
+    const platform = ABEXCORE_PLATFORM_PALETTE;
+    const needsPersist =
+      company.brandMode !== 'abexcore' ||
+      company.brandPrimary?.toLowerCase() !== platform.brandPrimary ||
+      company.brandAccent?.toLowerCase() !== platform.brandAccent ||
+      company.docPrimaryColor?.toLowerCase() !== platform.docPrimaryColor;
+
+    if (needsPersist) {
+      await prisma.company.update({
+        where: { id: company.id },
+        data: {
+          brandMode: 'abexcore',
+          brandPrimary: platform.brandPrimary,
+          brandAccent: platform.brandAccent,
+          docPrimaryColor: platform.docPrimaryColor,
+        },
+      });
+    }
+
+    return {
+      brandMode: 'abexcore',
+      brandPrimary: platform.brandPrimary,
+      brandAccent: platform.brandAccent,
+      docPrimaryColor: platform.docPrimaryColor,
+    };
+  }
+
   if (
     company.brandPrimary &&
     /^#[0-9A-Fa-f]{6}$/.test(company.brandPrimary) &&
@@ -23,37 +62,16 @@ export async function ensureCompanyBrandColors(company: {
     /^#[0-9A-Fa-f]{6}$/.test(company.docPrimaryColor)
   ) {
     return {
+      brandMode: 'unique',
       brandPrimary: company.brandPrimary.toLowerCase(),
       brandAccent: company.brandAccent.toLowerCase(),
       docPrimaryColor: company.docPrimaryColor.toLowerCase(),
     };
   }
 
-  if (isPlatformCompanySlug(company.slug)) {
-    const platform = {
-      brandPrimary: '#2563eb',
-      brandAccent: '#0284c7',
-      docPrimaryColor: '#1e6bb8',
-    };
-    if (!company.brandPrimary || !company.brandAccent || !company.docPrimaryColor) {
-      await prisma.company.update({
-        where: { id: company.id },
-        data: {
-          brandPrimary: company.brandPrimary || platform.brandPrimary,
-          brandAccent: company.brandAccent || platform.brandAccent,
-          docPrimaryColor: company.docPrimaryColor || platform.docPrimaryColor,
-        },
-      });
-    }
-    return {
-      brandPrimary: (company.brandPrimary || platform.brandPrimary).toLowerCase(),
-      brandAccent: (company.brandAccent || platform.brandAccent).toLowerCase(),
-      docPrimaryColor: (company.docPrimaryColor || platform.docPrimaryColor).toLowerCase(),
-    };
-  }
-
   const generated = generateCompanyBrandPalette(company.slug || company.id);
   const next = {
+    brandMode: 'unique' as const,
     brandPrimary: company.brandPrimary || generated.brandPrimary,
     brandAccent: company.brandAccent || generated.brandAccent,
     docPrimaryColor: company.docPrimaryColor || generated.docPrimaryColor,
@@ -65,6 +83,7 @@ export async function ensureCompanyBrandColors(company: {
   });
 
   return {
+    brandMode: 'unique',
     brandPrimary: next.brandPrimary.toLowerCase(),
     brandAccent: next.brandAccent.toLowerCase(),
     docPrimaryColor: next.docPrimaryColor.toLowerCase(),

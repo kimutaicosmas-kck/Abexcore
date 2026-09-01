@@ -5,7 +5,12 @@ import { slugifyCompany, runWithoutTenant } from '../utils/tenant';
 import { sanitizeCompanyBrand } from '../utils/platform';
 import { PLATFORM_OWNER_SLUG } from '../config/platformOwner';
 import { seedTenantDefaults } from '../utils/tenantSetup';
-import { generateCompanyBrandPalette } from '../utils/companyBrandPalette';
+import {
+  ABEXCORE_PLATFORM_PALETTE,
+  generateCompanyBrandPalette,
+  normalizeBrandMode,
+  type CompanyBrandMode,
+} from '../utils/companyBrandPalette';
 import { CompanyModulePreset, modulesForPreset } from '../config/companyModules';
 
 const SALT_ROUNDS = 12;
@@ -56,6 +61,7 @@ export class TenantService {
         name: true,
         logo: true,
         welcomeMessage: true,
+        brandMode: true,
         brandPrimary: true,
         brandAccent: true,
         docPrimaryColor: true,
@@ -67,6 +73,7 @@ export class TenantService {
     const brand = await ensureCompanyBrandColors({
       id: company.id,
       slug: company.slug,
+      brandMode: company.brandMode,
       brandPrimary: company.brandPrimary,
       brandAccent: company.brandAccent,
       docPrimaryColor: company.docPrimaryColor,
@@ -78,6 +85,7 @@ export class TenantService {
       name: company.name,
       logo: company.logo,
       welcomeMessage: company.welcomeMessage,
+      brandMode: brand.brandMode,
       brandPrimary: brand.brandPrimary,
       brandAccent: brand.brandAccent,
       docPrimaryColor: brand.docPrimaryColor,
@@ -127,6 +135,7 @@ export class TenantService {
             email: email,
             enabledModules,
             qualityModuleEnabled,
+            brandMode: 'unique',
             brandPrimary: brand.brandPrimary,
             brandAccent: brand.brandAccent,
             docPrimaryColor: brand.docPrimaryColor,
@@ -226,6 +235,7 @@ export class TenantService {
         isActive: true,
         enabledModules: true,
         qualityModuleEnabled: true,
+        brandMode: true,
         brandPrimary: true,
         brandAccent: true,
         docPrimaryColor: true,
@@ -244,6 +254,7 @@ export class TenantService {
   static async updateCompanyBranding(
     companyId: string,
     input: {
+      brandMode?: CompanyBrandMode | string | null;
       brandPrimary?: string | null;
       brandAccent?: string | null;
       docPrimaryColor?: string | null;
@@ -259,22 +270,36 @@ export class TenantService {
       throw new AppError('Platform company branding cannot be changed here', 400);
     }
 
-    const generated = input.regenerate ? generateCompanyBrandPalette(`${target.slug}-${Date.now()}`) : null;
+    const requestedMode = input.brandMode != null ? normalizeBrandMode(input.brandMode) : null;
+    const useAbexcore = requestedMode === 'abexcore';
+    const generated =
+      !useAbexcore && input.regenerate
+        ? generateCompanyBrandPalette(`${target.slug}-${Date.now()}`)
+        : null;
+    const nextMode: CompanyBrandMode = useAbexcore ? 'abexcore' : 'unique';
+
+    const palette = useAbexcore
+      ? ABEXCORE_PLATFORM_PALETTE
+      : generated
+        ? generated
+        : null;
+
     const company = await prisma.company.update({
       where: { id: companyId },
       data: {
-        brandPrimary: generated
-          ? generated.brandPrimary
+        brandMode: nextMode,
+        brandPrimary: palette
+          ? palette.brandPrimary
           : input.brandPrimary === undefined
             ? undefined
             : input.brandPrimary,
-        brandAccent: generated
-          ? generated.brandAccent
+        brandAccent: palette
+          ? palette.brandAccent
           : input.brandAccent === undefined
             ? undefined
             : input.brandAccent,
-        docPrimaryColor: generated
-          ? generated.docPrimaryColor
+        docPrimaryColor: palette
+          ? palette.docPrimaryColor
           : input.docPrimaryColor === undefined
             ? undefined
             : input.docPrimaryColor,
@@ -288,6 +313,7 @@ export class TenantService {
         isActive: true,
         enabledModules: true,
         qualityModuleEnabled: true,
+        brandMode: true,
         brandPrimary: true,
         brandAccent: true,
         docPrimaryColor: true,

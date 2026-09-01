@@ -311,6 +311,7 @@ router.get(
         isActive: true,
         enabledModules: true,
         qualityModuleEnabled: true,
+        brandMode: true,
         brandPrimary: true,
         brandAccent: true,
         docPrimaryColor: true,
@@ -365,6 +366,7 @@ const hexColorSchema = z
   .optional();
 
 const companyBrandingSchema = z.object({
+  brandMode: z.enum(['abexcore', 'unique']).optional(),
   brandPrimary: hexColorSchema,
   brandAccent: hexColorSchema,
   docPrimaryColor: hexColorSchema,
@@ -372,10 +374,11 @@ const companyBrandingSchema = z.object({
 }).refine(
   (body) =>
     body.regenerate === true ||
+    body.brandMode !== undefined ||
     body.brandPrimary !== undefined ||
     body.brandAccent !== undefined ||
     body.docPrimaryColor !== undefined,
-  { message: 'Provide brand colors or regenerate: true' }
+  { message: 'Provide brandMode, brand colors, or regenerate: true' }
 );
 
 router.patch(
@@ -386,17 +389,22 @@ router.patch(
   asyncHandler(async (req: AuthRequest, res: Response) => {
     const companyId = getParam(req.params.id);
     const company = await TenantService.updateCompanyBranding(companyId, {
+      brandMode: req.body.brandMode,
       brandPrimary: req.body.brandPrimary,
       brandAccent: req.body.brandAccent,
       docPrimaryColor: req.body.docPrimaryColor,
       regenerate: req.body.regenerate === true,
     });
+    const modeLabel =
+      company.brandMode === 'abexcore' ? 'AbexCore design' : 'unique design';
     res.json({
       success: true,
       data: company,
       message: req.body.regenerate
         ? `A new unique design was generated for ${company.name}.`
-        : `Brand colors updated for ${company.name}.`,
+        : req.body.brandMode === 'abexcore'
+          ? `${company.name} now uses the AbexCore design.`
+          : `Brand updated for ${company.name} (${modeLabel}).`,
     });
   })
 );

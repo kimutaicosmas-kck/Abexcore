@@ -6,6 +6,19 @@ export type CompanyBrandPalette = {
   docPrimaryColor: string;
 };
 
+/** Fixed AbexCore product look — used when a tenant chooses brandMode = abexcore. */
+export const ABEXCORE_PLATFORM_PALETTE: CompanyBrandPalette = {
+  brandPrimary: '#2563eb',
+  brandAccent: '#0284c7',
+  docPrimaryColor: '#1e6bb8',
+};
+
+export type CompanyBrandMode = 'abexcore' | 'unique';
+
+export function normalizeBrandMode(value?: string | null): CompanyBrandMode {
+  return value === 'abexcore' ? 'abexcore' : 'unique';
+}
+
 function clamp(n: number, min: number, max: number) {
   return Math.min(max, Math.max(min, Math.round(n)));
 }

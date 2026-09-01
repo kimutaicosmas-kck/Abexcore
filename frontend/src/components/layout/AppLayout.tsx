@@ -26,7 +26,7 @@ export function AppLayout() {
 
   useEffect(() => {
     applyCompanyBrandToDocument(company);
-  }, [company?.brandPrimary, company?.brandAccent, company?.id, company?.slug]);
+  }, [company?.brandPrimary, company?.brandAccent, company?.brandMode, company?.id, company?.slug]);
 
   useEffect(() => {
     const onResize = () => {
