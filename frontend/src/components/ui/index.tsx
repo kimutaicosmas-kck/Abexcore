@@ -1,4 +1,4 @@
-import { useId, useState } from 'react';
+import { Children, useId, useState } from 'react';
 import { Link } from 'react-router-dom';
 import clsx from 'clsx';
 import { ChevronRight } from 'lucide-react';
@@ -907,6 +907,7 @@ export function QuickActionGrid({ children }: { children: React.ReactNode }) {
 
 
 /** Responsive stat cards — equal width without stretching to viewport height. */
+/** Page KPI strip — hard cap of 5 cards so layouts stay consistent. */
 export function StatGrid({
   children,
   className,
@@ -914,6 +915,7 @@ export function StatGrid({
   children: React.ReactNode;
   className?: string;
 }) {
+  const items = Children.toArray(children).slice(0, 5);
   return (
     <div
       className={clsx(
@@ -921,7 +923,7 @@ export function StatGrid({
         className
       )}
     >
-      {children}
+      {items}
     </div>
   );
 }

@@ -180,6 +180,8 @@ export function ServerMetricsPanel() {
           icon={<Database className="h-5 w-5 text-white" />}
           color="from-cyan-500 to-cyan-700"
         />
+      </StatGrid>
+      <StatGrid>
         <StatCard
           dense
           title="Redis memory"

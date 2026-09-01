@@ -316,7 +316,7 @@ export function DashboardPage() {
             to={monthSalesLink}
           />
         )}
-        {showProductionKpis && (
+        {showProductionKpis ? (
           <StatCard
             title="Production orders"
             value={kpis.productionOrders}
@@ -325,16 +325,17 @@ export function DashboardPage() {
             to={linkTo('/production')}
             className="hidden sm:flex"
           />
-        )}
-        {showSalesKpis && (
-          <StatCard
-            title="Orders awaiting"
-            value={kpis.ordersAwaitingProduction ?? 0}
-            icon={<TrendingUp className="h-5 w-5 text-white" />}
-            color="from-sky-500 to-sky-700"
-            to={linkTo('/sales')}
-            className={showProductionKpis ? undefined : 'hidden sm:flex'}
-          />
+        ) : (
+          showSalesKpis && (
+            <StatCard
+              title="Orders awaiting"
+              value={kpis.ordersAwaitingProduction ?? 0}
+              icon={<TrendingUp className="h-5 w-5 text-white" />}
+              color="from-sky-500 to-sky-700"
+              to={linkTo('/sales')}
+              className="hidden sm:flex"
+            />
+          )
         )}
         {showInventoryKpis && (
           <StatCard
