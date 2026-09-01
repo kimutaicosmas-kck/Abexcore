@@ -41,6 +41,7 @@ import {
 } from '../components/ui';
 import { DashboardCharts, DashboardKPIs } from '../types';
 import { formatPartNumberLine } from '../utils/productDisplay';
+import { resolveCompanyModules } from '../utils/companyModules';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, ArcElement, Filler);
 
@@ -100,15 +101,20 @@ function formatChartDateLabel(isoDate: string) {
 
 export function DashboardPage() {
   const location = useLocation();
-  const { hasPermission } = useAuth();
+  const { canAccessRoute, company } = useAuth();
   const accessDenied = (location.state as { accessDenied?: boolean } | null)?.accessDenied;
   const [activeTab, setActiveTab] = useState(0);
   const [chartDays, setChartDays] = useState('7');
   const salesChartRef = useRef<ChartJS<'line'> | null>(null);
-  const showProduction = hasPermission('production:read');
-  const showInventory = hasPermission('inventory:read');
-  const showSales = hasPermission('sales:read') || hasPermission('finance:read');
-  const showFinance = hasPermission('finance:read');
+
+  // Dashboard is view-all for every employee; links only open modules the user can access.
+  const companyModules = resolveCompanyModules(company?.enabledModules);
+  const companyHas = (module: string) => companyModules.includes(module);
+  const linkTo = (path: string) => (canAccessRoute(path) ? path : undefined);
+  const monthSalesLink = linkTo('/finance') || linkTo('/sales');
+  const showSalesKpis = companyHas('sales') || companyHas('finance') || companyHas('pos');
+  const showProductionKpis = companyHas('production');
+  const showInventoryKpis = companyHas('inventory');
 
   const { data: kpis, isLoading, isError, refetch, isFetching } = useQuery({
     queryKey: ['dashboard-kpis'],
@@ -292,30 +298,61 @@ export function DashboardPage() {
   return (
     <div className="space-y-6">
       <StatGrid>
-        {showSales && (
-          <StatCard title="Sales today" value={formatCurrency(kpis.salesToday)} icon={<DollarSign className="h-5 w-5 text-white" />} color="from-emerald-500 to-emerald-700" to="/sales" />
+        {showSalesKpis && (
+          <StatCard
+            title="Sales today"
+            value={formatCurrency(kpis.salesToday)}
+            icon={<DollarSign className="h-5 w-5 text-white" />}
+            color="from-emerald-500 to-emerald-700"
+            to={linkTo('/sales')}
+          />
         )}
-        {showFinance && (
-          <StatCard title="This month sales" value={formatCurrency(kpis.monthlyRevenue)} icon={<TrendingUp className="h-5 w-5 text-white" />} color="from-primary-500 to-primary-700" to="/finance" />
+        {showSalesKpis && (
+          <StatCard
+            title="This month sales"
+            value={formatCurrency(kpis.monthlyRevenue)}
+            icon={<TrendingUp className="h-5 w-5 text-white" />}
+            color="from-primary-500 to-primary-700"
+            to={monthSalesLink}
+          />
         )}
-        {showProduction && (
-          <StatCard title="Production orders" value={kpis.productionOrders} icon={<Factory className="h-5 w-5 text-white" />} color="from-sky-500 to-sky-700" to="/production" className="hidden sm:flex" />
+        {showProductionKpis && (
+          <StatCard
+            title="Production orders"
+            value={kpis.productionOrders}
+            icon={<Factory className="h-5 w-5 text-white" />}
+            color="from-sky-500 to-sky-700"
+            to={linkTo('/production')}
+            className="hidden sm:flex"
+          />
         )}
-        {showSales && !showProduction && (
+        {showSalesKpis && (
           <StatCard
             title="Orders awaiting"
             value={kpis.ordersAwaitingProduction ?? 0}
             icon={<TrendingUp className="h-5 w-5 text-white" />}
             color="from-sky-500 to-sky-700"
-            to="/sales"
-            className="hidden sm:flex"
+            to={linkTo('/sales')}
+            className={showProductionKpis ? undefined : 'hidden sm:flex'}
           />
         )}
-        {showInventory && (
-          <StatCard title="Inventory value" value={formatCurrency(kpis.inventoryValue)} icon={<Package className="h-5 w-5 text-white" />} color="from-amber-500 to-amber-700" to="/inventory" />
+        {showInventoryKpis && (
+          <StatCard
+            title="Inventory value"
+            value={formatCurrency(kpis.inventoryValue)}
+            icon={<Package className="h-5 w-5 text-white" />}
+            color="from-amber-500 to-amber-700"
+            to={linkTo('/inventory')}
+          />
         )}
-        {showInventory && (
-          <StatCard title="Low stock" value={kpis.rawMaterialsLow} icon={<AlertTriangle className="h-5 w-5 text-white" />} color="from-rose-500 to-rose-700" to="/inventory" />
+        {showInventoryKpis && (
+          <StatCard
+            title="Low stock"
+            value={kpis.rawMaterialsLow}
+            icon={<AlertTriangle className="h-5 w-5 text-white" />}
+            color="from-rose-500 to-rose-700"
+            to={linkTo('/inventory')}
+          />
         )}
       </StatGrid>
 
