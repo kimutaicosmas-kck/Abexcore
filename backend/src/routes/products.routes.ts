@@ -13,7 +13,6 @@ import { acceptExcelUpload } from '../middleware/excelImport';
 import { compressProductImage } from '../utils/image';
 import { AccountingService } from '../services/accounting.service';
 import { injectTenantData } from '../utils/tenant';
-import { StockMovementService } from '../services/inventory.service';
 import { ExcelImportService } from '../services/excel-import.service';
 
 const router = Router();
@@ -231,7 +230,7 @@ router.get(
   })
 );
 
-/** Sales-safe catalog: active products with finished-goods availability (no costs/admin). */
+/** Sales-safe catalog: active products with on-hand qty > 0 in any finished-goods store. */
 router.get(
   '/available',
   authorize('sales:read'),
@@ -245,14 +244,13 @@ router.get(
     }>(req.query);
     const skip = (page - 1) * limit;
 
-    let warehouseId: string | null = null;
-    try {
-      warehouseId = await StockMovementService.getFinishedGoodsWarehouseId();
-    } catch {
-      warehouseId = null;
-    }
+    const fgWarehouses = await prisma.warehouse.findMany({
+      where: { isActive: true, deletedAt: null, type: 'finished_goods' },
+      select: { id: true },
+    });
+    const warehouseIds = fgWarehouses.map((w) => w.id);
 
-    if (!warehouseId) {
+    if (warehouseIds.length === 0) {
       res.json({
         success: true,
         data: [],
@@ -261,13 +259,25 @@ router.get(
       return;
     }
 
+    // On hand > 0 in store (reserved does not hide the product from Available).
     const stockLevels = await prisma.stockLevel.findMany({
-      where: { warehouseId, productId: { not: null } },
-      select: { productId: true, quantity: true, reservedQty: true },
+      where: {
+        warehouseId: { in: warehouseIds },
+        productId: { not: null },
+        quantity: { gt: 0 },
+      },
+      select: { productId: true, quantity: true, reservedQty: true, warehouseId: true },
     });
-    const inStockProductIds = stockLevels
-      .filter((level) => level.productId && Number(level.quantity) - Number(level.reservedQty) > 0)
-      .map((level) => level.productId as string);
+
+    const qtyByProduct = new Map<string, { onHand: number; reserved: number }>();
+    for (const level of stockLevels) {
+      if (!level.productId) continue;
+      const prev = qtyByProduct.get(level.productId) || { onHand: 0, reserved: 0 };
+      prev.onHand += Number(level.quantity);
+      prev.reserved += Number(level.reservedQty);
+      qtyByProduct.set(level.productId, prev);
+    }
+    const inStockProductIds = [...qtyByProduct.keys()];
 
     if (inStockProductIds.length === 0) {
       res.json({
@@ -312,7 +322,7 @@ router.get(
           minStockLevel: true,
           category: { select: { id: true, name: true } },
           stockLevels: {
-            where: warehouseId ? { warehouseId } : undefined,
+            where: { warehouseId: { in: warehouseIds } },
             select: {
               quantity: true,
               reservedQty: true,
@@ -325,8 +335,9 @@ router.get(
     ]);
 
     const data = rows.map((p) => {
-      const onHand = p.stockLevels.reduce((sum, s) => sum + Number(s.quantity), 0);
-      const reserved = p.stockLevels.reduce((sum, s) => sum + Number(s.reservedQty), 0);
+      const totals = qtyByProduct.get(p.id) || { onHand: 0, reserved: 0 };
+      const onHand = totals.onHand;
+      const reserved = totals.reserved;
       const availableQty = Math.max(0, onHand - reserved);
       return {
         id: p.id,
@@ -342,7 +353,7 @@ router.get(
         onHand,
         reservedQty: reserved,
         availableQty,
-        inStock: availableQty > 0,
+        inStock: onHand > 0,
         warehouses: p.stockLevels.map((s) => ({
           id: s.warehouse.id,
           name: s.warehouse.name,
@@ -359,6 +370,38 @@ router.get(
       data,
       pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
     });
+  })
+);
+
+router.get(
+  '/catalogue/excel',
+  authorize('products:read', 'sales:read'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const { ExportService } = await import('../services/export.service');
+    const buffer = await ExportService.generateProductCatalogueExcel({
+      search: typeof req.query.search === 'string' ? req.query.search : undefined,
+      category: typeof req.query.category === 'string' ? req.query.category : undefined,
+      inStockOnly: req.query.inStockOnly === 'true' || req.query.inStockOnly === '1',
+    });
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', 'attachment; filename="product-catalogue.xlsx"');
+    res.send(buffer);
+  })
+);
+
+router.get(
+  '/catalogue/pdf',
+  authorize('products:read', 'sales:read'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const { ExportService } = await import('../services/export.service');
+    const buffer = await ExportService.generateProductCataloguePDF({
+      search: typeof req.query.search === 'string' ? req.query.search : undefined,
+      category: typeof req.query.category === 'string' ? req.query.category : undefined,
+      inStockOnly: req.query.inStockOnly === 'true' || req.query.inStockOnly === '1',
+    });
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', 'attachment; filename="product-catalogue.pdf"');
+    res.send(buffer);
   })
 );
 

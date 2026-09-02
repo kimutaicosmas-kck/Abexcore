@@ -16,13 +16,14 @@ export function toStockQty(value: unknown): number {
 }
 
 /**
- * Low stock = on-hand is zero (or negative) OR at/below the configured minimum.
- * When minimum is unset (0), only zero/negative stock is flagged.
+ * Low-stock alert only (dashboard / notifications / reports).
+ * Does NOT limit how many units you can sell — sales may deplete stock to zero.
+ * When minimum is unset (0), only zero/negative on-hand is flagged.
  */
 export function isLowStock(quantity: unknown, minStockLevel: unknown): boolean {
   const qty = toStockQty(quantity);
   const min = toStockQty(minStockLevel);
-  return qty <= 0 || qty <= min;
+  return qty <= 0 || (min > 0 && qty <= min);
 }
 
 export function sumStockQuantities(levels: { quantity: unknown }[] | undefined | null): number {

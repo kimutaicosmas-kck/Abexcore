@@ -12,6 +12,7 @@ import {
   ChevronRight,
   Boxes,
   FileSpreadsheet,
+  Download,
 } from 'lucide-react';
 import { productsApi } from '../services/api';
 import {
@@ -41,6 +42,7 @@ import { Product, ProductCategoryOption, ProductStats } from '../types';
 import { PART_NUMBER_LABEL, formatPartNumberLine } from '../utils/productDisplay';
 import { AvailableProductsPanel } from './AvailableProductsPage';
 import { STAT_ROW_5 } from '../constants/statCardTones';
+import { downloadFile } from '../utils/download';
 
 const STATUS_OPTIONS = [
   { value: '', label: 'All statuses' },
@@ -108,6 +110,7 @@ export function ProductsPage() {
 
   const [formOpen, setFormOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  const [catalogueExporting, setCatalogueExporting] = useState<'excel' | 'pdf' | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
   const [deactivateOpen, setDeactivateOpen] = useState(false);
   const [editing, setEditing] = useState<Product | null>(null);
@@ -251,16 +254,60 @@ export function ProductsPage() {
   }
 
   const toolbarActions =
-    canCreate && activeTabName === 'Catalog' ? (
+    activeTabName === 'Catalog' && (canCreate || canManageProducts) ? (
       <div className="flex flex-wrap gap-2">
-        <Button size="sm" variant="secondary" onClick={() => setImportOpen(true)}>
+        <Button
+          size="sm"
+          variant="secondary"
+          loading={catalogueExporting === 'excel'}
+          disabled={!!catalogueExporting}
+          onClick={async () => {
+            setCatalogueExporting('excel');
+            try {
+              await downloadFile(productsApi.catalogueExcelPath, 'product-catalogue.xlsx', {
+                search: search || undefined,
+                category: category || undefined,
+              });
+            } finally {
+              setCatalogueExporting(null);
+            }
+          }}
+        >
           <FileSpreadsheet className="h-4 w-4 mr-1.5" />
-          Import Excel
+          Excel catalogue
         </Button>
-        <Button size="sm" onClick={openAddProduct}>
-          <Plus className="h-4 w-4 mr-1.5" />
-          Add Product
+        <Button
+          size="sm"
+          variant="secondary"
+          loading={catalogueExporting === 'pdf'}
+          disabled={!!catalogueExporting}
+          onClick={async () => {
+            setCatalogueExporting('pdf');
+            try {
+              await downloadFile(productsApi.cataloguePdfPath, 'product-catalogue.pdf', {
+                search: search || undefined,
+                category: category || undefined,
+              });
+            } finally {
+              setCatalogueExporting(null);
+            }
+          }}
+        >
+          <Download className="h-4 w-4 mr-1.5" />
+          PDF catalogue
         </Button>
+        {canCreate && (
+          <>
+            <Button size="sm" variant="secondary" onClick={() => setImportOpen(true)}>
+              <FileSpreadsheet className="h-4 w-4 mr-1.5" />
+              Import Excel
+            </Button>
+            <Button size="sm" onClick={openAddProduct}>
+              <Plus className="h-4 w-4 mr-1.5" />
+              Add Product
+            </Button>
+          </>
+        )}
       </div>
     ) : undefined;
 

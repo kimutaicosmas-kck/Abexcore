@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Search } from 'lucide-react';
+import { Download, FileSpreadsheet, Search } from 'lucide-react';
 import { productsApi } from '../services/api';
 import {
   Table,
@@ -18,6 +18,7 @@ import {
 } from '../components/ui';
 import { ProductCategoryOption } from '../types';
 import { formatPartNumberLine } from '../utils/productDisplay';
+import { downloadFile } from '../utils/download';
 
 export interface AvailableProduct {
   id: string;
@@ -61,6 +62,25 @@ export function AvailableProductsPanel() {
   });
 
   const rows = (data?.data as AvailableProduct[]) || [];
+  const [exporting, setExporting] = useState<'excel' | 'pdf' | null>(null);
+
+  const downloadCatalogue = async (format: 'excel' | 'pdf') => {
+    setExporting(format);
+    try {
+      const params = {
+        search: search || undefined,
+        category: category || undefined,
+        inStockOnly: 'true',
+      };
+      if (format === 'excel') {
+        await downloadFile(productsApi.catalogueExcelPath, 'product-catalogue.xlsx', params);
+      } else {
+        await downloadFile(productsApi.cataloguePdfPath, 'product-catalogue.pdf', params);
+      }
+    } finally {
+      setExporting(null);
+    }
+  };
 
   const columns = [
     {
@@ -155,12 +175,36 @@ export function AvailableProductsPanel() {
               Search
             </Button>
           </FilterField>
+          <FilterField>
+            <Button
+              size="sm"
+              variant="secondary"
+              loading={exporting === 'excel'}
+              disabled={!!exporting}
+              onClick={() => downloadCatalogue('excel')}
+            >
+              <FileSpreadsheet className="h-4 w-4 mr-1.5" />
+              Excel
+            </Button>
+          </FilterField>
+          <FilterField>
+            <Button
+              size="sm"
+              variant="secondary"
+              loading={exporting === 'pdf'}
+              disabled={!!exporting}
+              onClick={() => downloadCatalogue('pdf')}
+            >
+              <Download className="h-4 w-4 mr-1.5" />
+              PDF
+            </Button>
+          </FilterField>
         </FilterBar>
 
         {rows.length === 0 && !isLoading ? (
           <EmptyState
             title="No products in stock"
-            description="Only products with available finished-goods quantity are shown here. Check the catalog or warehouse when stock is replenished."
+            description="Only products with quantity greater than zero in finished-goods stores are listed here. Min stock is an alert only — you can still sell down to zero."
           />
         ) : (
           <Table columns={columns} data={rows} loading={isLoading} embedded />

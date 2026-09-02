@@ -262,6 +262,8 @@ export const productsApi = {
     form.append('file', file);
     return api.post('/products/import', form);
   },
+  catalogueExcelPath: '/products/catalogue/excel',
+  cataloguePdfPath: '/products/catalogue/pdf',
 };
 
 export const inventoryApi = {

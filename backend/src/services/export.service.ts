@@ -1183,6 +1183,176 @@ export class ExportService {
     });
   }
 
+  /** Full product catalogue for sales / customer handouts (Excel). */
+  static async generateProductCatalogueExcel(opts?: {
+    search?: string;
+    category?: string;
+    inStockOnly?: boolean;
+  }): Promise<Buffer> {
+    const companyId = requireTenantId();
+    const company = await resolveCompanyDocHeader(companyId);
+    const rows = await this.fetchProductCatalogueRows(opts || {});
+
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet('Product Catalogue');
+    const nextRow = addExcelCompanyLetterhead(
+      workbook,
+      sheet,
+      company,
+      `${company.name} — Product Catalogue`,
+      'H'
+    );
+    sheet.getCell(`A${nextRow}`).value = `${rows.length} products · Generated ${new Date().toLocaleString('en-KE')}`;
+
+    const headerRow = sheet.addRow([
+      'Part No.',
+      'Product',
+      'Category',
+      'Selling Price',
+      'Distributor',
+      'Retail',
+      'On Hand',
+      'Available',
+      'Min Stock',
+      'Status',
+    ]);
+    headerRow.font = { bold: true };
+
+    for (const row of rows) {
+      sheet.addRow([
+        row.sku,
+        row.name,
+        row.category,
+        row.sellingPrice,
+        row.distributorPrice,
+        row.retailPrice,
+        row.onHand,
+        row.availableQty,
+        row.minStockLevel,
+        row.isActive ? 'Active' : 'Inactive',
+      ]);
+    }
+
+    sheet.columns = [
+      { width: 16 },
+      { width: 32 },
+      { width: 18 },
+      { width: 14 },
+      { width: 14 },
+      { width: 14 },
+      { width: 10 },
+      { width: 10 },
+      { width: 10 },
+      { width: 10 },
+    ];
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    return Buffer.from(buffer);
+  }
+
+  /** Full product catalogue for sales / customer handouts (PDF). */
+  static async generateProductCataloguePDF(opts?: {
+    search?: string;
+    category?: string;
+    inStockOnly?: boolean;
+  }): Promise<Buffer> {
+    const companyId = requireTenantId();
+    const company = await resolveCompanyDocHeader(companyId);
+    const rows = await this.fetchProductCatalogueRows(opts || {});
+    const fmt = (n: number) =>
+      Math.round(n).toLocaleString('en-KE', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+
+    return this.generateTabularReportPDF({
+      company,
+      docType: 'PRODUCT CATALOGUE',
+      title: `${company.name} — Product Catalogue`,
+      subtitle: `${rows.length} products${opts?.inStockOnly ? ' · In stock only' : ''}`,
+      columns: [
+        { key: 'sku', label: 'Part No.', width: 72 },
+        { key: 'name', label: 'Product', width: 130 },
+        { key: 'category', label: 'Category', width: 80 },
+        { key: 'price', label: 'Price', width: 58, align: 'right' as const },
+        { key: 'onHand', label: 'On Hand', width: 52, align: 'right' as const },
+        { key: 'available', label: 'Avail.', width: 52, align: 'right' as const },
+      ],
+      rows: rows.map((row) => ({
+        sku: row.sku,
+        name: row.name,
+        category: row.category,
+        price: fmt(row.sellingPrice),
+        onHand: String(row.onHand),
+        available: String(row.availableQty),
+      })),
+      footer: 'Min stock is an alert only and does not block sales',
+    });
+  }
+
+  private static async fetchProductCatalogueRows(opts: {
+    search?: string;
+    category?: string;
+    inStockOnly?: boolean;
+  }) {
+    const fgWarehouses = await prisma.warehouse.findMany({
+      where: { isActive: true, deletedAt: null, type: 'finished_goods' },
+      select: { id: true },
+    });
+    const warehouseIds = fgWarehouses.map((w) => w.id);
+
+    const products = await prisma.product.findMany({
+      where: {
+        deletedAt: null,
+        ...(opts.category ? { categoryId: opts.category } : {}),
+        ...(opts.search
+          ? {
+              OR: [
+                { name: { contains: opts.search } },
+                { sku: { contains: opts.search } },
+                { barcode: { contains: opts.search } },
+              ],
+            }
+          : {}),
+      },
+      orderBy: { name: 'asc' },
+      select: {
+        sku: true,
+        name: true,
+        isActive: true,
+        sellingPrice: true,
+        distributorPrice: true,
+        retailPrice: true,
+        minStockLevel: true,
+        category: { select: { name: true } },
+        stockLevels: {
+          where: warehouseIds.length ? { warehouseId: { in: warehouseIds } } : undefined,
+          select: { quantity: true, reservedQty: true },
+        },
+      },
+      take: 5000,
+    });
+
+    const mapped = products.map((p) => {
+      const onHand = p.stockLevels.reduce((s, sl) => s + Number(sl.quantity), 0);
+      const reserved = p.stockLevels.reduce((s, sl) => s + Number(sl.reservedQty), 0);
+      return {
+        sku: p.sku,
+        name: p.name,
+        category: p.category?.name || '—',
+        sellingPrice: Number(p.sellingPrice),
+        distributorPrice: Number(p.distributorPrice),
+        retailPrice: Number(p.retailPrice),
+        onHand,
+        availableQty: Math.max(0, onHand - reserved),
+        minStockLevel: Number(p.minStockLevel),
+        isActive: p.isActive,
+      };
+    });
+
+    if (opts.inStockOnly) {
+      return mapped.filter((row) => row.onHand > 0);
+    }
+    return mapped;
+  }
+
   static async generateSummaryReportExcel(
     reportType: 'purchase' | 'production' | 'customer' | 'quality',
     summary: Record<string, unknown>

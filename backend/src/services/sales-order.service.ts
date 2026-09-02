@@ -101,6 +101,10 @@ export class SalesOrderService {
     }
   }
 
+  /**
+   * Sellable qty = on-hand minus reserved in finished goods.
+   * Minimum stock level is an alert only — never reduces sellable quantity.
+   */
   static async checkStockAvailability(
     tx: TxClient,
     items: { productId: string; quantity: number; product?: { name: string } | null }[]
@@ -114,6 +118,7 @@ export class SalesOrderService {
       });
       const onHand = stock ? Number(stock.quantity) : 0;
       const reserved = stock ? Number(stock.reservedQty) : 0;
+      // Sell everything on hand that is not already reserved — ignore minStockLevel.
       const available = onHand - reserved;
 
       if (available < item.quantity) {
