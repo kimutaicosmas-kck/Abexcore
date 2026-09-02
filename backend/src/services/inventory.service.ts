@@ -249,23 +249,30 @@ export class StockMovementService {
     const warehouseId = opts.warehouseId ?? (await this.getFinishedGoodsWarehouseId(tx));
     const qty = opts.quantity;
 
-    const stock = await tx.stockLevel.findFirst({
-      where: { warehouseId, productId: opts.productId },
-    });
+    const [stock, product] = await Promise.all([
+      tx.stockLevel.findFirst({
+        where: { warehouseId, productId: opts.productId },
+      }),
+      tx.product.findFirst({
+        where: { id: opts.productId },
+        select: { name: true, sku: true },
+      }),
+    ]);
 
     const onHand = stock ? Number(stock.quantity) : 0;
     const reserved = stock ? Number(stock.reservedQty) : 0;
     const available = onHand - reserved;
+    const label = product ? `${product.name} (${product.sku})` : 'this product';
 
     if (available < qty) {
       throw new AppError(
-        `Insufficient stock to reserve (available: ${available}, required: ${qty})`,
+        `Cannot reserve stock for ${label}: only ${Math.max(0, available)} available in finished goods, but ${qty} required.`,
         400
       );
     }
 
     if (!stock) {
-      throw new AppError('No stock record found for product', 400);
+      throw new AppError(`No finished-goods stock record found for ${label}.`, 400);
     }
 
     await tx.stockLevel.update({
@@ -329,20 +336,33 @@ export class StockMovementService {
     const warehouseId = opts.warehouseId ?? (await this.getFinishedGoodsWarehouseId(tx));
     const qty = opts.quantity;
 
-    const stock = await tx.stockLevel.findFirst({
-      where: { warehouseId, productId: opts.productId },
-    });
+    const [stock, product] = await Promise.all([
+      tx.stockLevel.findFirst({
+        where: { warehouseId, productId: opts.productId },
+      }),
+      tx.product.findFirst({
+        where: { id: opts.productId },
+        select: { name: true, sku: true },
+      }),
+    ]);
 
-    const available = stock ? Number(stock.quantity) - Number(stock.reservedQty) : 0;
-    if (available < qty) {
-      throw new AppError(`Insufficient finished goods stock (available: ${available}, required: ${qty})`, 400);
+    const onHand = stock ? Number(stock.quantity) : 0;
+    const reserved = stock ? Number(stock.reservedQty) : 0;
+    const releaseQty = opts.releaseReservedQty
+      ? Math.min(opts.releaseReservedQty, reserved)
+      : 0;
+    // Reserved qty released for this dispatch is usable; do not treat it as unavailable.
+    const usable = onHand - reserved + releaseQty;
+    const label = product ? `${product.name} (${product.sku})` : 'this product';
+
+    if (usable < qty) {
+      throw new AppError(
+        `Cannot create delivery — ${label} is short in finished goods: need ${qty}, only ${Math.max(0, usable)} available (on hand ${onHand}, reserved ${reserved}). Add or free stock for this product, then try again.`,
+        400
+      );
     }
 
     if (stock) {
-      const releaseQty = opts.releaseReservedQty
-        ? Math.min(opts.releaseReservedQty, Number(stock.reservedQty))
-        : 0;
-
       await tx.stockLevel.update({
         where: { id: stock.id },
         data: {

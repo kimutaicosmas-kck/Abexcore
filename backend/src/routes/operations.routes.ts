@@ -599,10 +599,17 @@ router.patch(
         const stockCheck = await SalesOrderService.checkStockAvailability(tx, existing.items);
         if (!stockCheck.canFulfill) {
           const summary = stockCheck.shortages
-            .slice(0, 3)
-            .map((s) => `${s.productName} (need ${s.required}, have ${s.available})`)
+            .slice(0, 5)
+            .map((s) => `${s.productName}: need ${s.required}, have ${s.available}`)
             .join('; ');
-          throw new AppError(`Insufficient finished goods stock: ${summary}`, 400);
+          const more =
+            stockCheck.shortages.length > 5
+              ? ` (+${stockCheck.shortages.length - 5} more)`
+              : '';
+          throw new AppError(
+            `Cannot mark order ready — not enough finished goods for: ${summary}${more}.`,
+            400
+          );
         }
         for (const item of existing.items) {
           await StockMovementService.reserveProductStock(tx, {
