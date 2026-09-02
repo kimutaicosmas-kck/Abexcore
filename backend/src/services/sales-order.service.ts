@@ -35,7 +35,7 @@ export class SalesOrderService {
     return JSON.stringify(lines);
   }
 
-  /** Reject duplicate sales orders (same LPO, or same customer + sale date + lines). */
+  /** Reject duplicate sales orders (same LPO, or accidental double-submit of identical lines). */
   static async assertUniqueSalesOrder(
     tx: TxClient,
     input: {
@@ -64,23 +64,21 @@ export class SalesOrderService {
       }
     }
 
+    // Same customer may buy the same products/qty many times in a day (esp. Trading).
+    // Only block near-identical re-submits (double-click / retry) within a short window.
+    const DOUBLE_SUBMIT_WINDOW_MS = 5 * 60 * 1000;
     const fingerprint = this.buildLineFingerprint(input.items);
-    const { salesOrderInDateRange } = await import('../utils/salesDate');
+    const recentSince = new Date(Date.now() - DOUBLE_SUBMIT_WINDOW_MS);
     const candidates = await tx.salesOrder.findMany({
       where: {
         customerId: input.customerId,
         status: { not: 'CANCELLED' },
-        AND: [
-          salesOrderInDateRange({
-            gte: startOfDay(input.businessDate),
-            lte: endOfDay(input.businessDate),
-          }),
-        ],
+        createdAt: { gte: recentSince },
       },
       include: {
         items: { select: { productId: true, quantity: true, unitPrice: true, discount: true } },
       },
-      take: 100,
+      take: 20,
       orderBy: { createdAt: 'desc' },
     });
 
@@ -95,7 +93,7 @@ export class SalesOrderService {
       );
       if (existingFp === fingerprint) {
         throw new AppError(
-          `This sales order already exists as ${order.orderNumber} (same customer, sale date, and products).`,
+          `This looks like a duplicate submit of ${order.orderNumber} (same customer and lines just now). Open that order, or wait a moment and try again if this is a new sale.`,
           409,
           'DUPLICATE_SALES_ORDER'
         );
