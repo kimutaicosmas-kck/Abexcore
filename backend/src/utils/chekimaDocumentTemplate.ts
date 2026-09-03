@@ -12,7 +12,6 @@ import {
   bindDocInk,
   drawAmazonStyleHeader,
   drawDocTable,
-  drawSignatureBlock,
   type CompanyDocHeader,
   type DocRefField,
 } from './documentTemplate';
@@ -21,6 +20,10 @@ export const CHEKIMA_COMPANY_SLUG = 'chekima';
 
 export const CHEKIMA_DEFAULT_TAGLINE =
   'Dealers in Oil, Lubricants & Spare Part for: Shantui, Hitachi, Hyundai, Liugong, Caterpillar, Case, Doosan, XCMG, Komatsu, Sany, Zoomlion, Cummins Engine Parts, Perkins Parts & Bell Equipment.';
+
+/** Left column ends before the Date / Doc No ref strip. */
+const REF_X = 330;
+const LEFT_COL_W = REF_X - PAGE_LEFT - 14;
 
 export function isChekimaDocCompany(slug?: string | null): boolean {
   const s = (slug || '').trim().toLowerCase();
@@ -83,45 +86,46 @@ function drawSectionLabel(doc: PDFKit.PDFDocument, label: string, y: number, col
   return doc.y + 4;
 }
 
-/** From / To block — replaces the standard M/s party section for Chekima. */
-function drawChekimaFromTo(
+/** From + To on the left; Date / Doc No refs on the right (no overlap). */
+function drawChekimaPartySection(
   doc: PDFKit.PDFDocument,
   startY: number,
   company: CompanyDocHeader & { tagline?: string },
   input: Pick<
     ChekimaDocInput,
     'customerName' | 'customerAddress' | 'customerPhone' | 'customerEmail' | 'contactPerson'
-  >
+  >,
+  refs: DocRefField[]
 ): number {
   const ink = bindDocInk(doc, company);
   const tagline = (company.tagline || CHEKIMA_DEFAULT_TAGLINE).trim();
-  const colW = PAGE_WIDTH / 2 - 8;
-  const rightX = PAGE_LEFT + PAGE_WIDTH / 2 + 8;
+  const refW = PAGE_RIGHT - REF_X;
 
-  doc.font('Helvetica-Bold').fontSize(9).fillColor(ink.primary).text('From', PAGE_LEFT, startY);
+  let leftY = startY;
+  doc.font('Helvetica-Bold').fontSize(9).fillColor(ink.primary).text('From', PAGE_LEFT, leftY);
+  leftY += 14;
   doc
     .font('Helvetica-Bold')
     .fontSize(9)
     .fillColor('#0f172a')
-    .text(company.name, PAGE_LEFT, startY + 14, { width: colW });
+    .text(company.name, PAGE_LEFT, leftY, { width: LEFT_COL_W });
+  leftY = doc.y + 2;
   doc
     .font('Helvetica')
     .fontSize(7.5)
     .fillColor('#475569')
-    .text(tagline, PAGE_LEFT, doc.y + 2, { width: colW });
-  const fromBottom = doc.y;
+    .text(tagline, PAGE_LEFT, leftY, { width: LEFT_COL_W });
+  leftY = doc.y + 10;
 
-  doc.font('Helvetica-Bold').fontSize(9).fillColor(ink.primary).text('To', rightX, startY, {
-    width: colW,
-    align: 'left',
-  });
+  doc.font('Helvetica-Bold').fontSize(9).fillColor(ink.primary).text('To', PAGE_LEFT, leftY);
+  leftY += 14;
   doc
     .font('Helvetica-Bold')
     .fontSize(9)
     .fillColor('#0f172a')
-    .text(input.customerName || '—', rightX, startY + 14, { width: colW });
+    .text(input.customerName || '—', PAGE_LEFT, leftY, { width: LEFT_COL_W, lineBreak: false });
+  leftY = doc.y + 2;
 
-  let toY = doc.y + 2;
   const toLines = [
     input.customerAddress ? `Address: ${input.customerAddress}` : null,
     input.customerPhone ? `Telephone: ${input.customerPhone}` : null,
@@ -131,42 +135,30 @@ function drawChekimaFromTo(
 
   doc.font('Helvetica').fontSize(8).fillColor('#475569');
   for (const line of toLines) {
-    doc.text(line, rightX, toY, { width: colW, lineBreak: false });
-    toY += 11;
+    doc.text(line, PAGE_LEFT, leftY, { width: LEFT_COL_W, lineBreak: false });
+    leftY += 11;
   }
 
-  return Math.max(fromBottom, toY) + 10;
-}
-
-/** Right-side refs — same pattern as standard invoices (Date, Doc No, etc.). */
-function drawChekimaRefs(
-  doc: PDFKit.PDFDocument,
-  company: CompanyDocHeader,
-  startY: number,
-  refs: DocRefField[]
-): number {
-  const ink = bindDocInk(doc, company);
-  const refX = 330;
-  const refW = PAGE_RIGHT - refX;
   let refY = startY;
-
   for (const ref of refs) {
-    doc.font('Helvetica-Bold').fontSize(9).fillColor(ink.primary).text(ref.label, refX, refY, {
-      width: 72,
+    doc.font('Helvetica-Bold').fontSize(9).fillColor(ink.primary).text(ref.label, REF_X, refY, {
+      width: 70,
+      lineBreak: false,
+    });
+    doc.font('Helvetica').fontSize(9).fillColor('#0f172a').text(ref.value || '—', REF_X + 74, refY, {
+      width: refW - 74,
+      lineBreak: false,
     });
     doc
-      .moveTo(refX + 74, refY + 11)
-      .lineTo(PAGE_RIGHT, refY + 11)
+      .moveTo(REF_X + 74, refY + 12)
+      .lineTo(PAGE_RIGHT, refY + 12)
       .strokeColor(ink.line)
       .lineWidth(0.8)
       .stroke();
-    doc.font('Helvetica').fontSize(9).fillColor('#0f172a').text(ref.value || '—', refX + 76, refY, {
-      width: refW - 76,
-      lineBreak: false,
-    });
-    refY += 18;
+    refY += 20;
   }
-  return refY + 4;
+
+  return Math.max(leftY, refY) + 10;
 }
 
 function drawChekimaTradingTotals(
@@ -214,8 +206,8 @@ function drawChekimaTradingTotals(
   }
 
   let totY = y;
-  const totX = 320;
-  const labelW = 105;
+  const totX = 300;
+  const labelW = 118;
   for (const row of rows) {
     doc
       .font(row.bold ? 'Helvetica-Bold' : 'Helvetica')
@@ -226,14 +218,45 @@ function drawChekimaTradingTotals(
       .font(row.bold ? 'Helvetica-Bold' : 'Helvetica')
       .fontSize(row.bold ? 10 : 9)
       .fillColor('#0f172a')
-      .text(row.value, totX + labelW + 4, totY, {
-        width: PAGE_RIGHT - totX - labelW - 4,
+      .text(row.value, totX + labelW + 6, totY, {
+        width: PAGE_RIGHT - totX - labelW - 6,
         align: 'right',
         lineBreak: false,
       });
     totY += row.bold ? 16 : 14;
   }
   return totY;
+}
+
+/** Left-side names only — no sign lines crossing the totals column. */
+function drawChekimaSignatures(
+  doc: PDFKit.PDFDocument,
+  y: number,
+  company: CompanyDocHeader,
+  preparedBy?: string,
+  authorizedBy?: string
+): number {
+  const ink = bindDocInk(doc, company);
+
+  doc.font('Helvetica-Bold').fontSize(9).fillColor(ink.primary).text('Prepared By:', PAGE_LEFT, y);
+  doc
+    .font('Helvetica')
+    .fontSize(9)
+    .fillColor('#0f172a')
+    .text((preparedBy || '—').toUpperCase(), PAGE_LEFT + 72, y, { width: 210, lineBreak: false });
+
+  y += 20;
+  doc.font('Helvetica-Bold').fontSize(9).fillColor(ink.primary).text('Authorized By:', PAGE_LEFT, y);
+  doc
+    .font('Helvetica')
+    .fontSize(9)
+    .fillColor('#0f172a')
+    .text((authorizedBy || preparedBy || '—').toUpperCase(), PAGE_LEFT + 82, y, {
+      width: 200,
+      lineBreak: false,
+    });
+
+  return y + 22;
 }
 
 export function drawChekimaTradingDocument(doc: PDFKit.PDFDocument, input: ChekimaDocInput): void {
@@ -252,10 +275,7 @@ export function drawChekimaTradingDocument(doc: PDFKit.PDFDocument, input: Cheki
     },
   ];
 
-  const partyTop = y;
-  y = drawChekimaFromTo(doc, y, company, input);
-  const refsBottom = drawChekimaRefs(doc, company, partyTop, refs);
-  y = Math.max(y, refsBottom);
+  y = drawChekimaPartySection(doc, y, company, input, refs);
 
   const description = (input.description || '').trim();
   if (description) {
@@ -294,16 +314,10 @@ export function drawChekimaTradingDocument(doc: PDFKit.PDFDocument, input: Cheki
     }
   );
 
-  const sigY = y + 6;
-  drawChekimaTradingTotals(doc, sigY, company, input);
-  drawSignatureBlock(doc, sigY, {
-    confirmLabel: 'Prepared By:',
-    confirmName: input.preparedBy,
-    receiveLabel: 'Authorized By:',
-    receiveName: input.authorizedBy || input.preparedBy,
-  });
-
-  y = Math.max(sigY + 72, doc.y) + 6;
+  const footerTop = y + 8;
+  drawChekimaSignatures(doc, footerTop, company, input.preparedBy, input.authorizedBy);
+  const totalsBottom = drawChekimaTradingTotals(doc, footerTop, company, input);
+  y = Math.max(footerTop + 52, totalsBottom) + 8;
 
   if (input.terms?.trim()) {
     y = drawSectionLabel(doc, 'Terms and Conditions', y, ink.primary);

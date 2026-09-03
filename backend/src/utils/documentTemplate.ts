@@ -277,7 +277,9 @@ export function drawAmazonStyleHeader(
   const longestLine = badgeLines.reduce((max, line) => Math.max(max, line.length), 0);
   const badgeW = Math.min(DOC_BADGE_MAX_W, Math.max(DOC_BADGE_MIN_W, longestLine * 7.2));
   const badgeX = PAGE_RIGHT - badgeW;
-  const badgeY = top + 4;
+  const badgeY = company.logoPng
+    ? top + Math.max(0, (logoSize - badgeH) / 2)
+    : top + 4;
   doc.rect(badgeX, badgeY, badgeW, badgeH).fill(primary);
   badgeLines.forEach((line, index) => {
     doc
