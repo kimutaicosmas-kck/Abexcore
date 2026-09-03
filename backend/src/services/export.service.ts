@@ -241,7 +241,7 @@ export class ExportService {
         ],
         rows,
         {
-          minBodyRows: Math.max(rows.length + 1, 10),
+          minBodyRows: Math.max(rows.length + 1, 3),
           footerLeft: 'E.& O.E',
           footerCenter: `No. ${invoice.invoiceNumber}`,
         }
@@ -394,7 +394,7 @@ export class ExportService {
         ],
         rows,
         {
-          minBodyRows: Math.max(rows.length + 1, 10),
+          minBodyRows: Math.max(rows.length + 1, 3),
           footerLeft: 'E.& O.E',
           footerCenter: `No. ${quotation.quotationNo}`,
         }
@@ -534,7 +534,7 @@ export class ExportService {
         ],
         rows,
         {
-          minBodyRows: Math.max(rows.length + 1, 10),
+          minBodyRows: Math.max(rows.length + 1, 3),
           footerLeft: 'E.& O.E',
           footerCenter: `No. ${order.orderNumber}`,
         }
@@ -769,7 +769,7 @@ export class ExportService {
         ],
         rows,
         {
-          minBodyRows: Math.max(rows.length + 1, 10),
+          minBodyRows: Math.max(rows.length + 1, 3),
           footerLeft: 'E.& O.E',
           footerCenter: `No. ${po.poNumber}`,
         }

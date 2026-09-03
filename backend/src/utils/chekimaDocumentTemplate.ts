@@ -98,6 +98,21 @@ function drawUnderlinedHeading(doc: PDFKit.PDFDocument, text: string, x: number,
   return doc.y;
 }
 
+function pageBottom(doc: PDFKit.PDFDocument): number {
+  return doc.page.height - doc.page.margins.bottom;
+}
+
+function drawFixedText(
+  doc: PDFKit.PDFDocument,
+  text: string,
+  x: number,
+  y: number,
+  width: number,
+  align: 'left' | 'center' | 'right' = 'left'
+) {
+  doc.text(text, x, y, { width, align, lineBreak: false });
+}
+
 /**
  * Draw full Chekima trading document. Returns when drawing is complete (caller ends doc).
  */
@@ -172,7 +187,7 @@ export function drawChekimaTradingDocument(doc: PDFKit.PDFDocument, input: Cheki
     .font('Helvetica')
     .fontSize(8)
     .fillColor('#374151')
-    .text(tagline, PAGE_LEFT, doc.y + 4, { width: leftW, align: 'left' });
+    .text(tagline, PAGE_LEFT, doc.y + 4, { width: leftW, align: 'left', lineBreak: true });
   const fromBottom = doc.y;
 
   doc.font('Helvetica-Bold').fontSize(11).fillColor('#111827').text('To', mid + 8, fromTop, {
@@ -193,8 +208,8 @@ export function drawChekimaTradingDocument(doc: PDFKit.PDFDocument, input: Cheki
   ].filter(Boolean) as string[];
   doc.font('Helvetica').fontSize(9).fillColor('#374151');
   for (const line of toLines) {
-    doc.text(line, mid + 8, toY, { width: rightW, align: 'right' });
-    toY = doc.y + 1;
+    drawFixedText(doc, line, mid + 8, toY, rightW, 'right');
+    toY += 11;
   }
 
   y = Math.max(fromBottom, toY) + 20;
@@ -205,8 +220,12 @@ export function drawChekimaTradingDocument(doc: PDFKit.PDFDocument, input: Cheki
     .font('Helvetica')
     .fontSize(10)
     .fillColor('#111827')
-    .text(dashOr(input.description), PAGE_LEFT, y, { width: PAGE_WIDTH });
-  y = doc.y + 16;
+    .text(dashOr(input.description), PAGE_LEFT, y, {
+      width: PAGE_WIDTH,
+      height: 28,
+      ellipsis: true,
+    });
+  y += 32;
 
   // —— Items table ——
   y = drawUnderlinedHeading(doc, `${input.docTitle} Items`, PAGE_LEFT, y) + 8;
@@ -309,7 +328,11 @@ export function drawChekimaTradingDocument(doc: PDFKit.PDFDocument, input: Cheki
       .font('Helvetica-Bold')
       .fontSize(36)
       .fillColor('#9ca3af')
-      .text('AUTHORIZED', PAGE_LEFT + 20, y + 10, { width: 260, align: 'left' });
+      .text('AUTHORIZED', PAGE_LEFT + 20, y + 10, {
+        width: 260,
+        align: 'left',
+        lineBreak: false,
+      });
     doc.restore();
   }
 
@@ -350,12 +373,12 @@ export function drawChekimaTradingDocument(doc: PDFKit.PDFDocument, input: Cheki
       .font(opts?.bold ? 'Helvetica-Bold' : 'Helvetica')
       .fontSize(10)
       .fillColor(opts?.muted ? '#9ca3af' : '#111827')
-      .text(label, totX, totY, { width: totLabelW, align: 'left' });
+      .text(label, totX, totY, { width: totLabelW, align: 'left', lineBreak: false });
     doc
       .font(opts?.bold ? 'Helvetica-Bold' : 'Helvetica')
       .fontSize(10)
       .fillColor(opts?.muted ? '#9ca3af' : '#111827')
-      .text(value, totX + totLabelW, totY, { width: totValW, align: 'right' });
+      .text(value, totX + totLabelW, totY, { width: totValW, align: 'right', lineBreak: false });
     totY += 16;
   };
 
@@ -382,20 +405,17 @@ export function drawChekimaTradingDocument(doc: PDFKit.PDFDocument, input: Cheki
   ];
   for (const section of footerSections) {
     y = drawUnderlinedHeading(doc, section.label, PAGE_LEFT, y) + 3;
-    doc.font('Helvetica').fontSize(10).fillColor('#111827').text(dashOr(section.value), PAGE_LEFT, y);
-    y = doc.y + 12;
+    drawFixedText(doc, dashOr(section.value), PAGE_LEFT, y, PAGE_WIDTH);
+    y += 14;
   }
 
-  // —— Page footer ——
-  const footerY = 800;
+  // —— Page footer (must stay inside bottom margin or PDFKit adds blank pages) ——
+  const footerY = pageBottom(doc) - 10;
   const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, '');
   doc.font('Helvetica-Oblique').fontSize(8).fillColor('#6b7280');
-  doc.text(stamp, PAGE_LEFT, footerY, { width: 120, align: 'left' });
-  doc.text('Page 1', PAGE_LEFT, footerY, { width: PAGE_WIDTH, align: 'center' });
-  doc.text('ERP By AbexCore Technologies', PAGE_LEFT, footerY, {
-    width: PAGE_WIDTH,
-    align: 'right',
-  });
+  drawFixedText(doc, stamp, PAGE_LEFT, footerY, 120, 'left');
+  drawFixedText(doc, 'Page 1', PAGE_LEFT, footerY, PAGE_WIDTH, 'center');
+  drawFixedText(doc, 'ERP By AbexCore Technologies', PAGE_LEFT, footerY, PAGE_WIDTH, 'right');
 }
 
 export function renderChekimaPdf(input: ChekimaDocInput): Promise<Buffer> {
