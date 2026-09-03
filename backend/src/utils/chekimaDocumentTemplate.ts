@@ -1,6 +1,7 @@
 /**
- * Chekima Kenya Ltd trading stationery (quotation / sales order / invoice).
- * Matches their requested Hanmak-style trading layout — AbexCore footer (not Hanmak).
+ * Chekima trading layout on standard AbexCore stationery.
+ * Same modern header, colours, and table as other tenants — plus From/To, Description,
+ * and trading-style totals from their requested format.
  */
 
 import PDFDocument from 'pdfkit';
@@ -8,13 +9,16 @@ import {
   PAGE_LEFT,
   PAGE_RIGHT,
   PAGE_WIDTH,
-  type CompanyDocHeader,
   bindDocInk,
+  drawAmazonStyleHeader,
+  drawDocTable,
+  drawSignatureBlock,
+  type CompanyDocHeader,
+  type DocRefField,
 } from './documentTemplate';
 
 export const CHEKIMA_COMPANY_SLUG = 'chekima';
 
-/** Default dealer line when company has no custom tagline stored. */
 export const CHEKIMA_DEFAULT_TAGLINE =
   'Dealers in Oil, Lubricants & Spare Part for: Shantui, Hitachi, Hyundai, Liugong, Caterpillar, Case, Doosan, XCMG, Komatsu, Sany, Zoomlion, Cummins Engine Parts, Perkins Parts & Bell Equipment.';
 
@@ -40,12 +44,9 @@ export type ChekimaDocInput = {
   customerPhone?: string;
   customerEmail?: string;
   contactPerson?: string;
-  /** Free-text job / quote description (e.g. QUOTATION FOR CAT 966H…). */
   description?: string;
   lines: ChekimaDocLine[];
-  /** Gross / payable total (VAT-inclusive selling total). */
   totalAmount: number;
-  /** VAT portion included in the total. */
   taxAmount: number;
   discountAmount?: number;
   discountPercent?: number;
@@ -54,12 +55,10 @@ export type ChekimaDocInput = {
   vatRate: number;
   preparedBy?: string;
   authorizedBy?: string;
+  refs?: DocRefField[];
   terms?: string;
-  plan?: string;
   comments?: string;
   currency?: string;
-  /** Show diagonal AUTHORIZED watermark (quotes / approved docs). */
-  showAuthorizedWatermark?: boolean;
 };
 
 function money(n: number) {
@@ -69,358 +68,261 @@ function money(n: number) {
   });
 }
 
-function formatDocDateTime(value: Date | string) {
+function formatDocDate(value: Date | string) {
   const d = typeof value === 'string' ? new Date(value) : value;
   if (Number.isNaN(d.getTime())) return String(value);
-  return d.toLocaleString('en-KE', {
+  return d.toLocaleDateString('en-KE', {
     year: 'numeric',
     month: 'short',
     day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: true,
   });
 }
 
-function shortDocNo(docNo: string) {
-  const digits = String(docNo).replace(/\D/g, '');
-  if (digits.length >= 4) return digits.slice(-4).replace(/^0+/, '') || digits.slice(-4);
-  return docNo;
+function drawSectionLabel(doc: PDFKit.PDFDocument, label: string, y: number, color: string): number {
+  doc.font('Helvetica-Bold').fontSize(9).fillColor(color).text(label, PAGE_LEFT, y, { underline: true });
+  return doc.y + 4;
 }
 
-function dashOr(value?: string | null) {
-  const v = (value || '').trim();
-  return v || '-';
-}
-
-function drawUnderlinedHeading(doc: PDFKit.PDFDocument, text: string, x: number, y: number) {
-  doc.font('Helvetica-Bold').fontSize(10).fillColor('#111827').text(text, x, y, { underline: true });
-  return doc.y;
-}
-
-function pageBottom(doc: PDFKit.PDFDocument): number {
-  return doc.page.height - doc.page.margins.bottom;
-}
-
-function drawFixedText(
+/** From / To block — replaces the standard M/s party section for Chekima. */
+function drawChekimaFromTo(
   doc: PDFKit.PDFDocument,
-  text: string,
-  x: number,
-  y: number,
-  width: number,
-  align: 'left' | 'center' | 'right' = 'left'
-) {
-  doc.text(text, x, y, { width, align, lineBreak: false });
-}
-
-/**
- * Draw full Chekima trading document. Returns when drawing is complete (caller ends doc).
- */
-export function drawChekimaTradingDocument(doc: PDFKit.PDFDocument, input: ChekimaDocInput): void {
-  const company = input.company;
-  bindDocInk(doc, company);
+  startY: number,
+  company: CompanyDocHeader & { tagline?: string },
+  input: Pick<
+    ChekimaDocInput,
+    'customerName' | 'customerAddress' | 'customerPhone' | 'customerEmail' | 'contactPerson'
+  >
+): number {
+  const ink = bindDocInk(doc, company);
   const tagline = (company.tagline || CHEKIMA_DEFAULT_TAGLINE).trim();
-  const total = Number(input.totalAmount) || 0;
-  const tax = Number(input.taxAmount) || 0;
-  const discountAmt = Number(input.discountAmount) || 0;
-  const discountPct = Number(input.discountPercent) || 0;
-  const afterDiscount = Math.max(0, total - discountAmt);
+  const colW = PAGE_WIDTH / 2 - 8;
+  const rightX = PAGE_LEFT + PAGE_WIDTH / 2 + 8;
 
-  let y = 40;
-
-  // —— Header: logo left, title + meta right ——
-  const logoSize = 64;
-  if (company.logoPng) {
-    try {
-      doc.image(company.logoPng, PAGE_LEFT, y, {
-        fit: [logoSize, logoSize],
-        align: 'center',
-        valign: 'center',
-      });
-    } catch {
-      // ignore broken logo
-    }
-  }
-
-  const titleRight = PAGE_RIGHT;
+  doc.font('Helvetica-Bold').fontSize(9).fillColor(ink.primary).text('From', PAGE_LEFT, startY);
   doc
     .font('Helvetica-Bold')
-    .fontSize(28)
-    .fillColor('#111827')
-    .text(input.docTitle, PAGE_LEFT, y + 4, { width: PAGE_WIDTH, align: 'right' });
-
-  let metaY = y + 40;
+    .fontSize(9)
+    .fillColor('#0f172a')
+    .text(company.name, PAGE_LEFT, startY + 14, { width: colW });
   doc
     .font('Helvetica')
-    .fontSize(10)
-    .fillColor('#111827')
-    .text(`${input.docTitle} No:  ${shortDocNo(input.docNo)}`, PAGE_LEFT, metaY, {
-      width: PAGE_WIDTH,
-      align: 'right',
-    });
-  metaY = doc.y + 2;
-  doc
-    .font('Helvetica')
-    .fontSize(10)
-    .fillColor('#111827')
-    .text(`${input.docTitle} Date:  ${formatDocDateTime(input.docDate)}`, PAGE_LEFT, metaY, {
-      width: PAGE_WIDTH,
-      align: 'right',
-    });
-  metaY = doc.y;
-
-  y = Math.max(y + logoSize, metaY + 18) + 18;
-
-  // —— From / To (open layout, no boxes) ——
-  const mid = PAGE_LEFT + PAGE_WIDTH / 2;
-  const leftW = PAGE_WIDTH / 2 - 16;
-  const rightW = PAGE_WIDTH / 2 - 8;
-  const fromTop = y;
-
-  doc.font('Helvetica-Bold').fontSize(11).fillColor('#111827').text('From', PAGE_LEFT, fromTop);
-  doc
-    .font('Helvetica-Bold')
-    .fontSize(11)
-    .fillColor('#111827')
-    .text(company.name, PAGE_LEFT, fromTop + 16, { width: leftW });
-  doc
-    .font('Helvetica')
-    .fontSize(8)
-    .fillColor('#374151')
-    .text(tagline, PAGE_LEFT, doc.y + 4, { width: leftW, align: 'left', lineBreak: true });
+    .fontSize(7.5)
+    .fillColor('#475569')
+    .text(tagline, PAGE_LEFT, doc.y + 2, { width: colW });
   const fromBottom = doc.y;
 
-  doc.font('Helvetica-Bold').fontSize(11).fillColor('#111827').text('To', mid + 8, fromTop, {
-    width: rightW,
-    align: 'right',
+  doc.font('Helvetica-Bold').fontSize(9).fillColor(ink.primary).text('To', rightX, startY, {
+    width: colW,
+    align: 'left',
   });
   doc
     .font('Helvetica-Bold')
-    .fontSize(11)
-    .fillColor('#111827')
-    .text(input.customerName || '-', mid + 8, fromTop + 16, { width: rightW, align: 'right' });
-  let toY = doc.y + 4;
+    .fontSize(9)
+    .fillColor('#0f172a')
+    .text(input.customerName || '—', rightX, startY + 14, { width: colW });
+
+  let toY = doc.y + 2;
   const toLines = [
     input.customerAddress ? `Address: ${input.customerAddress}` : null,
     input.customerPhone ? `Telephone: ${input.customerPhone}` : null,
     input.customerEmail ? `Email: ${input.customerEmail}` : null,
     input.contactPerson ? `Contact Person: ${input.contactPerson}` : null,
   ].filter(Boolean) as string[];
-  doc.font('Helvetica').fontSize(9).fillColor('#374151');
+
+  doc.font('Helvetica').fontSize(8).fillColor('#475569');
   for (const line of toLines) {
-    drawFixedText(doc, line, mid + 8, toY, rightW, 'right');
+    doc.text(line, rightX, toY, { width: colW, lineBreak: false });
     toY += 11;
   }
 
-  y = Math.max(fromBottom, toY) + 20;
+  return Math.max(fromBottom, toY) + 10;
+}
 
-  // —— Description ——
-  y = drawUnderlinedHeading(doc, 'Description', PAGE_LEFT, y) + 4;
-  doc
-    .font('Helvetica')
-    .fontSize(10)
-    .fillColor('#111827')
-    .text(dashOr(input.description), PAGE_LEFT, y, {
-      width: PAGE_WIDTH,
-      height: 28,
-      ellipsis: true,
+/** Right-side refs — same pattern as standard invoices (Date, Doc No, etc.). */
+function drawChekimaRefs(
+  doc: PDFKit.PDFDocument,
+  company: CompanyDocHeader,
+  startY: number,
+  refs: DocRefField[]
+): number {
+  const ink = bindDocInk(doc, company);
+  const refX = 330;
+  const refW = PAGE_RIGHT - refX;
+  let refY = startY;
+
+  for (const ref of refs) {
+    doc.font('Helvetica-Bold').fontSize(9).fillColor(ink.primary).text(ref.label, refX, refY, {
+      width: 72,
     });
-  y += 32;
-
-  // —— Items table ——
-  y = drawUnderlinedHeading(doc, `${input.docTitle} Items`, PAGE_LEFT, y) + 8;
-
-  const cols = [
-    { label: 'No', width: 32, align: 'center' as const },
-    { label: 'Item', width: 230, align: 'left' as const },
-    { label: 'Qty', width: 55, align: 'right' as const },
-    { label: 'Rate', width: 90, align: 'right' as const },
-    { label: 'Amount ()', width: 102, align: 'right' as const },
-  ];
-  const tableW = cols.reduce((s, c) => s + c.width, 0);
-  const headerH = 22;
-  const rowH = 28;
-
-  const tableTop = y;
-  doc.rect(PAGE_LEFT, y, tableW, headerH).strokeColor('#9ca3af').lineWidth(0.7).stroke();
-  let x = PAGE_LEFT;
-  doc.font('Helvetica-Bold').fontSize(9).fillColor('#111827');
-  for (const col of cols) {
-    doc.text(col.label, x + 4, y + 7, { width: col.width - 8, align: col.align });
-    x += col.width;
-  }
-  // vertical rules in header
-  x = PAGE_LEFT;
-  for (let i = 0; i < cols.length - 1; i++) {
-    x += cols[i].width;
     doc
-      .moveTo(x, y)
-      .lineTo(x, y + headerH)
-      .strokeColor('#9ca3af')
-      .lineWidth(0.5)
+      .moveTo(refX + 74, refY + 11)
+      .lineTo(PAGE_RIGHT, refY + 11)
+      .strokeColor(ink.line)
+      .lineWidth(0.8)
       .stroke();
+    doc.font('Helvetica').fontSize(9).fillColor('#0f172a').text(ref.value || '—', refX + 76, refY, {
+      width: refW - 76,
+      lineBreak: false,
+    });
+    refY += 18;
   }
-  y += headerH;
+  return refY + 4;
+}
 
-  const bodyRows = Math.max(input.lines.length, 2);
-  for (let i = 0; i < bodyRows; i++) {
-    const line = input.lines[i];
-    doc.rect(PAGE_LEFT, y, tableW, rowH).strokeColor('#9ca3af').lineWidth(0.5).stroke();
-    x = PAGE_LEFT;
-    for (let c = 0; c < cols.length - 1; c++) {
-      x += cols[c].width;
-      doc
-        .moveTo(x, y)
-        .lineTo(x, y + rowH)
-        .strokeColor('#9ca3af')
-        .lineWidth(0.5)
-        .stroke();
-    }
-    if (line) {
-      const cells = [`${i + 1}.`, line.item, line.qty, line.rate, line.amount];
-      x = PAGE_LEFT;
-      cols.forEach((col, idx) => {
-        if (idx === 1) {
-          doc
-            .font('Helvetica')
-            .fontSize(9)
-            .fillColor('#111827')
-            .text(cells[idx], x + 4, y + 5, {
-              width: col.width - 8,
-              align: 'left',
-              lineBreak: false,
-              ellipsis: true,
-            });
-          doc.font('Helvetica').fontSize(8).fillColor('#6b7280').text('-', x + 4, y + 16, {
-            width: col.width - 8,
-          });
-        } else {
-          doc
-            .font('Helvetica')
-            .fontSize(9)
-            .fillColor('#111827')
-            .text(cells[idx], x + 4, y + 9, {
-              width: col.width - 8,
-              align: col.align,
-              lineBreak: false,
-            });
-        }
-        x += col.width;
-      });
-    }
-    y += rowH;
-  }
+function drawChekimaTradingTotals(
+  doc: PDFKit.PDFDocument,
+  y: number,
+  company: CompanyDocHeader,
+  input: Pick<
+    ChekimaDocInput,
+    | 'totalAmount'
+    | 'taxAmount'
+    | 'discountAmount'
+    | 'discountPercent'
+    | 'paidAmount'
+    | 'balanceDue'
+    | 'currency'
+  >
+): number {
+  const ink = bindDocInk(doc, company);
+  const currency = input.currency || 'KES';
+  const total = Number(input.totalAmount) || 0;
+  const tax = Number(input.taxAmount) || 0;
+  const discountAmt = Number(input.discountAmount) || 0;
+  const discountPct = Number(input.discountPercent) || 0;
+  const afterDiscount = Math.max(0, total - discountAmt);
 
-  doc
-    .rect(PAGE_LEFT, tableTop, tableW, headerH + bodyRows * rowH)
-    .strokeColor('#6b7280')
-    .lineWidth(0.9)
-    .stroke();
-
-  y += 22;
-
-  // —— AUTHORIZED watermark behind signatures ——
-  if (input.showAuthorizedWatermark !== false) {
-    doc.save();
-    doc.opacity(0.12);
-    doc.rotate(-28, { origin: [PAGE_LEFT + 110, y + 40] });
-    doc
-      .font('Helvetica-Bold')
-      .fontSize(36)
-      .fillColor('#9ca3af')
-      .text('AUTHORIZED', PAGE_LEFT + 20, y + 10, {
-        width: 260,
-        align: 'left',
-        lineBreak: false,
-      });
-    doc.restore();
-  }
-
-  // —— Prepared / Authorized (left) + totals (right) ——
-  const sigY = y;
-  doc.font('Helvetica-Bold').fontSize(10).fillColor('#111827').text('Prepared By:', PAGE_LEFT, sigY);
-  doc
-    .font('Helvetica')
-    .fontSize(10)
-    .fillColor('#111827')
-    .text((input.preparedBy || '-').toUpperCase(), PAGE_LEFT + 85, sigY);
-  doc.font('Helvetica-Bold').fontSize(10).fillColor('#111827').text('Authorized By:', PAGE_LEFT, sigY + 18);
-  doc
-    .font('Helvetica')
-    .fontSize(10)
-    .fillColor('#111827')
-    .text((input.authorizedBy || input.preparedBy || '-').toUpperCase(), PAGE_LEFT + 95, sigY + 18);
-
-  const totX = 330;
-  const totLabelW = 110;
-  const totValW = PAGE_RIGHT - totX - totLabelW;
-  let totY = sigY - 4;
-
-  const drawTotalRow = (
-    label: string,
-    value: string,
-    opts?: { bold?: boolean; muted?: boolean; rule?: boolean }
-  ) => {
-    if (opts?.rule) {
-      doc
-        .moveTo(totX + totLabelW, totY - 2)
-        .lineTo(PAGE_RIGHT, totY - 2)
-        .strokeColor('#9ca3af')
-        .lineWidth(0.6)
-        .stroke();
-    }
-    doc
-      .font(opts?.bold ? 'Helvetica-Bold' : 'Helvetica')
-      .fontSize(10)
-      .fillColor(opts?.muted ? '#9ca3af' : '#111827')
-      .text(label, totX, totY, { width: totLabelW, align: 'left', lineBreak: false });
-    doc
-      .font(opts?.bold ? 'Helvetica-Bold' : 'Helvetica')
-      .fontSize(10)
-      .fillColor(opts?.muted ? '#9ca3af' : '#111827')
-      .text(value, totX + totLabelW, totY, { width: totValW, align: 'right', lineBreak: false });
-    totY += 16;
-  };
-
-  drawTotalRow('Total Amount:', money(total));
-  drawTotalRow('Less Discount:', `${discountPct.toFixed(2)} % | ${money(discountAmt)}`);
-  drawTotalRow('After Discount:', money(afterDiscount), { rule: true });
-  drawTotalRow('VAT Inclusive:', money(tax), { muted: true, rule: true });
-  drawTotalRow('Amount Payable:', money(total), { bold: true, rule: true });
-
+  const rows: { label: string; value: string; bold?: boolean; muted?: boolean }[] = [
+    { label: 'Total Amount', value: `${currency} ${money(total)}` },
+    {
+      label: 'Less Discount',
+      value: `${discountPct.toFixed(2)} % | ${currency} ${money(discountAmt)}`,
+    },
+    { label: 'After Discount', value: `${currency} ${money(afterDiscount)}` },
+    { label: 'VAT Inclusive', value: `${currency} ${money(tax)}`, muted: true },
+    { label: 'Amount Payable', value: `${currency} ${money(total)}`, bold: true },
+  ];
   if (input.paidAmount != null) {
-    drawTotalRow('Paid:', money(Number(input.paidAmount)));
+    rows.push({ label: 'Paid', value: `${currency} ${money(Number(input.paidAmount))}` });
   }
   if (input.balanceDue != null) {
-    drawTotalRow('Balance Due:', money(Number(input.balanceDue)), { bold: true });
+    rows.push({
+      label: 'Balance Due',
+      value: `${currency} ${money(Number(input.balanceDue))}`,
+      bold: true,
+    });
   }
 
-  y = Math.max(sigY + 50, totY) + 18;
+  let totY = y;
+  const totX = 320;
+  const labelW = 105;
+  for (const row of rows) {
+    doc
+      .font(row.bold ? 'Helvetica-Bold' : 'Helvetica')
+      .fontSize(row.bold ? 10 : 9)
+      .fillColor(row.muted ? '#94a3b8' : ink.primary)
+      .text(`${row.label}:`, totX, totY, { width: labelW, align: 'right', lineBreak: false });
+    doc
+      .font(row.bold ? 'Helvetica-Bold' : 'Helvetica')
+      .fontSize(row.bold ? 10 : 9)
+      .fillColor('#0f172a')
+      .text(row.value, totX + labelW + 4, totY, {
+        width: PAGE_RIGHT - totX - labelW - 4,
+        align: 'right',
+        lineBreak: false,
+      });
+    totY += row.bold ? 16 : 14;
+  }
+  return totY;
+}
 
-  // —— Terms / Plan / Comments ——
-  const footerSections: { label: string; value?: string }[] = [
-    { label: 'Terms and Conditions', value: input.terms },
-    { label: 'Plan', value: input.plan },
-    { label: 'Comments', value: input.comments },
+export function drawChekimaTradingDocument(doc: PDFKit.PDFDocument, input: ChekimaDocInput): void {
+  const company = input.company;
+  const ink = bindDocInk(doc, company);
+  const badge =
+    input.docTitle === 'Sales Order' ? 'SALES ORDER' : input.docTitle.toUpperCase();
+
+  let y = drawAmazonStyleHeader(doc, company, badge, { showPaybill: true });
+
+  const refs: DocRefField[] = input.refs ?? [
+    { label: 'Date', value: formatDocDate(input.docDate) },
+    {
+      label: input.docTitle === 'Quotation' ? 'Quote No.' : `${input.docTitle} No.`,
+      value: input.docNo,
+    },
   ];
-  for (const section of footerSections) {
-    y = drawUnderlinedHeading(doc, section.label, PAGE_LEFT, y) + 3;
-    drawFixedText(doc, dashOr(section.value), PAGE_LEFT, y, PAGE_WIDTH);
-    y += 14;
+
+  const partyTop = y;
+  y = drawChekimaFromTo(doc, y, company, input);
+  const refsBottom = drawChekimaRefs(doc, company, partyTop, refs);
+  y = Math.max(y, refsBottom);
+
+  const description = (input.description || '').trim();
+  if (description) {
+    y = drawSectionLabel(doc, 'Description', y, ink.primary);
+    doc.font('Helvetica').fontSize(9).fillColor('#0f172a').text(description, PAGE_LEFT, y, {
+      width: PAGE_WIDTH,
+    });
+    y = doc.y + 10;
   }
 
-  // —— Page footer (must stay inside bottom margin or PDFKit adds blank pages) ——
-  const footerY = pageBottom(doc) - 10;
-  const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-  doc.font('Helvetica-Oblique').fontSize(8).fillColor('#6b7280');
-  drawFixedText(doc, stamp, PAGE_LEFT, footerY, 120, 'left');
-  drawFixedText(doc, 'Page 1', PAGE_LEFT, footerY, PAGE_WIDTH, 'center');
-  drawFixedText(doc, 'ERP By AbexCore Technologies', PAGE_LEFT, footerY, PAGE_WIDTH, 'right');
+  y = drawSectionLabel(doc, `${input.docTitle} Items`, y, ink.primary) + 4;
+
+  const tableRows = input.lines.map((line, i) => ({
+    no: `${i + 1}.`,
+    item: line.item,
+    qty: line.qty,
+    rate: line.rate,
+    amount: line.amount,
+  }));
+
+  y = drawDocTable(
+    doc,
+    y,
+    [
+      { key: 'no', label: 'No', width: 32, align: 'center' },
+      { key: 'item', label: 'Item', width: 228 },
+      { key: 'qty', label: 'Qty', width: 52, align: 'right' },
+      { key: 'rate', label: 'Rate', width: 88, align: 'right' },
+      { key: 'amount', label: 'Amount', width: 92, align: 'right' },
+    ],
+    tableRows,
+    {
+      minBodyRows: Math.max(tableRows.length + 1, 3),
+      footerLeft: 'E.& O.E',
+      footerCenter: `No. ${input.docNo}`,
+    }
+  );
+
+  const sigY = y + 6;
+  drawChekimaTradingTotals(doc, sigY, company, input);
+  drawSignatureBlock(doc, sigY, {
+    confirmLabel: 'Prepared By:',
+    confirmName: input.preparedBy,
+    receiveLabel: 'Authorized By:',
+    receiveName: input.authorizedBy || input.preparedBy,
+  });
+
+  y = Math.max(sigY + 72, doc.y) + 6;
+
+  if (input.terms?.trim()) {
+    y = drawSectionLabel(doc, 'Terms and Conditions', y, ink.primary);
+    doc.font('Helvetica').fontSize(8).fillColor('#475569').text(input.terms.trim(), PAGE_LEFT, y, {
+      width: PAGE_WIDTH,
+    });
+    y = doc.y + 8;
+  }
+  if (input.comments?.trim()) {
+    y = drawSectionLabel(doc, 'Comments', y, ink.primary);
+    doc.font('Helvetica').fontSize(8).fillColor('#475569').text(input.comments.trim(), PAGE_LEFT, y, {
+      width: PAGE_WIDTH,
+    });
+  }
 }
 
 export function renderChekimaPdf(input: ChekimaDocInput): Promise<Buffer> {
   return new Promise((resolve, reject) => {
-    const doc = new PDFDocument({ margin: 36, size: 'A4' });
+    const doc = new PDFDocument({ margin: 40, size: 'A4', info: { Author: 'AbexCore ERP' } });
     const chunks: Buffer[] = [];
     doc.on('data', (chunk) => chunks.push(chunk));
     doc.on('end', () => resolve(Buffer.concat(chunks)));

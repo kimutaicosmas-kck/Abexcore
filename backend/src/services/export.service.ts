@@ -178,7 +178,11 @@ export class ExportService {
         vatRate,
         preparedBy,
         authorizedBy: preparedBy,
-        showAuthorizedWatermark: true,
+        refs: [
+          { label: 'Date', value: invoice.invoiceDate.toLocaleDateString('en-KE') },
+          { label: 'Invoice No.', value: invoice.invoiceNumber },
+          { label: 'Order / LPO', value: invoice.customerPoNumber || '—' },
+        ],
       });
     }
 
@@ -331,7 +335,24 @@ export class ExportService {
         discountAmount,
         discountPercent,
         vatRate,
-        showAuthorizedWatermark: true,
+        refs: [
+          {
+            label: 'Date',
+            value: quotation.createdAt
+              ? quotation.createdAt.toLocaleDateString('en-KE')
+              : new Date().toLocaleDateString('en-KE'),
+          },
+          { label: 'Quote No.', value: quotation.quotationNo },
+          {
+            label: 'Valid until',
+            value: quotation.validUntil
+              ? quotation.validUntil.toLocaleDateString('en-KE')
+              : '—',
+          },
+        ],
+        terms: quotation.validUntil
+          ? `Prices valid until ${quotation.validUntil.toLocaleDateString('en-KE')} unless withdrawn earlier.`
+          : undefined,
       });
     }
 
@@ -480,7 +501,11 @@ export class ExportService {
         vatRate,
         preparedBy,
         authorizedBy: preparedBy,
-        showAuthorizedWatermark: true,
+        refs: [
+          { label: 'Date', value: order.orderDate.toLocaleDateString('en-KE') },
+          { label: 'Order No.', value: order.orderNumber },
+          { label: 'LPO', value: order.customerPoNumber || '—' },
+        ],
       });
     }
 
