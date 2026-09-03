@@ -341,7 +341,11 @@ export function QuotationForm({ onSuccess, onCancel }: QuotationFormProps) {
         </div>
       </div>
 
-      <Input label="Notes" {...register('notes')} />
+      <Input
+        label="Description (shown on PDF)"
+        placeholder="e.g. QUOTATION FOR CAT 966H Wheel Loader, C11 Engine"
+        {...register('notes')}
+      />
 
       <div className="bg-gray-50 rounded-lg p-4 space-y-1 text-sm">
         <div className="flex justify-between">

@@ -18,6 +18,8 @@ export const PAGE_RIGHT = 547;
 export const PAGE_WIDTH = PAGE_RIGHT - PAGE_LEFT;
 
 export type CompanyDocHeader = {
+  /** Tenant slug — used to select company-specific stationery (e.g. Chekima). */
+  slug: string;
   name: string;
   legalName: string;
   addressLine: string;
@@ -181,6 +183,7 @@ export async function resolveCompanyDocHeader(companyId: string): Promise<Compan
   const primaryColor = normalizeHexColor(brand.docPrimaryColor || brand.brandPrimary, DOC_BLUE);
 
   return {
+    slug: company.slug,
     name: displayName,
     legalName,
     addressLine,

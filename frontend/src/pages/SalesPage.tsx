@@ -180,6 +180,7 @@ export function SalesPage() {
   const canDownloadInvoice = hasPermission('finance:read');
   const [downloadingInvoiceId, setDownloadingInvoiceId] = useState<string | null>(null);
   const [downloadingQuoteId, setDownloadingQuoteId] = useState<string | null>(null);
+  const [downloadingOrderId, setDownloadingOrderId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!orderIdFromUrl) return;
@@ -341,6 +342,15 @@ export function SalesPage() {
     }
   };
 
+  const downloadSalesOrder = async (orderId: string, orderNumber: string) => {
+    setDownloadingOrderId(orderId);
+    try {
+      await downloadFile(operationsApi.salesOrderPdfPath(orderId), `${orderNumber}.pdf`);
+    } finally {
+      setDownloadingOrderId(null);
+    }
+  };
+
   const goToTab = (index: number) => setActiveTab(index);
 
   const applyOrderFilters = (opts: { date?: string; status?: string }) => {
@@ -453,14 +463,21 @@ export function SalesPage() {
       key: 'actions',
       label: 'Actions',
       render: (_: unknown, row: Record<string, unknown>) => {
-        if (!canUpdate) return null;
         const status = row.status as string;
         const next = getNextOrderAction(status, isSalesOfficer);
         const showCancel = canCancelOrder(status, isSalesOfficer);
-        if (!next && !showCancel) return null;
         return (
           <div className="flex flex-wrap gap-1 justify-end" onClick={(e) => e.stopPropagation()}>
-            {next && (
+            <Button
+              size="sm"
+              variant="secondary"
+              loading={downloadingOrderId === row.id}
+              onClick={() => void downloadSalesOrder(row.id as string, row.orderNumber as string)}
+            >
+              <Download className="h-3.5 w-3.5 mr-1" />
+              PDF
+            </Button>
+            {canUpdate && next && (
               <Button
                 size="sm"
                 loading={statusMutation.isPending}
@@ -472,7 +489,7 @@ export function SalesPage() {
                 {next.label}
               </Button>
             )}
-            {showCancel && (
+            {canUpdate && showCancel && (
               <Button
                 size="sm"
                 variant="secondary"
@@ -999,6 +1016,14 @@ export function SalesPage() {
               </Card>
             )}
             <div className="flex flex-wrap justify-end gap-2 pt-2">
+              <Button
+                variant="secondary"
+                loading={downloadingOrderId === activeOrder.id}
+                onClick={() => void downloadSalesOrder(activeOrder.id, activeOrder.orderNumber)}
+              >
+                <Download className="h-4 w-4 mr-2" />
+                Export PDF
+              </Button>
               {canUpdate
                 && EDITABLE_ORDER_STATUSES.includes(activeOrder.status)
                 && (!isSalesOfficer || activeOrder.status === 'PENDING') && (

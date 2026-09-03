@@ -20,12 +20,61 @@ import {
   drawMoneyTotals,
   type CompanyDocHeader,
 } from '../utils/documentTemplate';
+import {
+  isChekimaDocCompany,
+  renderChekimaPdf,
+  type ChekimaDocLine,
+} from '../utils/chekimaDocumentTemplate';
 import type { CustomerStatementResult, VatCustomerReportResult } from './customerStatement.service';
 import type { VendorStatementResult } from './vendorStatement.service';
 
 type InvoiceWithRelations = Awaited<ReturnType<typeof ExportService.getInvoice>>;
 
 const LOGO_EXCEL_SIZE = 88;
+
+function money2(n: number) {
+  return Number(n || 0).toLocaleString('en-KE', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
+function personName(user?: { firstName?: string | null; lastName?: string | null } | null) {
+  if (!user) return undefined;
+  const name = `${user.firstName || ''} ${user.lastName || ''}`.trim();
+  return name || undefined;
+}
+
+function pickPrimaryContact(
+  contacts?: { name: string; isPrimary: boolean }[] | null
+): string | undefined {
+  if (!contacts?.length) return undefined;
+  return contacts.find((c) => c.isPrimary)?.name || contacts[0]?.name;
+}
+
+function customerAddressLine(customer?: {
+  address?: string | null;
+  city?: string | null;
+} | null) {
+  return [customer?.address, customer?.city].filter(Boolean).join(', ') || undefined;
+}
+
+function lineDiscountSummary(
+  items: { quantity: number | { toNumber?: () => number }; unitPrice: unknown; discount?: unknown; totalPrice: unknown }[]
+) {
+  let gross = 0;
+  let after = 0;
+  for (const item of items) {
+    const qty = Number(item.quantity);
+    const unit = Number(item.unitPrice);
+    const total = Number(item.totalPrice);
+    gross += qty * unit;
+    after += total;
+  }
+  const discountAmount = Math.max(0, Math.round(gross - after));
+  const discountPercent = gross > 0 ? (discountAmount / gross) * 100 : 0;
+  return { discountAmount, discountPercent };
+}
 
 function addExcelCompanyLetterhead(
   workbook: ExcelJS.Workbook,
@@ -72,10 +121,16 @@ export class ExportService {
     const invoice = await prisma.invoice.findFirst({
       where: { id, companyId: requireTenantId() },
       include: {
-        customer: true,
+        customer: { include: { contacts: { select: { name: true, isPrimary: true } } } },
         supplier: true,
         items: true,
         payments: true,
+        salesOrder: {
+          include: {
+            salesPerson: { select: { firstName: true, lastName: true } },
+            createdBy: { select: { firstName: true, lastName: true } },
+          },
+        },
       },
     });
     if (!invoice) throw new AppError('Invoice not found', 404);
@@ -92,6 +147,40 @@ export class ExportService {
     const credited =
       invoice.type === 'SALES' ? await creditedAmountForInvoice(prisma, invoice.id) : 0;
     const balanceDue = computeInvoiceBalanceDue(invoice, credited);
+
+    if (invoice.type === 'SALES' && isChekimaDocCompany(company.slug)) {
+      const customer = invoice.customer;
+      const preparedBy = personName(
+        invoice.salesOrder?.salesPerson || invoice.salesOrder?.createdBy
+      );
+      const lines: ChekimaDocLine[] = invoice.items.map((item) => ({
+        item: item.description,
+        qty: money2(Number(item.quantity)),
+        rate: money2(Number(item.unitPrice)),
+        amount: money2(Number(item.totalPrice)),
+      }));
+      return renderChekimaPdf({
+        company,
+        docTitle: 'Invoice',
+        docNo: invoice.invoiceNumber,
+        docDate: invoice.invoiceDate,
+        customerName: customer?.name || '-',
+        customerAddress: customerAddressLine(customer),
+        customerPhone: customer?.phone || undefined,
+        customerEmail: customer?.email || undefined,
+        contactPerson: pickPrimaryContact(customer?.contacts),
+        description: invoice.notes?.trim() || undefined,
+        lines,
+        taxAmount: Number(invoice.taxAmount),
+        totalAmount: Number(invoice.totalAmount),
+        paidAmount: Number(invoice.paidAmount),
+        balanceDue,
+        vatRate,
+        preparedBy,
+        authorizedBy: preparedBy,
+        showAuthorizedWatermark: true,
+      });
+    }
 
     return new Promise((resolve, reject) => {
       const doc = new PDFDocument({ margin: 40, size: 'A4' });
@@ -194,7 +283,7 @@ export class ExportService {
     const quotation = await prisma.salesQuotation.findFirst({
       where: { id, companyId: requireTenantId() },
       include: {
-        customer: true,
+        customer: { include: { contacts: { select: { name: true, isPrimary: true } } } },
         items: { include: { product: { select: { id: true, name: true, sku: true } } } },
       },
     });
@@ -209,6 +298,42 @@ export class ExportService {
     const { vatRate } = company;
     const money = (n: number) =>
       Math.round(n).toLocaleString('en-KE', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+
+    if (isChekimaDocCompany(company.slug)) {
+      const customer = quotation.customer;
+      const { discountAmount, discountPercent } = lineDiscountSummary(quotation.items);
+      const lines: ChekimaDocLine[] = quotation.items.map((item) => {
+        const product = item.product;
+        const description = product
+          ? [product.name, product.sku].filter(Boolean).join(' ')
+          : 'Item';
+        return {
+          item: description,
+          qty: money2(Number(item.quantity)),
+          rate: money2(Number(item.unitPrice)),
+          amount: money2(Number(item.totalPrice)),
+        };
+      });
+      return renderChekimaPdf({
+        company,
+        docTitle: 'Quotation',
+        docNo: quotation.quotationNo,
+        docDate: quotation.createdAt,
+        customerName: customer?.name || '-',
+        customerAddress: customerAddressLine(customer),
+        customerPhone: customer?.phone || undefined,
+        customerEmail: customer?.email || undefined,
+        contactPerson: pickPrimaryContact(customer?.contacts),
+        description: quotation.notes?.trim() || undefined,
+        lines,
+        taxAmount: Number(quotation.taxAmount),
+        totalAmount: Number(quotation.totalAmount),
+        discountAmount,
+        discountPercent,
+        vatRate,
+        showAuthorizedWatermark: true,
+      });
+    }
 
     return new Promise((resolve, reject) => {
       const doc = new PDFDocument({ margin: 40, size: 'A4' });
@@ -290,6 +415,148 @@ export class ExportService {
 
       drawSignatureBlock(doc, Math.max(y + 8, 700), {
         instruction: 'Prices are valid until the date shown above unless withdrawn earlier.',
+        confirmLabel: 'Prepared by:',
+        receiveLabel: 'Accepted by:',
+      });
+
+      doc.end();
+    });
+  }
+
+  static async getSalesOrder(id: string) {
+    const order = await prisma.salesOrder.findFirst({
+      where: { id, companyId: requireTenantId() },
+      include: {
+        customer: { include: { contacts: { select: { name: true, isPrimary: true } } } },
+        items: { include: { product: { select: { id: true, name: true, sku: true } } } },
+        salesPerson: { select: { firstName: true, lastName: true } },
+        createdBy: { select: { firstName: true, lastName: true } },
+      },
+    });
+    if (!order) throw new AppError('Sales order not found', 404);
+    return order;
+  }
+
+  static async generateSalesOrderPDF(
+    order: NonNullable<Awaited<ReturnType<typeof ExportService.getSalesOrder>>>
+  ): Promise<Buffer> {
+    const company = await resolveCompanyDocHeader(order.companyId);
+    const { vatRate } = company;
+    const money = (n: number) =>
+      Math.round(n).toLocaleString('en-KE', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+    const preparedBy = personName(order.salesPerson || order.createdBy);
+    const customer = order.customer;
+
+    if (isChekimaDocCompany(company.slug)) {
+      const { discountAmount, discountPercent } = lineDiscountSummary(order.items);
+      const lines: ChekimaDocLine[] = order.items.map((item) => {
+        const product = item.product;
+        const description = product
+          ? [product.name, product.sku].filter(Boolean).join(' ')
+          : 'Item';
+        return {
+          item: description,
+          qty: money2(Number(item.quantity)),
+          rate: money2(Number(item.unitPrice)),
+          amount: money2(Number(item.totalPrice)),
+        };
+      });
+      return renderChekimaPdf({
+        company,
+        docTitle: 'Sales Order',
+        docNo: order.orderNumber,
+        docDate: order.orderDate,
+        customerName: customer?.name || '-',
+        customerAddress: customerAddressLine(customer),
+        customerPhone: customer?.phone || undefined,
+        customerEmail: customer?.email || undefined,
+        contactPerson: pickPrimaryContact(customer?.contacts),
+        description: order.notes?.trim() || undefined,
+        lines,
+        taxAmount: Number(order.taxAmount),
+        totalAmount: Number(order.totalAmount),
+        discountAmount,
+        discountPercent,
+        vatRate,
+        preparedBy,
+        authorizedBy: preparedBy,
+        showAuthorizedWatermark: true,
+      });
+    }
+
+    return new Promise((resolve, reject) => {
+      const doc = new PDFDocument({ margin: 40, size: 'A4' });
+      const chunks: Buffer[] = [];
+      doc.on('data', (chunk) => chunks.push(chunk));
+      doc.on('end', () => resolve(Buffer.concat(chunks)));
+      doc.on('error', reject);
+
+      const partyAddress = [customer?.address, customer?.city, customer?.phone]
+        .filter(Boolean)
+        .join(', ');
+
+      let y = drawAmazonStyleHeader(doc, company, 'SALES ORDER', { showPaybill: true });
+      y = drawPartyAndRefs(doc, y, customer?.name || 'N/A', partyAddress, [
+        {
+          label: 'Date',
+          value: order.orderDate.toLocaleDateString('en-KE'),
+        },
+        { label: 'Order No.', value: order.orderNumber },
+        {
+          label: 'LPO',
+          value: order.customerPoNumber || '—',
+        },
+      ]);
+
+      y = drawInstructionLine(doc, y, 'Please supply / confirm the following goods');
+
+      const rows = order.items.map((item) => {
+        const product = item.product;
+        const description = product
+          ? [product.sku, product.name].filter(Boolean).join(' — ')
+          : 'Item';
+        return {
+          qty: String(Number(item.quantity)),
+          description,
+          unit: money(Number(item.unitPrice)),
+          total: money(Number(item.totalPrice)),
+        };
+      });
+
+      y = drawDocTable(
+        doc,
+        y,
+        [
+          { key: 'qty', label: 'Qty', width: 50, align: 'center' },
+          { key: 'description', label: 'Description', width: 265 },
+          { key: 'unit', label: 'Unit Price', width: 92, align: 'right' },
+          { key: 'total', label: 'Amount', width: 92, align: 'right' },
+        ],
+        rows,
+        {
+          minBodyRows: Math.max(rows.length + 1, 10),
+          footerLeft: 'E.& O.E',
+          footerCenter: `No. ${order.orderNumber}`,
+        }
+      );
+
+      y = drawMoneyTotals(doc, y, [
+        { label: 'Subtotal', value: `KES ${money(Number(order.subtotal))}` },
+        { label: `VAT (${vatRate}%)`, value: `KES ${money(Number(order.taxAmount))}` },
+        { label: 'Total', value: `KES ${money(Number(order.totalAmount))}`, bold: true },
+      ]);
+
+      if (order.notes) {
+        doc
+          .font('Helvetica')
+          .fontSize(8)
+          .fillColor(company.primaryColor || DOC_BLUE)
+          .text(`Notes: ${order.notes}`, PAGE_LEFT, y, { width: PAGE_WIDTH });
+        y = doc.y + 10;
+      }
+
+      drawSignatureBlock(doc, Math.max(y + 8, 700), {
+        instruction: 'Order confirmed subject to stock and company terms.',
         confirmLabel: 'Prepared by:',
         receiveLabel: 'Accepted by:',
       });

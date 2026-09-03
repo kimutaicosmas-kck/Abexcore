@@ -275,6 +275,20 @@ router.get(
   })
 );
 
+router.get(
+  '/orders/:id/pdf',
+  authorizeAny('sales:read', 'finance:read', 'finance:create'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const { ExportService } = await import('../services/export.service');
+    const order = await ExportService.getSalesOrder(getParam(req.params.id));
+    assertSalesBookOrderAccess(req.user!.roleName, req.user!.id, order);
+    const pdf = await ExportService.generateSalesOrderPDF(order);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${order.orderNumber}.pdf"`);
+    res.send(pdf);
+  })
+);
+
 router.post(
   '/pos/checkout',
   authorizeAny('pos:create', 'pos:update'),
