@@ -1,15 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Controller, useFieldArray, useForm } from 'react-hook-form';
+import { useFieldArray, useForm, Control, FieldErrors, UseFormRegister, UseFormSetValue } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Check, Plus, Search, Trash2, X } from 'lucide-react';
+import { Check, Search, X } from 'lucide-react';
 import { operationsApi, customersApi } from '../../services/api';
 import { Button, Input, Select, FormActions, ModalFormBody } from '../ui';
 import { Customer, SalesQuotation } from '../../types';
 import { useAuth, useVatRate } from '../../contexts/AuthContext';
 import { isSalesBookOwner } from '../../utils/salesTargets';
-import { ProductSearchSelect } from './ProductSearchSelect';
+import { ProductLineItemsEditor } from './ProductLineItemsEditor';
 import { FormDraftNotice } from './FormDraftNotice';
 import {
   readStoredDraftId,
@@ -477,70 +477,18 @@ export function QuotationForm({ onSuccess, onCancel, draftId: initialDraftId, ed
         )}
       </div>
 
-      <div>
-        <div className="flex items-center justify-between mb-2">
-          <label className="text-sm font-medium text-gray-700">Quotation Items *</label>
-          <Button
-            type="button"
-            size="sm"
-            variant="secondary"
-            onClick={() => append({ productId: '', quantity: 1, unitPrice: 0, discount: 0 })}
-          >
-            <Plus className="h-3 w-3 mr-1" /> Add Item
-          </Button>
-        </div>
-
-        {errors.items?.message && (
-          <p className="text-sm text-red-600 mb-2">{errors.items.message}</p>
-        )}
-
-        <div className="space-y-3">
-          {fields.map((field, index) => (
-            <div key={field.id} className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-end p-3 bg-gray-50 rounded-lg">
-              <div className="col-span-12 sm:col-span-5">
-                <Controller
-                  name={`items.${index}.productId`}
-                  control={control}
-                  render={({ field: productField }) => (
-                    <ProductSearchSelect
-                      label={index === 0 ? 'Product' : undefined}
-                      value={productField.value}
-                      onChange={productField.onChange}
-                      onProductSelect={(product) => {
-                        if (product && (!items[index]?.unitPrice || items[index].unitPrice === 0)) {
-                          setValue(`items.${index}.unitPrice`, Number(product.sellingPrice));
-                        }
-                      }}
-                      error={errors.items?.[index]?.productId?.message}
-                    />
-                  )}
-                />
-              </div>
-              <div className="col-span-12 sm:col-span-2">
-                <Input label={index === 0 ? 'Qty' : undefined} type="number" min={1} {...register(`items.${index}.quantity`)} />
-              </div>
-              <div className="col-span-12 sm:col-span-2">
-                <Input
-                  label={index === 0 ? (isVatCustomer ? 'Price (incl. VAT)' : 'Price') : undefined}
-                  type="number"
-                  step="0.01"
-                  {...register(`items.${index}.unitPrice`)}
-                />
-              </div>
-              <div className="col-span-12 sm:col-span-2">
-                <Input label={index === 0 ? 'Disc %' : undefined} type="number" min={0} max={100} {...register(`items.${index}.discount`)} />
-              </div>
-              <div className="col-span-12 sm:col-span-1">
-                {fields.length > 1 && (
-                  <Button type="button" variant="ghost" size="sm" onClick={() => remove(index)}>
-                    <Trash2 className="h-4 w-4 text-red-500" />
-                  </Button>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
+      <ProductLineItemsEditor
+        fields={fields}
+        items={items}
+        control={control as Control<any>}
+        register={register as UseFormRegister<any>}
+        setValue={setValue as UseFormSetValue<any>}
+        errors={errors as FieldErrors<any>}
+        onAppend={() => append({ productId: '', quantity: 1, unitPrice: 0, discount: 0 })}
+        onRemove={remove}
+        isVatCustomer={isVatCustomer}
+        sectionLabel="Quotation Items"
+      />
 
       <Input
         label="Description (shown on PDF)"

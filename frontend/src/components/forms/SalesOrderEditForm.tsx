@@ -1,15 +1,14 @@
 import { useEffect, useMemo } from 'react';
-import { Controller, useForm, useFieldArray } from 'react-hook-form';
+import { useForm, useFieldArray, Control, FieldErrors, UseFormRegister, UseFormSetValue } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Trash2 } from 'lucide-react';
 import { operationsApi } from '../../services/api';
 import { Alert, Button, Input, formatCurrency } from '../ui';
 import { SalesOrder } from '../../types';
 import { formatProductOptionLabel } from '../../utils/productDisplay';
 import { getApiErrorMessage } from '../../utils/apiError';
-import { ProductSearchSelect } from './ProductSearchSelect';
+import { ProductLineItemsEditor } from './ProductLineItemsEditor';
 
 const editItemSchema = z.object({
   id: z.string().optional(),
@@ -120,159 +119,67 @@ export function SalesOrderEditForm({ order, onSuccess, onCancel }: SalesOrderEdi
         automatically when you reduce or remove undelivered quantities.
       </p>
 
-      <div className="space-y-3">
-        {fields.map((field, index) => {
-          const line = items?.[index];
-          const confirmed = Number(line?.confirmedDeliveredQty || 0);
-          const isExistingLine = Boolean(line?.id);
-          const canRemove = orderOpen && confirmed === 0 && fields.length > 1;
-          const qty = Number(line?.quantity || 0);
-          const unitPrice = Number(line?.unitPrice || 0);
-          const discount = Number(line?.discount || 0);
-          const lineTotal = Math.round(qty * unitPrice * (1 - discount / 100));
-          const isVatCustomer = order.customer?.vatStatus === 'VAT';
-
+      <ProductLineItemsEditor
+        fields={fields}
+        items={items}
+        control={control as Control<any>}
+        register={register as UseFormRegister<any>}
+        setValue={setValue as UseFormSetValue<any>}
+        errors={errors as FieldErrors<any>}
+        allowAdd={canAddProducts}
+        onAppend={() =>
+          append({
+            productId: '',
+            productLabel: '',
+            quantity: 1,
+            confirmedDeliveredQty: 0,
+            unitPrice: 0,
+            discount: 0,
+          })
+        }
+        onRemove={remove}
+        isVatCustomer={order.customer?.vatStatus === 'VAT'}
+        sectionLabel="Order items"
+        canRemoveItem={(index, item) => {
+          const confirmed = Number(item?.confirmedDeliveredQty || 0);
+          return orderOpen && confirmed === 0 && fields.length > 1;
+        }}
+        isProductEditable={(_, item) => !Boolean(item?.id)}
+        getProductLabel={(_, item) => item?.productLabel}
+        getQuantityMin={(_, item) => {
+          const confirmed = Number(item?.confirmedDeliveredQty || 0);
+          return confirmed || 1;
+        }}
+        onProductSelected={(index, product) => {
+          if (!product) {
+            setValue(`items.${index}.productLabel`, '');
+            setValue(`items.${index}.unitPrice`, 0);
+            return;
+          }
+          setValue(`items.${index}.productLabel`, formatProductOptionLabel(product));
+          setValue(`items.${index}.unitPrice`, Number(product.sellingPrice || 0));
+        }}
+        renderEditorExtras={(index, item) => {
+          const confirmed = Number(item?.confirmedDeliveredQty || 0);
+          const isExistingLine = Boolean(item?.id);
           return (
-            <div
-              key={field.id}
-              className="rounded-2xl border border-slate-200 bg-slate-50/80 p-3 sm:p-4 space-y-3"
-            >
+            <>
               <input type="hidden" {...register(`items.${index}.id`)} />
               <input type="hidden" {...register(`items.${index}.confirmedDeliveredQty`)} />
-
-              <div className="flex items-start justify-between gap-2">
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  Item {index + 1}
+              <input type="hidden" {...register(`items.${index}.productLabel`)} />
+              {isExistingLine && <input type="hidden" {...register(`items.${index}.productId`)} />}
+              {confirmed > 0 && (
+                <p className="text-xs text-amber-700">
+                  {confirmed} customer-delivered — quantity cannot go below this / line cannot be removed
                 </p>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="!px-2 !py-1 shrink-0"
-                  disabled={!canRemove}
-                  title={
-                    !canRemove
-                      ? confirmed > 0
-                        ? 'Cannot remove — already customer-delivered'
-                        : !orderOpen
-                          ? 'Order is closed'
-                          : 'Keep at least one item'
-                      : 'Remove item'
-                  }
-                  onClick={() => remove(index)}
-                  aria-label={`Remove item ${index + 1}`}
-                >
-                  <Trash2 className="h-4 w-4 text-red-500" />
-                </Button>
-              </div>
-
-              {isExistingLine ? (
-                <>
-                  <input type="hidden" {...register(`items.${index}.productId`)} />
-                  <div>
-                    <p className="text-sm font-medium text-slate-700 mb-1">Product</p>
-                    <p className="text-sm font-medium text-slate-900 rounded-xl border border-slate-200 bg-white px-3 py-2">
-                      {line?.productLabel || 'Product'}
-                    </p>
-                    {confirmed > 0 && (
-                      <p className="text-xs text-amber-700 mt-1.5">
-                        {confirmed} customer-delivered — cannot go below / cannot remove
-                      </p>
-                    )}
-                  </div>
-                </>
-              ) : (
-                <Controller
-                  control={control}
-                  name={`items.${index}.productId`}
-                  render={({ field: productField }) => (
-                    <ProductSearchSelect
-                      label="Product"
-                      value={productField.value}
-                      onChange={productField.onChange}
-                      onProductSelect={(product) => {
-                        if (!product) {
-                          setValue(`items.${index}.productLabel`, '');
-                          setValue(`items.${index}.unitPrice`, 0);
-                          return;
-                        }
-                        setValue(`items.${index}.productLabel`, formatProductOptionLabel(product));
-                        setValue(`items.${index}.unitPrice`, Number(product.sellingPrice || 0));
-                      }}
-                      error={errors.items?.[index]?.productId?.message}
-                    />
-                  )}
-                />
               )}
-
-              <div className="grid grid-cols-3 gap-2 sm:gap-3">
-                <Input
-                  label="Qty"
-                  type="number"
-                  min={confirmed || 1}
-                  inputMode="numeric"
-                  {...register(`items.${index}.quantity`)}
-                  error={errors.items?.[index]?.quantity?.message}
-                />
-                <Input
-                  label={isVatCustomer ? 'Price*' : 'Price'}
-                  type="number"
-                  step="0.01"
-                  inputMode="decimal"
-                  title={isVatCustomer ? 'Price includes VAT' : undefined}
-                  {...register(`items.${index}.unitPrice`)}
-                  error={errors.items?.[index]?.unitPrice?.message}
-                />
-                <Input
-                  label="Disc %"
-                  type="number"
-                  min={0}
-                  max={100}
-                  inputMode="decimal"
-                  {...register(`items.${index}.discount`)}
-                />
-              </div>
-              {isVatCustomer && (
-                <p className="text-[11px] text-slate-500 -mt-1">* Price includes VAT</p>
-              )}
-
-              <div className="flex items-center justify-between border-t border-slate-200/80 pt-2">
-                <span className="text-xs text-slate-500">Line total</span>
-                <span className="text-sm font-semibold tabular-nums text-slate-900">
-                  {formatCurrency(lineTotal)}
-                </span>
-              </div>
-            </div>
+            </>
           );
-        })}
-      </div>
+        }}
+      />
 
-      {errors.items?.message && (
-        <p className="text-sm text-red-600">{errors.items.message}</p>
-      )}
       {typeof errors.items?.root?.message === 'string' && (
         <p className="text-sm text-red-600">{errors.items.root.message}</p>
-      )}
-
-      {canAddProducts && (
-        <Button
-          type="button"
-          variant="secondary"
-          size="sm"
-          onClick={() =>
-            append({
-              productId: '',
-              productLabel: '',
-              quantity: 1,
-              confirmedDeliveredQty: 0,
-              unitPrice: 0,
-              discount: 0,
-            })
-          }
-        >
-          <Plus className="h-4 w-4 mr-1.5" />
-          Add item
-        </Button>
       )}
 
       <div className="flex justify-end gap-3 pt-4 border-t">
