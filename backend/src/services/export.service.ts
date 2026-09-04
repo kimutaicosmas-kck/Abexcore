@@ -23,6 +23,7 @@ import {
 import {
   isChekimaDocCompany,
   renderChekimaPdf,
+  chekimaProductLineLabel,
   type ChekimaDocLine,
 } from '../utils/chekimaDocumentTemplate';
 import type { CustomerStatementResult, VatCustomerReportResult } from './customerStatement.service';
@@ -308,11 +309,8 @@ export class ExportService {
       const { discountAmount, discountPercent } = lineDiscountSummary(quotation.items);
       const lines: ChekimaDocLine[] = quotation.items.map((item) => {
         const product = item.product;
-        const description = product
-          ? [product.name, product.sku].filter(Boolean).join(' ')
-          : 'Item';
         return {
-          item: description,
+          item: chekimaProductLineLabel(product),
           qty: money2(Number(item.quantity)),
           rate: money2(Number(item.unitPrice)),
           amount: money2(Number(item.totalPrice)),
@@ -472,11 +470,8 @@ export class ExportService {
       const { discountAmount, discountPercent } = lineDiscountSummary(order.items);
       const lines: ChekimaDocLine[] = order.items.map((item) => {
         const product = item.product;
-        const description = product
-          ? [product.name, product.sku].filter(Boolean).join(' ')
-          : 'Item';
         return {
-          item: description,
+          item: chekimaProductLineLabel(product),
           qty: money2(Number(item.quantity)),
           rate: money2(Number(item.unitPrice)),
           amount: money2(Number(item.totalPrice)),

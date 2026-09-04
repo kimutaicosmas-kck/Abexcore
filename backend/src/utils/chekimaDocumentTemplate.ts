@@ -1,7 +1,6 @@
 /**
  * Chekima trading layout on standard AbexCore stationery.
- * Same modern header, colours, and table as other tenants — plus From/To, Description,
- * and trading-style totals from their requested format.
+ * Paginated items table — footer/totals stay together on the last page (no blank pages).
  */
 
 import PDFDocument from 'pdfkit';
@@ -11,7 +10,6 @@ import {
   PAGE_WIDTH,
   bindDocInk,
   drawAmazonStyleHeader,
-  drawDocTable,
   type CompanyDocHeader,
   type DocRefField,
 } from './documentTemplate';
@@ -21,9 +19,19 @@ export const CHEKIMA_COMPANY_SLUG = 'chekima';
 export const CHEKIMA_DEFAULT_TAGLINE =
   'Dealers in Oil, Lubricants & Spare Part for: Shantui, Hitachi, Hyundai, Liugong, Caterpillar, Case, Doosan, XCMG, Komatsu, Sany, Zoomlion, Cummins Engine Parts, Perkins Parts & Bell Equipment.';
 
-/** Left column ends before the Date / Doc No ref strip. */
 const REF_X = 330;
 const LEFT_COL_W = REF_X - PAGE_LEFT - 14;
+
+const TABLE_COLS = [
+  { key: 'no', label: 'No', width: 32, align: 'center' as const },
+  { key: 'item', label: 'Item', width: 228, align: 'left' as const },
+  { key: 'qty', label: 'Qty', width: 52, align: 'right' as const },
+  { key: 'rate', label: 'Rate', width: 88, align: 'right' as const },
+  { key: 'amount', label: 'Amount', width: 92, align: 'right' as const },
+];
+const TABLE_W = TABLE_COLS.reduce((s, c) => s + c.width, 0);
+const ROW_H = 18;
+const TABLE_HEADER_H = 22;
 
 export function isChekimaDocCompany(slug?: string | null): boolean {
   const s = (slug || '').trim().toLowerCase();
@@ -81,12 +89,31 @@ function formatDocDate(value: Date | string) {
   });
 }
 
-function drawSectionLabel(doc: PDFKit.PDFDocument, label: string, y: number, color: string): number {
-  doc.font('Helvetica-Bold').fontSize(9).fillColor(color).text(label, PAGE_LEFT, y, { underline: true });
-  return doc.y + 4;
+function pageBottom(doc: PDFKit.PDFDocument): number {
+  return doc.page.height - doc.page.margins.bottom;
 }
 
-/** From + To on the left; Date / Doc No refs on the right (no overlap). */
+function pageTop(doc: PDFKit.PDFDocument): number {
+  return doc.page.margins.top;
+}
+
+/** Move to a new page when the remaining content will not fit. */
+function ensureSpace(doc: PDFKit.PDFDocument, y: number, needed: number): number {
+  if (y + needed > pageBottom(doc)) {
+    doc.addPage();
+    return pageTop(doc);
+  }
+  return y;
+}
+
+function drawSectionLabel(doc: PDFKit.PDFDocument, label: string, y: number, color: string): number {
+  doc.font('Helvetica-Bold').fontSize(9).fillColor(color).text(label, PAGE_LEFT, y, {
+    underline: true,
+    lineBreak: false,
+  });
+  return y + 14;
+}
+
 function drawChekimaPartySection(
   doc: PDFKit.PDFDocument,
   startY: number,
@@ -102,29 +129,33 @@ function drawChekimaPartySection(
   const refW = PAGE_RIGHT - REF_X;
 
   let leftY = startY;
-  doc.font('Helvetica-Bold').fontSize(9).fillColor(ink.primary).text('From', PAGE_LEFT, leftY);
+  doc.font('Helvetica-Bold').fontSize(9).fillColor(ink.primary).text('From', PAGE_LEFT, leftY, {
+    lineBreak: false,
+  });
   leftY += 14;
   doc
     .font('Helvetica-Bold')
     .fontSize(9)
     .fillColor('#0f172a')
-    .text(company.name, PAGE_LEFT, leftY, { width: LEFT_COL_W });
+    .text(company.name, PAGE_LEFT, leftY, { width: LEFT_COL_W, lineBreak: true });
   leftY = doc.y + 2;
   doc
     .font('Helvetica')
     .fontSize(7.5)
     .fillColor('#475569')
-    .text(tagline, PAGE_LEFT, leftY, { width: LEFT_COL_W });
+    .text(tagline, PAGE_LEFT, leftY, { width: LEFT_COL_W, lineBreak: true });
   leftY = doc.y + 10;
 
-  doc.font('Helvetica-Bold').fontSize(9).fillColor(ink.primary).text('To', PAGE_LEFT, leftY);
+  doc.font('Helvetica-Bold').fontSize(9).fillColor(ink.primary).text('To', PAGE_LEFT, leftY, {
+    lineBreak: false,
+  });
   leftY += 14;
   doc
     .font('Helvetica-Bold')
     .fontSize(9)
     .fillColor('#0f172a')
     .text(input.customerName || '—', PAGE_LEFT, leftY, { width: LEFT_COL_W, lineBreak: false });
-  leftY = doc.y + 2;
+  leftY += 12;
 
   const toLines = [
     input.customerAddress ? `Address: ${input.customerAddress}` : null,
@@ -159,6 +190,103 @@ function drawChekimaPartySection(
   }
 
   return Math.max(leftY, refY) + 10;
+}
+
+function drawTableColumnHeader(doc: PDFKit.PDFDocument, y: number, company: CompanyDocHeader): number {
+  const ink = bindDocInk(doc, company);
+  doc.rect(PAGE_LEFT, y, TABLE_W, TABLE_HEADER_H).fill(ink.primary);
+  let x = PAGE_LEFT;
+  doc.font('Helvetica-Bold').fontSize(10).fillColor('#ffffff');
+  for (const col of TABLE_COLS) {
+    doc.text(col.label, x + 4, y + 6, {
+      width: col.width - 8,
+      align: col.align,
+      lineBreak: false,
+    });
+    x += col.width;
+  }
+  x = PAGE_LEFT;
+  for (let i = 0; i < TABLE_COLS.length - 1; i++) {
+    x += TABLE_COLS[i].width;
+    doc
+      .moveTo(x, y)
+      .lineTo(x, y + TABLE_HEADER_H)
+      .strokeColor('#ffffff')
+      .lineWidth(0.4)
+      .stroke();
+  }
+  return y + TABLE_HEADER_H;
+}
+
+function drawTableRow(
+  doc: PDFKit.PDFDocument,
+  y: number,
+  company: CompanyDocHeader,
+  row: Record<string, string>
+): number {
+  const ink = bindDocInk(doc, company);
+  doc.rect(PAGE_LEFT, y, TABLE_W, ROW_H).strokeColor(ink.line).lineWidth(0.5).stroke();
+  let x = PAGE_LEFT;
+  doc.font('Helvetica').fontSize(8).fillColor('#0f172a');
+  for (const col of TABLE_COLS) {
+    doc.text(row[col.key] || '', x + 4, y + 5, {
+      width: col.width - 8,
+      align: col.align,
+      lineBreak: false,
+      ellipsis: true,
+    });
+    x += col.width;
+  }
+  return y + ROW_H;
+}
+
+/** Items table that continues across pages; reserves space for closing block on last page. */
+function drawChekimaPaginatedTable(
+  doc: PDFKit.PDFDocument,
+  startY: number,
+  company: CompanyDocHeader,
+  docNo: string,
+  rows: Record<string, string>[],
+  closingBlockHeight: number
+): number {
+  let y = startY;
+  let headerDrawn = false;
+
+  const paintHeader = () => {
+    y = drawTableColumnHeader(doc, y, company);
+    headerDrawn = true;
+  };
+
+  paintHeader();
+
+  for (let i = 0; i < rows.length; i++) {
+    const isLast = i === rows.length - 1;
+    const needed = isLast ? ROW_H + 22 + closingBlockHeight : ROW_H;
+    const nextY = ensureSpace(doc, y, needed);
+    if (nextY !== y) {
+      y = nextY;
+      paintHeader();
+    } else if (!headerDrawn) {
+      paintHeader();
+    }
+    headerDrawn = true;
+    y = drawTableRow(doc, y, company, rows[i]);
+  }
+
+  y = ensureSpace(doc, y, 18);
+  const ink = bindDocInk(doc, company);
+  doc
+    .font('Helvetica-Bold')
+    .fontSize(9)
+    .fillColor(ink.primary)
+    .text('E.& O.E', PAGE_LEFT + 6, y + 2, { lineBreak: false });
+  doc
+    .font('Helvetica-Bold')
+    .fontSize(10)
+    .fillColor('#b91c1c')
+    .text(`No. ${docNo}`, PAGE_LEFT, y + 2, { width: TABLE_W, align: 'center', lineBreak: false });
+
+  return y + 18;
 }
 
 function drawChekimaTradingTotals(
@@ -228,7 +356,6 @@ function drawChekimaTradingTotals(
   return totY;
 }
 
-/** Left-side names only — no sign lines crossing the totals column. */
 function drawChekimaSignatures(
   doc: PDFKit.PDFDocument,
   y: number,
@@ -238,7 +365,11 @@ function drawChekimaSignatures(
 ): number {
   const ink = bindDocInk(doc, company);
 
-  doc.font('Helvetica-Bold').fontSize(9).fillColor(ink.primary).text('Prepared By:', PAGE_LEFT, y);
+  doc
+    .font('Helvetica-Bold')
+    .fontSize(9)
+    .fillColor(ink.primary)
+    .text('Prepared By:', PAGE_LEFT, y, { lineBreak: false });
   doc
     .font('Helvetica')
     .fontSize(9)
@@ -246,7 +377,11 @@ function drawChekimaSignatures(
     .text((preparedBy || '—').toUpperCase(), PAGE_LEFT + 72, y, { width: 210, lineBreak: false });
 
   y += 20;
-  doc.font('Helvetica-Bold').fontSize(9).fillColor(ink.primary).text('Authorized By:', PAGE_LEFT, y);
+  doc
+    .font('Helvetica-Bold')
+    .fontSize(9)
+    .fillColor(ink.primary)
+    .text('Authorized By:', PAGE_LEFT, y, { lineBreak: false });
   doc
     .font('Helvetica')
     .fontSize(9)
@@ -257,6 +392,13 @@ function drawChekimaSignatures(
     });
 
   return y + 22;
+}
+
+function estimateClosingHeight(input: ChekimaDocInput): number {
+  let h = 44 + 90;
+  if (input.terms?.trim()) h += 36;
+  if (input.comments?.trim()) h += 36;
+  return h;
 }
 
 export function drawChekimaTradingDocument(doc: PDFKit.PDFDocument, input: ChekimaDocInput): void {
@@ -282,6 +424,7 @@ export function drawChekimaTradingDocument(doc: PDFKit.PDFDocument, input: Cheki
     y = drawSectionLabel(doc, 'Description', y, ink.primary);
     doc.font('Helvetica').fontSize(9).fillColor('#0f172a').text(description, PAGE_LEFT, y, {
       width: PAGE_WIDTH,
+      lineBreak: true,
     });
     y = doc.y + 10;
   }
@@ -296,40 +439,30 @@ export function drawChekimaTradingDocument(doc: PDFKit.PDFDocument, input: Cheki
     amount: line.amount,
   }));
 
-  y = drawDocTable(
-    doc,
-    y,
-    [
-      { key: 'no', label: 'No', width: 32, align: 'center' },
-      { key: 'item', label: 'Item', width: 228 },
-      { key: 'qty', label: 'Qty', width: 52, align: 'right' },
-      { key: 'rate', label: 'Rate', width: 88, align: 'right' },
-      { key: 'amount', label: 'Amount', width: 92, align: 'right' },
-    ],
-    tableRows,
-    {
-      minBodyRows: Math.max(tableRows.length + 1, 3),
-      footerLeft: 'E.& O.E',
-      footerCenter: `No. ${input.docNo}`,
-    }
-  );
+  const closingH = estimateClosingHeight(input);
+  y = drawChekimaPaginatedTable(doc, y, company, input.docNo, tableRows, closingH);
 
-  const footerTop = y + 8;
+  y = ensureSpace(doc, y, closingH);
+  const footerTop = y;
   drawChekimaSignatures(doc, footerTop, company, input.preparedBy, input.authorizedBy);
-  const totalsBottom = drawChekimaTradingTotals(doc, footerTop, company, input);
-  y = Math.max(footerTop + 52, totalsBottom) + 8;
+  y = drawChekimaTradingTotals(doc, footerTop, company, input);
+  y = Math.max(footerTop + 52, y) + 8;
 
   if (input.terms?.trim()) {
+    y = ensureSpace(doc, y, 36);
     y = drawSectionLabel(doc, 'Terms and Conditions', y, ink.primary);
     doc.font('Helvetica').fontSize(8).fillColor('#475569').text(input.terms.trim(), PAGE_LEFT, y, {
       width: PAGE_WIDTH,
+      lineBreak: true,
     });
     y = doc.y + 8;
   }
   if (input.comments?.trim()) {
+    y = ensureSpace(doc, y, 36);
     y = drawSectionLabel(doc, 'Comments', y, ink.primary);
     doc.font('Helvetica').fontSize(8).fillColor('#475569').text(input.comments.trim(), PAGE_LEFT, y, {
       width: PAGE_WIDTH,
+      lineBreak: true,
     });
   }
 }
@@ -344,4 +477,17 @@ export function renderChekimaPdf(input: ChekimaDocInput): Promise<Buffer> {
     drawChekimaTradingDocument(doc, input);
     doc.end();
   });
+}
+
+/** Avoid duplicated SKU in Chekima line items (e.g. "809/00152 LINER BEARING 809/00152…"). */
+export function chekimaProductLineLabel(product?: {
+  name?: string | null;
+  sku?: string | null;
+} | null): string {
+  if (!product) return 'Item';
+  const name = (product.name || '').trim();
+  const sku = (product.sku || '').trim();
+  if (!name) return sku || 'Item';
+  if (!sku || name.includes(sku)) return name;
+  return `${sku} — ${name}`;
 }
