@@ -233,6 +233,7 @@ export function drawAmazonStyleHeader(
 ): number {
   const top = 40;
   const logoSize = DOC_LOGO_SIZE;
+  const headerRowH = logoSize;
   const ink = bindDocInk(doc, company);
   const primary = ink.primary;
   const muted = ink.muted;
@@ -252,23 +253,7 @@ export function drawAmazonStyleHeader(
   const nameX = company.logoPng ? PAGE_LEFT + logoSize + 12 : PAGE_LEFT;
   const nameWidth = PAGE_RIGHT - nameX - DOC_BADGE_MAX_W - 8;
 
-  doc
-    .font('Helvetica-Bold')
-    .fontSize(16)
-    .fillColor(primary)
-    .text(company.name.toUpperCase(), nameX, top + 6, { width: Math.max(nameWidth, 180), align: 'left' });
-
-  let y = doc.y + 2;
-  if (company.contactLine) {
-    doc
-      .font('Helvetica')
-      .fontSize(8)
-      .fillColor(muted)
-      .text(company.contactLine, nameX, y, { width: Math.max(nameWidth, 180), align: 'left' });
-    y = doc.y;
-  }
-
-  // Document type badge (top-right blue box) — supports two-line labels.
+  // Document type badge (top-right) — sized before vertical centering.
   const badgeLines = docTypeBadgeLines(docTypeBadge);
   const badgeFontSize = badgeLines.length > 1 ? 10 : 12;
   const badgeLineHeight = badgeLines.length > 1 ? 12 : 14;
@@ -277,9 +262,41 @@ export function drawAmazonStyleHeader(
   const longestLine = badgeLines.reduce((max, line) => Math.max(max, line.length), 0);
   const badgeW = Math.min(DOC_BADGE_MAX_W, Math.max(DOC_BADGE_MIN_W, longestLine * 7.2));
   const badgeX = PAGE_RIGHT - badgeW;
-  const badgeY = company.logoPng
-    ? top + Math.max(0, (logoSize - badgeH) / 2)
-    : top + 4;
+  const badgeY = top + Math.max(0, (headerRowH - badgeH) / 2);
+
+  // Company block — vertically centered on the same row as logo + badge.
+  const nameLineH = 18;
+  const contactGap = 2;
+  const contactLineH = company.contactLine ? 10 : 0;
+  const textBlockH = nameLineH + (company.contactLine ? contactGap + contactLineH : 0);
+  const textY = top + Math.max(0, (headerRowH - textBlockH) / 2);
+
+  doc
+    .font('Helvetica-Bold')
+    .fontSize(16)
+    .fillColor(primary)
+    .text(company.name.toUpperCase(), nameX, textY, {
+      width: Math.max(nameWidth, 180),
+      align: 'left',
+      lineBreak: false,
+      ellipsis: true,
+    });
+
+  let y = textY + nameLineH;
+  if (company.contactLine) {
+    doc
+      .font('Helvetica')
+      .fontSize(8)
+      .fillColor(muted)
+      .text(company.contactLine, nameX, y + contactGap, {
+        width: Math.max(nameWidth, 180),
+        align: 'left',
+        lineBreak: false,
+        ellipsis: true,
+      });
+    y = y + contactGap + contactLineH;
+  }
+
   doc.rect(badgeX, badgeY, badgeW, badgeH).fill(primary);
   badgeLines.forEach((line, index) => {
     doc
@@ -294,7 +311,7 @@ export function drawAmazonStyleHeader(
   });
 
   // Payment / M-Pesa block — customer-facing docs only (invoices, delivery notes, customer statements).
-  y = Math.max(y, top + logoSize) + 10;
+  y = top + headerRowH + 10;
   const showPaybill = options?.showPaybill === true && !!company.paybillNumber;
   if (showPaybill) {
     doc.font('Helvetica-Bold').fontSize(8).fillColor(primary).text('LIPA NA MPESA', PAGE_LEFT, y);
