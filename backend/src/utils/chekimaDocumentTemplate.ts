@@ -107,10 +107,17 @@ function ensureSpace(doc: PDFKit.PDFDocument, y: number, needed: number): number
 }
 
 function drawSectionLabel(doc: PDFKit.PDFDocument, label: string, y: number, color: string): number {
+  if (!Number.isFinite(y)) y = pageTop(doc);
   doc.font('Helvetica-Bold').fontSize(9).fillColor(color).text(label, PAGE_LEFT, y, {
-    underline: true,
     lineBreak: false,
   });
+  const labelWidth = doc.widthOfString(label);
+  doc
+    .moveTo(PAGE_LEFT, y + 11)
+    .lineTo(PAGE_LEFT + labelWidth, y + 11)
+    .strokeColor(color)
+    .lineWidth(0.5)
+    .stroke();
   return y + 14;
 }
 
@@ -138,13 +145,13 @@ function drawChekimaPartySection(
     .fontSize(9)
     .fillColor('#0f172a')
     .text(company.name, PAGE_LEFT, leftY, { width: LEFT_COL_W, lineBreak: true });
-  leftY = doc.y + 2;
+  leftY += Math.max(12, doc.heightOfString(company.name, { width: LEFT_COL_W })) + 2;
   doc
     .font('Helvetica')
     .fontSize(7.5)
     .fillColor('#475569')
     .text(tagline, PAGE_LEFT, leftY, { width: LEFT_COL_W, lineBreak: true });
-  leftY = doc.y + 10;
+  leftY += Math.max(24, doc.heightOfString(tagline, { width: LEFT_COL_W })) + 10;
 
   doc.font('Helvetica-Bold').fontSize(9).fillColor(ink.primary).text('To', PAGE_LEFT, leftY, {
     lineBreak: false,
@@ -431,13 +438,16 @@ export function drawChekimaTradingDocument(doc: PDFKit.PDFDocument, input: Cheki
 
   y = drawSectionLabel(doc, `${input.docTitle} Items`, y, ink.primary) + 4;
 
-  const tableRows = input.lines.map((line, i) => ({
-    no: `${i + 1}.`,
-    item: line.item,
-    qty: line.qty,
-    rate: line.rate,
-    amount: line.amount,
-  }));
+  const tableRows =
+    input.lines.length > 0
+      ? input.lines.map((line, i) => ({
+          no: `${i + 1}.`,
+          item: line.item,
+          qty: line.qty,
+          rate: line.rate,
+          amount: line.amount,
+        }))
+      : [{ no: '-', item: 'No line items', qty: '-', rate: '-', amount: '-' }];
 
   const closingH = estimateClosingHeight(input);
   y = drawChekimaPaginatedTable(doc, y, company, input.docNo, tableRows, closingH);
@@ -474,8 +484,12 @@ export function renderChekimaPdf(input: ChekimaDocInput): Promise<Buffer> {
     doc.on('data', (chunk) => chunks.push(chunk));
     doc.on('end', () => resolve(Buffer.concat(chunks)));
     doc.on('error', reject);
-    drawChekimaTradingDocument(doc, input);
-    doc.end();
+    try {
+      drawChekimaTradingDocument(doc, input);
+      doc.end();
+    } catch (err) {
+      reject(err);
+    }
   });
 }
 
