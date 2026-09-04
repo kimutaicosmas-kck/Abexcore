@@ -100,6 +100,8 @@ export interface DashboardKPIs {
   productionOrders: number;
   ordersAwaitingProduction: number;
   inventoryValue: number;
+  rawMaterialValue?: number;
+  finishedGoodsValue?: number;
   rawMaterialsLow: number;
   lowStockItems: {
     id: string;
@@ -263,9 +265,12 @@ export interface ProductStats {
 
 export interface InventoryStats {
   materialsCount: number;
+  rawMaterialsInStock?: number;
   warehouses: number;
   lowStockCount: number;
   inventoryValue: number;
+  rawMaterialValue?: number;
+  finishedGoodsValue?: number;
   transfersToday: number;
 }
 

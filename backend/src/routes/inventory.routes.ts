@@ -17,7 +17,7 @@ import { StockMovementService } from '../services/inventory.service';
 import { AccountingService } from '../services/accounting.service';
 import { ProcurementService } from '../services/procurement.service';
 import { Prisma, TransactionType } from '@prisma/client';
-import { isLowStock, sumStockQuantities, toStockQty } from '../utils/stock';
+import { isLowStock, sumStockQuantities, toStockQty, weightedStockUnitCost } from '../utils/stock';
 import { ExcelImportService } from '../services/excel-import.service';
 import { acceptExcelUpload } from '../middleware/excelImport';
 
@@ -231,7 +231,23 @@ router.get('/materials', authorize('inventory:read'), validate(materialListQuery
   const where: Record<string, unknown> = {};
   if (type) where.typeId = type;
   const result = await materialService.list({ page, limit, search, sortBy, sortOrder, where });
-  res.json({ success: true, ...result });
+  const data = (result.data as Array<{
+    unitCost?: unknown;
+    stockLevels?: { quantity: unknown; unitCost?: unknown }[];
+    [key: string]: unknown;
+  }>).map((material) => {
+    const levels = material.stockLevels;
+    const onHand = sumStockQuantities(levels);
+    const catalogCost = Number(material.unitCost || 0);
+    const effectiveUnitCost = weightedStockUnitCost(levels, catalogCost);
+    return {
+      ...material,
+      onHandTotal: onHand,
+      effectiveUnitCost,
+      stockValue: onHand * effectiveUnitCost,
+    };
+  });
+  res.json({ success: true, data, pagination: result.pagination });
 }));
 
 router.get('/materials/low-stock', authorize('inventory:read'), asyncHandler(async (_req: AuthRequest, res: Response) => {

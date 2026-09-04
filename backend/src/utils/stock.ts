@@ -30,3 +30,18 @@ export function sumStockQuantities(levels: { quantity: unknown }[] | undefined |
   if (!levels?.length) return 0;
   return levels.reduce((sum, sl) => sum + toStockQty(sl.quantity), 0);
 }
+
+/** Weighted average unit cost from stock levels; falls back when no stock. */
+export function weightedStockUnitCost(
+  levels: { quantity: unknown; unitCost?: unknown }[] | undefined | null,
+  fallback = 0
+): number {
+  if (!levels?.length) return fallback;
+  const qty = sumStockQuantities(levels);
+  if (qty <= 0) return fallback;
+  const total = levels.reduce(
+    (sum, l) => sum + toStockQty(l.quantity) * toStockQty(l.unitCost),
+    0
+  );
+  return total / qty;
+}

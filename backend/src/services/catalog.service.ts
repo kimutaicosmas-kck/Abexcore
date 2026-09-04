@@ -69,10 +69,18 @@ export class InventoryService {
       include: { product: true, rawMaterial: true },
     });
 
-    const inventoryValue = stockLevels.reduce(
-      (sum, sl) => sum + Number(sl.quantity) * Number(sl.unitCost),
-      0
-    );
+    let rawMaterialValue = 0;
+    let finishedGoodsValue = 0;
+    for (const sl of stockLevels) {
+      const lineValue = Number(sl.quantity) * Number(sl.unitCost);
+      if (sl.rawMaterialId) rawMaterialValue += lineValue;
+      else if (sl.productId) finishedGoodsValue += lineValue;
+    }
+    const inventoryValue = rawMaterialValue + finishedGoodsValue;
+
+    const rawMaterialsInStock = materials.filter((m) =>
+      sumStockQuantities(m.stockLevels) > 0
+    ).length;
 
     const [warehouses, materialsCount, transfersToday] = await Promise.all([
       prisma.warehouse.count({ where: { isActive: true, deletedAt: null } }),
@@ -86,9 +94,12 @@ export class InventoryService {
 
     return {
       materialsCount,
+      rawMaterialsInStock,
       warehouses,
       lowStockCount: lowMaterials.length + lowProducts.length,
       inventoryValue,
+      rawMaterialValue,
+      finishedGoodsValue,
       transfersToday,
     };
   }

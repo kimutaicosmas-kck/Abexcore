@@ -2,6 +2,7 @@ import { Prisma } from '@prisma/client';
 import prisma from '../config/database';
 import { AppError } from '../middleware/errorHandler';
 import { injectTenantData, requireTenantId } from '../utils/tenant';
+import { weightedStockUnitCost } from '../utils/stock';
 
 type TxClient = Prisma.TransactionClient;
 
@@ -494,6 +495,17 @@ export class StockMovementService {
           createdById: opts.userId,
         },
       });
+
+      if (item.rawMaterialId && item.unitCost > 0) {
+        const allLevels = await tx.stockLevel.findMany({
+          where: { rawMaterialId: item.rawMaterialId },
+        });
+        const avgCost = weightedStockUnitCost(allLevels, item.unitCost);
+        await tx.rawMaterial.update({
+          where: { id: item.rawMaterialId },
+          data: { unitCost: avgCost },
+        });
+      }
     }
   }
 

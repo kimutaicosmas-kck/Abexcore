@@ -339,11 +339,21 @@ export function DashboardPage() {
         )}
         {showInventoryKpis && (
           <StatCard
+            title="Raw material value"
+            value={formatCurrency(kpis.rawMaterialValue ?? kpis.inventoryValue)}
+            icon={<Package className="h-5 w-5 text-white" />}
+            color="from-amber-500 to-orange-600"
+            to={linkTo('/inventory')}
+          />
+        )}
+        {showInventoryKpis && (
+          <StatCard
             title="Inventory value"
             value={formatCurrency(kpis.inventoryValue)}
             icon={<Package className="h-5 w-5 text-white" />}
-            color="from-amber-500 to-amber-700"
+            color="from-cyan-500 to-cyan-700"
             to={linkTo('/inventory')}
+            className="hidden lg:flex"
           />
         )}
         {showInventoryKpis && (

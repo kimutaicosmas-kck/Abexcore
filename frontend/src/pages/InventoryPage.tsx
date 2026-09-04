@@ -310,7 +310,40 @@ export function InventoryPage() {
     {
       key: 'unitCost',
       label: 'Unit cost',
-      render: (val: unknown) => formatCurrency(val as number),
+      render: (_: unknown, row: Record<string, unknown>) => {
+        const effective = Number(
+          (row as { effectiveUnitCost?: number }).effectiveUnitCost ?? row.unitCost ?? 0
+        );
+        const catalog = Number(row.unitCost || 0);
+        const onHand = Number((row as { onHandTotal?: number }).onHandTotal ?? 0);
+        if (effective <= 0 && onHand > 0) {
+          return <span className="text-amber-700 font-medium">Ksh 0 — set cost</span>;
+        }
+        return (
+          <span>
+            {formatCurrency(effective)}
+            {catalog > 0 && effective !== catalog && (
+              <span className="block text-xs text-slate-500">Catalog: {formatCurrency(catalog)}</span>
+            )}
+          </span>
+        );
+      },
+    },
+    {
+      key: 'stockValue',
+      label: 'Stock value',
+      render: (_: unknown, row: Record<string, unknown>) => {
+        const stockValue = Number((row as { stockValue?: number }).stockValue ?? 0);
+        const onHand = Number((row as { onHandTotal?: number }).onHandTotal ?? 0);
+        if (onHand > 0 && stockValue <= 0) {
+          return <span className="text-amber-700 text-sm">No cost set</span>;
+        }
+        return (
+          <span className="font-semibold tabular-nums text-slate-900">
+            {formatCurrency(stockValue)}
+          </span>
+        );
+      },
     },
     {
       key: 'minStockLevel',
@@ -430,25 +463,25 @@ export function InventoryPage() {
       {stats && (
         <StatGrid>
           <StatCard
-            title="Inventory value"
-            value={formatCurrency(stats.inventoryValue)}
-            icon={<Boxes className="h-5 w-5 text-white" />}
-            color="from-cyan-500 to-cyan-700"
-            onClick={() => goToTab(0)}
+            title="Raw material value"
+            value={formatCurrency(stats.rawMaterialValue ?? stats.inventoryValue)}
+            icon={<Package className="h-5 w-5 text-white" />}
+            color="from-amber-500 to-orange-600"
+            onClick={() => goToTab(1)}
           />
           <StatCard
-            title="Raw materials"
-            value={stats.materialsCount}
-            icon={<Package className="h-5 w-5 text-white" />}
+            title="Materials in stock"
+            value={stats.rawMaterialsInStock ?? stats.materialsCount}
+            icon={<Boxes className="h-5 w-5 text-white" />}
             color="from-violet-500 to-violet-700"
             onClick={() => goToTab(1)}
           />
           <StatCard
-            title="Warehouses"
-            value={stats.warehouses}
-            icon={<Warehouse className="h-5 w-5 text-white" />}
-            color="from-emerald-500 to-emerald-700"
-            onClick={() => goToTab(2)}
+            title="Total inventory value"
+            value={formatCurrency(stats.inventoryValue)}
+            icon={<Boxes className="h-5 w-5 text-white" />}
+            color="from-cyan-500 to-cyan-700"
+            onClick={() => goToTab(0)}
             className="hidden sm:flex"
           />
           <StatCard
@@ -458,15 +491,16 @@ export function InventoryPage() {
             color="from-orange-500 to-orange-700"
             onClick={() => goToTab(3)}
           />
-          <StatCard
-            title="Movements today"
-            value={stats.transfersToday}
-            icon={<Activity className="h-5 w-5 text-white" />}
-            color="from-rose-500 to-rose-700"
-            onClick={() => goToTab(4)}
-          />
         </StatGrid>
       )}
+
+      <Alert variant="info">
+        <strong>Material cost &amp; stock:</strong> the <strong>Materials</strong> tab shows on-hand quantity,
+        unit cost, and stock value. If unit cost shows <strong>Ksh 0 — set cost</strong>, edit the material or
+        receive stock via <strong>Procurement → Goods Receipt</strong> with a unit price. The top{' '}
+        <strong>Inventory value</strong> includes finished goods too — open <strong>Stock Levels</strong> and filter
+        WH-RM for raw materials only.
+      </Alert>
 
       <PageHeader
         action={

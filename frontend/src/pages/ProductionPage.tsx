@@ -16,6 +16,7 @@ import {
   DataPanel,
   TablePagination,
   formatDate,
+  formatCurrency,
   getStatusBadge,
   PageToolbar,
   ConfirmDialog,
@@ -103,6 +104,18 @@ export function ProductionPage() {
     },
     { key: 'quantity', label: 'Qty' },
     { key: 'completedQty', label: 'Completed' },
+    {
+      key: 'estimatedCost',
+      label: 'Est. material cost',
+      render: (val: unknown) =>
+        val != null && Number(val) > 0 ? formatCurrency(Number(val)) : '—',
+    },
+    {
+      key: 'actualCost',
+      label: 'Actual material cost',
+      render: (val: unknown) =>
+        val != null && Number(val) > 0 ? formatCurrency(Number(val)) : '—',
+    },
     {
       key: 'status',
       label: 'Status',

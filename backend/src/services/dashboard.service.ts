@@ -86,9 +86,14 @@ export class DashboardService {
       include: { product: true, rawMaterial: true },
     });
 
-    const totalInventoryValue = inventoryValue.reduce((sum, sl) => {
-      return sum + Number(sl.quantity) * Number(sl.unitCost);
-    }, 0);
+    let rawMaterialValue = 0;
+    let finishedGoodsValue = 0;
+    for (const sl of inventoryValue) {
+      const lineValue = Number(sl.quantity) * Number(sl.unitCost);
+      if (sl.rawMaterialId) rawMaterialValue += lineValue;
+      else if (sl.productId) finishedGoodsValue += lineValue;
+    }
+    const totalInventoryValue = rawMaterialValue + finishedGoodsValue;
 
     const lowMaterials = lowStockMaterials.filter((m) =>
       isLowStock(sumStockQuantities(m.stockLevels), m.minStockLevel)
@@ -208,6 +213,8 @@ export class DashboardService {
       productionOrders,
       ordersAwaitingProduction: awaitingProduction,
       inventoryValue: totalInventoryValue,
+      rawMaterialValue,
+      finishedGoodsValue,
       rawMaterialsLow: lowStock.length,
       lowStockItems: lowStock.slice(0, 5),
       finishedGoods: Number(finishedGoods._sum.quantity || 0),
