@@ -38,6 +38,7 @@ export function useModuleFormDraft<T extends FieldValues>({
   const savingRef = useRef(false);
   const lastSavedRef = useRef('');
   const hydratedRef = useRef(false);
+  const discardedRef = useRef(false);
 
   useEffect(() => {
     if (!enabled || hydratedRef.current) return;
@@ -109,7 +110,7 @@ export function useModuleFormDraft<T extends FieldValues>({
 
   useEffect(() => {
     return () => {
-      if (enabled) void persist(true);
+      if (enabled && !discardedRef.current) void persist(true);
     };
   }, [enabled, persist]);
 
@@ -124,7 +125,21 @@ export function useModuleFormDraft<T extends FieldValues>({
     }
   }, [moduleKey]);
 
-  return { draftRestored, draftSavedAt, clearDraft, flushDraft: () => persist(true) };
+  const discardDraft = useCallback(async () => {
+    discardedRef.current = true;
+    lastSavedRef.current = '';
+    setDraftSavedAt(null);
+    setDraftRestored(false);
+    reset(defaultValues);
+    onRestoreUi?.(undefined);
+    try {
+      await draftsApi.remove(moduleKey);
+    } catch {
+      // Ignore cleanup failures.
+    }
+  }, [defaultValues, moduleKey, onRestoreUi, reset]);
+
+  return { draftRestored, draftSavedAt, clearDraft, discardDraft, flushDraft: () => persist(true) };
 }
 
 /** Standard module keys for form draft persistence. */

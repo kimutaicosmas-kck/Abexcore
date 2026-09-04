@@ -75,7 +75,7 @@ export function StockTransferForm({ onSuccess, onCancel }: StockTransferFormProp
     defaultValues: transferDefaultValues,
   });
 
-  const { draftSavedAt, draftRestored, clearDraft } = useModuleFormDraft({
+  const { draftSavedAt, draftRestored, clearDraft, discardDraft } = useModuleFormDraft({
     moduleKey: FORM_DRAFT_MODULES.stockTransfer,
     watch,
     getValues,
@@ -132,7 +132,7 @@ export function StockTransferForm({ onSuccess, onCancel }: StockTransferFormProp
 
   return (
     <form onSubmit={handleSubmit((d) => mutation.mutate(d))} className="space-y-4">
-      <FormDraftNotice draftSavedAt={draftSavedAt} draftRestored={draftRestored} />
+      <FormDraftNotice draftSavedAt={draftSavedAt} draftRestored={draftRestored} onDiscard={discardDraft} />
       {mutation.isError && (
         <div className="p-3 rounded-lg bg-red-50 text-red-700 text-sm">
           {(mutation.error as AxiosError<{ message?: string }>)?.response?.data?.message ||

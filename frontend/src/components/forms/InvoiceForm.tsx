@@ -13,6 +13,7 @@ import {
   readStoredDraftId,
   useDocumentDraftAutosave,
 } from '../../hooks/useDocumentDraftAutosave';
+import { FormDraftNotice } from './FormDraftNotice';
 
 const invoiceItemSchema = z.object({
   description: z.string().min(1, 'Description is required'),
@@ -88,6 +89,9 @@ export function InvoiceForm({ onSuccess, onCancel, draftId: initialDraftId }: In
     () => initialDraftId || readStoredDraftId(INVOICE_DRAFT_STORAGE_KEY)
   );
   const [draftSavedAt, setDraftSavedAt] = useState<Date | null>(null);
+  const [draftRestored, setDraftRestored] = useState(Boolean(initialDraftId));
+  const [draftDiscarded, setDraftDiscarded] = useState(false);
+  const [discarding, setDiscarding] = useState(false);
   const hydratedDraftIdRef = useRef<string | undefined>(undefined);
 
   const { data: customersData } = useQuery({
@@ -149,6 +153,7 @@ export function InvoiceForm({ onSuccess, onCancel, draftId: initialDraftId }: In
             }))
           : [{ description: '', quantity: 1, unitPrice: 0 }],
     });
+    setDraftRestored(true);
   }, [existingDraft, reset]);
 
   const saveDraft = useCallback(
@@ -172,8 +177,31 @@ export function InvoiceForm({ onSuccess, onCancel, draftId: initialDraftId }: In
     saveDraft,
     isMeaningful: invoiceHasDraftContent,
     storageKey: INVOICE_DRAFT_STORAGE_KEY,
-    enabled: !draftLoading,
+    enabled: !draftLoading && !draftDiscarded,
   });
+
+  const discardDraft = useCallback(async () => {
+    setDiscarding(true);
+    try {
+      if (draftId) {
+        await financeApi.deleteInvoiceDraft(draftId);
+      }
+      clearStoredDraft();
+      setDraftId(undefined);
+      setDraftSavedAt(null);
+      setDraftRestored(false);
+      setDraftDiscarded(true);
+      hydratedDraftIdRef.current = undefined;
+      reset({
+        type: 'SALES',
+        items: [{ description: '', quantity: 1, unitPrice: 0 }],
+      });
+      queryClient.invalidateQueries({ queryKey: ['invoices'] });
+      onCancel();
+    } finally {
+      setDiscarding(false);
+    }
+  }, [clearStoredDraft, draftId, onCancel, queryClient, reset]);
 
   const { fields, append, remove } = useFieldArray({ control, name: 'items' });
   const invoiceType = watch('type');
@@ -237,11 +265,15 @@ export function InvoiceForm({ onSuccess, onCancel, draftId: initialDraftId }: In
       >
       {draftLoading ? (
         <div className="p-3 rounded-lg bg-slate-50 text-slate-600 text-sm">Loading draft…</div>
-      ) : draftSavedAt ? (
-        <div className="p-3 rounded-lg bg-emerald-50 text-emerald-800 text-sm">
-          Draft saved — you can leave and continue later from the Drafts filter.
-        </div>
-      ) : null}
+      ) : (
+        <FormDraftNotice
+          show={Boolean(draftId || draftSavedAt || draftRestored)}
+          draftSavedAt={draftSavedAt}
+          draftRestored={draftRestored}
+          onDiscard={discardDraft}
+          discarding={discarding}
+        />
+      )}
 
       {mutation.isError && (
         <Alert variant="error">{getApiErrorMessage(mutation.error)}</Alert>

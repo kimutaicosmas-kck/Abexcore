@@ -106,7 +106,7 @@ export function GoodsReceiptForm({ onSuccess, onCancel }: GoodsReceiptFormProps)
     defaultValues: goodsReceiptDefaultValues,
   });
 
-  const { draftSavedAt, draftRestored, clearDraft } = useModuleFormDraft({
+  const { draftSavedAt, draftRestored, clearDraft, discardDraft } = useModuleFormDraft({
     moduleKey: FORM_DRAFT_MODULES.goodsReceipt,
     watch,
     getValues,
@@ -171,7 +171,7 @@ export function GoodsReceiptForm({ onSuccess, onCancel }: GoodsReceiptFormProps)
 
   return (
     <form onSubmit={handleSubmit((data) => mutation.mutate(data))} className="space-y-4">
-      <FormDraftNotice draftSavedAt={draftSavedAt} draftRestored={draftRestored} />
+      <FormDraftNotice draftSavedAt={draftSavedAt} draftRestored={draftRestored} onDiscard={discardDraft} />
       {mutation.isError && (
         <div className="p-3 rounded-lg bg-red-50 text-red-700 text-sm">
           {(mutation.error as { response?: { data?: { message?: string } } })?.response?.data?.message ||

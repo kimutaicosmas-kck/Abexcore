@@ -94,7 +94,7 @@ export function JournalEntryForm({ onSuccess, onCancel }: JournalEntryFormProps)
     defaultValues: journalEntryDefaultValues,
   });
 
-  const { draftSavedAt, draftRestored, clearDraft } = useModuleFormDraft({
+  const { draftSavedAt, draftRestored, clearDraft, discardDraft } = useModuleFormDraft({
     moduleKey: FORM_DRAFT_MODULES.journalEntry,
     watch,
     getValues,
@@ -163,7 +163,7 @@ export function JournalEntryForm({ onSuccess, onCancel }: JournalEntryFormProps)
 
   return (
     <form onSubmit={handleSubmit((data) => mutation.mutate(data))} className="space-y-4">
-      <FormDraftNotice draftSavedAt={draftSavedAt} draftRestored={draftRestored} />
+      <FormDraftNotice draftSavedAt={draftSavedAt} draftRestored={draftRestored} onDiscard={discardDraft} />
       {mutation.isError && (
         <div className="p-3 rounded-lg bg-red-50 text-red-700 text-sm">
           {getApiErrorMessage(mutation.error)}

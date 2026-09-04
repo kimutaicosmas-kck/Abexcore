@@ -104,7 +104,7 @@ export function SalaryAdvanceForm({
     defaultValues: advanceDefaultValues,
   });
 
-  const { draftSavedAt, draftRestored, clearDraft } = useModuleFormDraft({
+  const { draftSavedAt, draftRestored, clearDraft, discardDraft } = useModuleFormDraft({
     moduleKey: FORM_DRAFT_MODULES.salaryAdvance,
     watch,
     getValues,
@@ -183,7 +183,7 @@ export function SalaryAdvanceForm({
 
   return (
     <form onSubmit={handleSubmit((data) => mutation.mutate(data))} className="space-y-4">
-      <FormDraftNotice draftSavedAt={draftSavedAt} draftRestored={draftRestored} />
+      <FormDraftNotice draftSavedAt={draftSavedAt} draftRestored={draftRestored} onDiscard={discardDraft} />
       {mutation.isError && (
         <Alert variant="error">{getApiErrorMessage(mutation.error)}</Alert>
       )}

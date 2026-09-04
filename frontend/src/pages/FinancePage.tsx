@@ -47,6 +47,7 @@ import {
   formatDate,
   getStatusBadge,
   PageToolbar,
+  ConfirmDialog,
 } from '../components/ui';
 import { Modal } from '../components/ui/Modal';
 import { InvoiceForm } from '../components/forms/InvoiceForm';
@@ -152,6 +153,7 @@ export function FinancePage() {
   const [paymentsExporting, setPaymentsExporting] = useState(false);
   const [invoiceModalOpen, setInvoiceModalOpen] = useState(false);
   const [editingInvoiceId, setEditingInvoiceId] = useState<string | undefined>();
+  const [pendingDraftDiscard, setPendingDraftDiscard] = useState<{ id: string; label: string } | null>(null);
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
   const [journalModalOpen, setJournalModalOpen] = useState(false);
   const [selectedInvoiceId, setSelectedInvoiceId] = useState<string | null>(null);
@@ -266,6 +268,20 @@ export function FinancePage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['finance-invoices'] });
       queryClient.invalidateQueries({ queryKey: ['finance-invoice-detail'] });
+    },
+  });
+
+  const discardInvoiceMutation = useMutation({
+    mutationFn: (id: string) => financeApi.deleteInvoiceDraft(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['invoices'] });
+      queryClient.invalidateQueries({ queryKey: ['finance-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['invoice-detail'] });
+      setDetailOpen(false);
+      setSelectedInvoiceId(null);
+      setInvoiceModalOpen(false);
+      setEditingInvoiceId(undefined);
+      setPendingDraftDiscard(null);
     },
   });
 
@@ -394,16 +410,30 @@ export function FinancePage() {
         return (
           <div className="flex flex-wrap items-center gap-1.5 justify-end" onClick={(e) => e.stopPropagation()}>
             {isDraft && canCreate && (
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => {
-                  setEditingInvoiceId(inv.id);
-                  setInvoiceModalOpen(true);
-                }}
-              >
-                Continue
-              </Button>
+              <>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => {
+                    setEditingInvoiceId(inv.id);
+                    setInvoiceModalOpen(true);
+                  }}
+                >
+                  Continue
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() =>
+                    setPendingDraftDiscard({
+                      id: inv.id,
+                      label: inv.invoiceNumber,
+                    })
+                  }
+                >
+                  Discard
+                </Button>
+              </>
             )}
             {!isDraft && (
             <Button
@@ -1404,6 +1434,36 @@ export function FinancePage() {
             )}
 
             <div className="flex flex-wrap justify-end gap-2 pt-4 border-t">
+              {invoiceDetail.status === 'DRAFT' && canCreate && (
+                <>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => {
+                      setDetailOpen(false);
+                      setEditingInvoiceId(invoiceDetail.id);
+                      setInvoiceModalOpen(true);
+                    }}
+                  >
+                    Continue
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    loading={discardInvoiceMutation.isPending}
+                    onClick={() =>
+                      setPendingDraftDiscard({
+                        id: invoiceDetail.id,
+                        label: invoiceDetail.invoiceNumber,
+                      })
+                    }
+                  >
+                    Discard draft
+                  </Button>
+                </>
+              )}
+              {invoiceDetail.status !== 'DRAFT' && (
+              <>
               <Button
                 variant="secondary"
                 size="sm"
@@ -1434,6 +1494,8 @@ export function FinancePage() {
                 >
                   Submit to eTIMS
                 </Button>
+              )}
+              </>
               )}
             </div>
           </div>
@@ -1481,6 +1543,23 @@ export function FinancePage() {
           </div>
         )}
       </Modal>
+
+      <ConfirmDialog
+        open={!!pendingDraftDiscard}
+        title="Discard invoice draft?"
+        message={
+          pendingDraftDiscard
+            ? `Permanently delete draft ${pendingDraftDiscard.label}? This cannot be undone.`
+            : ''
+        }
+        confirmLabel="Discard draft"
+        loading={discardInvoiceMutation.isPending}
+        onCancel={() => setPendingDraftDiscard(null)}
+        onConfirm={() => {
+          if (!pendingDraftDiscard) return;
+          discardInvoiceMutation.mutate(pendingDraftDiscard.id);
+        }}
+      />
     </div>
   );
 }

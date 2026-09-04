@@ -38,7 +38,7 @@ export function MachineForm({ onSuccess, onCancel }: MachineFormProps) {
     defaultValues: machineDefaultValues,
   });
 
-  const { draftSavedAt, draftRestored, clearDraft } = useModuleFormDraft({
+  const { draftSavedAt, draftRestored, clearDraft, discardDraft } = useModuleFormDraft({
     moduleKey: FORM_DRAFT_MODULES.machine,
     watch,
     getValues,
@@ -64,7 +64,7 @@ export function MachineForm({ onSuccess, onCancel }: MachineFormProps) {
 
   return (
     <form onSubmit={handleSubmit((data) => mutation.mutate(data))} className="space-y-4">
-      <FormDraftNotice draftSavedAt={draftSavedAt} draftRestored={draftRestored} />
+      <FormDraftNotice draftSavedAt={draftSavedAt} draftRestored={draftRestored} onDiscard={discardDraft} />
       {mutation.isError && (
         <div className="p-3 rounded-lg bg-red-50 text-red-700 text-sm">Failed to add machine. Code may already exist.</div>
       )}

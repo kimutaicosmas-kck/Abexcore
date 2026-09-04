@@ -69,7 +69,7 @@ export function PurchaseOrderForm({ onSuccess, onCancel }: PurchaseOrderFormProp
     defaultValues: purchaseOrderDefaultValues,
   });
 
-  const { draftSavedAt, draftRestored, clearDraft } = useModuleFormDraft({
+  const { draftSavedAt, draftRestored, clearDraft, discardDraft } = useModuleFormDraft({
     moduleKey: FORM_DRAFT_MODULES.purchaseOrder,
     watch,
     getValues,
@@ -213,7 +213,7 @@ export function PurchaseOrderForm({ onSuccess, onCancel }: PurchaseOrderFormProp
 
   return (
     <form onSubmit={handleSubmit((data) => mutation.mutate(data))} className="space-y-4">
-      <FormDraftNotice draftSavedAt={draftSavedAt} draftRestored={draftRestored} />
+      <FormDraftNotice draftSavedAt={draftSavedAt} draftRestored={draftRestored} onDiscard={discardDraft} />
       {mutation.isError && (
         <div className="p-3 rounded-lg bg-red-50 text-red-700 text-sm">
           Failed to create purchase order. Please check all fields.

@@ -79,7 +79,7 @@ export function SalesOrderForm({ onSuccess, onCancel }: SalesOrderFormProps) {
     defaultValues: salesOrderDefaultValues,
   });
 
-  const { draftSavedAt, draftRestored, clearDraft } = useModuleFormDraft({
+  const { draftSavedAt, draftRestored, clearDraft, discardDraft } = useModuleFormDraft({
     moduleKey: FORM_DRAFT_MODULES.salesOrder,
     watch,
     getValues,
@@ -252,7 +252,7 @@ export function SalesOrderForm({ onSuccess, onCancel }: SalesOrderFormProps) {
           </div>
         }
       >
-      <FormDraftNotice draftSavedAt={draftSavedAt} draftRestored={draftRestored} />
+      <FormDraftNotice draftSavedAt={draftSavedAt} draftRestored={draftRestored} onDiscard={discardDraft} />
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {canAssignSalesPerson && (
           <Select

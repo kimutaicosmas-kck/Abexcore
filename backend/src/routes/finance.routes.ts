@@ -669,6 +669,36 @@ router.patch(
   })
 );
 
+router.delete(
+  '/invoices/:id/draft',
+  authorize('finance:create'),
+  auditLog('finance', 'delete', 'invoice'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const id = getParam(req.params.id);
+    const existing = await prisma.invoice.findUnique({
+      where: { id },
+      include: {
+        payments: { select: { id: true }, take: 1 },
+        paymentAllocations: { select: { id: true }, take: 1 },
+      },
+    });
+    if (!existing) throw new AppError('Invoice not found', 404);
+    if (existing.status !== 'DRAFT') {
+      throw new AppError('Only draft invoices can be discarded', 400);
+    }
+    if (existing.payments.length > 0 || existing.paymentAllocations.length > 0) {
+      throw new AppError('Cannot discard an invoice that has payments recorded', 400);
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.invoiceItem.deleteMany({ where: { invoiceId: id } });
+      await tx.invoice.delete({ where: { id } });
+    });
+
+    res.json({ success: true });
+  })
+);
+
 router.post(
   '/invoices/:id/finalize',
   authorize('finance:create'),

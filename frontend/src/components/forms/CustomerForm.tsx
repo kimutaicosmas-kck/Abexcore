@@ -112,7 +112,7 @@ export function CustomerForm({ customer, onSuccess, onCancel }: CustomerFormProp
       : customerDefaultValues,
   });
 
-  const { draftSavedAt, draftRestored, clearDraft } = useModuleFormDraft({
+  const { draftSavedAt, draftRestored, clearDraft, discardDraft } = useModuleFormDraft({
     moduleKey: FORM_DRAFT_MODULES.customer,
     watch,
     getValues,
@@ -172,7 +172,7 @@ export function CustomerForm({ customer, onSuccess, onCancel }: CustomerFormProp
           />
         }
       >
-      <FormDraftNotice draftSavedAt={draftSavedAt} draftRestored={draftRestored} />
+      <FormDraftNotice draftSavedAt={draftSavedAt} draftRestored={draftRestored} onDiscard={discardDraft} />
       {mutation.isError && (
         <div className="p-3 rounded-lg bg-red-50 text-red-700 text-sm">{getApiError(mutation.error)}</div>
       )}

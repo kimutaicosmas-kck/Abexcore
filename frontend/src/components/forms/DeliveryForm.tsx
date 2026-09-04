@@ -172,7 +172,7 @@ export function DeliveryForm({ onSuccess, onCancel, initialOrderIds = [] }: Deli
     defaultValues: deliveryDefaultValues,
   });
 
-  const { draftSavedAt, draftRestored, clearDraft } = useModuleFormDraft({
+  const { draftSavedAt, draftRestored, clearDraft, discardDraft } = useModuleFormDraft({
     moduleKey: FORM_DRAFT_MODULES.delivery,
     watch,
     getValues,
@@ -349,7 +349,7 @@ export function DeliveryForm({ onSuccess, onCancel, initialOrderIds = [] }: Deli
       })}
       className="space-y-4"
     >
-      <FormDraftNotice draftSavedAt={draftSavedAt} draftRestored={draftRestored} />
+      <FormDraftNotice draftSavedAt={draftSavedAt} draftRestored={draftRestored} onDiscard={discardDraft} />
       {(mutation.isError || formError) && (
         <Alert variant="error">
           {formError || getApiErrorMessage(mutation.error)}

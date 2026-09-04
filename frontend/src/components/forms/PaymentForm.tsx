@@ -147,7 +147,7 @@ export function PaymentForm({ onSuccess, onCancel, invoiceId: preselectedId }: P
     defaultValues: paymentDefaultValues,
   });
 
-  const { draftSavedAt, draftRestored, clearDraft } = useModuleFormDraft({
+  const { draftSavedAt, draftRestored, clearDraft, discardDraft } = useModuleFormDraft({
     moduleKey: FORM_DRAFT_MODULES.payment,
     watch,
     getValues,
@@ -247,7 +247,7 @@ export function PaymentForm({ onSuccess, onCancel, invoiceId: preselectedId }: P
       })}
       className="space-y-4"
     >
-      <FormDraftNotice draftSavedAt={draftSavedAt} draftRestored={draftRestored} />
+      <FormDraftNotice draftSavedAt={draftSavedAt} draftRestored={draftRestored} onDiscard={discardDraft} />
       {mutation.isError && (
         <Alert variant="error">{getApiErrorMessage(mutation.error)}</Alert>
       )}

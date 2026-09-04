@@ -34,6 +34,7 @@ import { SalesOrderService, StockShortage } from '../services/sales-order.servic
 import { ProductionService } from '../services/production.service';
 import { PosCheckoutService } from '../services/pos-checkout.service';
 import { AccountingService } from '../services/accounting.service';
+import { isSalesOrderReassignableToday } from '../utils/salesDate';
 import { salesPersonOrderFilter } from '../services/my-sales.service';
 import { NotificationService } from '../services/notification.service';
 import { injectTenantData, requireTenantId } from '../utils/tenant';
@@ -532,13 +533,22 @@ router.patch(
         salesPersonId: true,
         createdById: true,
         customerId: true,
+        orderDate: true,
+        requiredDate: true,
       },
     });
     if (!existing) throw new AppError('Sales order not found', 404);
     assertSalesBookOrderAccess(req.user!.roleName, req.user!.id, existing);
 
-    if (['DELIVERED', 'COMPLETED', 'CANCELLED'].includes(existing.status)) {
-      throw new AppError('Cannot reassign a closed or cancelled sales order', 400);
+    if (existing.status === 'CANCELLED') {
+      throw new AppError('Cannot reassign a cancelled sales order', 400);
+    }
+
+    if (!isSalesOrderReassignableToday(existing)) {
+      throw new AppError(
+        'Sales person can only be reassigned on the order sale date (before midnight). Yesterday and older orders are locked.',
+        400
+      );
     }
 
     if (salesPersonId) {
@@ -1076,6 +1086,33 @@ router.patch(
     });
 
     res.json({ success: true, data: quotation });
+  })
+);
+
+router.delete(
+  '/quotations/:id/draft',
+  authorize('sales:create'),
+  auditLog('sales', 'delete', 'sales_quotation'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const id = getParam(req.params.id);
+    const existing = await prisma.salesQuotation.findUnique({
+      where: { id },
+      include: { salesOrders: { select: { id: true } } },
+    });
+    if (!existing) throw new AppError('Quotation not found', 404);
+    if (existing.status !== 'DRAFT') {
+      throw new AppError('Only draft quotations can be discarded', 400);
+    }
+    if (existing.salesOrders.length > 0) {
+      throw new AppError('Quotation has already been converted', 400);
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.quotationItem.deleteMany({ where: { quotationId: id } });
+      await tx.salesQuotation.delete({ where: { id } });
+    });
+
+    res.json({ success: true });
   })
 );
 

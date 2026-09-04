@@ -57,7 +57,7 @@ export function ProductionOrderForm({ onSuccess, onCancel }: ProductionOrderForm
     defaultValues: productionOrderDefaultValues,
   });
 
-  const { draftSavedAt, draftRestored, clearDraft } = useModuleFormDraft({
+  const { draftSavedAt, draftRestored, clearDraft, discardDraft } = useModuleFormDraft({
     moduleKey: FORM_DRAFT_MODULES.productionOrder,
     watch,
     getValues,
@@ -109,7 +109,7 @@ export function ProductionOrderForm({ onSuccess, onCancel }: ProductionOrderForm
 
   return (
     <form onSubmit={handleSubmit((data) => mutation.mutate(data))} className="space-y-4">
-      <FormDraftNotice draftSavedAt={draftSavedAt} draftRestored={draftRestored} />
+      <FormDraftNotice draftSavedAt={draftSavedAt} draftRestored={draftRestored} onDiscard={discardDraft} />
       {mutation.isError && (
         <div className="p-3 rounded-lg bg-red-50 text-red-700 text-sm">
           Failed to create production order. Please try again.

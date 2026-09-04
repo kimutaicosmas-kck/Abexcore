@@ -10,6 +10,7 @@ import { Customer, SalesQuotation } from '../../types';
 import { useAuth, useVatRate } from '../../contexts/AuthContext';
 import { isSalesBookOwner } from '../../utils/salesTargets';
 import { ProductSearchSelect } from './ProductSearchSelect';
+import { FormDraftNotice } from './FormDraftNotice';
 import {
   readStoredDraftId,
   useDocumentDraftAutosave,
@@ -80,6 +81,9 @@ export function QuotationForm({ onSuccess, onCancel, draftId: initialDraftId }: 
     () => initialDraftId || readStoredDraftId(QUOTATION_DRAFT_STORAGE_KEY)
   );
   const [draftSavedAt, setDraftSavedAt] = useState<Date | null>(null);
+  const [draftRestored, setDraftRestored] = useState(Boolean(initialDraftId));
+  const [draftDiscarded, setDraftDiscarded] = useState(false);
+  const [discarding, setDiscarding] = useState(false);
   const [customerSearch, setCustomerSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [customerListOpen, setCustomerListOpen] = useState(false);
@@ -133,6 +137,7 @@ export function QuotationForm({ onSuccess, onCancel, draftId: initialDraftId }: 
         `${existingDraft.customer.code} — ${existingDraft.customer.name} (${vatTag})`
       );
     }
+    setDraftRestored(true);
   }, [existingDraft, reset]);
 
   const saveDraft = useCallback(
@@ -156,8 +161,32 @@ export function QuotationForm({ onSuccess, onCancel, draftId: initialDraftId }: 
     saveDraft,
     isMeaningful: quotationHasDraftContent,
     storageKey: QUOTATION_DRAFT_STORAGE_KEY,
-    enabled: !draftLoading,
+    enabled: !draftLoading && !draftDiscarded,
   });
+
+  const discardDraft = useCallback(async () => {
+    setDiscarding(true);
+    try {
+      if (draftId) {
+        await operationsApi.deleteQuotationDraft(draftId);
+      }
+      clearStoredDraft();
+      setDraftId(undefined);
+      setDraftSavedAt(null);
+      setDraftRestored(false);
+      setDraftDiscarded(true);
+      hydratedDraftIdRef.current = undefined;
+      reset({
+        salesPersonFilter: '',
+        items: [{ productId: '', quantity: 1, unitPrice: 0, discount: 0 }],
+      });
+      setCustomerSearch('');
+      queryClient.invalidateQueries({ queryKey: ['quotations'] });
+      onCancel();
+    } finally {
+      setDiscarding(false);
+    }
+  }, [clearStoredDraft, draftId, onCancel, queryClient, reset]);
 
   const { fields, append, remove } = useFieldArray({ control, name: 'items' });
   const items = watch('items');
@@ -291,11 +320,15 @@ export function QuotationForm({ onSuccess, onCancel, draftId: initialDraftId }: 
       >
       {draftLoading ? (
         <div className="p-3 rounded-lg bg-slate-50 text-slate-600 text-sm">Loading draft…</div>
-      ) : draftSavedAt ? (
-        <div className="p-3 rounded-lg bg-emerald-50 text-emerald-800 text-sm">
-          Draft saved — you can leave and continue later from the Drafts list.
-        </div>
-      ) : null}
+      ) : (
+        <FormDraftNotice
+          show={Boolean(draftId || draftSavedAt || draftRestored)}
+          draftSavedAt={draftSavedAt}
+          draftRestored={draftRestored}
+          onDiscard={discardDraft}
+          discarding={discarding}
+        />
+      )}
 
       {mutation.isError && (
         <div className="p-3 rounded-lg bg-red-50 text-red-700 text-sm">

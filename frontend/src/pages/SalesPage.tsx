@@ -50,6 +50,7 @@ import { SalesOrderReassignForm } from '../components/forms/SalesOrderReassignFo
 import { QuotationForm } from '../components/forms/QuotationForm';
 import { useAuth } from '../contexts/AuthContext';
 import { canManageSalesTargets, isSalesBookOwner } from '../utils/salesTargets';
+import { isSalesOrderReassignableToday } from '../utils/salesDate';
 import { SalesOrder, SalesQuotation, SalesStats } from '../types';
 
 const COMPANY_TABS = ['Sales Orders', 'Quotations'];
@@ -148,16 +149,17 @@ export function SalesPage() {
   const [statusFeedback, setStatusFeedback] = useState<{ text: string; variant: 'error' | 'info' } | null>(null);
   const [quoteFeedback, setQuoteFeedback] = useState<{ text: string; variant: 'error' | 'info' } | null>(null);
   const [pendingStatusChange, setPendingStatusChange] = useState<{ id: string; status: string; label: string } | null>(null);
+  const [pendingDraftDiscard, setPendingDraftDiscard] = useState<{ id: string; label: string } | null>(null);
   const [orderEditMode, setOrderEditMode] = useState(false);
   const [orderReassignOpen, setOrderReassignOpen] = useState(false);
   const [selectedDeliveryOrderIds, setSelectedDeliveryOrderIds] = useState<string[]>([]);
 
   const canCreate = hasPermission('sales:create');
   const canUpdate = hasPermission('sales:update');
-  const canReassignOrder = (status: string) =>
+  const canReassignOrder = (order: SalesOrder) =>
     !myBook
-    && !['DELIVERED', 'COMPLETED', 'CANCELLED'].includes(status)
-    && (canUpdate || canManageSalesTargets(user?.role?.name, hasPermission));
+    && (canUpdate || canManageSalesTargets(user?.role?.name, hasPermission))
+    && isSalesOrderReassignableToday(order);
   const canReadSales = hasPermission('sales:read');
   const canCreateDelivery = hasPermission('delivery:create');
 
@@ -291,6 +293,19 @@ export function SalesPage() {
       queryClient.invalidateQueries({ queryKey: ['customers'] });
       setQuoteDetailOpen(false);
       setSelectedQuote(null);
+    },
+    onError: (err) => setQuoteFeedback({ text: getApiErrorMessage(err), variant: 'error' }),
+  });
+
+  const discardQuotationMutation = useMutation({
+    mutationFn: (id: string) => operationsApi.deleteQuotationDraft(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['quotations'] });
+      setQuoteDetailOpen(false);
+      setSelectedQuote(null);
+      setQuotationModalOpen(false);
+      setEditingQuotationId(undefined);
+      setPendingDraftDiscard(null);
     },
     onError: (err) => setQuoteFeedback({ text: getApiErrorMessage(err), variant: 'error' }),
   });
@@ -554,17 +569,32 @@ export function SalesPage() {
         return (
           <div className="flex flex-wrap items-center gap-1.5 justify-end">
             {isDraft && canCreate && (
-              <Button
-                size="sm"
-                variant="secondary"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setEditingQuotationId(row.id as string);
-                  setQuotationModalOpen(true);
-                }}
-              >
-                Continue
-              </Button>
+              <>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setEditingQuotationId(row.id as string);
+                    setQuotationModalOpen(true);
+                  }}
+                >
+                  Continue
+                </Button>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setPendingDraftDiscard({
+                      id: row.id as string,
+                      label: row.quotationNo as string,
+                    });
+                  }}
+                >
+                  Discard
+                </Button>
+              </>
             )}
             {!isDraft && (
             <Button
@@ -974,7 +1004,7 @@ export function SalesPage() {
                         : '—';
                     })()}
                   </p>
-                  {canReassignOrder(activeOrder.status) && (
+                  {canReassignOrder(activeOrder) && (
                     <button
                       type="button"
                       className="text-xs font-medium text-primary-600 hover:text-primary-700 underline-offset-2 hover:underline"
@@ -1070,7 +1100,7 @@ export function SalesPage() {
                 ))}
               </Card>
             )}
-            {orderReassignOpen && canReassignOrder(activeOrder.status) && (
+            {orderReassignOpen && canReassignOrder(activeOrder) && (
               <SalesOrderReassignForm
                 order={activeOrder}
                 onSuccess={(updated) => {
@@ -1101,7 +1131,7 @@ export function SalesPage() {
                   Adjust order
                 </Button>
               )}
-              {canReassignOrder(activeOrder.status) && (
+              {canReassignOrder(activeOrder) && (
                 <Button
                   variant="secondary"
                   onClick={() => setOrderReassignOpen((open) => !open)}
@@ -1183,6 +1213,32 @@ export function SalesPage() {
               </Card>
             )}
             <div className="flex flex-wrap justify-end gap-2">
+              {selectedQuote.status === 'DRAFT' && canCreate && (
+                <>
+                  <Button
+                    variant="secondary"
+                    onClick={() => {
+                      setEditingQuotationId(selectedQuote.id);
+                      setQuotationModalOpen(true);
+                    }}
+                  >
+                    Continue
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    loading={discardQuotationMutation.isPending}
+                    onClick={() =>
+                      setPendingDraftDiscard({
+                        id: selectedQuote.id,
+                        label: selectedQuote.quotationNo,
+                      })
+                    }
+                  >
+                    Discard draft
+                  </Button>
+                </>
+              )}
+              {selectedQuote.status !== 'DRAFT' && (
               <Button
                 variant="secondary"
                 loading={downloadingQuoteId === selectedQuote.id}
@@ -1191,7 +1247,8 @@ export function SalesPage() {
                 <Download className="h-4 w-4 mr-1.5" />
                 Export PDF
               </Button>
-              {canCreate && !['APPROVED', 'CANCELLED', 'REJECTED'].includes(selectedQuote.status) && (
+              )}
+              {canCreate && !['APPROVED', 'CANCELLED', 'REJECTED', 'DRAFT'].includes(selectedQuote.status) && (
                 <Button loading={convertMutation.isPending} onClick={() => convertMutation.mutate(selectedQuote.id)}>
                   Convert to Sales Order
                 </Button>
@@ -1200,6 +1257,23 @@ export function SalesPage() {
           </div>
         )}
       </Modal>
+
+      <ConfirmDialog
+        open={!!pendingDraftDiscard}
+        title="Discard quotation draft?"
+        message={
+          pendingDraftDiscard
+            ? `Permanently delete draft ${pendingDraftDiscard.label}? This cannot be undone.`
+            : ''
+        }
+        confirmLabel="Discard draft"
+        loading={discardQuotationMutation.isPending}
+        onCancel={() => setPendingDraftDiscard(null)}
+        onConfirm={() => {
+          if (!pendingDraftDiscard) return;
+          discardQuotationMutation.mutate(pendingDraftDiscard.id);
+        }}
+      />
 
       <ConfirmDialog
         open={!!pendingStatusChange}

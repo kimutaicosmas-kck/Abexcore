@@ -51,6 +51,7 @@ export function SalesOrderReassignForm({ order, onSuccess }: SalesOrderReassignF
         <p className="text-sm font-medium text-slate-900">Reassign sales person</p>
         <p className="text-xs text-slate-500 mt-0.5">
           Move this order to the correct salesperson for reporting and commission tracking.
+          Only allowed on the order sale date — yesterday and older orders are locked after midnight.
         </p>
       </div>
       <Select

@@ -79,7 +79,7 @@ export function StockAdjustForm({ onSuccess, onCancel }: StockAdjustFormProps) {
     defaultValues: stockAdjustDefaultValues,
   });
 
-  const { draftSavedAt, draftRestored, clearDraft } = useModuleFormDraft({
+  const { draftSavedAt, draftRestored, clearDraft, discardDraft } = useModuleFormDraft({
     moduleKey: FORM_DRAFT_MODULES.stockAdjust,
     watch,
     getValues,
@@ -147,7 +147,7 @@ export function StockAdjustForm({ onSuccess, onCancel }: StockAdjustFormProps) {
 
   return (
     <form onSubmit={handleSubmit((data) => mutation.mutate(data))} className="space-y-4">
-      <FormDraftNotice draftSavedAt={draftSavedAt} draftRestored={draftRestored} />
+      <FormDraftNotice draftSavedAt={draftSavedAt} draftRestored={draftRestored} onDiscard={discardDraft} />
       {mutation.isError && (
         <div className="p-3 rounded-lg bg-red-50 text-red-700 text-sm">
           {(mutation.error as AxiosError<{ message?: string }>)?.response?.data?.message ||
