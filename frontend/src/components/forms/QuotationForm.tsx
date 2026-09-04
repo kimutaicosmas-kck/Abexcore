@@ -39,6 +39,8 @@ interface QuotationFormProps {
   onSuccess: () => void;
   onCancel: () => void;
   draftId?: string;
+  /** Edit a finalized quotation (PENDING / APPROVED, not yet converted). */
+  editId?: string;
 }
 
 function toQuotationDraftPayload(data: QuotationFormData) {
@@ -71,7 +73,7 @@ function formatValidUntil(value?: string | null) {
   return value.slice(0, 10);
 }
 
-export function QuotationForm({ onSuccess, onCancel, draftId: initialDraftId }: QuotationFormProps) {
+export function QuotationForm({ onSuccess, onCancel, draftId: initialDraftId, editId }: QuotationFormProps) {
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const myBook = isSalesBookOwner(user?.role?.name);
@@ -89,6 +91,8 @@ export function QuotationForm({ onSuccess, onCancel, draftId: initialDraftId }: 
   const [customerListOpen, setCustomerListOpen] = useState(false);
   const customerBoxRef = useRef<HTMLDivElement>(null);
   const hydratedDraftIdRef = useRef<string | undefined>(undefined);
+  const hydratedEditIdRef = useRef<string | undefined>(undefined);
+  const isEditingPending = Boolean(editId);
 
   useEffect(() => {
     const t = window.setTimeout(() => setDebouncedSearch(customerSearch.trim()), 250);
@@ -107,38 +111,57 @@ export function QuotationForm({ onSuccess, onCancel, draftId: initialDraftId }: 
   const { data: existingDraft, isLoading: draftLoading } = useQuery({
     queryKey: ['quotation-draft', draftId],
     queryFn: () => operationsApi.getQuotation(draftId!).then((r) => r.data.data as SalesQuotation),
-    enabled: Boolean(draftId),
+    enabled: Boolean(draftId) && !editId,
   });
+
+  const { data: existingEdit, isLoading: editLoading } = useQuery({
+    queryKey: ['quotation-edit', editId],
+    queryFn: () => operationsApi.getQuotation(editId!).then((r) => r.data.data as SalesQuotation),
+    enabled: Boolean(editId),
+  });
+
+  const hydrateQuotation = useCallback(
+    (quotation: SalesQuotation) => {
+      reset({
+        customerId: quotation.customer?.id || '',
+        salesPersonFilter: '',
+        validUntil: formatValidUntil(quotation.validUntil),
+        notes: quotation.notes || '',
+        items:
+          quotation.items.length > 0
+            ? quotation.items.map((item) => ({
+                productId: item.productId,
+                quantity: item.quantity,
+                unitPrice: Number(item.unitPrice),
+                discount: Number(item.discount || 0),
+              }))
+            : [{ productId: '', quantity: 1, unitPrice: 0, discount: 0 }],
+      });
+
+      if (quotation.customer) {
+        const vatTag = quotation.customer.vatStatus === 'NON_VAT' ? 'Non-VAT' : 'VAT';
+        setCustomerSearch(
+          `${quotation.customer.code} — ${quotation.customer.name} (${vatTag})`
+        );
+      }
+    },
+    [reset]
+  );
 
   useEffect(() => {
     if (!existingDraft || existingDraft.status !== 'DRAFT') return;
     if (hydratedDraftIdRef.current === existingDraft.id) return;
     hydratedDraftIdRef.current = existingDraft.id;
-
-    reset({
-      customerId: existingDraft.customer?.id || '',
-      salesPersonFilter: '',
-      validUntil: formatValidUntil(existingDraft.validUntil),
-      notes: existingDraft.notes || '',
-      items:
-        existingDraft.items.length > 0
-          ? existingDraft.items.map((item) => ({
-              productId: item.productId,
-              quantity: item.quantity,
-              unitPrice: Number(item.unitPrice),
-              discount: Number(item.discount || 0),
-            }))
-          : [{ productId: '', quantity: 1, unitPrice: 0, discount: 0 }],
-    });
-
-    if (existingDraft.customer) {
-      const vatTag = existingDraft.customer.vatStatus === 'NON_VAT' ? 'Non-VAT' : 'VAT';
-      setCustomerSearch(
-        `${existingDraft.customer.code} — ${existingDraft.customer.name} (${vatTag})`
-      );
-    }
+    hydrateQuotation(existingDraft);
     setDraftRestored(true);
-  }, [existingDraft, reset]);
+  }, [existingDraft, hydrateQuotation]);
+
+  useEffect(() => {
+    if (!existingEdit || !['PENDING', 'APPROVED'].includes(existingEdit.status)) return;
+    if (hydratedEditIdRef.current === existingEdit.id) return;
+    hydratedEditIdRef.current = existingEdit.id;
+    hydrateQuotation(existingEdit);
+  }, [existingEdit, hydrateQuotation]);
 
   const saveDraft = useCallback(
     async (data: QuotationFormData, currentDraftId?: string) => {
@@ -161,7 +184,7 @@ export function QuotationForm({ onSuccess, onCancel, draftId: initialDraftId }: 
     saveDraft,
     isMeaningful: quotationHasDraftContent,
     storageKey: QUOTATION_DRAFT_STORAGE_KEY,
-    enabled: !draftLoading && !draftDiscarded,
+    enabled: !draftLoading && !draftDiscarded && !isEditingPending,
   });
 
   const discardDraft = useCallback(async () => {
@@ -276,16 +299,24 @@ export function QuotationForm({ onSuccess, onCancel, draftId: initialDraftId }: 
   const mutation = useMutation({
     mutationFn: async (data: QuotationFormData) => {
       const { salesPersonFilter: _filter, ...payload } = data;
+      if (editId) {
+        return operationsApi.updateQuotation(editId, payload);
+      }
       if (draftId) {
         return operationsApi.finalizeQuotation(draftId, payload);
       }
       return operationsApi.createQuotation(payload);
     },
     onSuccess: () => {
-      clearStoredDraft();
-      setDraftId(undefined);
+      if (!isEditingPending) {
+        clearStoredDraft();
+        setDraftId(undefined);
+      }
       queryClient.invalidateQueries({ queryKey: ['quotations'] });
       queryClient.invalidateQueries({ queryKey: ['sales-stats'] });
+      if (editId) {
+        queryClient.invalidateQueries({ queryKey: ['quotation-edit', editId] });
+      }
       onSuccess();
     },
   });
@@ -304,8 +335,19 @@ export function QuotationForm({ onSuccess, onCancel, draftId: initialDraftId }: 
   };
 
   const handleCancel = () => {
+    if (isEditingPending) {
+      onCancel();
+      return;
+    }
     void saveDraft(getValues(), draftId).finally(onCancel);
   };
+
+  const formLoading = draftLoading || editLoading;
+  const submitLabel = isEditingPending
+    ? 'Save Changes'
+    : draftId
+      ? 'Save Quotation'
+      : 'Create Quotation';
 
   return (
     <form onSubmit={handleSubmit((data) => mutation.mutate(data))}>
@@ -313,26 +355,32 @@ export function QuotationForm({ onSuccess, onCancel, draftId: initialDraftId }: 
         footer={
           <FormActions
             onCancel={handleCancel}
-            submitLabel={draftId ? 'Save Quotation' : 'Create Quotation'}
+            submitLabel={submitLabel}
             loading={mutation.isPending}
           />
         }
       >
-      {draftLoading ? (
-        <div className="p-3 rounded-lg bg-slate-50 text-slate-600 text-sm">Loading draft…</div>
+      {formLoading ? (
+        <div className="p-3 rounded-lg bg-slate-50 text-slate-600 text-sm">
+          {isEditingPending ? 'Loading quotation…' : 'Loading draft…'}
+        </div>
       ) : (
-        <FormDraftNotice
-          show={Boolean(draftId || draftSavedAt || draftRestored)}
-          draftSavedAt={draftSavedAt}
-          draftRestored={draftRestored}
-          onDiscard={discardDraft}
-          discarding={discarding}
-        />
+        !isEditingPending && (
+          <FormDraftNotice
+            show={Boolean(draftId || draftSavedAt || draftRestored)}
+            draftSavedAt={draftSavedAt}
+            draftRestored={draftRestored}
+            onDiscard={discardDraft}
+            discarding={discarding}
+          />
+        )
       )}
 
       {mutation.isError && (
         <div className="p-3 rounded-lg bg-red-50 text-red-700 text-sm">
-          Failed to create quotation. Please check all fields.
+          {isEditingPending
+            ? 'Failed to update quotation. Please check all fields.'
+            : 'Failed to create quotation. Please check all fields.'}
         </div>
       )}
 

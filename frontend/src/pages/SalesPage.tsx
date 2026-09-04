@@ -142,6 +142,7 @@ export function SalesPage() {
   const [orderModalOpen, setOrderModalOpen] = useState(false);
   const [quotationModalOpen, setQuotationModalOpen] = useState(false);
   const [editingQuotationId, setEditingQuotationId] = useState<string | undefined>();
+  const [editingPendingQuoteId, setEditingPendingQuoteId] = useState<string | undefined>();
   const [selectedOrder, setSelectedOrder] = useState<SalesOrder | null>(null);
   const [selectedQuote, setSelectedQuote] = useState<SalesQuotation | null>(null);
   const [orderDetailOpen, setOrderDetailOpen] = useState(false);
@@ -156,6 +157,10 @@ export function SalesPage() {
 
   const canCreate = hasPermission('sales:create');
   const canUpdate = hasPermission('sales:update');
+  const canEditQuotation = (quote: SalesQuotation) =>
+    (canCreate || canUpdate)
+    && quote.status === 'PENDING'
+    && !(quote.salesOrders?.length);
   const canReassignOrder = (order: SalesOrder) =>
     !myBook
     && (canUpdate || canManageSalesTargets(user?.role?.name, hasPermission))
@@ -566,6 +571,7 @@ export function SalesPage() {
         const canConvert =
           canCreate && !['APPROVED', 'CANCELLED', 'REJECTED'].includes(status);
         const isDraft = status === 'DRAFT';
+        const canEdit = status === 'PENDING' && (canCreate || canUpdate);
         return (
           <div className="flex flex-wrap items-center gap-1.5 justify-end">
             {isDraft && canCreate && (
@@ -595,6 +601,20 @@ export function SalesPage() {
                   Discard
                 </Button>
               </>
+            )}
+            {canEdit && (
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setEditingPendingQuoteId(row.id as string);
+                  setQuotationModalOpen(true);
+                }}
+              >
+                <Pencil className="h-3.5 w-3.5 mr-1" />
+                Edit
+              </Button>
             )}
             {!isDraft && (
             <Button
@@ -946,19 +966,31 @@ export function SalesPage() {
         onClose={() => {
           setQuotationModalOpen(false);
           setEditingQuotationId(undefined);
+          setEditingPendingQuoteId(undefined);
         }}
-        title={editingQuotationId ? 'Continue Quotation' : 'New Quotation'}
+        title={
+          editingPendingQuoteId
+            ? 'Edit Quotation'
+            : editingQuotationId
+              ? 'Continue Quotation'
+              : 'New Quotation'
+        }
         size="xl"
       >
         <QuotationForm
-          draftId={editingQuotationId}
+          draftId={editingPendingQuoteId ? undefined : editingQuotationId}
+          editId={editingPendingQuoteId}
           onSuccess={() => {
             setQuotationModalOpen(false);
             setEditingQuotationId(undefined);
+            setEditingPendingQuoteId(undefined);
+            setQuoteDetailOpen(false);
+            setSelectedQuote(null);
           }}
           onCancel={() => {
             setQuotationModalOpen(false);
             setEditingQuotationId(undefined);
+            setEditingPendingQuoteId(undefined);
           }}
         />
       </Modal>
@@ -1247,6 +1279,18 @@ export function SalesPage() {
                 <Download className="h-4 w-4 mr-1.5" />
                 Export PDF
               </Button>
+              )}
+              {canEditQuotation(selectedQuote) && (
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    setEditingPendingQuoteId(selectedQuote.id);
+                    setQuotationModalOpen(true);
+                  }}
+                >
+                  <Pencil className="h-4 w-4 mr-1.5" />
+                  Edit quotation
+                </Button>
               )}
               {canCreate && !['APPROVED', 'CANCELLED', 'REJECTED', 'DRAFT'].includes(selectedQuote.status) && (
                 <Button loading={convertMutation.isPending} onClick={() => convertMutation.mutate(selectedQuote.id)}>

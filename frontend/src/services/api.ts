@@ -361,6 +361,7 @@ export const operationsApi = {
   updateQuotationDraft: (id: string, data: object) => api.patch(`/operations/quotations/${id}/draft`, data),
   deleteQuotationDraft: (id: string) => api.delete(`/operations/quotations/${id}/draft`),
   finalizeQuotation: (id: string, data: object) => api.post(`/operations/quotations/${id}/finalize`, data),
+  updateQuotation: (id: string, data: object) => api.patch(`/operations/quotations/${id}`, data),
   convertQuotation: (id: string) => api.post(`/operations/quotations/${id}/convert`),
   quotationPdfPath: (id: string) => `/operations/quotations/${id}/pdf`,
   salesOrderPdfPath: (id: string) => `/operations/orders/${id}/pdf`,

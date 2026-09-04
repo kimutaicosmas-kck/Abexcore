@@ -1188,6 +1188,80 @@ router.post(
   })
 );
 
+router.patch(
+  '/quotations/:id',
+  authorizeAny('sales:create', 'sales:update'),
+  validate(createQuotationSchema),
+  auditLog('sales', 'update', 'sales_quotation'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const id = getParam(req.params.id);
+    const existing = await prisma.salesQuotation.findUnique({
+      where: { id },
+      include: { salesOrders: { select: { id: true } } },
+    });
+    if (!existing) throw new AppError('Quotation not found', 404);
+    if (existing.status === 'DRAFT') {
+      throw new AppError('Use the draft endpoint to update draft quotations', 400);
+    }
+    if (!['PENDING', 'APPROVED'].includes(existing.status)) {
+      throw new AppError('This quotation cannot be edited', 400);
+    }
+    if (existing.salesOrders.length > 0) {
+      throw new AppError('Quotation has already been converted to a sales order', 400);
+    }
+
+    const { customerId, validUntil, notes, items } = req.body;
+    const customer = await prisma.customer.findFirst({
+      where: {
+        id: customerId,
+        deletedAt: null,
+        ...(isSalesBookOwner(req.user!.roleName)
+          ? { salesPersonId: req.user!.id }
+          : {}),
+      },
+      select: { id: true, vatStatus: true },
+    });
+    if (!customer) throw new AppError('Customer not found', 404);
+    const vatRate = await getCustomerVatRate(customer);
+
+    const gross = items.reduce(
+      (sum: number, item: { quantity: number; unitPrice: number; discount?: number }) =>
+        sum + item.quantity * item.unitPrice * (1 - (item.discount || 0) / 100),
+      0
+    );
+    const { subtotal, taxAmount, totalAmount } = splitInclusiveAmount(gross, vatRate);
+    const mappedItems = items.map(
+      (item: { productId: string; quantity: number; unitPrice: number; discount?: number }) => ({
+        ...item,
+        unitPrice: roundMoney(item.unitPrice),
+        totalPrice: roundMoney(
+          item.quantity * item.unitPrice * (1 - (item.discount || 0) / 100)
+        ),
+      })
+    );
+
+    const quotation = await prisma.$transaction(async (tx) => {
+      await tx.quotationItem.deleteMany({ where: { quotationId: id } });
+      return tx.salesQuotation.update({
+        where: { id },
+        data: {
+          customerId,
+          validUntil: validUntil ? new Date(validUntil) : null,
+          notes,
+          subtotal,
+          taxAmount,
+          totalAmount,
+          status: existing.status,
+          items: { create: mappedItems },
+        },
+        include: { customer: true, items: { include: { product: true } } },
+      });
+    });
+
+    res.json({ success: true, data: quotation });
+  })
+);
+
 router.post(
   '/quotations',
   authorize('sales:create'),
