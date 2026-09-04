@@ -6,6 +6,8 @@ import { crmApi, customersApi } from '../../services/api';
 import { Button, Input, Select, Textarea } from '../ui';
 import { Customer } from '../../types';
 import { ProductSearchSelect } from './ProductSearchSelect';
+import { FORM_DRAFT_MODULES, useModuleFormDraft } from '../../hooks/useModuleFormDraft';
+import { FormDraftNotice } from './FormDraftNotice';
 
 const warrantySchema = z.object({
   customerId: z.string().min(1, 'Customer is required'),
@@ -17,6 +19,14 @@ const warrantySchema = z.object({
 });
 
 type WarrantyFormData = z.infer<typeof warrantySchema>;
+
+const warrantyDefaultValues: WarrantyFormData = {
+  customerId: '',
+  productId: '',
+  startDate: new Date().toISOString().slice(0, 10),
+  endDate: '',
+  notes: '',
+};
 
 interface WarrantyFormProps {
   onSuccess: () => void;
@@ -36,15 +46,23 @@ export function WarrantyForm({ onSuccess, onCancel }: WarrantyFormProps) {
     ...(customersData || []).map((c) => ({ value: c.id, label: `${c.code} - ${c.name}` })),
   ];
 
-  const { register, control, handleSubmit, formState: { errors } } = useForm<WarrantyFormData>({
+  const { register, control, handleSubmit, watch, getValues, reset, formState: { errors } } = useForm<WarrantyFormData>({
     resolver: zodResolver(warrantySchema),
-    defaultValues: {
-      customerId: '',
-      productId: '',
-      startDate: new Date().toISOString().slice(0, 10),
-      endDate: '',
-      notes: '',
-    },
+    defaultValues: warrantyDefaultValues,
+  });
+
+  const { draftSavedAt, draftRestored, clearDraft } = useModuleFormDraft({
+    moduleKey: FORM_DRAFT_MODULES.warranty,
+    watch,
+    getValues,
+    reset,
+    defaultValues: warrantyDefaultValues,
+    isMeaningful: (data) =>
+      Boolean(data.customerId) ||
+      Boolean(data.productId) ||
+      Boolean(data.serialNumber?.trim()) ||
+      Boolean(data.endDate) ||
+      Boolean(data.notes?.trim()),
   });
 
   const mutation = useMutation({
@@ -55,6 +73,7 @@ export function WarrantyForm({ onSuccess, onCancel }: WarrantyFormProps) {
         notes: data.notes || undefined,
       }),
     onSuccess: () => {
+      void clearDraft();
       queryClient.invalidateQueries({ queryKey: ['warranties'] });
       queryClient.invalidateQueries({ queryKey: ['crm-stats'] });
       onSuccess();
@@ -63,6 +82,7 @@ export function WarrantyForm({ onSuccess, onCancel }: WarrantyFormProps) {
 
   return (
     <form onSubmit={handleSubmit((data) => mutation.mutate(data))} className="space-y-4">
+      <FormDraftNotice draftSavedAt={draftSavedAt} draftRestored={draftRestored} />
       {mutation.isError && (
         <div className="p-3 rounded-lg bg-red-50 text-red-700 text-sm">
           Failed to register warranty. Please try again.

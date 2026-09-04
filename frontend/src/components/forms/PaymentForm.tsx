@@ -8,6 +8,8 @@ import { financeApi } from '../../services/api';
 import { Button, Input, Select, Alert, formatCurrency } from '../ui';
 import { getApiErrorMessage } from '../../utils/apiError';
 import { Invoice } from '../../types';
+import { FORM_DRAFT_MODULES, useModuleFormDraft } from '../../hooks/useModuleFormDraft';
+import { FormDraftNotice } from './FormDraftNotice';
 
 const paymentSchema = z
   .object({
@@ -22,6 +24,20 @@ const paymentSchema = z
 
 type PaymentFormData = z.infer<typeof paymentSchema>;
 
+function todayInput() {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+const paymentDefaultValues: PaymentFormData = {
+  paymentDate: todayInput(),
+  method: undefined,
+  reference: '',
+};
+
 const paymentMethodOptions = [
   { value: '', label: 'Select method...' },
   { value: 'CASH', label: 'Cash' },
@@ -31,14 +47,6 @@ const paymentMethodOptions = [
   { value: 'CARD', label: 'Card' },
   { value: 'CREDIT', label: 'Credit' },
 ];
-
-function todayInput() {
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
-}
 
 function invoiceBalance(inv: Invoice): number {
   if (inv.balanceDue != null) return Number(inv.balanceDue);
@@ -131,13 +139,31 @@ export function PaymentForm({ onSuccess, onCancel, invoiceId: preselectedId }: P
     register,
     handleSubmit,
     watch,
+    getValues,
+    reset,
     formState: { errors },
   } = useForm<PaymentFormData>({
     resolver: zodResolver(paymentSchema),
-    defaultValues: {
-      paymentDate: todayInput(),
-      method: undefined,
-      reference: '',
+    defaultValues: paymentDefaultValues,
+  });
+
+  const { draftSavedAt, draftRestored, clearDraft } = useModuleFormDraft({
+    moduleKey: FORM_DRAFT_MODULES.payment,
+    watch,
+    getValues,
+    reset,
+    defaultValues: paymentDefaultValues,
+    isMeaningful: (data) =>
+      Boolean(data.method) ||
+      Boolean(data.reference?.trim()) ||
+      Object.keys(selected).length > 0 ||
+      Boolean(invoiceSearch.trim()),
+    getUiState: () => ({ selected, invoiceSearch }),
+    onRestoreUi: (ui) => {
+      if (ui?.selected && typeof ui.selected === 'object') {
+        setSelected(ui.selected as Record<string, number>);
+      }
+      if (typeof ui?.invoiceSearch === 'string') setInvoiceSearch(ui.invoiceSearch);
     },
   });
 
@@ -194,6 +220,7 @@ export function PaymentForm({ onSuccess, onCancel, invoiceId: preselectedId }: P
       });
     },
     onSuccess: () => {
+      void clearDraft();
       queryClient.invalidateQueries({ queryKey: ['invoices'] });
       queryClient.invalidateQueries({ queryKey: ['invoice-detail'] });
       queryClient.invalidateQueries({ queryKey: ['invoices-for-payment'] });
@@ -220,6 +247,7 @@ export function PaymentForm({ onSuccess, onCancel, invoiceId: preselectedId }: P
       })}
       className="space-y-4"
     >
+      <FormDraftNotice draftSavedAt={draftSavedAt} draftRestored={draftRestored} />
       {mutation.isError && (
         <Alert variant="error">{getApiErrorMessage(mutation.error)}</Alert>
       )}

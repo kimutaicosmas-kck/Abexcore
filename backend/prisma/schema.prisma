@@ -67,6 +67,7 @@ enum QualityStatus {
 }
 
 enum PaymentStatus {
+  DRAFT
   UNPAID
   PARTIAL
   PAID
@@ -417,6 +418,9 @@ model User {
   approvalsDecided       ApprovalRequest[] @relation("ApprovalDecidedBy")
   expensesSubmitted      Expense[] @relation("ExpenseSubmittedBy")
   expensesApproved       Expense[] @relation("ExpenseApprovedBy")
+  quotationsCreated      SalesQuotation[] @relation("QuotationCreator")
+  invoicesCreated        Invoice[] @relation("InvoiceCreator")
+  formDrafts             FormDraft[]
 
   @@unique([companyId, email])
   @@map("users")
@@ -1149,21 +1153,24 @@ model SalesQuotation {
   id           String         @id @default(uuid())
   companyId    String         @map("company_id")
   quotationNo  String         @map("quotation_no")
-  customerId   String         @map("customer_id")
+  customerId   String?        @map("customer_id")
   validUntil   DateTime?      @map("valid_until")
   status       ApprovalStatus @default(DRAFT)
   subtotal     Decimal        @default(0) @db.Decimal(15, 2)
   taxAmount    Decimal        @default(0) @map("tax_amount") @db.Decimal(15, 2)
   totalAmount  Decimal        @default(0) @map("total_amount") @db.Decimal(15, 2)
   notes        String?        @db.Text
+  createdById  String?        @map("created_by_id")
   createdAt    DateTime       @default(now()) @map("created_at")
   updatedAt    DateTime       @updatedAt @map("updated_at")
 
-  customer   Customer        @relation(fields: [customerId], references: [id])
+  customer   Customer?       @relation(fields: [customerId], references: [id])
+  createdBy  User?           @relation("QuotationCreator", fields: [createdById], references: [id])
   items      QuotationItem[]
   salesOrders SalesOrder[]
 
   @@unique([companyId, quotationNo])
+  @@index([status])
   @@map("sales_quotations")
 }
 
@@ -1468,11 +1475,13 @@ model Invoice {
   etimsControlCode String?      @map("etims_control_code")
   etimsSubmittedAt DateTime?    @map("etims_submitted_at")
   etimsInvoiceNumber String?    @map("etims_invoice_number")
+  createdById     String?       @map("created_by_id")
   createdAt       DateTime      @default(now()) @map("created_at")
   updatedAt       DateTime       @updatedAt @map("updated_at")
 
   customer      Customer?      @relation(fields: [customerId], references: [id])
   supplier      Supplier?      @relation("SupplierInvoices", fields: [supplierId], references: [id])
+  createdBy     User?          @relation("InvoiceCreator", fields: [createdById], references: [id])
   salesOrder    SalesOrder?    @relation(fields: [salesOrderId], references: [id])
   purchaseOrder PurchaseOrder? @relation(fields: [purchaseOrderId], references: [id])
   deliveryNote  DeliveryNote?  @relation(fields: [deliveryNoteId], references: [id])
@@ -1912,4 +1921,21 @@ model Expense {
   @@index([companyId, status, expenseDate])
   @@index([categoryAccountId])
   @@map("expenses")
+}
+
+/** In-progress form state per user/module (quotation & invoice use entity drafts instead). */
+model FormDraft {
+  id        String   @id @default(uuid())
+  companyId String   @map("company_id")
+  userId    String   @map("user_id")
+  moduleKey String   @map("module_key") @db.VarChar(64)
+  payload   Json
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, userId, moduleKey])
+  @@index([companyId, userId])
+  @@map("form_drafts")
 }

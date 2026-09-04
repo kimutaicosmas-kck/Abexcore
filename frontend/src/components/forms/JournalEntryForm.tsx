@@ -7,6 +7,8 @@ import { financeApi } from '../../services/api';
 import { Button, Input, Select, formatCurrency } from '../ui';
 import { getApiErrorMessage } from '../../utils/apiError';
 import { Invoice } from '../../types';
+import { FORM_DRAFT_MODULES, useModuleFormDraft } from '../../hooks/useModuleFormDraft';
+import { FormDraftNotice } from './FormDraftNotice';
 
 const lineSchema = z.object({
   accountId: z.string().min(1, 'Account is required'),
@@ -31,6 +33,17 @@ const journalSchema = z.object({
 );
 
 type JournalFormData = z.infer<typeof journalSchema>;
+
+const journalEntryDefaultValues: JournalFormData = {
+  date: new Date().toISOString().slice(0, 10),
+  description: '',
+  reference: '',
+  invoiceId: '',
+  lines: [
+    { accountId: '', debit: 0, credit: 0, description: '' },
+    { accountId: '', debit: 0, credit: 0, description: '' },
+  ],
+};
 
 interface Account {
   id: string;
@@ -76,18 +89,29 @@ export function JournalEntryForm({ onSuccess, onCancel }: JournalEntryFormProps)
 
   const today = new Date().toISOString().slice(0, 10);
 
-  const { register, control, handleSubmit, watch, setValue, formState: { errors } } = useForm<JournalFormData>({
+  const { register, control, handleSubmit, watch, setValue, getValues, reset, formState: { errors } } = useForm<JournalFormData>({
     resolver: zodResolver(journalSchema),
-    defaultValues: {
-      date: today,
-      description: '',
-      reference: '',
-      invoiceId: '',
-      lines: [
-        { accountId: '', debit: 0, credit: 0, description: '' },
-        { accountId: '', debit: 0, credit: 0, description: '' },
-      ],
-    },
+    defaultValues: journalEntryDefaultValues,
+  });
+
+  const { draftSavedAt, draftRestored, clearDraft } = useModuleFormDraft({
+    moduleKey: FORM_DRAFT_MODULES.journalEntry,
+    watch,
+    getValues,
+    reset,
+    defaultValues: journalEntryDefaultValues,
+    isMeaningful: (data) =>
+      data.date !== today ||
+      Boolean(data.description?.trim()) ||
+      Boolean(data.reference?.trim()) ||
+      Boolean(data.invoiceId) ||
+      data.lines.some(
+        (line) =>
+          Boolean(line.accountId) ||
+          Number(line.debit) > 0 ||
+          Number(line.credit) > 0 ||
+          Boolean(line.description?.trim())
+      ),
   });
 
   const { fields, append, remove } = useFieldArray({ control, name: 'lines' });
@@ -129,6 +153,7 @@ export function JournalEntryForm({ onSuccess, onCancel }: JournalEntryFormProps)
         })),
       }),
     onSuccess: () => {
+      void clearDraft();
       queryClient.invalidateQueries({ queryKey: ['journal-entries'] });
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
       queryClient.invalidateQueries({ queryKey: ['finance-stats'] });
@@ -138,6 +163,7 @@ export function JournalEntryForm({ onSuccess, onCancel }: JournalEntryFormProps)
 
   return (
     <form onSubmit={handleSubmit((data) => mutation.mutate(data))} className="space-y-4">
+      <FormDraftNotice draftSavedAt={draftSavedAt} draftRestored={draftRestored} />
       {mutation.isError && (
         <div className="p-3 rounded-lg bg-red-50 text-red-700 text-sm">
           {getApiErrorMessage(mutation.error)}

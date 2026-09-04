@@ -5,6 +5,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { crmApi, customersApi } from '../../services/api';
 import { Button, Input, Select, Textarea } from '../ui';
 import { Customer } from '../../types';
+import { FORM_DRAFT_MODULES, useModuleFormDraft } from '../../hooks/useModuleFormDraft';
+import { FormDraftNotice } from './FormDraftNotice';
 
 const complaintSchema = z.object({
   customerId: z.string().min(1, 'Customer is required'),
@@ -14,6 +16,13 @@ const complaintSchema = z.object({
 });
 
 type ComplaintFormData = z.infer<typeof complaintSchema>;
+
+const complaintDefaultValues: ComplaintFormData = {
+  customerId: '',
+  subject: '',
+  description: '',
+  priority: 'medium',
+};
 
 const priorityOptions = [
   { value: 'low', label: 'Low' },
@@ -40,14 +49,27 @@ export function ComplaintForm({ onSuccess, onCancel }: ComplaintFormProps) {
     ...(customersData || []).map((c) => ({ value: c.id, label: `${c.code} - ${c.name}` })),
   ];
 
-  const { register, handleSubmit, formState: { errors } } = useForm<ComplaintFormData>({
+  const { register, handleSubmit, watch, getValues, reset, formState: { errors } } = useForm<ComplaintFormData>({
     resolver: zodResolver(complaintSchema),
-    defaultValues: { customerId: '', priority: 'medium' },
+    defaultValues: complaintDefaultValues,
+  });
+
+  const { draftSavedAt, draftRestored, clearDraft } = useModuleFormDraft({
+    moduleKey: FORM_DRAFT_MODULES.complaint,
+    watch,
+    getValues,
+    reset,
+    defaultValues: complaintDefaultValues,
+    isMeaningful: (data) =>
+      Boolean(data.customerId) ||
+      Boolean(data.subject?.trim()) ||
+      Boolean(data.description?.trim()),
   });
 
   const mutation = useMutation({
     mutationFn: (data: ComplaintFormData) => crmApi.createComplaint(data),
     onSuccess: () => {
+      void clearDraft();
       queryClient.invalidateQueries({ queryKey: ['complaints'] });
       queryClient.invalidateQueries({ queryKey: ['crm-stats'] });
       onSuccess();
@@ -56,6 +78,7 @@ export function ComplaintForm({ onSuccess, onCancel }: ComplaintFormProps) {
 
   return (
     <form onSubmit={handleSubmit((data) => mutation.mutate(data))} className="space-y-4">
+      <FormDraftNotice draftSavedAt={draftSavedAt} draftRestored={draftRestored} />
       {mutation.isError && (
         <div className="p-3 rounded-lg bg-red-50 text-red-700 text-sm">
           Failed to create complaint. Please try again.

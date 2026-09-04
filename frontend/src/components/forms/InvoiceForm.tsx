@@ -1,3 +1,4 @@
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useFieldArray, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -6,8 +7,12 @@ import { Plus, Trash2 } from 'lucide-react';
 import { financeApi, customersApi, inventoryApi } from '../../services/api';
 import { Button, Input, Select, Alert, FormActions, ModalFormBody } from '../ui';
 import { getApiErrorMessage } from '../../utils/apiError';
-import { Customer, Supplier } from '../../types';
+import { Customer, Invoice, Supplier } from '../../types';
 import { useVatRate } from '../../contexts/AuthContext';
+import {
+  readStoredDraftId,
+  useDocumentDraftAutosave,
+} from '../../hooks/useDocumentDraftAutosave';
 
 const invoiceItemSchema = z.object({
   description: z.string().min(1, 'Description is required'),
@@ -34,13 +39,56 @@ const invoiceTypeOptions = [
   { value: 'DEBIT_NOTE', label: 'Debit Note' },
 ];
 
+const INVOICE_DRAFT_STORAGE_KEY = 'abexcore:invoice-draft-id';
+
 interface InvoiceFormProps {
   onSuccess: () => void;
   onCancel: () => void;
+  draftId?: string;
 }
 
-export function InvoiceForm({ onSuccess, onCancel }: InvoiceFormProps) {
+function toInvoiceDraftPayload(data: InvoiceFormData) {
+  const isCustomerType = data.type === 'SALES' || data.type === 'CREDIT_NOTE';
+  return {
+    type: data.type,
+    customerId: isCustomerType ? data.customerId || undefined : undefined,
+    supplierId: !isCustomerType ? data.supplierId || undefined : undefined,
+    dueDate: data.dueDate || undefined,
+    customerPoNumber: data.customerPoNumber || undefined,
+    notes: data.notes || undefined,
+    items: data.items
+      .filter((item) => item.description?.trim())
+      .map((item) => ({
+        description: item.description.trim(),
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+      })),
+  };
+}
+
+function invoiceHasDraftContent(data: InvoiceFormData) {
+  const isCustomerType = data.type === 'SALES' || data.type === 'CREDIT_NOTE';
+  return (
+    (isCustomerType ? Boolean(data.customerId) : Boolean(data.supplierId)) ||
+    data.items.some((item) => Boolean(item.description?.trim())) ||
+    Boolean(data.notes?.trim()) ||
+    Boolean(data.dueDate) ||
+    Boolean(data.customerPoNumber?.trim())
+  );
+}
+
+function formatDueDate(value?: string | null) {
+  if (!value) return '';
+  return value.slice(0, 10);
+}
+
+export function InvoiceForm({ onSuccess, onCancel, draftId: initialDraftId }: InvoiceFormProps) {
   const queryClient = useQueryClient();
+  const [draftId, setDraftId] = useState(
+    () => initialDraftId || readStoredDraftId(INVOICE_DRAFT_STORAGE_KEY)
+  );
+  const [draftSavedAt, setDraftSavedAt] = useState<Date | null>(null);
+  const hydratedDraftIdRef = useRef<string | undefined>(undefined);
 
   const { data: customersData } = useQuery({
     queryKey: ['customers'],
@@ -65,12 +113,66 @@ export function InvoiceForm({ onSuccess, onCancel }: InvoiceFormProps) {
     ...(suppliersData || []).map((s) => ({ value: s.id, label: `${s.code} - ${s.name}` })),
   ];
 
-  const { register, control, handleSubmit, watch, formState: { errors } } = useForm<InvoiceFormData>({
-    resolver: zodResolver(invoiceSchema),
-    defaultValues: {
-      type: 'SALES',
-      items: [{ description: '', quantity: 1, unitPrice: 0 }],
+  const { register, control, handleSubmit, watch, reset, getValues, formState: { errors } } =
+    useForm<InvoiceFormData>({
+      resolver: zodResolver(invoiceSchema),
+      defaultValues: {
+        type: 'SALES',
+        items: [{ description: '', quantity: 1, unitPrice: 0 }],
+      },
+    });
+
+  const { data: existingDraft, isLoading: draftLoading } = useQuery({
+    queryKey: ['invoice-draft', draftId],
+    queryFn: () => financeApi.getInvoice(draftId!).then((r) => r.data.data as Invoice),
+    enabled: Boolean(draftId),
+  });
+
+  useEffect(() => {
+    if (!existingDraft || existingDraft.status !== 'DRAFT') return;
+    if (hydratedDraftIdRef.current === existingDraft.id) return;
+    hydratedDraftIdRef.current = existingDraft.id;
+
+    reset({
+      type: existingDraft.type as InvoiceFormData['type'],
+      customerId: existingDraft.customer?.id || '',
+      supplierId: existingDraft.supplier?.id || '',
+      dueDate: formatDueDate(existingDraft.dueDate),
+      customerPoNumber: existingDraft.customerPoNumber || '',
+      notes: existingDraft.notes || '',
+      items:
+        existingDraft.items && existingDraft.items.length > 0
+          ? existingDraft.items.map((item) => ({
+              description: item.description,
+              quantity: Number(item.quantity),
+              unitPrice: Number(item.unitPrice),
+            }))
+          : [{ description: '', quantity: 1, unitPrice: 0 }],
+    });
+  }, [existingDraft, reset]);
+
+  const saveDraft = useCallback(
+    async (data: InvoiceFormData, currentDraftId?: string) => {
+      const payload = toInvoiceDraftPayload(data);
+      const response = currentDraftId
+        ? await financeApi.updateInvoiceDraft(currentDraftId, payload)
+        : await financeApi.saveInvoiceDraft(payload);
+      setDraftSavedAt(new Date());
+      queryClient.invalidateQueries({ queryKey: ['invoices'] });
+      return { id: response.data.data.id as string };
     },
+    [queryClient]
+  );
+
+  const { clearStoredDraft } = useDocumentDraftAutosave({
+    watch,
+    getValues,
+    draftId,
+    onDraftId: setDraftId,
+    saveDraft,
+    isMeaningful: invoiceHasDraftContent,
+    storageKey: INVOICE_DRAFT_STORAGE_KEY,
+    enabled: !draftLoading,
   });
 
   const { fields, append, remove } = useFieldArray({ control, name: 'items' });
@@ -80,7 +182,7 @@ export function InvoiceForm({ onSuccess, onCancel }: InvoiceFormProps) {
   const isCustomerType = invoiceType === 'SALES' || invoiceType === 'CREDIT_NOTE';
 
   const companyVatRate = useVatRate();
-  const selectedCustomer = customersData?.find((c) => c.id === customerId);
+  const selectedCustomer = customersData?.find((c) => c.id === customerId) || existingDraft?.customer;
   const vatRate =
     isCustomerType && selectedCustomer?.vatStatus === 'NON_VAT' ? 0 : companyVatRate;
   const isVatCustomer = isCustomerType && selectedCustomer?.vatStatus === 'VAT';
@@ -88,8 +190,6 @@ export function InvoiceForm({ onSuccess, onCancel }: InvoiceFormProps) {
     (sum, item) => sum + (item.quantity || 0) * (item.unitPrice || 0),
     0
   );
-  // Sales: keyed prices include VAT. Purchases: VAT is added on top of cost.
-  // All amounts are whole KES (no decimals).
   const roundedKeyed = Math.round(keyedTotal);
   const taxAmount = isCustomerType
     ? vatRate > 0
@@ -100,32 +200,49 @@ export function InvoiceForm({ onSuccess, onCancel }: InvoiceFormProps) {
   const grandTotal = isCustomerType ? roundedKeyed : roundedKeyed + taxAmount;
 
   const mutation = useMutation({
-    mutationFn: (data: InvoiceFormData) => {
+    mutationFn: async (data: InvoiceFormData) => {
       const payload = {
         ...data,
         customerId: isCustomerType ? data.customerId || undefined : undefined,
         supplierId: !isCustomerType ? data.supplierId || undefined : undefined,
       };
+      if (draftId) {
+        return financeApi.finalizeInvoice(draftId, payload);
+      }
       return financeApi.createInvoice(payload);
     },
     onSuccess: () => {
+      clearStoredDraft();
+      setDraftId(undefined);
       queryClient.invalidateQueries({ queryKey: ['invoices'] });
       queryClient.invalidateQueries({ queryKey: ['finance-stats'] });
       onSuccess();
     },
   });
 
+  const handleCancel = () => {
+    void saveDraft(getValues(), draftId).finally(onCancel);
+  };
+
   return (
     <form onSubmit={handleSubmit((data) => mutation.mutate(data))}>
       <ModalFormBody
         footer={
           <FormActions
-            onCancel={onCancel}
-            submitLabel="Create Invoice"
+            onCancel={handleCancel}
+            submitLabel={draftId ? 'Save Invoice' : 'Create Invoice'}
             loading={mutation.isPending}
           />
         }
       >
+      {draftLoading ? (
+        <div className="p-3 rounded-lg bg-slate-50 text-slate-600 text-sm">Loading draft…</div>
+      ) : draftSavedAt ? (
+        <div className="p-3 rounded-lg bg-emerald-50 text-emerald-800 text-sm">
+          Draft saved — you can leave and continue later from the Drafts filter.
+        </div>
+      ) : null}
+
       {mutation.isError && (
         <Alert variant="error">{getApiErrorMessage(mutation.error)}</Alert>
       )}
@@ -230,3 +347,5 @@ export function InvoiceForm({ onSuccess, onCancel }: InvoiceFormProps) {
     </form>
   );
 }
+
+export { INVOICE_DRAFT_STORAGE_KEY };

@@ -3,7 +3,9 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { inventoryApi } from '../../services/api';
+import { FORM_DRAFT_MODULES, useModuleFormDraft } from '../../hooks/useModuleFormDraft';
 import { Button, Input, Select } from '../ui';
+import { FormDraftNotice } from './FormDraftNotice';
 
 const rfqSchema = z.object({
   dueDate: z.string().optional(),
@@ -12,6 +14,8 @@ const rfqSchema = z.object({
 });
 
 type RfqFormData = z.infer<typeof rfqSchema>;
+
+const rfqDefaultValues: RfqFormData = { supplierIds: [], notes: '' };
 
 interface RfqFormProps {
   requisitionId: string;
@@ -27,9 +31,21 @@ export function RfqForm({ requisitionId, onSuccess, onCancel }: RfqFormProps) {
     queryFn: () => inventoryApi.suppliers({ limit: 100 }).then((r) => r.data.data as { id: string; code: string; name: string }[]),
   });
 
-  const { register, handleSubmit, watch, setValue, formState: { errors } } = useForm<RfqFormData>({
+  const { register, handleSubmit, watch, setValue, getValues, reset, formState: { errors } } = useForm<RfqFormData>({
     resolver: zodResolver(rfqSchema),
-    defaultValues: { supplierIds: [], notes: '' },
+    defaultValues: rfqDefaultValues,
+  });
+
+  const { draftSavedAt, draftRestored, clearDraft } = useModuleFormDraft({
+    moduleKey: FORM_DRAFT_MODULES.rfq,
+    watch,
+    getValues,
+    reset,
+    defaultValues: rfqDefaultValues,
+    isMeaningful: (data) =>
+      Boolean(data.dueDate) ||
+      Boolean(data.notes?.trim()) ||
+      data.supplierIds.length > 0,
   });
 
   const selectedIds = watch('supplierIds') || [];
@@ -44,6 +60,7 @@ export function RfqForm({ requisitionId, onSuccess, onCancel }: RfqFormProps) {
   const mutation = useMutation({
     mutationFn: (data: RfqFormData) => inventoryApi.createRfq(requisitionId, data),
     onSuccess: () => {
+      void clearDraft();
       queryClient.invalidateQueries({ queryKey: ['rfqs'] });
       queryClient.invalidateQueries({ queryKey: ['requisitions'] });
       queryClient.invalidateQueries({ queryKey: ['procurement-stats'] });
@@ -53,6 +70,7 @@ export function RfqForm({ requisitionId, onSuccess, onCancel }: RfqFormProps) {
 
   return (
     <form onSubmit={handleSubmit((data) => mutation.mutate(data))} className="space-y-4">
+      <FormDraftNotice draftSavedAt={draftSavedAt} draftRestored={draftRestored} />
       {mutation.isError && (
         <div className="p-3 rounded-lg bg-red-50 text-red-700 text-sm">Failed to create RFQ.</div>
       )}

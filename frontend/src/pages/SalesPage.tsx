@@ -45,6 +45,7 @@ import {
 import { Modal } from '../components/ui/Modal';
 import { SalesOrderForm } from '../components/forms/SalesOrderForm';
 import { SalesOrderEditForm } from '../components/forms/SalesOrderEditForm';
+import { SalesOrderReassignForm } from '../components/forms/SalesOrderReassignForm';
 import { QuotationForm } from '../components/forms/QuotationForm';
 import { useAuth } from '../contexts/AuthContext';
 import { canManageSalesTargets, isSalesBookOwner } from '../utils/salesTargets';
@@ -138,6 +139,7 @@ export function SalesPage() {
   const [orderDate, setOrderDate] = useState(() => todayDateInput());
   const [orderModalOpen, setOrderModalOpen] = useState(false);
   const [quotationModalOpen, setQuotationModalOpen] = useState(false);
+  const [editingQuotationId, setEditingQuotationId] = useState<string | undefined>();
   const [selectedOrder, setSelectedOrder] = useState<SalesOrder | null>(null);
   const [selectedQuote, setSelectedQuote] = useState<SalesQuotation | null>(null);
   const [orderDetailOpen, setOrderDetailOpen] = useState(false);
@@ -540,8 +542,23 @@ export function SalesPage() {
         const status = row.status as string;
         const canConvert =
           canCreate && !['APPROVED', 'CANCELLED', 'REJECTED'].includes(status);
+        const isDraft = status === 'DRAFT';
         return (
           <div className="flex flex-wrap items-center gap-1.5 justify-end">
+            {isDraft && canCreate && (
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setEditingQuotationId(row.id as string);
+                  setQuotationModalOpen(true);
+                }}
+              >
+                Continue
+              </Button>
+            )}
+            {!isDraft && (
             <Button
               size="sm"
               variant="secondary"
@@ -554,7 +571,8 @@ export function SalesPage() {
               <Download className="h-3.5 w-3.5 mr-1" />
               PDF
             </Button>
-            {canConvert && (
+            )}
+            {canConvert && !isDraft && (
               <Button
                 size="sm"
                 loading={convertMutation.isPending}
@@ -885,8 +903,26 @@ export function SalesPage() {
         <SalesOrderForm onSuccess={() => setOrderModalOpen(false)} onCancel={() => setOrderModalOpen(false)} />
       </Modal>
 
-      <Modal open={quotationModalOpen} onClose={() => setQuotationModalOpen(false)} title="New Quotation" size="xl">
-        <QuotationForm onSuccess={() => setQuotationModalOpen(false)} onCancel={() => setQuotationModalOpen(false)} />
+      <Modal
+        open={quotationModalOpen}
+        onClose={() => {
+          setQuotationModalOpen(false);
+          setEditingQuotationId(undefined);
+        }}
+        title={editingQuotationId ? 'Continue Quotation' : 'New Quotation'}
+        size="xl"
+      >
+        <QuotationForm
+          draftId={editingQuotationId}
+          onSuccess={() => {
+            setQuotationModalOpen(false);
+            setEditingQuotationId(undefined);
+          }}
+          onCancel={() => {
+            setQuotationModalOpen(false);
+            setEditingQuotationId(undefined);
+          }}
+        />
       </Modal>
 
       <Modal
@@ -937,8 +973,21 @@ export function SalesPage() {
                 </p>
               </div>
               <div><p className="text-slate-500">Status</p><Badge variant={getStatusBadge(activeOrder.status)}>{activeOrder.status.replace(/_/g, ' ')}</Badge></div>
-              <div><p className="text-slate-500">Total</p><p className="font-semibold text-lg">{formatCurrency(Number(activeOrder.totalAmount))}</p></div>
+              <div><p className="text-slate-500">Total</p><p className="font-semibold text-lg">{formatCurrency(Number(activeOrder.totalAmount))}</p>              </div>
             </div>
+            {canUpdate && !myBook && !['DELIVERED', 'COMPLETED', 'CANCELLED'].includes(activeOrder.status) && (
+              <SalesOrderReassignForm
+                order={activeOrder}
+                onSuccess={(updated) => {
+                  setSelectedOrder(updated);
+                  setStatusFeedback({
+                    text: 'Sales person updated for this order.',
+                    variant: 'info',
+                  });
+                  queryClient.setQueryData(['sales-order', updated.id], updated);
+                }}
+              />
+            )}
             {activeOrder.items?.length > 0 && (
               <Card title={`Line Items (${activeOrder.items.length})`}>
                 {activeOrder.items.map((item, index) => {

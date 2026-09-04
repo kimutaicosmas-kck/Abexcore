@@ -6,6 +6,8 @@ import { deliveryApi } from '../../services/api';
 import { Alert, Button, Input, Select } from '../ui';
 import { VEHICLE_TYPE_FORM_OPTIONS } from '../../types';
 import { getApiErrorMessage } from '../../utils/apiError';
+import { FORM_DRAFT_MODULES, useModuleFormDraft } from '../../hooks/useModuleFormDraft';
+import { FormDraftNotice } from './FormDraftNotice';
 
 const vehicleSchema = z.object({
   registration: z.string().min(1, 'Registration is required'),
@@ -17,6 +19,12 @@ const vehicleSchema = z.object({
 });
 
 type VehicleFormData = z.infer<typeof vehicleSchema>;
+
+const vehicleDefaultValues: VehicleFormData = {
+  registration: '',
+  type: 'TRUCK',
+  isHired: false,
+};
 
 const CAPACITY_HINTS: Record<string, string> = {
   MOTORCYCLE: 'e.g. 50 kg',
@@ -32,9 +40,24 @@ interface VehicleFormProps {
 export function VehicleForm({ onSuccess, onCancel }: VehicleFormProps) {
   const queryClient = useQueryClient();
 
-  const { register, handleSubmit, watch, formState: { errors } } = useForm<VehicleFormData>({
+  const { register, handleSubmit, watch, getValues, reset, formState: { errors } } = useForm<VehicleFormData>({
     resolver: zodResolver(vehicleSchema),
-    defaultValues: { type: 'TRUCK', isHired: false },
+    defaultValues: vehicleDefaultValues,
+  });
+
+  const { draftSavedAt, draftRestored, clearDraft } = useModuleFormDraft({
+    moduleKey: FORM_DRAFT_MODULES.vehicle,
+    watch,
+    getValues,
+    reset,
+    defaultValues: vehicleDefaultValues,
+    isMeaningful: (data) =>
+      Boolean(data.registration?.trim()) ||
+      Boolean(data.make?.trim()) ||
+      Boolean(data.model?.trim()) ||
+      Boolean(data.capacity?.trim()) ||
+      data.type !== 'TRUCK' ||
+      Boolean(data.isHired),
   });
 
   const vehicleType = watch('type');
@@ -49,6 +72,7 @@ export function VehicleForm({ onSuccess, onCancel }: VehicleFormProps) {
         capacity: data.capacity?.trim() || undefined,
       }),
     onSuccess: () => {
+      void clearDraft();
       queryClient.invalidateQueries({ queryKey: ['vehicles'] });
       queryClient.invalidateQueries({ queryKey: ['delivery-stats'] });
       onSuccess();
@@ -57,6 +81,7 @@ export function VehicleForm({ onSuccess, onCancel }: VehicleFormProps) {
 
   return (
     <form onSubmit={handleSubmit((data) => mutation.mutate(data))} className="space-y-4">
+      <FormDraftNotice draftSavedAt={draftSavedAt} draftRestored={draftRestored} />
       {mutation.isError && (
         <Alert variant="error">{getApiErrorMessage(mutation.error)}</Alert>
       )}

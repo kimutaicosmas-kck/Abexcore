@@ -7,6 +7,8 @@ import { Plus, Trash2 } from 'lucide-react';
 import { inventoryApi } from '../../services/api';
 import { Button, Input, Select } from '../ui';
 import { RawMaterial, Supplier, PurchaseOrder } from '../../types';
+import { FORM_DRAFT_MODULES, useModuleFormDraft } from '../../hooks/useModuleFormDraft';
+import { FormDraftNotice } from './FormDraftNotice';
 
 const grItemSchema = z.object({
   rawMaterialId: z.string().optional(),
@@ -26,6 +28,13 @@ const goodsReceiptSchema = z.object({
 });
 
 type GoodsReceiptFormData = z.infer<typeof goodsReceiptSchema>;
+
+const goodsReceiptDefaultValues: GoodsReceiptFormData = {
+  supplierId: '',
+  warehouseId: '',
+  purchaseOrderId: '',
+  items: [{ rawMaterialId: '', quantity: 1, unitCost: 0 }],
+};
 
 interface Warehouse {
   id: string;
@@ -92,14 +101,29 @@ export function GoodsReceiptForm({ onSuccess, onCancel }: GoodsReceiptFormProps)
     ...(materialsData || []).map((m) => ({ value: m.id, label: `${m.code} - ${m.name}` })),
   ];
 
-  const { register, control, handleSubmit, setValue, formState: { errors } } = useForm<GoodsReceiptFormData>({
+  const { register, control, handleSubmit, watch, setValue, getValues, reset, formState: { errors } } = useForm<GoodsReceiptFormData>({
     resolver: zodResolver(goodsReceiptSchema),
-    defaultValues: {
-      supplierId: '',
-      warehouseId: '',
-      purchaseOrderId: '',
-      items: [{ rawMaterialId: '', quantity: 1, unitCost: 0 }],
-    },
+    defaultValues: goodsReceiptDefaultValues,
+  });
+
+  const { draftSavedAt, draftRestored, clearDraft } = useModuleFormDraft({
+    moduleKey: FORM_DRAFT_MODULES.goodsReceipt,
+    watch,
+    getValues,
+    reset,
+    defaultValues: goodsReceiptDefaultValues,
+    isMeaningful: (data) =>
+      Boolean(data.supplierId) ||
+      Boolean(data.purchaseOrderId) ||
+      Boolean(data.notes?.trim()) ||
+      data.items.some(
+        (item) =>
+          Boolean(item.rawMaterialId) ||
+          Boolean(item.batchNumber?.trim()) ||
+          Number(item.quantity) !== 1 ||
+          Number(item.unitCost) > 0 ||
+          Boolean(item.expiryDate)
+      ),
   });
 
   const { fields, append, remove } = useFieldArray({ control, name: 'items' });
@@ -136,6 +160,7 @@ export function GoodsReceiptForm({ onSuccess, onCancel }: GoodsReceiptFormProps)
       return inventoryApi.createGoodsReceipt(payload);
     },
     onSuccess: () => {
+      void clearDraft();
       queryClient.invalidateQueries({ queryKey: ['goods-receipts'] });
       queryClient.invalidateQueries({ queryKey: ['procurement-stats'] });
       queryClient.invalidateQueries({ queryKey: ['inventory-stats'] });
@@ -146,6 +171,7 @@ export function GoodsReceiptForm({ onSuccess, onCancel }: GoodsReceiptFormProps)
 
   return (
     <form onSubmit={handleSubmit((data) => mutation.mutate(data))} className="space-y-4">
+      <FormDraftNotice draftSavedAt={draftSavedAt} draftRestored={draftRestored} />
       {mutation.isError && (
         <div className="p-3 rounded-lg bg-red-50 text-red-700 text-sm">
           {(mutation.error as { response?: { data?: { message?: string } } })?.response?.data?.message ||

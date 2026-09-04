@@ -393,13 +393,27 @@ export interface SalesOrderItem {
 export interface ProductionOrder {
   id: string;
   orderNumber: string;
+  productId?: string;
   product: Product;
   quantity: number;
   completedQty: number;
+  rejectedQty?: number;
   status: string;
   priority: string;
+  estimatedCost?: number;
+  actualCost?: number;
   scheduledStart?: string;
+  notes?: string;
   machine?: { id: string; name: string };
+  consumption?: Array<{
+    id: string;
+    rawMaterialId: string;
+    plannedQty: number;
+    actualQty?: number;
+    wasteQty?: number;
+    unit?: string;
+    rawMaterial?: RawMaterial;
+  }>;
 }
 
 export interface PurchaseOrder {
@@ -617,7 +631,7 @@ export interface SalesStats {
 export interface SalesQuotation {
   id: string;
   quotationNo: string;
-  customer: Customer;
+  customer?: Customer;
   status: string;
   validUntil?: string;
   totalAmount: number;

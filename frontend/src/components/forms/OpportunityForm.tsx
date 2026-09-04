@@ -5,6 +5,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { crmApi, customersApi } from '../../services/api';
 import { Button, Input, Select, Textarea } from '../ui';
 import { Customer, Opportunity } from '../../types';
+import { FORM_DRAFT_MODULES, useModuleFormDraft } from '../../hooks/useModuleFormDraft';
+import { FormDraftNotice } from './FormDraftNotice';
 
 const opportunitySchema = z.object({
   customerId: z.string().min(1, 'Customer is required'),
@@ -17,6 +19,15 @@ const opportunitySchema = z.object({
 });
 
 type OpportunityFormData = z.infer<typeof opportunitySchema>;
+
+const opportunityDefaultValues: OpportunityFormData = {
+  customerId: '',
+  title: '',
+  value: 0,
+  stage: 'PROSPECTING',
+  probability: 25,
+  notes: '',
+};
 
 const stageOptions = [
   { value: 'PROSPECTING', label: 'Prospecting' },
@@ -47,7 +58,7 @@ export function OpportunityForm({ opportunity, onSuccess, onCancel }: Opportunit
     ...(customersData || []).map((c) => ({ value: c.id, label: `${c.code} - ${c.name}` })),
   ];
 
-  const { register, handleSubmit, formState: { errors } } = useForm<OpportunityFormData>({
+  const { register, handleSubmit, watch, getValues, reset, formState: { errors } } = useForm<OpportunityFormData>({
     resolver: zodResolver(opportunitySchema),
     defaultValues: opportunity
       ? {
@@ -59,7 +70,22 @@ export function OpportunityForm({ opportunity, onSuccess, onCancel }: Opportunit
           expectedCloseDate: opportunity.expectedCloseDate?.slice(0, 10) || '',
           notes: opportunity.notes || '',
         }
-      : { customerId: '', stage: 'PROSPECTING', probability: 25, notes: '' },
+      : opportunityDefaultValues,
+  });
+
+  const { draftSavedAt, draftRestored, clearDraft } = useModuleFormDraft({
+    moduleKey: FORM_DRAFT_MODULES.opportunity,
+    watch,
+    getValues,
+    reset,
+    defaultValues: opportunityDefaultValues,
+    enabled: !isEdit,
+    isMeaningful: (data) =>
+      Boolean(data.customerId) ||
+      Boolean(data.title?.trim()) ||
+      (data.value != null && data.value > 0) ||
+      Boolean(data.expectedCloseDate) ||
+      Boolean(data.notes?.trim()),
   });
 
   const mutation = useMutation({
@@ -75,6 +101,7 @@ export function OpportunityForm({ opportunity, onSuccess, onCancel }: Opportunit
         : crmApi.createOpportunity(payload);
     },
     onSuccess: () => {
+      void clearDraft();
       queryClient.invalidateQueries({ queryKey: ['opportunities'] });
       queryClient.invalidateQueries({ queryKey: ['crm-stats'] });
       onSuccess();
@@ -83,6 +110,7 @@ export function OpportunityForm({ opportunity, onSuccess, onCancel }: Opportunit
 
   return (
     <form onSubmit={handleSubmit((data) => mutation.mutate(data))} className="space-y-4">
+      <FormDraftNotice draftSavedAt={draftSavedAt} draftRestored={draftRestored} />
       {mutation.isError && (
         <div className="p-3 rounded-lg bg-red-50 text-red-700 text-sm">
           Failed to save opportunity. Please try again.

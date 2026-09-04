@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Controller, useFieldArray, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -6,10 +6,14 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Check, Plus, Search, Trash2, X } from 'lucide-react';
 import { operationsApi, customersApi } from '../../services/api';
 import { Button, Input, Select, FormActions, ModalFormBody } from '../ui';
-import { Customer } from '../../types';
+import { Customer, SalesQuotation } from '../../types';
 import { useAuth, useVatRate } from '../../contexts/AuthContext';
 import { isSalesBookOwner } from '../../utils/salesTargets';
 import { ProductSearchSelect } from './ProductSearchSelect';
+import {
+  readStoredDraftId,
+  useDocumentDraftAutosave,
+} from '../../hooks/useDocumentDraftAutosave';
 
 const quotationItemSchema = z.object({
   productId: z.string().min(1, 'Product required'),
@@ -28,33 +32,131 @@ const quotationSchema = z.object({
 
 type QuotationFormData = z.infer<typeof quotationSchema>;
 
+const QUOTATION_DRAFT_STORAGE_KEY = 'abexcore:quotation-draft-id';
+
 interface QuotationFormProps {
   onSuccess: () => void;
   onCancel: () => void;
+  draftId?: string;
 }
 
-export function QuotationForm({ onSuccess, onCancel }: QuotationFormProps) {
+function toQuotationDraftPayload(data: QuotationFormData) {
+  const { salesPersonFilter: _filter, customerId, validUntil, notes, items } = data;
+  return {
+    customerId: customerId || undefined,
+    validUntil: validUntil || undefined,
+    notes: notes || undefined,
+    items: items
+      .filter((item) => item.productId)
+      .map((item) => ({
+        productId: item.productId,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+        discount: item.discount,
+      })),
+  };
+}
+
+function quotationHasDraftContent(data: QuotationFormData) {
+  return (
+    Boolean(data.customerId) ||
+    data.items.some((item) => Boolean(item.productId)) ||
+    Boolean(data.notes?.trim())
+  );
+}
+
+function formatValidUntil(value?: string | null) {
+  if (!value) return '';
+  return value.slice(0, 10);
+}
+
+export function QuotationForm({ onSuccess, onCancel, draftId: initialDraftId }: QuotationFormProps) {
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const myBook = isSalesBookOwner(user?.role?.name);
   const canFilterBySalesPerson = !myBook;
 
+  const [draftId, setDraftId] = useState(
+    () => initialDraftId || readStoredDraftId(QUOTATION_DRAFT_STORAGE_KEY)
+  );
+  const [draftSavedAt, setDraftSavedAt] = useState<Date | null>(null);
   const [customerSearch, setCustomerSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [customerListOpen, setCustomerListOpen] = useState(false);
   const customerBoxRef = useRef<HTMLDivElement>(null);
+  const hydratedDraftIdRef = useRef<string | undefined>(undefined);
 
   useEffect(() => {
     const t = window.setTimeout(() => setDebouncedSearch(customerSearch.trim()), 250);
     return () => window.clearTimeout(t);
   }, [customerSearch]);
 
-  const { register, control, handleSubmit, watch, setValue, formState: { errors } } = useForm<QuotationFormData>({
-    resolver: zodResolver(quotationSchema),
-    defaultValues: {
+  const { register, control, handleSubmit, watch, setValue, reset, getValues, formState: { errors } } =
+    useForm<QuotationFormData>({
+      resolver: zodResolver(quotationSchema),
+      defaultValues: {
+        salesPersonFilter: '',
+        items: [{ productId: '', quantity: 1, unitPrice: 0, discount: 0 }],
+      },
+    });
+
+  const { data: existingDraft, isLoading: draftLoading } = useQuery({
+    queryKey: ['quotation-draft', draftId],
+    queryFn: () => operationsApi.getQuotation(draftId!).then((r) => r.data.data as SalesQuotation),
+    enabled: Boolean(draftId),
+  });
+
+  useEffect(() => {
+    if (!existingDraft || existingDraft.status !== 'DRAFT') return;
+    if (hydratedDraftIdRef.current === existingDraft.id) return;
+    hydratedDraftIdRef.current = existingDraft.id;
+
+    reset({
+      customerId: existingDraft.customer?.id || '',
       salesPersonFilter: '',
-      items: [{ productId: '', quantity: 1, unitPrice: 0, discount: 0 }],
+      validUntil: formatValidUntil(existingDraft.validUntil),
+      notes: existingDraft.notes || '',
+      items:
+        existingDraft.items.length > 0
+          ? existingDraft.items.map((item) => ({
+              productId: item.productId,
+              quantity: item.quantity,
+              unitPrice: Number(item.unitPrice),
+              discount: Number(item.discount || 0),
+            }))
+          : [{ productId: '', quantity: 1, unitPrice: 0, discount: 0 }],
+    });
+
+    if (existingDraft.customer) {
+      const vatTag = existingDraft.customer.vatStatus === 'NON_VAT' ? 'Non-VAT' : 'VAT';
+      setCustomerSearch(
+        `${existingDraft.customer.code} — ${existingDraft.customer.name} (${vatTag})`
+      );
+    }
+  }, [existingDraft, reset]);
+
+  const saveDraft = useCallback(
+    async (data: QuotationFormData, currentDraftId?: string) => {
+      const payload = toQuotationDraftPayload(data);
+      const response = currentDraftId
+        ? await operationsApi.updateQuotationDraft(currentDraftId, payload)
+        : await operationsApi.saveQuotationDraft(payload);
+      setDraftSavedAt(new Date());
+      queryClient.invalidateQueries({ queryKey: ['quotations'] });
+      return { id: response.data.data.id as string };
     },
+    [queryClient]
+  );
+
+  const { clearStoredDraft } = useDocumentDraftAutosave({
+    watch,
+    getValues,
+    draftId,
+    onDraftId: setDraftId,
+    saveDraft,
+    isMeaningful: quotationHasDraftContent,
+    storageKey: QUOTATION_DRAFT_STORAGE_KEY,
+    enabled: !draftLoading,
   });
 
   const { fields, append, remove } = useFieldArray({ control, name: 'items' });
@@ -125,6 +227,7 @@ export function QuotationForm({ onSuccess, onCancel }: QuotationFormProps) {
   const companyVatRate = useVatRate();
   const selectedCustomer =
     customersData?.find((c) => c.id === customerId) ||
+    existingDraft?.customer ||
     (customerId
       ? ({ id: customerId, name: customerSearch, code: '', vatStatus: 'VAT' } as Customer)
       : undefined);
@@ -142,11 +245,16 @@ export function QuotationForm({ onSuccess, onCancel }: QuotationFormProps) {
   const total = keyedTotal;
 
   const mutation = useMutation({
-    mutationFn: (data: QuotationFormData) => {
+    mutationFn: async (data: QuotationFormData) => {
       const { salesPersonFilter: _filter, ...payload } = data;
+      if (draftId) {
+        return operationsApi.finalizeQuotation(draftId, payload);
+      }
       return operationsApi.createQuotation(payload);
     },
     onSuccess: () => {
+      clearStoredDraft();
+      setDraftId(undefined);
       queryClient.invalidateQueries({ queryKey: ['quotations'] });
       queryClient.invalidateQueries({ queryKey: ['sales-stats'] });
       onSuccess();
@@ -166,17 +274,29 @@ export function QuotationForm({ onSuccess, onCancel }: QuotationFormProps) {
     setCustomerListOpen(true);
   };
 
+  const handleCancel = () => {
+    void saveDraft(getValues(), draftId).finally(onCancel);
+  };
+
   return (
     <form onSubmit={handleSubmit((data) => mutation.mutate(data))}>
       <ModalFormBody
         footer={
           <FormActions
-            onCancel={onCancel}
-            submitLabel="Create Quotation"
+            onCancel={handleCancel}
+            submitLabel={draftId ? 'Save Quotation' : 'Create Quotation'}
             loading={mutation.isPending}
           />
         }
       >
+      {draftLoading ? (
+        <div className="p-3 rounded-lg bg-slate-50 text-slate-600 text-sm">Loading draft…</div>
+      ) : draftSavedAt ? (
+        <div className="p-3 rounded-lg bg-emerald-50 text-emerald-800 text-sm">
+          Draft saved — you can leave and continue later from the Drafts list.
+        </div>
+      ) : null}
+
       {mutation.isError && (
         <div className="p-3 rounded-lg bg-red-50 text-red-700 text-sm">
           Failed to create quotation. Please check all fields.
@@ -369,3 +489,5 @@ export function QuotationForm({ onSuccess, onCancel }: QuotationFormProps) {
     </form>
   );
 }
+
+export { QUOTATION_DRAFT_STORAGE_KEY };

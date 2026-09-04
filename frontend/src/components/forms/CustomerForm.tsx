@@ -8,6 +8,8 @@ import { Input, Select, FormActions, ModalFormBody } from '../ui';
 import { Customer } from '../../types';
 import { useAuth } from '../../contexts/AuthContext';
 import { isSalesBookOwner } from '../../utils/salesTargets';
+import { FORM_DRAFT_MODULES, useModuleFormDraft } from '../../hooks/useModuleFormDraft';
+import { FormDraftNotice } from './FormDraftNotice';
 
 const customerSchema = z
   .object({
@@ -37,6 +39,17 @@ const customerSchema = z
   });
 
 type CustomerFormData = z.infer<typeof customerSchema>;
+
+const customerDefaultValues: CustomerFormData = {
+  code: '',
+  name: '',
+  type: 'DEALER',
+  vatStatus: 'NON_VAT',
+  creditLimit: 0,
+  paymentTerms: 30,
+  salesPersonId: '',
+  isActive: true,
+};
 
 const customerTypes = [
   { value: 'DEALER', label: 'Dealer' },
@@ -77,7 +90,7 @@ export function CustomerForm({ customer, onSuccess, onCancel }: CustomerFormProp
     enabled: canAssignSalesPerson,
   });
 
-  const { register, handleSubmit, watch, formState: { errors } } = useForm<CustomerFormData>({
+  const { register, handleSubmit, watch, getValues, reset, formState: { errors } } = useForm<CustomerFormData>({
     resolver: zodResolver(customerSchema),
     defaultValues: customer
       ? {
@@ -96,14 +109,26 @@ export function CustomerForm({ customer, onSuccess, onCancel }: CustomerFormProp
           notes: customer.notes || '',
           isActive: customer.isActive,
         }
-      : {
-          type: 'DEALER',
-          vatStatus: 'NON_VAT',
-          creditLimit: 0,
-          paymentTerms: 30,
-          salesPersonId: '',
-          isActive: true,
-        },
+      : customerDefaultValues,
+  });
+
+  const { draftSavedAt, draftRestored, clearDraft } = useModuleFormDraft({
+    moduleKey: FORM_DRAFT_MODULES.customer,
+    watch,
+    getValues,
+    reset,
+    defaultValues: customerDefaultValues,
+    enabled: !isEdit,
+    isMeaningful: (data) =>
+      Boolean(data.code?.trim()) ||
+      Boolean(data.name?.trim()) ||
+      Boolean(data.email?.trim()) ||
+      Boolean(data.phone?.trim()) ||
+      Boolean(data.address?.trim()) ||
+      Boolean(data.city?.trim()) ||
+      Boolean(data.taxPin?.trim()) ||
+      Boolean(data.notes?.trim()) ||
+      Boolean(data.salesPersonId),
   });
 
   const vatStatus = watch('vatStatus');
@@ -123,6 +148,7 @@ export function CustomerForm({ customer, onSuccess, onCancel }: CustomerFormProp
         : customersApi.create(payload);
     },
     onSuccess: () => {
+      void clearDraft();
       queryClient.invalidateQueries({ queryKey: ['customers'] });
       queryClient.invalidateQueries({ queryKey: ['crm-stats'] });
       if (isEdit) queryClient.invalidateQueries({ queryKey: ['customer-detail', customer!.id] });
@@ -146,6 +172,7 @@ export function CustomerForm({ customer, onSuccess, onCancel }: CustomerFormProp
           />
         }
       >
+      <FormDraftNotice draftSavedAt={draftSavedAt} draftRestored={draftRestored} />
       {mutation.isError && (
         <div className="p-3 rounded-lg bg-red-50 text-red-700 text-sm">{getApiError(mutation.error)}</div>
       )}

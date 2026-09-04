@@ -7,6 +7,8 @@ import { hrApi } from '../../services/api';
 import { Alert, Button, Input, Select, Textarea, formatCurrency } from '../ui';
 import { Employee } from '../../types';
 import { getApiErrorMessage } from '../../utils/apiError';
+import { FORM_DRAFT_MODULES, useModuleFormDraft } from '../../hooks/useModuleFormDraft';
+import { FormDraftNotice } from './FormDraftNotice';
 
 const advanceSchema = z
   .object({
@@ -83,21 +85,38 @@ export function SalaryAdvanceForm({
     })),
   ];
 
-  const { register, handleSubmit, watch, setValue, formState: { errors } } = useForm<AdvanceFormData>({
+  const advanceDefaultValues: AdvanceFormData = {
+    entryMode: defaultMode,
+    employeeId: defaultEmployeeId || '',
+    amount: 0,
+    monthlyDeduction: 0,
+    deductionStartDate: nextMonth,
+    disbursedAt: today,
+    alreadyRepaid: 0,
+    reason: '',
+    notes: '',
+    approveNow: true,
+    disburseNow: true,
+  };
+
+  const { register, handleSubmit, watch, setValue, getValues, reset, formState: { errors } } = useForm<AdvanceFormData>({
     resolver: zodResolver(advanceSchema),
-    defaultValues: {
-      entryMode: defaultMode,
-      employeeId: defaultEmployeeId || '',
-      amount: undefined,
-      monthlyDeduction: undefined,
-      deductionStartDate: nextMonth,
-      disbursedAt: today,
-      alreadyRepaid: 0,
-      reason: '',
-      notes: '',
-      approveNow: true,
-      disburseNow: true,
-    },
+    defaultValues: advanceDefaultValues,
+  });
+
+  const { draftSavedAt, draftRestored, clearDraft } = useModuleFormDraft({
+    moduleKey: FORM_DRAFT_MODULES.salaryAdvance,
+    watch,
+    getValues,
+    reset,
+    defaultValues: advanceDefaultValues,
+    isMeaningful: (data) =>
+      Boolean(data.employeeId) ||
+      (data.amount != null && data.amount > 0) ||
+      (data.monthlyDeduction != null && data.monthlyDeduction > 0) ||
+      Boolean(data.reason?.trim()) ||
+      Boolean(data.notes?.trim()) ||
+      data.entryMode === 'RECORD_EXISTING',
   });
 
   const entryMode = watch('entryMode');
@@ -152,6 +171,7 @@ export function SalaryAdvanceForm({
       return hrApi.createAdvance(payload);
     },
     onSuccess: () => {
+      void clearDraft();
       queryClient.invalidateQueries({ queryKey: ['salary-advances'] });
       queryClient.invalidateQueries({ queryKey: ['salary-advance-stats'] });
       queryClient.invalidateQueries({ queryKey: ['hr-stats'] });
@@ -163,6 +183,7 @@ export function SalaryAdvanceForm({
 
   return (
     <form onSubmit={handleSubmit((data) => mutation.mutate(data))} className="space-y-4">
+      <FormDraftNotice draftSavedAt={draftSavedAt} draftRestored={draftRestored} />
       {mutation.isError && (
         <Alert variant="error">{getApiErrorMessage(mutation.error)}</Alert>
       )}

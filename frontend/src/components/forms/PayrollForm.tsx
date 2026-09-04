@@ -7,6 +7,8 @@ import { hrApi } from '../../services/api';
 import { Alert, Button, Input, Select, formatCurrency } from '../ui';
 import { Employee } from '../../types';
 import { getApiErrorMessage } from '../../utils/apiError';
+import { FORM_DRAFT_MODULES, useModuleFormDraft } from '../../hooks/useModuleFormDraft';
+import { FormDraftNotice } from './FormDraftNotice';
 
 const payrollSchema = z.object({
   employeeId: z.string().min(1, 'Employee is required'),
@@ -17,6 +19,14 @@ const payrollSchema = z.object({
 });
 
 type PayrollFormData = z.infer<typeof payrollSchema>;
+
+const payrollDefaultValues: PayrollFormData = {
+  employeeId: '',
+  periodStart: '',
+  periodEnd: '',
+  basicSalary: 0,
+  allowances: 0,
+};
 
 interface PayrollBreakdown {
   grossPay: number;
@@ -51,9 +61,23 @@ export function PayrollForm({ onSuccess, onCancel }: PayrollFormProps) {
     })),
   ];
 
-  const { register, handleSubmit, watch, setValue, formState: { errors } } = useForm<PayrollFormData>({
+  const { register, handleSubmit, watch, setValue, getValues, reset, formState: { errors } } = useForm<PayrollFormData>({
     resolver: zodResolver(payrollSchema),
-    defaultValues: { employeeId: '', allowances: 0 },
+    defaultValues: payrollDefaultValues,
+  });
+
+  const { draftSavedAt, draftRestored, clearDraft } = useModuleFormDraft({
+    moduleKey: FORM_DRAFT_MODULES.payroll,
+    watch,
+    getValues,
+    reset,
+    defaultValues: payrollDefaultValues,
+    isMeaningful: (data) =>
+      Boolean(data.employeeId) ||
+      Boolean(data.periodStart) ||
+      Boolean(data.periodEnd) ||
+      (data.basicSalary != null && data.basicSalary > 0) ||
+      (data.allowances != null && data.allowances > 0),
   });
 
   const employeeId = watch('employeeId');
@@ -83,6 +107,7 @@ export function PayrollForm({ onSuccess, onCancel }: PayrollFormProps) {
   const mutation = useMutation({
     mutationFn: (data: PayrollFormData) => hrApi.createPayroll(data),
     onSuccess: () => {
+      void clearDraft();
       queryClient.invalidateQueries({ queryKey: ['payroll'] });
       queryClient.invalidateQueries({ queryKey: ['hr-stats'] });
       queryClient.invalidateQueries({ queryKey: ['salary-advances'] });
@@ -93,6 +118,7 @@ export function PayrollForm({ onSuccess, onCancel }: PayrollFormProps) {
 
   return (
     <form onSubmit={handleSubmit((data) => mutation.mutate(data))} className="space-y-4">
+      <FormDraftNotice draftSavedAt={draftSavedAt} draftRestored={draftRestored} />
       {mutation.isError && (
         <Alert variant="error">{getApiErrorMessage(mutation.error)}</Alert>
       )}

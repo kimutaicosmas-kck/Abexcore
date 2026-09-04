@@ -9,6 +9,8 @@ import { Alert, Button, Input, Select, formatCurrency } from '../ui';
 import { DeliveryNote, SalesOrder, Vehicle, vehicleTypeLabel } from '../../types';
 import { formatProductOptionLabel } from '../../utils/productDisplay';
 import { getApiErrorMessage } from '../../utils/apiError';
+import { FORM_DRAFT_MODULES, useModuleFormDraft } from '../../hooks/useModuleFormDraft';
+import { FormDraftNotice } from './FormDraftNotice';
 
 const tripSchema = z.object({
   vehicleId: z.string().optional(),
@@ -19,6 +21,11 @@ const tripSchema = z.object({
 });
 
 type TripFormData = z.infer<typeof tripSchema>;
+
+const deliveryDefaultValues: TripFormData = {
+  vehicleId: '',
+  driverId: '',
+};
 
 type TripOrder = {
   salesOrderId: string;
@@ -160,11 +167,30 @@ export function DeliveryForm({ onSuccess, onCancel, initialOrderIds = [] }: Deli
     })),
   ];
 
-  const { register, handleSubmit, setValue, watch, formState: { errors } } = useForm<TripFormData>({
+  const { register, handleSubmit, setValue, watch, getValues, reset, formState: { errors } } = useForm<TripFormData>({
     resolver: zodResolver(tripSchema),
-    defaultValues: {
-      vehicleId: '',
-      driverId: '',
+    defaultValues: deliveryDefaultValues,
+  });
+
+  const { draftSavedAt, draftRestored, clearDraft } = useModuleFormDraft({
+    moduleKey: FORM_DRAFT_MODULES.delivery,
+    watch,
+    getValues,
+    reset,
+    defaultValues: deliveryDefaultValues,
+    isMeaningful: (data) =>
+      Boolean(data.vehicleId) ||
+      Boolean(data.driverId) ||
+      Boolean(data.scheduledDate) ||
+      Boolean(data.waybillNo?.trim()) ||
+      Boolean(data.notes?.trim()) ||
+      tripOrders.length > 0 ||
+      selectedNoteIds.length > 0,
+    getUiState: () => ({ tripOrders, selectedNoteIds, orderSearch }),
+    onRestoreUi: (ui) => {
+      if (Array.isArray(ui?.tripOrders)) setTripOrders(ui.tripOrders as TripOrder[]);
+      if (Array.isArray(ui?.selectedNoteIds)) setSelectedNoteIds(ui.selectedNoteIds as string[]);
+      if (typeof ui?.orderSearch === 'string') setOrderSearch(ui.orderSearch);
     },
   });
 
@@ -274,6 +300,7 @@ export function DeliveryForm({ onSuccess, onCancel, initialOrderIds = [] }: Deli
       return deliveryApi.create(payload);
     },
     onSuccess: () => {
+      void clearDraft();
       invalidateDeliveryQueries();
       onSuccess();
     },
@@ -292,6 +319,7 @@ export function DeliveryForm({ onSuccess, onCancel, initialOrderIds = [] }: Deli
       });
     },
     onSuccess: () => {
+      void clearDraft();
       invalidateDeliveryQueries();
       onSuccess();
     },
@@ -321,6 +349,7 @@ export function DeliveryForm({ onSuccess, onCancel, initialOrderIds = [] }: Deli
       })}
       className="space-y-4"
     >
+      <FormDraftNotice draftSavedAt={draftSavedAt} draftRestored={draftRestored} />
       {(mutation.isError || formError) && (
         <Alert variant="error">
           {formError || getApiErrorMessage(mutation.error)}

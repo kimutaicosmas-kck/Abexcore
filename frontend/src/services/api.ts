@@ -158,6 +158,12 @@ export function accessTokenNeedsRefresh(token: string | null = localStorage.getI
   return isAccessTokenExpired(token);
 }
 
+export const draftsApi = {
+  get: (moduleKey: string) => api.get(`/drafts/${moduleKey}`),
+  save: (moduleKey: string, payload: unknown) => api.put(`/drafts/${moduleKey}`, { payload }),
+  remove: (moduleKey: string) => api.delete(`/drafts/${moduleKey}`),
+};
+
 export const authApi = {
   login: (companySlug: string, email: string, password: string, totpCode?: string) =>
     api.post('/auth/login', { companySlug, email, password, totpCode }),
@@ -264,6 +270,10 @@ export const productsApi = {
   },
   catalogueExcelPath: '/products/catalogue/excel',
   cataloguePdfPath: '/products/catalogue/pdf',
+  getBom: (productId: string) => api.get(`/products/${productId}/bom`),
+  getBomPreview: (productId: string, quantity: number) =>
+    api.get(`/products/${productId}/bom/preview`, { params: { quantity } }),
+  upsertBom: (productId: string, data: object) => api.put(`/products/${productId}/bom`, data),
 };
 
 export const inventoryApi = {
@@ -340,15 +350,21 @@ export const operationsApi = {
   updateOrderStatus: (id: string, status: string) =>
     api.patch(`/operations/orders/${id}/status`, { status }),
   updateOrderItems: (id: string, data: object) => api.patch(`/operations/orders/${id}/items`, data),
+  updateOrderAssignment: (id: string, data: { salesPersonId: string | null; reason: string }) =>
+    api.patch(`/operations/orders/${id}/assignment`, data),
   generateProductionFromOrder: (orderId: string) =>
     api.post(`/operations/orders/${orderId}/generate-production`),
   quotations: (params?: object) => api.get('/operations/quotations', { params }),
   getQuotation: (id: string) => api.get(`/operations/quotations/${id}`),
   createQuotation: (data: object) => api.post('/operations/quotations', data),
+  saveQuotationDraft: (data: object) => api.post('/operations/quotations/draft', data),
+  updateQuotationDraft: (id: string, data: object) => api.patch(`/operations/quotations/${id}/draft`, data),
+  finalizeQuotation: (id: string, data: object) => api.post(`/operations/quotations/${id}/finalize`, data),
   convertQuotation: (id: string) => api.post(`/operations/quotations/${id}/convert`),
   quotationPdfPath: (id: string) => `/operations/quotations/${id}/pdf`,
   salesOrderPdfPath: (id: string) => `/operations/orders/${id}/pdf`,
   production: (params?: object) => api.get('/operations/production', { params }),
+  getProductionOrder: (id: string) => api.get(`/operations/production/${id}`),
   createProduction: (data: object) => api.post('/operations/production', data),
   startProduction: (id: string) => api.post(`/operations/production/${id}/start`),
   completeProduction: (id: string, data: object) =>
@@ -452,6 +468,9 @@ export const financeApi = {
   invoices: (params?: object) => api.get('/finance/invoices', { params }),
   getInvoice: (id: string) => api.get(`/finance/invoices/${id}`),
   createInvoice: (data: object) => api.post('/finance/invoices', data),
+  saveInvoiceDraft: (data: object) => api.post('/finance/invoices/draft', data),
+  updateInvoiceDraft: (id: string, data: object) => api.patch(`/finance/invoices/${id}/draft`, data),
+  finalizeInvoice: (id: string, data: object) => api.post(`/finance/invoices/${id}/finalize`, data),
   createInvoiceFromOrder: (orderId: string) => api.post(`/finance/invoices/from-order/${orderId}`),
   createPurchaseInvoiceFromGrn: (grnId: string) => api.post(`/finance/invoices/from-grn/${grnId}`),
   listPayments: (params?: object) => api.get('/finance/payments', { params }),

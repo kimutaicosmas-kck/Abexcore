@@ -6,6 +6,8 @@ import { Plus, Trash2 } from 'lucide-react';
 import { inventoryApi } from '../../services/api';
 import { Button, Input, Select } from '../ui';
 import { RawMaterial } from '../../types';
+import { FORM_DRAFT_MODULES, useModuleFormDraft } from '../../hooks/useModuleFormDraft';
+import { FormDraftNotice } from './FormDraftNotice';
 
 const requisitionItemSchema = z.object({
   rawMaterialId: z.string().optional(),
@@ -24,6 +26,11 @@ const requisitionSchema = z.object({
 });
 
 type RequisitionFormData = z.infer<typeof requisitionSchema>;
+
+const requisitionDefaultValues: RequisitionFormData = {
+  priority: 'NORMAL',
+  items: [{ rawMaterialId: '', description: '', quantity: 1, unit: '', estimatedCost: 0 }],
+};
 
 const priorityOptions = [
   { value: 'LOW', label: 'Low' },
@@ -50,12 +57,22 @@ export function RequisitionForm({ onSuccess, onCancel }: RequisitionFormProps) {
     ...(materialsData || []).map((m) => ({ value: m.id, label: `${m.code} - ${m.name}` })),
   ];
 
-  const { register, control, handleSubmit, watch, setValue, formState: { errors } } = useForm<RequisitionFormData>({
+  const { register, control, handleSubmit, watch, setValue, getValues, reset, formState: { errors } } = useForm<RequisitionFormData>({
     resolver: zodResolver(requisitionSchema),
-    defaultValues: {
-      priority: 'NORMAL',
-      items: [{ rawMaterialId: '', description: '', quantity: 1, unit: '', estimatedCost: 0 }],
-    },
+    defaultValues: requisitionDefaultValues,
+  });
+
+  const { draftSavedAt, draftRestored, clearDraft } = useModuleFormDraft({
+    moduleKey: FORM_DRAFT_MODULES.requisition,
+    watch,
+    getValues,
+    reset,
+    defaultValues: requisitionDefaultValues,
+    isMeaningful: (data) =>
+      Boolean(data.department?.trim()) ||
+      Boolean(data.notes?.trim()) ||
+      Boolean(data.requiredDate) ||
+      data.items.some((item) => Boolean(item.description?.trim())),
   });
 
   const { fields, append, remove } = useFieldArray({ control, name: 'items' });
@@ -82,6 +99,7 @@ export function RequisitionForm({ onSuccess, onCancel }: RequisitionFormProps) {
       return inventoryApi.createRequisition(payload);
     },
     onSuccess: () => {
+      void clearDraft();
       queryClient.invalidateQueries({ queryKey: ['requisitions'] });
       queryClient.invalidateQueries({ queryKey: ['procurement-stats'] });
       onSuccess();
@@ -90,6 +108,7 @@ export function RequisitionForm({ onSuccess, onCancel }: RequisitionFormProps) {
 
   return (
     <form onSubmit={handleSubmit((data) => mutation.mutate(data))} className="space-y-4">
+      <FormDraftNotice draftSavedAt={draftSavedAt} draftRestored={draftRestored} />
       {mutation.isError && (
         <div className="p-3 rounded-lg bg-red-50 text-red-700 text-sm">
           Failed to create requisition. Please check all fields.

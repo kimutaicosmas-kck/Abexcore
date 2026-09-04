@@ -425,6 +425,37 @@ export const completeProductionSchema = z.object({
     (v) => (v === '' || v === null || v === undefined ? undefined : v),
     z.string().uuid().optional()
   ),
+  /** Optional per-material actual usage overrides. */
+  consumption: z
+    .array(
+      z.object({
+        rawMaterialId: z.string().uuid(),
+        actualQty: z.coerce.number().min(0).optional(),
+        wasteQty: z.coerce.number().min(0).optional(),
+      })
+    )
+    .optional(),
+});
+
+export const upsertBomSchema = z.object({
+  version: z.string().max(20).optional(),
+  notes: z.string().max(2000).optional(),
+  items: z
+    .array(
+      z.object({
+        rawMaterialId: z.string().uuid(),
+        quantity: z.coerce.number().min(0.0001),
+        unit: z.string().max(20).optional(),
+        wastePercent: z.coerce.number().min(0).max(100).optional(),
+        notes: z.string().max(500).optional(),
+      })
+    )
+    .min(1, 'Add at least one material line'),
+});
+
+export const updateSalesOrderAssignmentSchema = z.object({
+  salesPersonId: z.string().uuid().nullable(),
+  reason: z.string().min(1, 'Reason is required').max(500),
 });
 
 export const companySettingsSchema = z.object({
@@ -457,6 +488,32 @@ export const createQuotationSchema = z.object({
   })).min(1),
 });
 
+const quotationDraftItemSchema = z.object({
+  productId: z.string().uuid().optional(),
+  quantity: z.number().int().min(1).optional(),
+  unitPrice: z.number().min(0).optional(),
+  discount: z.number().min(0).max(100).optional(),
+});
+
+export const saveQuotationDraftSchema = z
+  .object({
+    customerId: z.string().uuid().optional(),
+    validUntil: z.string().optional(),
+    notes: z.string().optional(),
+    items: z.array(quotationDraftItemSchema).optional(),
+  })
+  .superRefine((data, ctx) => {
+    const hasCustomer = Boolean(data.customerId);
+    const hasItem = (data.items || []).some((item) => Boolean(item.productId));
+    const hasNotes = Boolean(data.notes?.trim());
+    if (!hasCustomer && !hasItem && !hasNotes) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Add a customer, line item, or description before saving a draft',
+      });
+    }
+  });
+
 export const createInvoiceSchema = z.object({
   type: z.enum(['SALES', 'PURCHASE', 'CREDIT_NOTE', 'DEBIT_NOTE']).default('SALES'),
   customerId: z.string().uuid().optional(),
@@ -476,6 +533,41 @@ export const createInvoiceSchema = z.object({
     taxRate: z.number().min(0).optional(),
   })).min(1),
 });
+
+const invoiceDraftItemSchema = z.object({
+  description: z.string().optional(),
+  quantity: z.number().min(0.001).optional(),
+  unitPrice: z.number().min(0).optional(),
+  taxRate: z.number().min(0).optional(),
+});
+
+export const saveInvoiceDraftSchema = z
+  .object({
+    type: z.enum(['SALES', 'PURCHASE', 'CREDIT_NOTE', 'DEBIT_NOTE']).default('SALES'),
+    customerId: z.string().uuid().optional(),
+    supplierId: z.string().uuid().optional(),
+    dueDate: z.string().optional(),
+    customerPoNumber: z.preprocess(
+      (v) => (typeof v === 'string' && v.trim() === '' ? undefined : v),
+      z.string().trim().max(100).optional()
+    ),
+    notes: z.string().optional(),
+    items: z.array(invoiceDraftItemSchema).optional(),
+  })
+  .superRefine((data, ctx) => {
+    const isCustomerType = data.type === 'SALES' || data.type === 'CREDIT_NOTE';
+    const hasParty = isCustomerType ? Boolean(data.customerId) : Boolean(data.supplierId);
+    const hasItem = (data.items || []).some((item) => Boolean(item.description?.trim()));
+    const hasNotes = Boolean(data.notes?.trim());
+    const hasDueDate = Boolean(data.dueDate);
+    const hasPo = Boolean(data.customerPoNumber?.trim());
+    if (!hasParty && !hasItem && !hasNotes && !hasDueDate && !hasPo) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Add invoice details before saving a draft',
+      });
+    }
+  });
 
 export const createPaymentSchema = z
   .object({

@@ -92,6 +92,7 @@ const TYPE_FILTER = [
 
 const STATUS_FILTER = [
   { value: '', label: 'All statuses' },
+  { value: 'DRAFT', label: 'Draft' },
   { value: 'UNPAID', label: 'Unpaid' },
   { value: 'PARTIAL', label: 'Partial' },
   { value: 'PAID', label: 'Paid' },
@@ -115,6 +116,7 @@ function invoiceBalance(inv: Invoice) {
 }
 
 function invoiceDisplayStatus(inv: Invoice) {
+  if (inv.status === 'DRAFT') return 'DRAFT';
   if (inv.type === 'SALES' && invoiceBalance(inv) <= 0.009) return 'PAID';
   return inv.status;
 }
@@ -149,6 +151,7 @@ export function FinancePage() {
   const [downloading, setDownloading] = useState<string | null>(null);
   const [paymentsExporting, setPaymentsExporting] = useState(false);
   const [invoiceModalOpen, setInvoiceModalOpen] = useState(false);
+  const [editingInvoiceId, setEditingInvoiceId] = useState<string | undefined>();
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
   const [journalModalOpen, setJournalModalOpen] = useState(false);
   const [selectedInvoiceId, setSelectedInvoiceId] = useState<string | null>(null);
@@ -387,8 +390,22 @@ export function FinancePage() {
       label: '',
       render: (_: unknown, row: Record<string, unknown>) => {
         const inv = row as unknown as Invoice;
+        const isDraft = inv.status === 'DRAFT';
         return (
-          <div onClick={(e) => e.stopPropagation()}>
+          <div className="flex flex-wrap items-center gap-1.5 justify-end" onClick={(e) => e.stopPropagation()}>
+            {isDraft && canCreate && (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => {
+                  setEditingInvoiceId(inv.id);
+                  setInvoiceModalOpen(true);
+                }}
+              >
+                Continue
+              </Button>
+            )}
+            {!isDraft && (
             <Button
               variant="secondary"
               size="sm"
@@ -398,6 +415,7 @@ export function FinancePage() {
               <Download className="h-4 w-4 mr-1" />
               PDF
             </Button>
+            )}
           </div>
         );
       },
@@ -1200,8 +1218,26 @@ export function FinancePage() {
       )}
 
       {/* Modals */}
-      <Modal open={invoiceModalOpen} onClose={() => setInvoiceModalOpen(false)} title="Create Invoice" size="xl">
-        <InvoiceForm onSuccess={() => setInvoiceModalOpen(false)} onCancel={() => setInvoiceModalOpen(false)} />
+      <Modal
+        open={invoiceModalOpen}
+        onClose={() => {
+          setInvoiceModalOpen(false);
+          setEditingInvoiceId(undefined);
+        }}
+        title={editingInvoiceId ? 'Continue Invoice' : 'Create Invoice'}
+        size="xl"
+      >
+        <InvoiceForm
+          draftId={editingInvoiceId}
+          onSuccess={() => {
+            setInvoiceModalOpen(false);
+            setEditingInvoiceId(undefined);
+          }}
+          onCancel={() => {
+            setInvoiceModalOpen(false);
+            setEditingInvoiceId(undefined);
+          }}
+        />
       </Modal>
 
       <Modal

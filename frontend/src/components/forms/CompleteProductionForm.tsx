@@ -1,12 +1,12 @@
-import { useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { operationsApi, inventoryApi, qualityApi } from '../../services/api';
-import { Button, Input, getApiErrorMessage } from '../ui';
+import { Button, Input, getApiErrorMessage, formatCurrency } from '../ui';
 import { useAuth } from '../../contexts/AuthContext';
-import { QualityInspection } from '../../types';
+import { QualityInspection, ProductionOrder } from '../../types';
 
 const completeProductionSchema = z.object({
   completedQty: z.coerce.number().int().min(1, 'Completed quantity must be at least 1'),
@@ -42,6 +42,11 @@ export function CompleteProductionForm({
   const queryClient = useQueryClient();
   const { hasPermission } = useAuth();
   const canPassQc = hasPermission('quality:update') || hasPermission('production:update');
+
+  const { data: productionOrder, isLoading: orderLoading } = useQuery({
+    queryKey: ['production-order', productionId],
+    queryFn: () => operationsApi.getProductionOrder(productionId).then((r) => r.data.data as ProductionOrder),
+  });
 
   const { data: warehousesData } = useQuery({
     queryKey: ['warehouses'],
@@ -139,7 +144,7 @@ export function CompleteProductionForm({
     },
   });
 
-  const { register, handleSubmit, formState: { errors } } = useForm<CompleteProductionFormData>({
+  const { register, handleSubmit, watch, formState: { errors } } = useForm<CompleteProductionFormData>({
     resolver: zodResolver(completeProductionSchema),
     defaultValues: {
       completedQty: orderQuantity && orderQuantity > 0 ? orderQuantity : 1,
@@ -147,9 +152,55 @@ export function CompleteProductionForm({
     },
   });
 
+  const completedQty = watch('completedQty') || 1;
+  const orderQty = productionOrder?.quantity || orderQuantity || 1;
+  const scale = orderQty > 0 ? completedQty / orderQty : 1;
+
+  const [actualByMaterial, setActualByMaterial] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    if (!productionOrder?.consumption?.length) return;
+    setActualByMaterial((prev) => {
+      const next = { ...prev };
+      for (const line of productionOrder.consumption || []) {
+        if (next[line.rawMaterialId] !== undefined) continue;
+        const planned = Number(line.plannedQty) * scale;
+        next[line.rawMaterialId] = planned.toFixed(3);
+      }
+      return next;
+    });
+  }, [productionOrder, scale]);
+
+  const materialLines = useMemo(() => {
+    return (productionOrder?.consumption || []).map((line) => {
+      const planned = Number(line.plannedQty) * scale;
+      const actual = Number(actualByMaterial[line.rawMaterialId] ?? planned);
+      const rm = line.rawMaterial;
+      const unitCost = Number(rm?.unitCost || 0);
+      return {
+        rawMaterialId: line.rawMaterialId,
+        name: rm?.name || line.rawMaterialId,
+        code: rm?.code || '',
+        unit: line.unit || rm?.unit || 'pcs',
+        planned,
+        actual,
+        lineCost: actual * unitCost,
+        unitCost,
+      };
+    });
+  }, [productionOrder, scale, actualByMaterial]);
+
+  const totalMaterialCost = materialLines.reduce((sum, l) => sum + l.lineCost, 0);
+
   const mutation = useMutation({
     mutationFn: (data: CompleteProductionFormData) =>
-      operationsApi.completeProduction(productionId, data),
+      operationsApi.completeProduction(productionId, {
+        ...data,
+        consumption: materialLines.map((line) => ({
+          rawMaterialId: line.rawMaterialId,
+          actualQty: line.actual,
+        })),
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['production'] });
       queryClient.invalidateQueries({ queryKey: ['sales-orders'] });
@@ -161,6 +212,7 @@ export function CompleteProductionForm({
   });
 
   const qcBlocked = !passedInspection;
+  const noBom = !orderLoading && (productionOrder?.consumption?.length || 0) === 0;
 
   return (
     <form onSubmit={handleSubmit((data) => mutation.mutate(data))} className="space-y-4">
@@ -169,6 +221,17 @@ export function CompleteProductionForm({
           Completing production for <span className="font-medium text-slate-900">{orderNumber}</span>
         </p>
       )}
+
+      {orderLoading ? (
+        <div className="p-3 rounded-lg bg-slate-50 text-slate-600 text-sm">Loading production order…</div>
+      ) : noBom ? (
+        <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-900 text-sm">
+          <p className="font-medium">No material recipe (BOM)</p>
+          <p className="mt-1">
+            Add a bill of materials to this product in Products → edit product → Materials recipe, then create a new production order.
+          </p>
+        </div>
+      ) : null}
 
       {inspectionsLoading || ensureInspectionMutation.isPending ? (
         <div className="p-3 rounded-lg bg-slate-50 text-slate-600 text-sm">Loading quality check…</div>
@@ -208,6 +271,69 @@ export function CompleteProductionForm({
         </div>
       )}
 
+      {materialLines.length > 0 && (
+        <div className="rounded-xl border border-slate-200 overflow-hidden">
+          <div className="bg-slate-50 px-3 py-2 border-b border-slate-200">
+            <p className="text-sm font-medium text-slate-900">Materials to consume</p>
+            <p className="text-xs text-slate-500">Adjust actual usage if production used more or less than planned.</p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-sm">
+              <thead>
+                <tr className="text-left text-slate-500 border-b border-slate-100">
+                  <th className="px-3 py-2">Material</th>
+                  <th className="px-3 py-2">Planned</th>
+                  <th className="px-3 py-2">Actual</th>
+                  <th className="px-3 py-2 text-right">Est. cost</th>
+                </tr>
+              </thead>
+              <tbody>
+                {materialLines.map((line) => (
+                  <tr key={line.rawMaterialId} className="border-b border-slate-50 last:border-0">
+                    <td className="px-3 py-2">
+                      <span className="font-medium text-slate-900">{line.code} — {line.name}</span>
+                    </td>
+                    <td className="px-3 py-2 tabular-nums">{line.planned.toFixed(3)} {line.unit}</td>
+                    <td className="px-3 py-2">
+                      <input
+                        type="number"
+                        step="0.001"
+                        min={0}
+                        disabled={qcBlocked || noBom}
+                        value={actualByMaterial[line.rawMaterialId] ?? line.planned.toFixed(3)}
+                        onChange={(e) =>
+                          setActualByMaterial((prev) => ({
+                            ...prev,
+                            [line.rawMaterialId]: e.target.value,
+                          }))
+                        }
+                        className="w-28 rounded-lg border border-slate-200 px-2 py-1 text-sm"
+                      />
+                      <span className="ml-1 text-slate-500">{line.unit}</span>
+                    </td>
+                    <td className="px-3 py-2 text-right tabular-nums">{formatCurrency(line.lineCost)}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="bg-slate-50 font-medium">
+                  <td colSpan={3} className="px-3 py-2 text-right text-slate-700">Total material cost</td>
+                  <td className="px-3 py-2 text-right tabular-nums">{formatCurrency(totalMaterialCost)}</td>
+                </tr>
+                {completedQty > 0 && (
+                  <tr className="bg-slate-50 text-slate-600 text-xs">
+                    <td colSpan={3} className="px-3 py-2 text-right">Unit cost (FG)</td>
+                    <td className="px-3 py-2 text-right tabular-nums">
+                      {formatCurrency(totalMaterialCost / completedQty)}
+                    </td>
+                  </tr>
+                )}
+              </tfoot>
+            </table>
+          </div>
+        </div>
+      )}
+
       <div className="p-3 rounded-lg bg-primary-50/80 border border-primary-100 text-sm text-primary-900">
         <p className="font-medium">Output warehouse</p>
         <p className="text-primary-800/90 mt-0.5">
@@ -222,22 +348,23 @@ export function CompleteProductionForm({
           label="Completed Quantity *"
           type="number"
           min={1}
+          max={orderQty}
           {...register('completedQty')}
           error={errors.completedQty?.message}
-          disabled={qcBlocked}
+          disabled={qcBlocked || noBom}
         />
         <Input
           label="Rejected Quantity"
           type="number"
           min={0}
           {...register('rejectedQty')}
-          disabled={qcBlocked}
+          disabled={qcBlocked || noBom}
         />
       </div>
 
       <div className="flex justify-end gap-3 pt-4 border-t">
         <Button type="button" variant="secondary" onClick={onCancel}>Cancel</Button>
-        <Button type="submit" loading={mutation.isPending} disabled={qcBlocked}>
+        <Button type="submit" loading={mutation.isPending} disabled={qcBlocked || noBom}>
           Complete Production
         </Button>
       </div>

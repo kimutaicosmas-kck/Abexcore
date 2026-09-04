@@ -8,6 +8,9 @@ import { productsApi } from '../../services/api';
 import { Button, Input, Select, NumberInput } from '../ui';
 import { Product, ProductCategoryOption } from '../../types';
 import { getApiErrorMessage } from '../../utils/apiError';
+import { FORM_DRAFT_MODULES, useModuleFormDraft } from '../../hooks/useModuleFormDraft';
+import { FormDraftNotice } from './FormDraftNotice';
+import { ProductBomEditor } from './ProductBomEditor';
 
 const productSchema = z.object({
   sku: z.string().min(1, 'Part number is required'),
@@ -24,6 +27,16 @@ const productSchema = z.object({
 });
 
 type ProductFormData = z.infer<typeof productSchema>;
+
+const productDefaultValues: ProductFormData = {
+  sku: '',
+  name: '',
+  categoryId: '',
+  minStockLevel: 0,
+  initialQuantity: 0,
+  warehouseId: '',
+  isActive: true,
+};
 
 interface StockWarehouse {
   id: string;
@@ -82,7 +95,7 @@ export function ProductForm({ product, onSuccess, onCancel }: ProductFormProps) 
   const defaultCategoryId = product?.categoryId || product?.category?.id || categoriesData?.[0]?.id || '';
   const currentOnHand = product ? resolveOnHand(product as ProductWithStock) : 0;
 
-  const { register, handleSubmit, watch, setValue, formState: { errors } } = useForm<ProductFormData>({
+  const { register, handleSubmit, watch, setValue, getValues, reset, formState: { errors } } = useForm<ProductFormData>({
     resolver: zodResolver(productSchema),
     defaultValues: product
       ? {
@@ -98,13 +111,23 @@ export function ProductForm({ product, onSuccess, onCancel }: ProductFormProps) 
           initialQuantity: currentOnHand,
           warehouseId: '',
         }
-      : {
-          categoryId: defaultCategoryId,
-          minStockLevel: 0,
-          initialQuantity: 0,
-          warehouseId: '',
-          isActive: true,
-        },
+      : { ...productDefaultValues, categoryId: defaultCategoryId },
+  });
+
+  const { draftSavedAt, draftRestored, clearDraft } = useModuleFormDraft({
+    moduleKey: FORM_DRAFT_MODULES.product,
+    watch,
+    getValues,
+    reset,
+    defaultValues: productDefaultValues,
+    enabled: !isEdit,
+    isMeaningful: (data) =>
+      Boolean(data.sku?.trim()) ||
+      Boolean(data.name?.trim()) ||
+      Boolean(data.description?.trim()) ||
+      Boolean(data.categoryId) ||
+      (data.sellingPrice != null && data.sellingPrice > 0) ||
+      (data.initialQuantity != null && data.initialQuantity > 0),
   });
 
   const initialQuantity = Number(watch('initialQuantity') || 0);
@@ -141,6 +164,7 @@ export function ProductForm({ product, onSuccess, onCancel }: ProductFormProps) 
       return isEdit ? productsApi.update(product!.id, payload) : productsApi.create(payload);
     },
     onSuccess: () => {
+      void clearDraft();
       queryClient.invalidateQueries({ queryKey: ['products'] });
       queryClient.invalidateQueries({ queryKey: ['product-stats'] });
       queryClient.invalidateQueries({ queryKey: ['inventory'] });
@@ -157,6 +181,7 @@ export function ProductForm({ product, onSuccess, onCancel }: ProductFormProps) 
 
   return (
     <form onSubmit={handleSubmit((data) => mutation.mutate(data))} className="space-y-4">
+      <FormDraftNotice draftSavedAt={draftSavedAt} draftRestored={draftRestored} />
       {mutation.isError && (
         <div className="p-3 rounded-lg bg-red-50 text-red-700 text-sm">{getError(mutation.error)}</div>
       )}
@@ -229,6 +254,8 @@ export function ProductForm({ product, onSuccess, onCancel }: ProductFormProps) 
         )}
       </div>
       <Input label="Description" {...register('description')} />
+
+      {isEdit && product?.id && <ProductBomEditor productId={product.id} />}
 
       <div className="flex justify-end gap-3 pt-4 border-t">
         <Button type="button" variant="secondary" onClick={onCancel}>Cancel</Button>

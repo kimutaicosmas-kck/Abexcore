@@ -7,6 +7,8 @@ import { AxiosError } from 'axios';
 import { inventoryApi } from '../../services/api';
 import { Button, Input, Select } from '../ui';
 import { MaterialTypeOption, RawMaterial, Supplier } from '../../types';
+import { FORM_DRAFT_MODULES, useModuleFormDraft } from '../../hooks/useModuleFormDraft';
+import { FormDraftNotice } from './FormDraftNotice';
 
 const optionalNonNeg = z.preprocess((v) => {
   if (v === '' || v === null || v === undefined) return undefined;
@@ -27,6 +29,18 @@ const rawMaterialSchema = z.object({
 });
 
 type RawMaterialFormData = z.infer<typeof rawMaterialSchema>;
+
+const rawMaterialDefaultValues: RawMaterialFormData = {
+  name: '',
+  typeId: '',
+  unit: 'pcs',
+  unitCost: 0,
+  weight: undefined,
+  supplierId: '',
+  minStockLevel: 0,
+  reorderQty: 0,
+  initialQuantity: 0,
+};
 
 interface Warehouse {
   id: string;
@@ -102,19 +116,25 @@ export function RawMaterialForm({ material, onSuccess, onCancel }: RawMaterialFo
     label: t.name,
   }));
 
-  const { register, handleSubmit, setValue, reset, formState: { errors } } = useForm<RawMaterialFormData>({
+  const { register, handleSubmit, watch, setValue, getValues, reset, formState: { errors } } = useForm<RawMaterialFormData>({
     resolver: zodResolver(rawMaterialSchema),
-    defaultValues: {
-      name: '',
-      typeId: '',
-      unit: 'pcs',
-      unitCost: 0,
-      weight: undefined,
-      supplierId: '',
-      minStockLevel: 0,
-      reorderQty: 0,
-      initialQuantity: 0,
-    },
+    defaultValues: rawMaterialDefaultValues,
+  });
+
+  const { draftSavedAt, draftRestored, clearDraft } = useModuleFormDraft({
+    moduleKey: FORM_DRAFT_MODULES.rawMaterial,
+    watch,
+    getValues,
+    reset,
+    defaultValues: rawMaterialDefaultValues,
+    enabled: !isEdit,
+    isMeaningful: (data) =>
+      Boolean(data.name?.trim()) ||
+      Boolean(data.typeId) ||
+      Boolean(data.supplierId) ||
+      (data.unitCost != null && data.unitCost > 0) ||
+      (data.initialQuantity != null && data.initialQuantity > 0) ||
+      (data.weight != null && data.weight > 0),
   });
 
   useEffect(() => {
@@ -134,15 +154,8 @@ export function RawMaterialForm({ material, onSuccess, onCancel }: RawMaterialFo
       });
     } else {
       reset({
-        name: '',
+        ...rawMaterialDefaultValues,
         typeId: materialTypesData?.[0]?.id || '',
-        unit: 'pcs',
-        unitCost: 0,
-        weight: undefined,
-        supplierId: '',
-        minStockLevel: 0,
-        reorderQty: 0,
-        initialQuantity: 0,
       });
     }
   }, [material, material?.id, materialTypesData, reset]);
@@ -184,6 +197,7 @@ export function RawMaterialForm({ material, onSuccess, onCancel }: RawMaterialFo
         : inventoryApi.createMaterial(payload);
     },
     onSuccess: async () => {
+      void clearDraft();
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['materials'] }),
         queryClient.invalidateQueries({ queryKey: ['inventory-stats'] }),
@@ -199,6 +213,7 @@ export function RawMaterialForm({ material, onSuccess, onCancel }: RawMaterialFo
 
   return (
     <form onSubmit={handleSubmit((data) => mutation.mutate(data))} className="space-y-4">
+      <FormDraftNotice draftSavedAt={draftSavedAt} draftRestored={draftRestored} />
       {mutation.isError && (
         <div className="p-3 rounded-lg bg-red-50 text-red-700 text-sm">
           {(mutation.error as AxiosError<{ message?: string }>)?.response?.data?.message ||

@@ -5,6 +5,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { maintenanceApi } from '../../services/api';
 import { Button, Input, Select } from '../ui';
 import { Machine } from '../../types';
+import { FORM_DRAFT_MODULES, useModuleFormDraft } from '../../hooks/useModuleFormDraft';
+import { FormDraftNotice } from './FormDraftNotice';
 
 const maintenanceTypeOptions = [
   { value: 'PREVENTIVE', label: 'Preventive' },
@@ -22,6 +24,13 @@ const maintenanceSchema = z.object({
 });
 
 type MaintenanceFormData = z.infer<typeof maintenanceSchema>;
+
+const maintenanceDefaultValues: MaintenanceFormData = {
+  machineId: '',
+  type: 'PREVENTIVE',
+  description: '',
+  cost: 0,
+};
 
 interface MaintenanceFormProps {
   onSuccess: () => void;
@@ -41,14 +50,28 @@ export function MaintenanceForm({ onSuccess, onCancel }: MaintenanceFormProps) {
     ...(machinesData || []).map((m) => ({ value: m.id, label: `${m.code} - ${m.name}` })),
   ];
 
-  const { register, handleSubmit, formState: { errors } } = useForm<MaintenanceFormData>({
+  const { register, handleSubmit, watch, getValues, reset, formState: { errors } } = useForm<MaintenanceFormData>({
     resolver: zodResolver(maintenanceSchema),
-    defaultValues: { machineId: '', type: 'PREVENTIVE', cost: 0 },
+    defaultValues: maintenanceDefaultValues,
+  });
+
+  const { draftSavedAt, draftRestored, clearDraft } = useModuleFormDraft({
+    moduleKey: FORM_DRAFT_MODULES.maintenance,
+    watch,
+    getValues,
+    reset,
+    defaultValues: maintenanceDefaultValues,
+    isMeaningful: (data) =>
+      Boolean(data.machineId) ||
+      Boolean(data.description?.trim()) ||
+      Boolean(data.scheduledDate) ||
+      (data.cost != null && Number(data.cost) > 0),
   });
 
   const mutation = useMutation({
     mutationFn: (data: MaintenanceFormData) => maintenanceApi.createRequest(data),
     onSuccess: () => {
+      void clearDraft();
       queryClient.invalidateQueries({ queryKey: ['maintenance-requests'] });
       queryClient.invalidateQueries({ queryKey: ['maintenance-stats'] });
       onSuccess();
@@ -57,6 +80,7 @@ export function MaintenanceForm({ onSuccess, onCancel }: MaintenanceFormProps) {
 
   return (
     <form onSubmit={handleSubmit((data) => mutation.mutate(data))} className="space-y-4">
+      <FormDraftNotice draftSavedAt={draftSavedAt} draftRestored={draftRestored} />
       {mutation.isError && (
         <div className="p-3 rounded-lg bg-red-50 text-red-700 text-sm">
           Failed to create maintenance request. Please try again.

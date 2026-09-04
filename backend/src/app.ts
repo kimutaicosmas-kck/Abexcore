@@ -35,6 +35,7 @@ import tenantRoutes from './routes/tenant.routes';
 import trashRoutes from './routes/trash.routes';
 import systemRoutes from './routes/system.routes';
 import platformRoutes from './routes/platform.routes';
+import draftsRoutes from './routes/drafts.routes';
 
 export function createApp() {
   const app = express();
@@ -210,6 +211,7 @@ export function createApp() {
   apiRouter.use('/trash', trashRoutes);
   apiRouter.use('/system', systemRoutes);
   apiRouter.use('/platform', platformRoutes);
+  apiRouter.use('/drafts', draftsRoutes);
 
   app.use('/api/v1', apiRouter);
   app.use(notFound);

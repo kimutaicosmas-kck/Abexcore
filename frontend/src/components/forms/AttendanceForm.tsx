@@ -5,6 +5,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { hrApi } from '../../services/api';
 import { Button, Input, Select } from '../ui';
 import { Employee } from '../../types';
+import { FORM_DRAFT_MODULES, useModuleFormDraft } from '../../hooks/useModuleFormDraft';
+import { FormDraftNotice } from './FormDraftNotice';
 
 const attendanceSchema = z.object({
   employeeId: z.string().min(1, 'Employee is required'),
@@ -48,9 +50,31 @@ export function AttendanceForm({ onSuccess, onCancel }: AttendanceFormProps) {
 
   const today = new Date().toISOString().slice(0, 10);
 
-  const { register, handleSubmit, formState: { errors } } = useForm<AttendanceFormData>({
+  const attendanceDefaultValues: AttendanceFormData = {
+    employeeId: '',
+    date: today,
+    status: 'present',
+    notes: '',
+  };
+
+  const { register, handleSubmit, watch, getValues, reset, formState: { errors } } = useForm<AttendanceFormData>({
     resolver: zodResolver(attendanceSchema),
-    defaultValues: { employeeId: '', date: today, status: 'present', notes: '' },
+    defaultValues: attendanceDefaultValues,
+  });
+
+  const { draftSavedAt, draftRestored, clearDraft } = useModuleFormDraft({
+    moduleKey: FORM_DRAFT_MODULES.attendance,
+    watch,
+    getValues,
+    reset,
+    defaultValues: attendanceDefaultValues,
+    isMeaningful: (data) =>
+      Boolean(data.employeeId) ||
+      Boolean(data.checkIn) ||
+      Boolean(data.checkOut) ||
+      Boolean(data.notes?.trim()) ||
+      data.status !== 'present' ||
+      data.date !== today,
   });
 
   const mutation = useMutation({
@@ -64,6 +88,7 @@ export function AttendanceForm({ onSuccess, onCancel }: AttendanceFormProps) {
       return hrApi.recordAttendance(payload);
     },
     onSuccess: () => {
+      void clearDraft();
       queryClient.invalidateQueries({ queryKey: ['attendance'] });
       queryClient.invalidateQueries({ queryKey: ['hr-stats'] });
       onSuccess();
@@ -72,6 +97,7 @@ export function AttendanceForm({ onSuccess, onCancel }: AttendanceFormProps) {
 
   return (
     <form onSubmit={handleSubmit((data) => mutation.mutate(data))} className="space-y-4">
+      <FormDraftNotice draftSavedAt={draftSavedAt} draftRestored={draftRestored} />
       {mutation.isError && (
         <div className="p-3 rounded-lg bg-red-50 text-red-700 text-sm">
           Failed to record attendance. Please try again.

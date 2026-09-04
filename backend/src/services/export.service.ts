@@ -126,6 +126,7 @@ export class ExportService {
         supplier: true,
         items: true,
         payments: true,
+        createdBy: { select: { firstName: true, lastName: true } },
         salesOrder: {
           include: {
             salesPerson: { select: { firstName: true, lastName: true } },
@@ -152,7 +153,7 @@ export class ExportService {
     if (invoice.type === 'SALES' && isChekimaDocCompany(company.slug)) {
       const customer = invoice.customer;
       const preparedBy = personName(
-        invoice.salesOrder?.salesPerson || invoice.salesOrder?.createdBy
+        invoice.createdBy || invoice.salesOrder?.salesPerson || invoice.salesOrder?.createdBy
       );
       const lines: ChekimaDocLine[] = invoice.items.map((item) => ({
         item: item.description,
@@ -290,6 +291,7 @@ export class ExportService {
       include: {
         customer: { include: { contacts: { select: { name: true, isPrimary: true } } } },
         items: { include: { product: { select: { id: true, name: true, sku: true } } } },
+        createdBy: { select: { firstName: true, lastName: true } },
       },
     });
     if (!quotation) throw new AppError('Quotation not found', 404);
@@ -306,6 +308,7 @@ export class ExportService {
 
     if (isChekimaDocCompany(company.slug)) {
       const customer = quotation.customer;
+      const preparedBy = personName(quotation.createdBy);
       const { discountAmount, discountPercent } = lineDiscountSummary(quotation.items);
       const lines: ChekimaDocLine[] = quotation.items.map((item) => {
         const product = item.product;
@@ -333,6 +336,8 @@ export class ExportService {
         discountAmount,
         discountPercent,
         vatRate,
+        preparedBy,
+        authorizedBy: preparedBy,
         refs: [
           {
             label: 'Date',

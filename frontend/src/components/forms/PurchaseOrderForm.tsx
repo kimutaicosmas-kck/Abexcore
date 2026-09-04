@@ -9,6 +9,8 @@ import { downloadFile } from '../../utils/download';
 import { getApiErrorMessage } from '../../utils/apiError';
 import { Alert, Button, Input, Select } from '../ui';
 import { PurchaseOrder, RawMaterial, Supplier } from '../../types';
+import { FORM_DRAFT_MODULES, useModuleFormDraft } from '../../hooks/useModuleFormDraft';
+import { FormDraftNotice } from './FormDraftNotice';
 
 const poItemSchema = z.object({
   rawMaterialId: z.string().optional(),
@@ -25,6 +27,11 @@ const purchaseOrderSchema = z.object({
 });
 
 type PurchaseOrderFormData = z.infer<typeof purchaseOrderSchema>;
+
+const purchaseOrderDefaultValues: PurchaseOrderFormData = {
+  supplierId: '',
+  items: [{ rawMaterialId: '', description: '', quantity: 1, unitPrice: 0 }],
+};
 
 interface PurchaseOrderFormProps {
   onSuccess: () => void;
@@ -57,11 +64,22 @@ export function PurchaseOrderForm({ onSuccess, onCancel }: PurchaseOrderFormProp
     ...(materialsData || []).map((m) => ({ value: m.id, label: `${m.code} - ${m.name}` })),
   ];
 
-  const { register, control, handleSubmit, watch, setValue, formState: { errors } } = useForm<PurchaseOrderFormData>({
+  const { register, control, handleSubmit, watch, setValue, getValues, reset, formState: { errors } } = useForm<PurchaseOrderFormData>({
     resolver: zodResolver(purchaseOrderSchema),
-    defaultValues: {
-      items: [{ rawMaterialId: '', description: '', quantity: 1, unitPrice: 0 }],
-    },
+    defaultValues: purchaseOrderDefaultValues,
+  });
+
+  const { draftSavedAt, draftRestored, clearDraft } = useModuleFormDraft({
+    moduleKey: FORM_DRAFT_MODULES.purchaseOrder,
+    watch,
+    getValues,
+    reset,
+    defaultValues: purchaseOrderDefaultValues,
+    isMeaningful: (data) =>
+      Boolean(data.supplierId) ||
+      Boolean(data.expectedDate) ||
+      Boolean(data.notes?.trim()) ||
+      data.items.some((item) => Boolean(item.description?.trim()) || Boolean(item.rawMaterialId)),
   });
 
   const { fields, append, remove } = useFieldArray({ control, name: 'items' });
@@ -111,6 +129,7 @@ export function PurchaseOrderForm({ onSuccess, onCancel }: PurchaseOrderFormProp
       return inventoryApi.createPurchaseOrder(payload);
     },
     onSuccess: async (res) => {
+      void clearDraft();
       queryClient.invalidateQueries({ queryKey: ['purchase-orders'] });
       queryClient.invalidateQueries({ queryKey: ['procurement-stats'] });
       const po = res.data.data as PurchaseOrder;
@@ -194,6 +213,7 @@ export function PurchaseOrderForm({ onSuccess, onCancel }: PurchaseOrderFormProp
 
   return (
     <form onSubmit={handleSubmit((data) => mutation.mutate(data))} className="space-y-4">
+      <FormDraftNotice draftSavedAt={draftSavedAt} draftRestored={draftRestored} />
       {mutation.isError && (
         <div className="p-3 rounded-lg bg-red-50 text-red-700 text-sm">
           Failed to create purchase order. Please check all fields.

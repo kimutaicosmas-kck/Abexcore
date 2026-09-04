@@ -5,6 +5,8 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { inventoryApi } from '../../services/api';
 import { Button, Input } from '../ui';
 import { Supplier } from '../../types';
+import { FORM_DRAFT_MODULES, useModuleFormDraft } from '../../hooks/useModuleFormDraft';
+import { FormDraftNotice } from './FormDraftNotice';
 
 const supplierSchema = z.object({
   code: z.string().min(1, 'Code is required'),
@@ -21,6 +23,13 @@ const supplierSchema = z.object({
 
 type SupplierFormData = z.infer<typeof supplierSchema>;
 
+const supplierDefaultValues: SupplierFormData = {
+  code: '',
+  name: '',
+  paymentTerms: 30,
+  leadTimeDays: 7,
+};
+
 interface SupplierFormProps {
   supplier?: Supplier | null;
   onSuccess: () => void;
@@ -31,7 +40,7 @@ export function SupplierForm({ supplier, onSuccess, onCancel }: SupplierFormProp
   const queryClient = useQueryClient();
   const isEdit = !!supplier;
 
-  const { register, handleSubmit, formState: { errors } } = useForm<SupplierFormData>({
+  const { register, handleSubmit, watch, getValues, reset, formState: { errors } } = useForm<SupplierFormData>({
     resolver: zodResolver(supplierSchema),
     defaultValues: supplier
       ? {
@@ -43,7 +52,25 @@ export function SupplierForm({ supplier, onSuccess, onCancel }: SupplierFormProp
           leadTimeDays: supplier.leadTimeDays,
           paymentTerms: 30,
         }
-      : { paymentTerms: 30, leadTimeDays: 7 },
+      : supplierDefaultValues,
+  });
+
+  const { draftSavedAt, draftRestored, clearDraft } = useModuleFormDraft({
+    moduleKey: FORM_DRAFT_MODULES.supplier,
+    watch,
+    getValues,
+    reset,
+    defaultValues: supplierDefaultValues,
+    enabled: !isEdit,
+    isMeaningful: (data) =>
+      Boolean(data.code?.trim()) ||
+      Boolean(data.name?.trim()) ||
+      Boolean(data.email?.trim()) ||
+      Boolean(data.phone?.trim()) ||
+      Boolean(data.address?.trim()) ||
+      Boolean(data.city?.trim()) ||
+      Boolean(data.taxPin?.trim()) ||
+      Boolean(data.notes?.trim()),
   });
 
   const mutation = useMutation({
@@ -54,6 +81,7 @@ export function SupplierForm({ supplier, onSuccess, onCancel }: SupplierFormProp
         : inventoryApi.createSupplier(payload);
     },
     onSuccess: () => {
+      void clearDraft();
       queryClient.invalidateQueries({ queryKey: ['suppliers'] });
       queryClient.invalidateQueries({ queryKey: ['procurement-stats'] });
       onSuccess();
@@ -62,6 +90,7 @@ export function SupplierForm({ supplier, onSuccess, onCancel }: SupplierFormProp
 
   return (
     <form onSubmit={handleSubmit((data) => mutation.mutate(data))} className="space-y-4">
+      <FormDraftNotice draftSavedAt={draftSavedAt} draftRestored={draftRestored} />
       {mutation.isError && (
         <div className="p-3 rounded-lg bg-red-50 text-red-700 text-sm">
           Failed to save supplier. Please try again.

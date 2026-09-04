@@ -8,6 +8,8 @@ import { inventoryApi } from '../../services/api';
 import { Button, Input, Select } from '../ui';
 import { RawMaterial } from '../../types';
 import { ProductSearchSelect } from './ProductSearchSelect';
+import { FORM_DRAFT_MODULES, useModuleFormDraft } from '../../hooks/useModuleFormDraft';
+import { FormDraftNotice } from './FormDraftNotice';
 
 const stockAdjustSchema = z.object({
   warehouseId: z.string().min(1, 'Warehouse is required'),
@@ -22,6 +24,14 @@ const stockAdjustSchema = z.object({
 });
 
 type StockAdjustFormData = z.infer<typeof stockAdjustSchema>;
+
+const stockAdjustDefaultValues: StockAdjustFormData = {
+  warehouseId: '',
+  rawMaterialId: '',
+  productId: '',
+  type: 'add',
+  quantity: 1,
+};
 
 const adjustTypeOptions = [
   { value: 'add', label: 'Add Stock' },
@@ -64,15 +74,24 @@ export function StockAdjustForm({ onSuccess, onCancel }: StockAdjustFormProps) {
     queryFn: () => inventoryApi.materials({ limit: 100 }).then((r) => r.data.data as RawMaterial[]),
   });
 
-  const { register, control, handleSubmit, setValue, formState: { errors } } = useForm<StockAdjustFormData>({
+  const { register, control, handleSubmit, watch, setValue, getValues, reset, formState: { errors } } = useForm<StockAdjustFormData>({
     resolver: zodResolver(stockAdjustSchema),
-    defaultValues: {
-      warehouseId: '',
-      rawMaterialId: '',
-      productId: '',
-      type: 'add',
-      quantity: 1,
-    },
+    defaultValues: stockAdjustDefaultValues,
+  });
+
+  const { draftSavedAt, draftRestored, clearDraft } = useModuleFormDraft({
+    moduleKey: FORM_DRAFT_MODULES.stockAdjust,
+    watch,
+    getValues,
+    reset,
+    defaultValues: stockAdjustDefaultValues,
+    isMeaningful: (data) =>
+      Boolean(data.rawMaterialId) ||
+      Boolean(data.productId) ||
+      Boolean(data.warehouseId) ||
+      Boolean(data.notes?.trim()) ||
+      data.type !== 'add' ||
+      (data.quantity != null && data.quantity !== 1),
   });
 
   const rawMaterialId = useWatch({ control, name: 'rawMaterialId' });
@@ -118,6 +137,7 @@ export function StockAdjustForm({ onSuccess, onCancel }: StockAdjustFormProps) {
       return inventoryApi.adjustStock(payload);
     },
     onSuccess: () => {
+      void clearDraft();
       queryClient.invalidateQueries({ queryKey: ['stock-levels'] });
       queryClient.invalidateQueries({ queryKey: ['inventory-stats'] });
       queryClient.invalidateQueries({ queryKey: ['inventory-transactions'] });
@@ -127,6 +147,7 @@ export function StockAdjustForm({ onSuccess, onCancel }: StockAdjustFormProps) {
 
   return (
     <form onSubmit={handleSubmit((data) => mutation.mutate(data))} className="space-y-4">
+      <FormDraftNotice draftSavedAt={draftSavedAt} draftRestored={draftRestored} />
       {mutation.isError && (
         <div className="p-3 rounded-lg bg-red-50 text-red-700 text-sm">
           {(mutation.error as AxiosError<{ message?: string }>)?.response?.data?.message ||

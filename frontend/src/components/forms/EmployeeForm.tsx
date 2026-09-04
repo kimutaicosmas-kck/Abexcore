@@ -6,6 +6,8 @@ import { hrApi, usersApi } from '../../services/api';
 import { Button, Input, Select } from '../ui';
 import { Employee } from '../../types';
 import { getApiErrorMessage } from '../../utils/apiError';
+import { FORM_DRAFT_MODULES, useModuleFormDraft } from '../../hooks/useModuleFormDraft';
+import { FormDraftNotice } from './FormDraftNotice';
 
 const employeeSchema = z.object({
   employeeNo: z.string().min(1, 'Employee number is required'),
@@ -22,6 +24,17 @@ const employeeSchema = z.object({
 });
 
 type EmployeeFormData = z.infer<typeof employeeSchema>;
+
+const employeeDefaultValues: EmployeeFormData = {
+  employeeNo: '',
+  firstName: '',
+  lastName: '',
+  hireDate: new Date().toISOString().slice(0, 10),
+  salary: 0,
+  departmentId: '',
+  userId: '',
+  gender: 'UNSPECIFIED',
+};
 
 interface Department {
   id: string;
@@ -80,7 +93,7 @@ export function EmployeeForm({ employee, onSuccess, onCancel }: EmployeeFormProp
       })),
   ];
 
-  const { register, handleSubmit, formState: { errors } } = useForm<EmployeeFormData>({
+  const { register, handleSubmit, watch, getValues, reset, formState: { errors } } = useForm<EmployeeFormData>({
     resolver: zodResolver(employeeSchema),
     defaultValues: employee
       ? {
@@ -98,7 +111,27 @@ export function EmployeeForm({ employee, onSuccess, onCancel }: EmployeeFormProp
           departmentId: employee.departmentId || employee.department?.id || '',
           userId: employee.userId || employee.user?.id || '',
         }
-      : { salary: 0, departmentId: '', userId: '', gender: 'UNSPECIFIED' },
+      : employeeDefaultValues,
+  });
+
+  const { draftSavedAt, draftRestored, clearDraft } = useModuleFormDraft({
+    moduleKey: FORM_DRAFT_MODULES.employee,
+    watch,
+    getValues,
+    reset,
+    defaultValues: employeeDefaultValues,
+    enabled: !isEdit,
+    isMeaningful: (data) =>
+      Boolean(data.employeeNo?.trim()) ||
+      Boolean(data.firstName?.trim()) ||
+      Boolean(data.lastName?.trim()) ||
+      Boolean(data.email?.trim()) ||
+      Boolean(data.phone?.trim()) ||
+      Boolean(data.position?.trim()) ||
+      Boolean(data.hireDate) ||
+      Boolean(data.departmentId) ||
+      Boolean(data.userId) ||
+      (data.salary != null && data.salary > 0),
   });
 
   const mutation = useMutation({
@@ -115,6 +148,7 @@ export function EmployeeForm({ employee, onSuccess, onCancel }: EmployeeFormProp
         : hrApi.createEmployee(payload);
     },
     onSuccess: () => {
+      void clearDraft();
       queryClient.invalidateQueries({ queryKey: ['employees'] });
       queryClient.invalidateQueries({ queryKey: ['hr-stats'] });
       queryClient.invalidateQueries({ queryKey: ['hr-linkable-users'] });
@@ -125,6 +159,7 @@ export function EmployeeForm({ employee, onSuccess, onCancel }: EmployeeFormProp
 
   return (
     <form onSubmit={handleSubmit((data) => mutation.mutate(data))} className="space-y-4">
+      <FormDraftNotice draftSavedAt={draftSavedAt} draftRestored={draftRestored} />
       {mutation.isError && (
         <div className="p-3 rounded-lg bg-red-50 text-red-700 text-sm">
           {getApiErrorMessage(mutation.error)}

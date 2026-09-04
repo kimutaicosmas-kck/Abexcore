@@ -9,6 +9,7 @@ import {
   paymentListQuerySchema,
   paginationSchema,
   createInvoiceSchema,
+  saveInvoiceDraftSchema,
   createPaymentSchema,
   createJournalEntrySchema,
   salesByPersonQuerySchema,
@@ -59,6 +60,65 @@ const INVOICE_TIMING_PERIODS = new Set<PaymentInvoiceTimingPreset>([
   'this_week_taken_and_paid',
   'this_month_taken_and_paid',
 ]);
+
+type InvoiceDraftItem = {
+  description?: string;
+  quantity?: number;
+  unitPrice?: number;
+  taxRate?: number;
+};
+
+async function computeInvoiceDraftTotals(
+  type: 'SALES' | 'PURCHASE' | 'CREDIT_NOTE' | 'DEBIT_NOTE',
+  customerId: string | undefined,
+  items: InvoiceDraftItem[] | undefined
+) {
+  const lineItems = (items || []).filter((item) => item.description?.trim());
+  if (lineItems.length === 0) {
+    return { subtotal: 0, taxAmount: 0, totalAmount: 0, vatRate: 0 };
+  }
+
+  let vatRate = await getVatRate();
+  const isSalesSide = type === 'SALES' || type === 'CREDIT_NOTE';
+  if (isSalesSide && customerId) {
+    const customer = await prisma.customer.findFirst({
+      where: { id: customerId, companyId: requireTenantId(), deletedAt: null },
+      select: { vatStatus: true },
+    });
+    if (customer) vatRate = await getCustomerVatRate(customer);
+  }
+
+  const keyedTotal = lineItems.reduce(
+    (sum, item) => sum + (item.quantity || 1) * (item.unitPrice || 0),
+    0
+  );
+  const purchaseTax = calcTax(keyedTotal, vatRate);
+  return isSalesSide
+    ? { ...splitInclusiveAmount(keyedTotal, vatRate), vatRate }
+    : {
+        subtotal: keyedTotal,
+        taxAmount: purchaseTax,
+        totalAmount: keyedTotal + purchaseTax,
+        vatRate,
+      };
+}
+
+function mapInvoiceDraftItems(items: InvoiceDraftItem[] | undefined, vatRate: number) {
+  return (items || [])
+    .filter((item) => item.description?.trim())
+    .map((item) => ({
+      description: item.description!.trim(),
+      quantity: item.quantity || 1,
+      unitPrice: roundMoney(item.unitPrice || 0),
+      taxRate: item.taxRate ?? vatRate,
+      totalPrice: roundMoney((item.quantity || 1) * (item.unitPrice || 0)),
+    }));
+}
+
+function draftInvoiceNumber(type: 'SALES' | 'PURCHASE' | 'CREDIT_NOTE' | 'DEBIT_NOTE') {
+  const prefix = type === 'SALES' || type === 'CREDIT_NOTE' ? 'DRAFT-INV' : 'DRAFT-PINV';
+  return `${prefix}-${Date.now()}`;
+}
 
 /** Payment IDs where payment date aligns with invoice issue date (MySQL YEARWEEK mode 1 = Monday). */
 async function paymentIdsByInvoiceTiming(
@@ -471,6 +531,294 @@ router.get(
 );
 
 router.post(
+  '/invoices/draft',
+  authorize('finance:create'),
+  validate(saveInvoiceDraftSchema),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const {
+      type = 'SALES',
+      customerId,
+      supplierId,
+      dueDate,
+      customerPoNumber,
+      notes,
+      items,
+    } = req.body as {
+      type?: 'SALES' | 'PURCHASE' | 'CREDIT_NOTE' | 'DEBIT_NOTE';
+      customerId?: string;
+      supplierId?: string;
+      dueDate?: string;
+      customerPoNumber?: string;
+      notes?: string;
+      items?: InvoiceDraftItem[];
+    };
+
+    const isSalesSide = type === 'SALES' || type === 'CREDIT_NOTE';
+    if (isSalesSide && customerId) {
+      const customer = await prisma.customer.findFirst({
+        where: { id: customerId, companyId: requireTenantId(), deletedAt: null },
+        select: { id: true },
+      });
+      if (!customer) throw new AppError('Customer not found', 404);
+    }
+    if (!isSalesSide && supplierId) {
+      const supplier = await prisma.supplier.findFirst({
+        where: { id: supplierId, companyId: requireTenantId(), deletedAt: null },
+        select: { id: true },
+      });
+      if (!supplier) throw new AppError('Supplier not found', 404);
+    }
+
+    const totals = await computeInvoiceDraftTotals(type, customerId, items);
+    const mappedItems = mapInvoiceDraftItems(items, totals.vatRate);
+
+    const invoice = await prisma.invoice.create({
+      data: injectTenantData({
+        invoiceNumber: draftInvoiceNumber(type),
+        type,
+        customerId: isSalesSide ? customerId : undefined,
+        supplierId: !isSalesSide ? supplierId : undefined,
+        dueDate: dueDate ? new Date(dueDate) : undefined,
+        customerPoNumber: type === 'SALES' ? customerPoNumber : undefined,
+        notes,
+        status: 'DRAFT',
+        fiscalStatus: 'NOT_REQUIRED',
+        subtotal: totals.subtotal,
+        taxAmount: totals.taxAmount,
+        totalAmount: totals.totalAmount,
+        createdById: req.user!.id,
+        ...(mappedItems.length > 0 ? { items: { create: mappedItems } } : {}),
+      }),
+      include: { customer: true, supplier: true, items: true },
+    });
+
+    res.status(201).json({ success: true, data: invoice });
+  })
+);
+
+router.patch(
+  '/invoices/:id/draft',
+  authorize('finance:create'),
+  validate(saveInvoiceDraftSchema),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const id = getParam(req.params.id);
+    const existing = await prisma.invoice.findUnique({ where: { id } });
+    if (!existing) throw new AppError('Invoice not found', 404);
+    if (existing.status !== 'DRAFT') {
+      throw new AppError('Only draft invoices can be updated this way', 400);
+    }
+
+    const {
+      type = existing.type,
+      customerId,
+      supplierId,
+      dueDate,
+      customerPoNumber,
+      notes,
+      items,
+    } = req.body as {
+      type?: 'SALES' | 'PURCHASE' | 'CREDIT_NOTE' | 'DEBIT_NOTE';
+      customerId?: string;
+      supplierId?: string;
+      dueDate?: string;
+      customerPoNumber?: string;
+      notes?: string;
+      items?: InvoiceDraftItem[];
+    };
+
+    const isSalesSide = type === 'SALES' || type === 'CREDIT_NOTE';
+    if (isSalesSide && customerId) {
+      const customer = await prisma.customer.findFirst({
+        where: { id: customerId, companyId: requireTenantId(), deletedAt: null },
+        select: { id: true },
+      });
+      if (!customer) throw new AppError('Customer not found', 404);
+    }
+    if (!isSalesSide && supplierId) {
+      const supplier = await prisma.supplier.findFirst({
+        where: { id: supplierId, companyId: requireTenantId(), deletedAt: null },
+        select: { id: true },
+      });
+      if (!supplier) throw new AppError('Supplier not found', 404);
+    }
+
+    const totals = await computeInvoiceDraftTotals(type, customerId, items);
+    const mappedItems = mapInvoiceDraftItems(items, totals.vatRate);
+
+    const invoice = await prisma.$transaction(async (tx) => {
+      await tx.invoiceItem.deleteMany({ where: { invoiceId: id } });
+      return tx.invoice.update({
+        where: { id },
+        data: {
+          type,
+          customerId: isSalesSide ? customerId ?? null : null,
+          supplierId: !isSalesSide ? supplierId ?? null : null,
+          dueDate: dueDate ? new Date(dueDate) : null,
+          customerPoNumber: type === 'SALES' ? customerPoNumber ?? null : null,
+          notes,
+          subtotal: totals.subtotal,
+          taxAmount: totals.taxAmount,
+          totalAmount: totals.totalAmount,
+          ...(mappedItems.length > 0 ? { items: { create: mappedItems } } : {}),
+        },
+        include: { customer: true, supplier: true, items: true },
+      });
+    });
+
+    res.json({ success: true, data: invoice });
+  })
+);
+
+router.post(
+  '/invoices/:id/finalize',
+  authorize('finance:create'),
+  validate(createInvoiceSchema),
+  auditLog('finance', 'create', 'invoice'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const id = getParam(req.params.id);
+    const existing = await prisma.invoice.findUnique({ where: { id } });
+    if (!existing) throw new AppError('Invoice not found', 404);
+    if (existing.status !== 'DRAFT') {
+      throw new AppError('Only draft invoices can be finalized', 400);
+    }
+
+    const {
+      type,
+      customerId,
+      supplierId,
+      salesOrderId,
+      purchaseOrderId,
+      dueDate,
+      customerPoNumber,
+      items,
+      notes,
+    } = req.body;
+
+    let vatRate = await getVatRate();
+    if ((type === 'SALES' || type === 'CREDIT_NOTE') && customerId) {
+      const customer = await prisma.customer.findFirst({
+        where: { id: customerId, companyId: requireTenantId(), deletedAt: null },
+        select: { vatStatus: true },
+      });
+      if (!customer) throw new AppError('Customer not found', 404);
+      vatRate = await getCustomerVatRate(customer);
+    }
+
+    const keyedTotal = items.reduce(
+      (sum: number, item: { quantity: number; unitPrice: number }) =>
+        sum + item.quantity * item.unitPrice,
+      0
+    );
+    const isSalesSide = type === 'SALES' || type === 'CREDIT_NOTE';
+    const purchaseTax = calcTax(keyedTotal, vatRate);
+    const { subtotal, taxAmount, totalAmount } = isSalesSide
+      ? splitInclusiveAmount(keyedTotal, vatRate)
+      : {
+          subtotal: keyedTotal,
+          taxAmount: purchaseTax,
+          totalAmount: keyedTotal + purchaseTax,
+        };
+
+    const invoice = await prisma.$transaction(async (tx) => {
+      let resolvedCustomerPo = customerPoNumber as string | undefined;
+      let salesInvoiceDate: Date | undefined;
+      if (type === 'SALES' && salesOrderId) {
+        const order = await tx.salesOrder.findUnique({
+          where: { id: salesOrderId },
+          include: { items: { include: { product: true } } },
+        });
+        if (!order) throw new AppError('Sales order not found', 404);
+        if (!resolvedCustomerPo && order.customerPoNumber) {
+          resolvedCustomerPo = order.customerPoNumber;
+        }
+        const { resolveSalesBusinessDate } = await import('../utils/salesDate');
+        salesInvoiceDate = resolveSalesBusinessDate(order);
+        await SalesOrderService.validateOrderLinesForInvoicing(
+          tx,
+          order.items.map((item) => ({
+            productId: item.productId,
+            quantity: item.quantity,
+            product: item.product,
+          }))
+        );
+      }
+
+      const invoiceNumber = await nextInvoiceNumber(tx, type === 'SALES' ? 'INV' : 'PINV');
+      await tx.invoiceItem.deleteMany({ where: { invoiceId: id } });
+      const inv = await tx.invoice.update({
+        where: { id },
+        data: {
+          invoiceNumber,
+          type,
+          customerId,
+          supplierId,
+          salesOrderId,
+          purchaseOrderId,
+          customerPoNumber: type === 'SALES' ? resolvedCustomerPo : undefined,
+          ...(salesInvoiceDate ? { invoiceDate: salesInvoiceDate } : {}),
+          dueDate: dueDate
+            ? new Date(dueDate)
+            : salesInvoiceDate
+              ? new Date(salesInvoiceDate.getTime() + 30 * 24 * 60 * 60 * 1000)
+              : undefined,
+          fiscalStatus: type === 'SALES' ? 'PENDING' : 'NOT_REQUIRED',
+          subtotal,
+          taxAmount,
+          totalAmount,
+          status: 'UNPAID',
+          createdById: existing.createdById ?? req.user!.id,
+          notes,
+          items: {
+            create: items.map((item: { description: string; quantity: number; unitPrice: number }) => ({
+              ...item,
+              unitPrice: roundMoney(item.unitPrice),
+              taxRate: vatRate,
+              totalPrice: roundMoney(item.quantity * item.unitPrice),
+            })),
+          },
+        },
+        include: { customer: true, supplier: true, items: true },
+      });
+
+      if (type === 'SALES') {
+        await AccountingService.postSalesInvoice(tx, {
+          id: inv.id,
+          invoiceNumber: inv.invoiceNumber,
+          subtotal: Number(inv.subtotal),
+          taxAmount: Number(inv.taxAmount),
+          totalAmount: Number(inv.totalAmount),
+        });
+        if (customerId) await syncCustomerCreditUsed(customerId, tx);
+      }
+
+      if (type === 'CREDIT_NOTE') {
+        await AccountingService.postCreditNote(tx, {
+          id: inv.id,
+          invoiceNumber: inv.invoiceNumber,
+          subtotal: Number(inv.subtotal),
+          taxAmount: Number(inv.taxAmount),
+          totalAmount: Number(inv.totalAmount),
+        });
+        if (customerId) await syncCustomerCreditUsed(customerId, tx);
+      }
+
+      if (type === 'PURCHASE') {
+        await AccountingService.postPurchaseInvoice(tx, {
+          invoiceNumber: inv.invoiceNumber,
+          subtotal: Number(inv.subtotal),
+          taxAmount: Number(inv.taxAmount),
+          totalAmount: Number(inv.totalAmount),
+        });
+      }
+
+      return inv;
+    });
+
+    res.json({ success: true, data: invoice });
+  })
+);
+
+router.post(
   '/invoices',
   authorize('finance:create'),
   validate(createInvoiceSchema),
@@ -558,6 +906,7 @@ router.post(
           subtotal,
           taxAmount,
           totalAmount,
+          createdById: req.user!.id,
           notes,
           items: {
             create: items.map((item: { description: string; quantity: number; unitPrice: number }) => ({

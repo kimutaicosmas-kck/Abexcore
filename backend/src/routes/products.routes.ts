@@ -3,7 +3,7 @@ import { authenticate, authorize, authorizeProductPicker, AuthRequest, requireSu
 import { validate } from '../middleware/validate';
 import { asyncHandler, AppError } from '../middleware/errorHandler';
 import { auditLog } from '../middleware/auditLog';
-import { createProductSchema, updateProductSchema, productListQuerySchema, createProductCategorySchema, updateCatalogItemSchema, reorderCatalogSchema } from '../validators/schemas';
+import { createProductSchema, updateProductSchema, productListQuerySchema, createProductCategorySchema, updateCatalogItemSchema, reorderCatalogSchema, upsertBomSchema } from '../validators/schemas';
 import { createCrudService } from '../utils/crud';
 import { getParam, getQuery } from '../utils/request';
 import { ProductService } from '../services/catalog.service';
@@ -12,7 +12,7 @@ import { productImageUpload } from '../middleware/upload';
 import { acceptExcelUpload } from '../middleware/excelImport';
 import { compressProductImage } from '../utils/image';
 import { AccountingService } from '../services/accounting.service';
-import { injectTenantData } from '../utils/tenant';
+import { injectTenantData, requireTenantId } from '../utils/tenant';
 import { ExcelImportService } from '../services/excel-import.service';
 
 const router = Router();
@@ -701,6 +701,127 @@ router.post(
     });
 
     res.json({ success: true, data });
+  })
+);
+
+router.get(
+  '/:id/bom',
+  authorize('products:read'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const productId = getParam(req.params.id);
+    const product = await prisma.product.findFirst({
+      where: { id: productId, companyId: requireTenantId(), deletedAt: null },
+      select: { id: true, name: true, sku: true },
+    });
+    if (!product) throw new AppError('Product not found', 404);
+
+    const bom = await prisma.billOfMaterial.findUnique({
+      where: { productId },
+      include: {
+        items: {
+          include: {
+            rawMaterial: { select: { id: true, code: true, name: true, unit: true, unitCost: true } },
+          },
+        },
+      },
+    });
+
+    res.json({ success: true, data: { product, bom } });
+  })
+);
+
+router.get(
+  '/:id/bom/preview',
+  authorize('products:read'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const productId = getParam(req.params.id);
+    const quantity = Math.max(1, Number(req.query.quantity) || 1);
+
+    const product = await prisma.product.findFirst({
+      where: { id: productId, companyId: requireTenantId(), deletedAt: null },
+      select: { id: true, name: true, sku: true },
+    });
+    if (!product) throw new AppError('Product not found', 404);
+
+    const { ProductionService } = await import('../services/production.service');
+    const { lines, estimatedCost } = await ProductionService.explodeBom(prisma, productId, quantity);
+
+    res.json({
+      success: true,
+      data: { product, quantity, lines, estimatedCost },
+    });
+  })
+);
+
+router.put(
+  '/:id/bom',
+  authorize('products:update'),
+  validate(upsertBomSchema),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const productId = getParam(req.params.id);
+    const { version, notes, items } = req.body as {
+      version?: string;
+      notes?: string;
+      items: Array<{
+        rawMaterialId: string;
+        quantity: number;
+        unit?: string;
+        wastePercent?: number;
+        notes?: string;
+      }>;
+    };
+
+    const product = await prisma.product.findFirst({
+      where: { id: productId, companyId: requireTenantId(), deletedAt: null },
+      select: { id: true },
+    });
+    if (!product) throw new AppError('Product not found', 404);
+
+    const materialIds = [...new Set(items.map((i) => i.rawMaterialId))];
+    const materials = await prisma.rawMaterial.findMany({
+      where: { id: { in: materialIds }, companyId: requireTenantId(), deletedAt: null },
+      select: { id: true },
+    });
+    if (materials.length !== materialIds.length) {
+      throw new AppError('One or more raw materials were not found', 400);
+    }
+
+    const bom = await prisma.$transaction(async (tx) => {
+      const existing = await tx.billOfMaterial.findUnique({ where: { productId } });
+      const header = existing
+        ? await tx.billOfMaterial.update({
+            where: { id: existing.id },
+            data: { version: version || existing.version, notes, isActive: true },
+          })
+        : await tx.billOfMaterial.create({
+            data: { productId, version: version || '1.0', notes, isActive: true },
+          });
+
+      await tx.billOfMaterialItem.deleteMany({ where: { bomId: header.id } });
+      await tx.billOfMaterialItem.createMany({
+        data: items.map((item) => ({
+          bomId: header.id,
+          rawMaterialId: item.rawMaterialId,
+          quantity: item.quantity,
+          unit: item.unit || 'pcs',
+          wastePercent: item.wastePercent ?? 0,
+          notes: item.notes,
+        })),
+      });
+
+      return tx.billOfMaterial.findUniqueOrThrow({
+        where: { id: header.id },
+        include: {
+          items: {
+            include: {
+              rawMaterial: { select: { id: true, code: true, name: true, unit: true, unitCost: true } },
+            },
+          },
+        },
+      });
+    });
+
+    res.json({ success: true, data: bom });
   })
 );
 

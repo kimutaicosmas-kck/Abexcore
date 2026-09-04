@@ -11,6 +11,8 @@ import { useAuth, useVatRate } from '../../contexts/AuthContext';
 import { isSalesBookOwner } from '../../utils/salesTargets';
 import { getApiErrorCode, getApiErrorMessage } from '../../utils/apiError';
 import { ProductSearchSelect } from './ProductSearchSelect';
+import { FORM_DRAFT_MODULES, useModuleFormDraft } from '../../hooks/useModuleFormDraft';
+import { FormDraftNotice } from './FormDraftNotice';
 
 const orderItemSchema = z.object({
   productId: z.string().min(1, 'Product required'),
@@ -44,6 +46,15 @@ const salesOrderSchema = z.object({
 
 type SalesOrderFormData = z.infer<typeof salesOrderSchema>;
 
+const salesOrderDefaultValues: SalesOrderFormData = {
+  salesPersonId: '',
+  customerId: '',
+  orderDate: localDateInput(),
+  requiredDate: localDateInput(),
+  customerPoNumber: '',
+  items: [{ productId: '', quantity: 1, unitPrice: 0, discount: 0 }],
+};
+
 interface SalesOrderFormProps {
   onSuccess: () => void;
   onCancel: () => void;
@@ -63,15 +74,27 @@ export function SalesOrderForm({ onSuccess, onCancel }: SalesOrderFormProps) {
     return () => window.clearTimeout(t);
   }, [customerSearch]);
 
-  const { register, control, handleSubmit, watch, setValue, formState: { errors } } = useForm<SalesOrderFormData>({
+  const { register, control, handleSubmit, watch, setValue, getValues, reset: resetForm, formState: { errors } } = useForm<SalesOrderFormData>({
     resolver: zodResolver(salesOrderSchema),
-    defaultValues: {
-      salesPersonId: '',
-      customerId: '',
-      orderDate: localDateInput(),
-      requiredDate: localDateInput(),
-      customerPoNumber: '',
-      items: [{ productId: '', quantity: 1, unitPrice: 0, discount: 0 }],
+    defaultValues: salesOrderDefaultValues,
+  });
+
+  const { draftSavedAt, draftRestored, clearDraft } = useModuleFormDraft({
+    moduleKey: FORM_DRAFT_MODULES.salesOrder,
+    watch,
+    getValues,
+    reset: resetForm,
+    defaultValues: salesOrderDefaultValues,
+    isMeaningful: (data) =>
+      Boolean(data.customerId) ||
+      data.items.some((item) => Boolean(item.productId)) ||
+      Boolean(data.notes?.trim()) ||
+      Boolean(data.customerPoNumber?.trim()),
+    getUiState: () => ({ customerSearch }),
+    onRestoreUi: (ui) => {
+      if (ui?.customerSearch && typeof ui.customerSearch === 'string') {
+        setCustomerSearch(ui.customerSearch);
+      }
     },
   });
 
@@ -179,6 +202,7 @@ export function SalesOrderForm({ onSuccess, onCancel }: SalesOrderFormProps) {
       });
     },
     onSuccess: () => {
+      void clearDraft();
       queryClient.invalidateQueries({ queryKey: ['sales-orders'] });
       queryClient.invalidateQueries({ queryKey: ['sales-stats'] });
       queryClient.invalidateQueries({ queryKey: ['customers'] });
@@ -228,6 +252,7 @@ export function SalesOrderForm({ onSuccess, onCancel }: SalesOrderFormProps) {
           </div>
         }
       >
+      <FormDraftNotice draftSavedAt={draftSavedAt} draftRestored={draftRestored} />
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {canAssignSalesPerson && (
           <Select

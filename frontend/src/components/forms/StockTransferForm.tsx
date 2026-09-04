@@ -8,6 +8,8 @@ import { inventoryApi } from '../../services/api';
 import { Button, Input, Select } from '../ui';
 import { RawMaterial } from '../../types';
 import { ProductSearchSelect } from './ProductSearchSelect';
+import { FORM_DRAFT_MODULES, useModuleFormDraft } from '../../hooks/useModuleFormDraft';
+import { FormDraftNotice } from './FormDraftNotice';
 
 const transferSchema = z.object({
   fromWarehouseId: z.string().min(1, 'Source warehouse required'),
@@ -26,6 +28,14 @@ const transferSchema = z.object({
 });
 
 type TransferFormData = z.infer<typeof transferSchema>;
+
+const transferDefaultValues: TransferFormData = {
+  fromWarehouseId: '',
+  toWarehouseId: '',
+  quantity: 1,
+  productId: '',
+  rawMaterialId: '',
+};
 
 interface Warehouse {
   id: string;
@@ -60,9 +70,25 @@ export function StockTransferForm({ onSuccess, onCancel }: StockTransferFormProp
     queryFn: () => inventoryApi.materials({ limit: 100 }).then((r) => r.data.data as RawMaterial[]),
   });
 
-  const { register, control, handleSubmit, setValue, formState: { errors } } = useForm<TransferFormData>({
+  const { register, control, handleSubmit, watch, setValue, getValues, reset, formState: { errors } } = useForm<TransferFormData>({
     resolver: zodResolver(transferSchema),
-    defaultValues: { quantity: 1, productId: '', rawMaterialId: '' },
+    defaultValues: transferDefaultValues,
+  });
+
+  const { draftSavedAt, draftRestored, clearDraft } = useModuleFormDraft({
+    moduleKey: FORM_DRAFT_MODULES.stockTransfer,
+    watch,
+    getValues,
+    reset,
+    defaultValues: transferDefaultValues,
+    isMeaningful: (data) =>
+      Boolean(data.rawMaterialId) ||
+      Boolean(data.productId) ||
+      Boolean(data.fromWarehouseId) ||
+      Boolean(data.toWarehouseId) ||
+      Boolean(data.batchNumber?.trim()) ||
+      Boolean(data.notes?.trim()) ||
+      (data.quantity != null && data.quantity !== 1),
   });
 
   const rawMaterialId = useWatch({ control, name: 'rawMaterialId' });
@@ -95,6 +121,7 @@ export function StockTransferForm({ onSuccess, onCancel }: StockTransferFormProp
   const mutation = useMutation({
     mutationFn: (data: TransferFormData) => inventoryApi.transferStock(data),
     onSuccess: () => {
+      void clearDraft();
       queryClient.invalidateQueries({ queryKey: ['stock-levels'] });
       queryClient.invalidateQueries({ queryKey: ['transfers'] });
       queryClient.invalidateQueries({ queryKey: ['inventory-stats'] });
@@ -105,6 +132,7 @@ export function StockTransferForm({ onSuccess, onCancel }: StockTransferFormProp
 
   return (
     <form onSubmit={handleSubmit((d) => mutation.mutate(d))} className="space-y-4">
+      <FormDraftNotice draftSavedAt={draftSavedAt} draftRestored={draftRestored} />
       {mutation.isError && (
         <div className="p-3 rounded-lg bg-red-50 text-red-700 text-sm">
           {(mutation.error as AxiosError<{ message?: string }>)?.response?.data?.message ||

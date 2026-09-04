@@ -6,6 +6,8 @@ import { qualityApi, inventoryApi, operationsApi } from '../../services/api';
 import { Button, Input, Select } from '../ui';
 import { ProductionOrder } from '../../types';
 import { ProductSearchSelect } from './ProductSearchSelect';
+import { FORM_DRAFT_MODULES, useModuleFormDraft } from '../../hooks/useModuleFormDraft';
+import { FormDraftNotice } from './FormDraftNotice';
 
 const qualityTypeOptions = [
   { value: 'incoming', label: 'Incoming (procurement)' },
@@ -41,6 +43,15 @@ const qualitySchema = z
   });
 
 type QualityFormData = z.infer<typeof qualitySchema>;
+
+const qualityDefaultValues: QualityFormData = {
+  type: 'production',
+  status: 'PENDING',
+  goodsReceiptId: '',
+  productionOrderId: '',
+  productId: '',
+  defectsFound: 0,
+};
 
 interface GoodsReceipt {
   id: string;
@@ -78,16 +89,25 @@ export function QualityForm({ onSuccess, onCancel }: QualityFormProps) {
     ...(productionData || []).map((po) => ({ value: po.id, label: po.orderNumber })),
   ];
 
-  const { register, control, handleSubmit, watch, formState: { errors } } = useForm<QualityFormData>({
+  const { register, control, handleSubmit, watch, getValues, reset, formState: { errors } } = useForm<QualityFormData>({
     resolver: zodResolver(qualitySchema),
-    defaultValues: {
-      type: 'production',
-      status: 'PENDING',
-      goodsReceiptId: '',
-      productionOrderId: '',
-      productId: '',
-      defectsFound: 0,
-    },
+    defaultValues: qualityDefaultValues,
+  });
+
+  const { draftSavedAt, draftRestored, clearDraft } = useModuleFormDraft({
+    moduleKey: FORM_DRAFT_MODULES.quality,
+    watch,
+    getValues,
+    reset,
+    defaultValues: qualityDefaultValues,
+    isMeaningful: (data) =>
+      Boolean(data.goodsReceiptId) ||
+      Boolean(data.productionOrderId) ||
+      Boolean(data.productId) ||
+      Boolean(data.result?.trim()) ||
+      (data.defectsFound != null && data.defectsFound > 0) ||
+      data.type !== 'production' ||
+      data.status !== 'PENDING',
   });
 
   const inspectionType = watch('type');
@@ -105,6 +125,7 @@ export function QualityForm({ onSuccess, onCancel }: QualityFormProps) {
       return qualityApi.create(payload);
     },
     onSuccess: () => {
+      void clearDraft();
       queryClient.invalidateQueries({ queryKey: ['quality'] });
       queryClient.invalidateQueries({ queryKey: ['quality-stats'] });
       onSuccess();
@@ -113,6 +134,7 @@ export function QualityForm({ onSuccess, onCancel }: QualityFormProps) {
 
   return (
     <form onSubmit={handleSubmit((data) => mutation.mutate(data))} className="space-y-4">
+      <FormDraftNotice draftSavedAt={draftSavedAt} draftRestored={draftRestored} />
       {mutation.isError && (
         <div className="p-3 rounded-lg bg-red-50 text-red-700 text-sm">
           Failed to create quality inspection. Please try again.

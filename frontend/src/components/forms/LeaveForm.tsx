@@ -5,6 +5,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { hrApi } from '../../services/api';
 import { Button, Input, Select } from '../ui';
 import { Employee } from '../../types';
+import { FORM_DRAFT_MODULES, useModuleFormDraft } from '../../hooks/useModuleFormDraft';
+import { FormDraftNotice } from './FormDraftNotice';
 
 const leaveSchema = z.object({
   employeeId: z.string().min(1, 'Employee is required'),
@@ -15,6 +17,14 @@ const leaveSchema = z.object({
 });
 
 type LeaveFormData = z.infer<typeof leaveSchema>;
+
+const leaveDefaultValues: LeaveFormData = {
+  employeeId: '',
+  type: '',
+  startDate: '',
+  endDate: '',
+  reason: '',
+};
 
 const leaveTypeOptions = [
   { value: '', label: 'Select type...' },
@@ -47,15 +57,30 @@ export function LeaveForm({ onSuccess, onCancel }: LeaveFormProps) {
     })),
   ];
 
-  const { register, handleSubmit, formState: { errors } } = useForm<LeaveFormData>({
+  const { register, handleSubmit, watch, getValues, reset, formState: { errors } } = useForm<LeaveFormData>({
     resolver: zodResolver(leaveSchema),
-    defaultValues: { employeeId: '', type: '', reason: '' },
+    defaultValues: leaveDefaultValues,
+  });
+
+  const { draftSavedAt, draftRestored, clearDraft } = useModuleFormDraft({
+    moduleKey: FORM_DRAFT_MODULES.leave,
+    watch,
+    getValues,
+    reset,
+    defaultValues: leaveDefaultValues,
+    isMeaningful: (data) =>
+      Boolean(data.employeeId) ||
+      Boolean(data.type) ||
+      Boolean(data.startDate) ||
+      Boolean(data.endDate) ||
+      Boolean(data.reason?.trim()),
   });
 
   const mutation = useMutation({
     mutationFn: (data: LeaveFormData) =>
       hrApi.createLeave({ ...data, reason: data.reason || undefined }),
     onSuccess: () => {
+      void clearDraft();
       queryClient.invalidateQueries({ queryKey: ['leave'] });
       queryClient.invalidateQueries({ queryKey: ['hr-stats'] });
       onSuccess();
@@ -64,6 +89,7 @@ export function LeaveForm({ onSuccess, onCancel }: LeaveFormProps) {
 
   return (
     <form onSubmit={handleSubmit((data) => mutation.mutate(data))} className="space-y-4">
+      <FormDraftNotice draftSavedAt={draftSavedAt} draftRestored={draftRestored} />
       {mutation.isError && (
         <div className="p-3 rounded-lg bg-red-50 text-red-700 text-sm">
           Failed to submit leave request. Please try again.

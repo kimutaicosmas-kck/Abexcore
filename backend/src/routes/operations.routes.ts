@@ -8,7 +8,9 @@ import {
   updateSalesOrderItemsSchema,
   createProductionOrderSchema,
   completeProductionSchema,
+  updateSalesOrderAssignmentSchema,
   createQuotationSchema,
+  saveQuotationDraftSchema,
   salesListQuerySchema,
   salesStatsQuerySchema,
   paginationSchema,
@@ -29,6 +31,7 @@ import { getCustomerVatRate, roundMoney, splitInclusiveAmount } from '../utils/c
 import { assertCreditLimit, assertOrderStatusTransition, syncCustomerCreditUsed } from '../utils/credit';
 import { StockMovementService } from '../services/inventory.service';
 import { SalesOrderService, StockShortage } from '../services/sales-order.service';
+import { ProductionService } from '../services/production.service';
 import { PosCheckoutService } from '../services/pos-checkout.service';
 import { AccountingService } from '../services/accounting.service';
 import { salesPersonOrderFilter } from '../services/my-sales.service';
@@ -64,6 +67,54 @@ function resolveSalesOrderDate(orderDate?: string): Date {
     throw new AppError('Order date cannot be more than 365 days in the past', 400);
   }
   return day;
+}
+
+type QuotationDraftItem = {
+  productId?: string;
+  quantity?: number;
+  unitPrice?: number;
+  discount?: number;
+};
+
+async function computeQuotationDraftTotals(
+  customerId: string | undefined,
+  items: QuotationDraftItem[] | undefined
+) {
+  const lineItems = (items || []).filter(
+    (item): item is Required<Pick<QuotationDraftItem, 'productId'>> & QuotationDraftItem =>
+      Boolean(item.productId)
+  );
+  if (!customerId || lineItems.length === 0) {
+    return { subtotal: 0, taxAmount: 0, totalAmount: 0, vatRate: 0 };
+  }
+  const customer = await prisma.customer.findFirst({
+    where: { id: customerId, deletedAt: null },
+    select: { id: true, vatStatus: true },
+  });
+  if (!customer) throw new AppError('Customer not found', 404);
+  const vatRate = await getCustomerVatRate(customer);
+  const gross = lineItems.reduce(
+    (sum, item) =>
+      sum +
+      (item.quantity || 1) * (item.unitPrice || 0) * (1 - (item.discount || 0) / 100),
+    0
+  );
+  const { subtotal, taxAmount, totalAmount } = splitInclusiveAmount(gross, vatRate);
+  return { subtotal, taxAmount, totalAmount, vatRate };
+}
+
+function mapQuotationDraftItems(items: QuotationDraftItem[] | undefined) {
+  return (items || [])
+    .filter((item) => item.productId)
+    .map((item) => ({
+      productId: item.productId!,
+      quantity: item.quantity || 1,
+      unitPrice: roundMoney(item.unitPrice || 0),
+      discount: item.discount || 0,
+      totalPrice: roundMoney(
+        (item.quantity || 1) * (item.unitPrice || 0) * (1 - (item.discount || 0) / 100)
+      ),
+    }));
 }
 
 function salesPersonLabel(order: {
@@ -460,6 +511,96 @@ router.post(
 );
 
 router.patch(
+  '/orders/:id/assignment',
+  authorize('sales:update'),
+  validate(updateSalesOrderAssignmentSchema),
+  auditLog('sales', 'update', 'sales_order'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const orderId = getParam(req.params.id);
+    const { salesPersonId, reason } = req.body as { salesPersonId: string | null; reason: string };
+
+    if (isSalesPersonRole(req.user!.roleName)) {
+      throw new AppError('Only managers can reassign sales orders to another salesperson', 403);
+    }
+
+    const existing = await prisma.salesOrder.findUnique({
+      where: { id: orderId },
+      select: {
+        id: true,
+        orderNumber: true,
+        status: true,
+        salesPersonId: true,
+        createdById: true,
+        customerId: true,
+      },
+    });
+    if (!existing) throw new AppError('Sales order not found', 404);
+    assertSalesBookOrderAccess(req.user!.roleName, req.user!.id, existing);
+
+    if (['DELIVERED', 'COMPLETED', 'CANCELLED'].includes(existing.status)) {
+      throw new AppError('Cannot reassign a closed or cancelled sales order', 400);
+    }
+
+    if (salesPersonId) {
+      const officer = await prisma.user.findFirst({
+        where: {
+          id: salesPersonId,
+          companyId: requireTenantId(),
+          deletedAt: null,
+          status: 'ACTIVE',
+          role: { name: { in: [...SALES_PERSON_ROLE_NAMES] } },
+        },
+        select: { id: true },
+      });
+      if (!officer) {
+        throw new AppError('Selected sales person is not a valid sales role', 400);
+      }
+    }
+
+    const prior = await prisma.salesOrder.findUnique({
+      where: { id: orderId },
+      select: { notes: true },
+    });
+
+    const refreshed = await prisma.salesOrder.update({
+      where: { id: orderId },
+      data: {
+        salesPersonId,
+        notes: prior?.notes
+          ? `${prior.notes}\n[Reassigned] ${reason}`
+          : `[Reassigned] ${reason}`,
+      },
+      include: {
+        customer: true,
+        items: { include: { product: true } },
+        salesPerson: { select: { id: true, firstName: true, lastName: true } },
+        createdBy: { select: { firstName: true, lastName: true } },
+        deliveries: { select: { id: true, deliveryNo: true, status: true } },
+        invoices: { select: { id: true, invoiceNumber: true, status: true, totalAmount: true } },
+      },
+    });
+
+    const notifyUserId = salesPersonId
+      ? await resolveSalesOrderNotifyUserId({
+          salesPersonId,
+          createdById: existing.createdById,
+        })
+      : null;
+    if (notifyUserId && notifyUserId !== req.user!.id) {
+      await NotificationService.notifyUser(
+        notifyUserId,
+        'SYSTEM',
+        `Sales order ${existing.orderNumber} assigned to you`,
+        reason,
+        '/sales'
+      );
+    }
+
+    res.json({ success: true, data: refreshed });
+  })
+);
+
+router.patch(
   '/orders/:id/items',
   authorize('sales:update'),
   validate(updateSalesOrderItemsSchema),
@@ -821,6 +962,196 @@ router.get(
 );
 
 router.post(
+  '/quotations/draft',
+  authorize('sales:create'),
+  validate(saveQuotationDraftSchema),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const { customerId, validUntil, notes, items } = req.body as {
+      customerId?: string;
+      validUntil?: string;
+      notes?: string;
+      items?: QuotationDraftItem[];
+    };
+
+    if (customerId) {
+      const customer = await prisma.customer.findFirst({
+        where: {
+          id: customerId,
+          deletedAt: null,
+          ...(isSalesBookOwner(req.user!.roleName)
+            ? { salesPersonId: req.user!.id }
+            : {}),
+        },
+        select: { id: true },
+      });
+      if (!customer) throw new AppError('Customer not found', 404);
+    }
+
+    const totals = await computeQuotationDraftTotals(customerId, items);
+    const count = await prisma.salesQuotation.count();
+    const quotationNo = generateNumber('QT', count + 1);
+    const mappedItems = mapQuotationDraftItems(items);
+
+    const quotation = await prisma.salesQuotation.create({
+      data: injectTenantData({
+        quotationNo,
+        customerId: customerId || null,
+        validUntil: validUntil ? new Date(validUntil) : undefined,
+        notes,
+        status: 'DRAFT',
+        subtotal: totals.subtotal,
+        taxAmount: totals.taxAmount,
+        totalAmount: totals.totalAmount,
+        createdById: req.user!.id,
+        ...(mappedItems.length > 0
+          ? { items: { create: mappedItems } }
+          : {}),
+      }),
+      include: { customer: true, items: { include: { product: true } } },
+    });
+
+    res.status(201).json({ success: true, data: quotation });
+  })
+);
+
+router.patch(
+  '/quotations/:id/draft',
+  authorize('sales:create'),
+  validate(saveQuotationDraftSchema),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const id = getParam(req.params.id);
+    const existing = await prisma.salesQuotation.findUnique({
+      where: { id },
+      include: { salesOrders: { select: { id: true } } },
+    });
+    if (!existing) throw new AppError('Quotation not found', 404);
+    if (existing.status !== 'DRAFT') {
+      throw new AppError('Only draft quotations can be updated this way', 400);
+    }
+    if (existing.salesOrders.length > 0) {
+      throw new AppError('Quotation has already been converted', 400);
+    }
+
+    const { customerId, validUntil, notes, items } = req.body as {
+      customerId?: string;
+      validUntil?: string;
+      notes?: string;
+      items?: QuotationDraftItem[];
+    };
+
+    if (customerId) {
+      const customer = await prisma.customer.findFirst({
+        where: {
+          id: customerId,
+          deletedAt: null,
+          ...(isSalesBookOwner(req.user!.roleName)
+            ? { salesPersonId: req.user!.id }
+            : {}),
+        },
+        select: { id: true },
+      });
+      if (!customer) throw new AppError('Customer not found', 404);
+    }
+
+    const totals = await computeQuotationDraftTotals(customerId, items);
+    const mappedItems = mapQuotationDraftItems(items);
+
+    const quotation = await prisma.$transaction(async (tx) => {
+      await tx.quotationItem.deleteMany({ where: { quotationId: id } });
+      return tx.salesQuotation.update({
+        where: { id },
+        data: {
+          customerId: customerId ?? null,
+          validUntil: validUntil ? new Date(validUntil) : null,
+          notes,
+          subtotal: totals.subtotal,
+          taxAmount: totals.taxAmount,
+          totalAmount: totals.totalAmount,
+          ...(mappedItems.length > 0
+            ? { items: { create: mappedItems } }
+            : {}),
+        },
+        include: { customer: true, items: { include: { product: true } } },
+      });
+    });
+
+    res.json({ success: true, data: quotation });
+  })
+);
+
+router.post(
+  '/quotations/:id/finalize',
+  authorize('sales:create'),
+  validate(createQuotationSchema),
+  auditLog('sales', 'create', 'sales_quotation'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const id = getParam(req.params.id);
+    const existing = await prisma.salesQuotation.findUnique({
+      where: { id },
+      include: { salesOrders: { select: { id: true } } },
+    });
+    if (!existing) throw new AppError('Quotation not found', 404);
+    if (existing.status !== 'DRAFT') {
+      throw new AppError('Only draft quotations can be finalized', 400);
+    }
+    if (existing.salesOrders.length > 0) {
+      throw new AppError('Quotation has already been converted', 400);
+    }
+
+    const { customerId, validUntil, notes, items } = req.body;
+    const customer = await prisma.customer.findFirst({
+      where: {
+        id: customerId,
+        deletedAt: null,
+        ...(isSalesBookOwner(req.user!.roleName)
+          ? { salesPersonId: req.user!.id }
+          : {}),
+      },
+      select: { id: true, vatStatus: true },
+    });
+    if (!customer) throw new AppError('Customer not found', 404);
+    const vatRate = await getCustomerVatRate(customer);
+
+    const gross = items.reduce(
+      (sum: number, item: { quantity: number; unitPrice: number; discount?: number }) =>
+        sum + item.quantity * item.unitPrice * (1 - (item.discount || 0) / 100),
+      0
+    );
+    const { subtotal, taxAmount, totalAmount } = splitInclusiveAmount(gross, vatRate);
+    const mappedItems = items.map(
+      (item: { productId: string; quantity: number; unitPrice: number; discount?: number }) => ({
+        ...item,
+        unitPrice: roundMoney(item.unitPrice),
+        totalPrice: roundMoney(
+          item.quantity * item.unitPrice * (1 - (item.discount || 0) / 100)
+        ),
+      })
+    );
+
+    const quotation = await prisma.$transaction(async (tx) => {
+      await tx.quotationItem.deleteMany({ where: { quotationId: id } });
+      return tx.salesQuotation.update({
+        where: { id },
+        data: {
+          customerId,
+          validUntil: validUntil ? new Date(validUntil) : null,
+          notes,
+          subtotal,
+          taxAmount,
+          totalAmount,
+          status: 'PENDING',
+          createdById: existing.createdById ?? req.user!.id,
+          items: { create: mappedItems },
+        },
+        include: { customer: true, items: { include: { product: true } } },
+      });
+    });
+
+    res.json({ success: true, data: quotation });
+  })
+);
+
+router.post(
   '/quotations',
   authorize('sales:create'),
   validate(createQuotationSchema),
@@ -856,9 +1187,11 @@ router.post(
         customerId,
         validUntil: validUntil ? new Date(validUntil) : undefined,
         notes,
+        status: 'PENDING',
         subtotal,
         taxAmount,
         totalAmount,
+        createdById: req.user!.id,
         items: {
           create: items.map((item: { productId: string; quantity: number; unitPrice: number; discount?: number }) => ({
             ...item,
@@ -893,7 +1226,15 @@ router.post(
       throw new AppError('Quotation has already been converted', 400);
     }
 
-    await assertCreditLimit(quotation.customerId, Number(quotation.totalAmount));
+    if (quotation.status === 'DRAFT') {
+      throw new AppError('Complete the quotation before converting it to a sales order', 400);
+    }
+    if (!quotation.customerId) {
+      throw new AppError('Quotation must have a customer before conversion', 400);
+    }
+    const quotationCustomerId = quotation.customerId;
+
+    await assertCreditLimit(quotationCustomerId, Number(quotation.totalAmount));
 
     const count = await prisma.salesOrder.count();
     const orderNumber = generateNumber('SO', count + 1);
@@ -902,7 +1243,7 @@ router.post(
 
     const order = await prisma.$transaction(async (tx) => {
       await SalesOrderService.assertUniqueSalesOrder(tx, {
-        customerId: quotation.customerId,
+        customerId: quotationCustomerId,
         businessDate: new Date(),
         items: quotation.items.map((item) => ({
           productId: item.productId,
@@ -915,7 +1256,7 @@ router.post(
       const so = await tx.salesOrder.create({
         data: injectTenantData({
           orderNumber,
-          customerId: quotation.customerId,
+          customerId: quotationCustomerId,
           quotationId: quotation.id,
           createdById: req.user!.id,
           salesPersonId: assignedSalesPersonId,
@@ -944,7 +1285,7 @@ router.post(
         data: { status: 'APPROVED' },
       });
 
-      await syncCustomerCreditUsed(quotation.customerId, tx);
+      await syncCustomerCreditUsed(quotationCustomerId, tx);
       return so;
     });
 
@@ -1055,14 +1396,42 @@ router.post(
         },
       });
 
+      await ProductionService.attachBomConsumption(tx, created.id, productId, quantity);
+
       if (salesOrderId) {
         await SalesOrderService.maybeSetInProduction(tx, salesOrderId);
       }
 
-      return created;
+      return tx.productionOrder.findUniqueOrThrow({
+        where: { id: created.id },
+        include: {
+          product: true,
+          consumption: { include: { rawMaterial: true } },
+        },
+      });
     });
 
     res.status(201).json({ success: true, data: productionOrder });
+  })
+);
+
+router.get(
+  '/production/:id',
+  authorize('production:read'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const data = await prisma.productionOrder.findFirst({
+      where: { id: getParam(req.params.id), companyId: requireTenantId() },
+      include: {
+        product: true,
+        machine: true,
+        salesOrder: { select: { id: true, orderNumber: true } },
+        assignedTo: { select: { firstName: true, lastName: true } },
+        consumption: { include: { rawMaterial: true } },
+        batches: true,
+      },
+    });
+    if (!data) throw new AppError('Production order not found', 404);
+    res.json({ success: true, data });
   })
 );
 
@@ -1115,11 +1484,14 @@ router.post(
   validate(completeProductionSchema),
   auditLog('production', 'update', 'production_order'),
   asyncHandler(async (req: AuthRequest, res: Response) => {
-    const { completedQty, rejectedQty, warehouseId } = req.body;
+    const { completedQty, rejectedQty, warehouseId, consumption } = req.body;
 
     const order = await prisma.productionOrder.findUnique({
       where: { id: getParam(req.params.id) },
-      include: { consumption: true, product: true },
+      include: {
+        consumption: { include: { rawMaterial: true } },
+        product: true,
+      },
     });
 
     if (!order) throw new AppError('Production order not found', 404);
@@ -1139,135 +1511,15 @@ router.post(
       );
     }
 
-    const result = await prisma.$transaction(async (tx) => {
-      const fgWarehouseId = await StockMovementService.getFinishedGoodsWarehouseId(tx);
-      if (warehouseId && warehouseId !== fgWarehouseId) {
-        throw new AppError('Production output must be posted to the finished goods warehouse', 400);
-      }
-
-      let rawMaterialsWarehouseId: string;
-      try {
-        rawMaterialsWarehouseId = await StockMovementService.getRawMaterialsWarehouseId(tx);
-      } catch (err) {
-        throw new AppError(
-          'Raw materials warehouse is required before completing production. Create WH-RM (raw_materials) first.',
-          400
-        );
-      }
-
-      let totalMaterialCost = 0;
-
-      for (const consumption of order.consumption) {
-        const consumeWarehouseId = rawMaterialsWarehouseId;
-        const stockLevel = await tx.stockLevel.findFirst({
-          where: { rawMaterialId: consumption.rawMaterialId, warehouseId: consumeWarehouseId },
-        });
-
-        if (stockLevel) {
-          const consumeQty = Number(consumption.plannedQty);
-          const unitCost = Number(stockLevel.unitCost);
-          totalMaterialCost += consumeQty * unitCost;
-
-          const newQty = Number(stockLevel.quantity) - consumeQty;
-          if (newQty < 0) throw new AppError(`Insufficient ${consumption.rawMaterialId} stock`, 400);
-
-          await tx.stockLevel.update({
-            where: { id: stockLevel.id },
-            data: { quantity: newQty },
-          });
-
-          await tx.inventoryTransaction.create({
-            data: {
-              warehouseId: consumeWarehouseId,
-              type: 'PRODUCTION_CONSUMPTION',
-              rawMaterialId: consumption.rawMaterialId,
-              quantity: consumeQty,
-              unitCost,
-              referenceType: 'production_order',
-              referenceId: order.id,
-              createdById: req.user!.id,
-            },
-          });
-        }
-      }
-
-      const batchNumber = generateNumber('BATCH', (await tx.productionBatch.count()) + 1);
-
-      await tx.productionBatch.create({
-        data: {
-          productionOrderId: order.id,
-          batchNumber,
-          quantity: completedQty,
-        },
-      });
-
-      const fgUnitCost =
-        completedQty > 0
-          ? totalMaterialCost / completedQty
-          : Number(order.product.manufacturingCost);
-
-      const fgStock = await tx.stockLevel.findFirst({
-        where: { productId: order.productId, warehouseId: fgWarehouseId },
-      });
-
-      if (fgStock) {
-        await tx.stockLevel.update({
-          where: { id: fgStock.id },
-          data: {
-            quantity: { increment: completedQty },
-            unitCost: fgUnitCost,
-          },
-        });
-      } else {
-        await tx.stockLevel.create({
-          data: {
-            warehouseId: fgWarehouseId,
-            productId: order.productId,
-            batchNumber,
-            quantity: completedQty,
-            unitCost: fgUnitCost,
-          },
-        });
-      }
-
-      await tx.inventoryTransaction.create({
-        data: {
-          warehouseId: fgWarehouseId,
-          type: 'PRODUCTION_OUTPUT',
-          productId: order.productId,
-          batchNumber,
-          quantity: completedQty,
-          unitCost: fgUnitCost,
-          referenceType: 'production_order',
-          referenceId: order.id,
-          createdById: req.user!.id,
-        },
-      });
-
-      await AccountingService.postProductionCosting(tx, {
-        orderNumber: order.orderNumber,
-        materialCost: totalMaterialCost,
-        finishedGoodsCost: totalMaterialCost,
-      });
-
-      const productionResult = await tx.productionOrder.update({
-        where: { id: order.id },
-        data: {
-          status: 'COMPLETED',
-          actualEnd: new Date(),
-          completedQty,
-          rejectedQty: rejectedQty || 0,
-        },
-        include: { product: true, batches: true },
-      });
-
-      // When all linked production is done, advance the sales order so Delivery/Sales see READY.
-      if (order.salesOrderId) {
-        await SalesOrderService.maybeAdvanceToReady(tx, order.salesOrderId);
-      }
-
-      return productionResult;
-    });
+    const result = await prisma.$transaction(async (tx) =>
+      ProductionService.completeProduction(tx, order, {
+        completedQty,
+        rejectedQty,
+        warehouseId,
+        consumptionOverrides: consumption,
+        userId: req.user!.id,
+      })
+    );
 
     res.json({ success: true, data: result });
   })
