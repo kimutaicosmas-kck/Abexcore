@@ -82,6 +82,10 @@ export class InventoryService {
       sumStockQuantities(m.stockLevels) > 0
     ).length;
 
+    const finishedGoodsInStock = products.filter((p) =>
+      sumStockQuantities(p.stockLevels) > 0
+    ).length;
+
     const [warehouses, materialsCount, transfersToday] = await Promise.all([
       prisma.warehouse.count({ where: { isActive: true, deletedAt: null } }),
       prisma.rawMaterial.count({ where: { deletedAt: null, isActive: true } }),
@@ -95,6 +99,7 @@ export class InventoryService {
     return {
       materialsCount,
       rawMaterialsInStock,
+      finishedGoodsInStock,
       warehouses,
       lowStockCount: lowMaterials.length + lowProducts.length,
       inventoryValue,

@@ -266,6 +266,7 @@ export interface ProductStats {
 export interface InventoryStats {
   materialsCount: number;
   rawMaterialsInStock?: number;
+  finishedGoodsInStock?: number;
   warehouses: number;
   lowStockCount: number;
   inventoryValue: number;

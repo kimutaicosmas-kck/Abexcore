@@ -198,6 +198,10 @@ export const stockLevelListQuerySchema = paginationSchema.extend({
     (v) => (v === '' || v === undefined ? undefined : v),
     z.string().uuid().optional()
   ),
+  itemType: z.preprocess(
+    (v) => (v === '' || v === undefined ? undefined : v),
+    z.enum(['RAW_MATERIAL', 'PRODUCT']).optional()
+  ),
 });
 
 export const userListQuerySchema = paginationSchema.extend({

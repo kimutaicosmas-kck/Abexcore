@@ -616,11 +616,12 @@ router.get('/warehouses', authorize('inventory:read'), asyncHandler(async (_req:
 const listStockLevels = asyncHandler(async (req: AuthRequest, res: Response) => {
   await StockMovementService.relocateMisplacedRawMaterialStock();
 
-  const { page, limit, search, warehouseId } = getQuery<{
+  const { page, limit, search, warehouseId, itemType } = getQuery<{
     page: number;
     limit: number;
     search?: string;
     warehouseId?: string;
+    itemType?: 'RAW_MATERIAL' | 'PRODUCT';
   }>(req.query);
   const skip = (page - 1) * limit;
 
@@ -633,6 +634,14 @@ const listStockLevels = asyncHandler(async (req: AuthRequest, res: Response) => 
     if (!warehouse) throw new AppError('Warehouse not found', 404);
 
     if (warehouse.type === 'raw_materials') {
+      if (itemType === 'PRODUCT') {
+        res.json({
+          success: true,
+          data: [],
+          pagination: { page, limit, total: 0, totalPages: 0 },
+        });
+        return;
+      }
       const materialWhere: Prisma.RawMaterialWhereInput = {
         isActive: true,
         deletedAt: null,
@@ -700,6 +709,8 @@ const listStockLevels = asyncHandler(async (req: AuthRequest, res: Response) => 
 
   const where: Prisma.StockLevelWhereInput = mergeTenantWarehouseWhere({
     ...(warehouseId ? { warehouseId } : {}),
+    ...(itemType === 'RAW_MATERIAL' ? { rawMaterialId: { not: null } } : {}),
+    ...(itemType === 'PRODUCT' ? { productId: { not: null } } : {}),
     ...(search
       ? {
           OR: [

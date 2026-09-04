@@ -83,6 +83,7 @@ export function InventoryPage() {
   const [txPage, setTxPage] = useState(1);
   const [stockSearch, setStockSearch] = useState('');
   const [stockWarehouseId, setStockWarehouseId] = useState('');
+  const [stockItemType, setStockItemType] = useState('');
   const [matSearch, setMatSearch] = useState('');
   const [matType, setMatType] = useState('');
   const [txSearch, setTxSearch] = useState('');
@@ -114,7 +115,7 @@ export function InventoryPage() {
   ];
 
   const { data: stockLevels, isLoading: stockLoading, isError: stockError, refetch: refetchStock } = useQuery({
-    queryKey: ['stock-levels', stockPage, stockSearch, stockWarehouseId],
+    queryKey: ['stock-levels', stockPage, stockSearch, stockWarehouseId, stockItemType],
     queryFn: () =>
       inventoryApi
         .stockLevels({
@@ -122,6 +123,7 @@ export function InventoryPage() {
           limit: 15,
           search: stockSearch || undefined,
           warehouseId: stockWarehouseId || undefined,
+          itemType: stockItemType || undefined,
         })
         .then((r) => r.data),
     enabled: activeTab === 0,
@@ -198,6 +200,18 @@ export function InventoryPage() {
   );
 
   const stockColumns = [
+    {
+      key: 'itemType',
+      label: 'Type',
+      render: (_: unknown, row: Record<string, unknown>) => {
+        const isMaterial = Boolean(row.rawMaterial);
+        return (
+          <Badge variant={isMaterial ? 'warning' : 'success'}>
+            {isMaterial ? 'Raw material' : 'Finished good'}
+          </Badge>
+        );
+      },
+    },
     {
       key: 'item',
       label: 'Item',
@@ -464,28 +478,48 @@ export function InventoryPage() {
         <StatGrid>
           <StatCard
             title="Raw material value"
-            value={formatCurrency(stats.rawMaterialValue ?? stats.inventoryValue)}
+            value={formatCurrency(stats.rawMaterialValue ?? 0)}
             icon={<Package className="h-5 w-5 text-white" />}
             color="from-amber-500 to-orange-600"
-            onClick={() => goToTab(1)}
+            onClick={() => {
+              setStockItemType('RAW_MATERIAL');
+              setStockPage(1);
+              goToTab(0);
+            }}
+          />
+          <StatCard
+            title="Finished goods value"
+            value={formatCurrency(stats.finishedGoodsValue ?? 0)}
+            icon={<Boxes className="h-5 w-5 text-white" />}
+            color="from-emerald-500 to-teal-600"
+            onClick={() => {
+              setStockItemType('PRODUCT');
+              setStockPage(1);
+              goToTab(0);
+            }}
           />
           <StatCard
             title="Materials in stock"
-            value={stats.rawMaterialsInStock ?? stats.materialsCount}
-            icon={<Boxes className="h-5 w-5 text-white" />}
+            value={stats.rawMaterialsInStock ?? 0}
+            icon={<Package className="h-5 w-5 text-white" />}
             color="from-violet-500 to-violet-700"
             onClick={() => goToTab(1)}
-          />
-          <StatCard
-            title="Total inventory value"
-            value={formatCurrency(stats.inventoryValue)}
-            icon={<Boxes className="h-5 w-5 text-white" />}
-            color="from-cyan-500 to-cyan-700"
-            onClick={() => goToTab(0)}
             className="hidden sm:flex"
           />
           <StatCard
-            title="Low stock"
+            title="Finished goods in stock"
+            value={stats.finishedGoodsInStock ?? 0}
+            icon={<Boxes className="h-5 w-5 text-white" />}
+            color="from-cyan-500 to-cyan-700"
+            onClick={() => {
+              setStockItemType('PRODUCT');
+              setStockPage(1);
+              goToTab(0);
+            }}
+            className="hidden md:flex"
+          />
+          <StatCard
+            title="Low stock items"
             value={stats.lowStockCount}
             icon={<TrendingDown className="h-5 w-5 text-white" />}
             color="from-orange-500 to-orange-700"
@@ -495,11 +529,9 @@ export function InventoryPage() {
       )}
 
       <Alert variant="info">
-        <strong>Material cost &amp; stock:</strong> the <strong>Materials</strong> tab shows on-hand quantity,
-        unit cost, and stock value. If unit cost shows <strong>Ksh 0 — set cost</strong>, edit the material or
-        receive stock via <strong>Procurement → Goods Receipt</strong> with a unit price. The top{' '}
-        <strong>Inventory value</strong> includes finished goods too — open <strong>Stock Levels</strong> and filter
-        WH-RM for raw materials only.
+        <strong>Raw materials</strong> and <strong>finished goods</strong> are valued separately above.
+        Use <strong>Materials</strong> for raw material qty/cost, or <strong>Stock Levels</strong> with the type filter.
+        Set unit costs on materials (edit row) or via goods receipt so raw material value is accurate.
       </Alert>
 
       <PageHeader
@@ -527,6 +559,16 @@ export function InventoryPage() {
             />
             <Select
               options={[
+                { value: '', label: 'All types' },
+                { value: 'RAW_MATERIAL', label: 'Raw materials only' },
+                { value: 'PRODUCT', label: 'Finished goods only' },
+              ]}
+              value={stockItemType}
+              onChange={(e) => { setStockItemType(e.target.value); setStockPage(1); }}
+              className="sm:w-52"
+            />
+            <Select
+              options={[
                 { value: '', label: 'All warehouses' },
                 ...warehouseList.map((wh) => ({
                   value: wh.id,
@@ -538,17 +580,27 @@ export function InventoryPage() {
               className="sm:w-64"
             />
           </div>
-          {stockWarehouseId && (
+          {(stockWarehouseId || stockItemType) && (
             <Alert variant="info" className="mb-4">
-              {warehouseList.find((w) => w.id === stockWarehouseId)?.type === 'raw_materials'
-                ? 'Showing raw materials for this warehouse (on-hand qty may be 0 until you receive or adjust stock). '
-                : 'Showing stock for one warehouse. '}
+              {stockItemType === 'RAW_MATERIAL' && 'Showing raw materials only. '}
+              {stockItemType === 'PRODUCT' && 'Showing finished goods only. '}
+              {stockWarehouseId && (
+                <>
+                  {warehouseList.find((w) => w.id === stockWarehouseId)?.type === 'raw_materials'
+                    ? 'Warehouse: raw materials store. '
+                    : 'Filtered to one warehouse. '}
+                </>
+              )}
               <button
                 type="button"
                 className="underline font-medium"
-                onClick={() => { setStockWarehouseId(''); setStockPage(1); }}
+                onClick={() => {
+                  setStockWarehouseId('');
+                  setStockItemType('');
+                  setStockPage(1);
+                }}
               >
-                Clear filter
+                Clear filters
               </button>
             </Alert>
           )}
