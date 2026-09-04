@@ -146,91 +146,15 @@ export function ProductLineItemsEditor({
         <p className="mb-2 text-sm text-red-600">{String(errors.items.message)}</p>
       )}
 
-      {frozenIndices.length > 0 && (
-        <div className="mb-3 overflow-hidden rounded-xl border border-slate-200 bg-white">
-          <div className="border-b border-slate-200 bg-slate-50 px-3 py-2">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Added items ({frozenIndices.length})
-            </p>
-          </div>
-          <div className="max-h-[min(40vh,280px)] overflow-y-auto overscroll-contain">
-            <table className="w-full min-w-[520px] text-left text-sm">
-              <thead className="sticky top-0 z-10 bg-slate-100 text-xs uppercase tracking-wide text-slate-500 shadow-[0_1px_0_0_rgb(226,232,240)]">
-                <tr>
-                  <th className="px-3 py-2 font-semibold">Product</th>
-                  <th className="px-2 py-2 font-semibold text-right w-14">Qty</th>
-                  <th className="px-2 py-2 font-semibold text-right w-24">Price</th>
-                  <th className="hidden px-2 py-2 font-semibold text-right w-16 sm:table-cell">Disc</th>
-                  <th className="px-2 py-2 font-semibold text-right w-24">Total</th>
-                  <th className="px-2 py-2 w-20" aria-label="Actions" />
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {frozenIndices.map((index) => {
-                  const item = items[index];
-                  const removable = canRemoveItem
-                    ? canRemoveItem(index, item)
-                    : fields.length > 1;
-                  return (
-                    <tr
-                      key={fields[index].id}
-                      className={clsx(
-                        'hover:bg-primary-50/40',
-                        !item?.productId && 'bg-amber-50/40'
-                      )}
-                    >
-                      <td className="max-w-[220px] px-3 py-2.5 font-medium text-slate-900">
-                        <ProductLineLabel productId={item?.productId || ''} />
-                      </td>
-                      <td className="px-2 py-2.5 text-right tabular-nums text-slate-700">
-                        {item?.quantity ?? '—'}
-                      </td>
-                      <td className="px-2 py-2.5 text-right tabular-nums text-slate-700">
-                        {formatCurrency(Number(item?.unitPrice || 0))}
-                      </td>
-                      <td className="hidden px-2 py-2.5 text-right tabular-nums text-slate-600 sm:table-cell">
-                        {Number(item?.discount || 0)}%
-                      </td>
-                      <td className="px-2 py-2.5 text-right font-medium tabular-nums text-slate-900">
-                        {formatCurrency(lineTotal(item))}
-                      </td>
-                      <td className="px-2 py-2.5">
-                        <div className="flex items-center justify-end gap-0.5">
-                          <button
-                            type="button"
-                            onClick={() => setActiveIndex(index)}
-                            className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 hover:text-primary-700"
-                            title="Edit item"
-                            aria-label={`Edit item ${index + 1}`}
-                          >
-                            <Pencil className="h-3.5 w-3.5" />
-                          </button>
-                          <button
-                            type="button"
-                            disabled={!removable}
-                            onClick={() => handleRemove(index)}
-                            className="rounded-lg p-1.5 text-slate-500 hover:bg-red-50 hover:text-red-600 disabled:opacity-30"
-                            title={removable ? 'Remove item' : 'Cannot remove'}
-                            aria-label={`Remove item ${index + 1}`}
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
       {fields[activeIndex] && (
-        <div className="rounded-2xl border border-primary-100 bg-white p-3 shadow-sm sm:p-4 space-y-3 ring-1 ring-primary-50">
+        <div className="mb-3 rounded-2xl border border-primary-100 bg-white p-3 shadow-sm sm:p-4 space-y-3 ring-1 ring-primary-50">
           <div className="flex items-center justify-between gap-2">
             <p className="text-xs font-semibold uppercase tracking-wide text-primary-700">
-              {frozenIndices.length > 0 ? `Editing item ${activeIndex + 1}` : `Item ${activeIndex + 1}`}
+              {activeIndex === fields.length - 1 && frozenIndices.length > 0
+                ? 'New item'
+                : frozenIndices.length > 0
+                  ? `Editing item ${activeIndex + 1}`
+                  : `Item ${activeIndex + 1}`}
             </p>
             {fields.length > 1 && (
               <Button
@@ -322,6 +246,86 @@ export function ProductLineItemsEditor({
             <span className="text-sm font-semibold tabular-nums text-slate-900">
               {formatCurrency(activeLineTotal)}
             </span>
+          </div>
+        </div>
+      )}
+
+      {frozenIndices.length > 0 && (
+        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+          <div className="border-b border-slate-200 bg-slate-50 px-3 py-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Added items ({frozenIndices.length})
+            </p>
+          </div>
+          <div className="max-h-[min(40vh,280px)] overflow-y-auto overscroll-contain">
+            <table className="w-full min-w-[520px] text-left text-sm">
+              <thead className="sticky top-0 z-10 bg-slate-100 text-xs uppercase tracking-wide text-slate-500 shadow-[0_1px_0_0_rgb(226,232,240)]">
+                <tr>
+                  <th className="px-3 py-2 font-semibold">Product</th>
+                  <th className="px-2 py-2 font-semibold text-right w-14">Qty</th>
+                  <th className="px-2 py-2 font-semibold text-right w-24">Price</th>
+                  <th className="hidden px-2 py-2 font-semibold text-right w-16 sm:table-cell">Disc</th>
+                  <th className="px-2 py-2 font-semibold text-right w-24">Total</th>
+                  <th className="px-2 py-2 w-20" aria-label="Actions" />
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {[...frozenIndices].reverse().map((index) => {
+                  const item = items[index];
+                  const removable = canRemoveItem
+                    ? canRemoveItem(index, item)
+                    : fields.length > 1;
+                  return (
+                    <tr
+                      key={fields[index].id}
+                      className={clsx(
+                        'hover:bg-primary-50/40',
+                        !item?.productId && 'bg-amber-50/40'
+                      )}
+                    >
+                      <td className="max-w-[220px] px-3 py-2.5 font-medium text-slate-900">
+                        <ProductLineLabel productId={item?.productId || ''} />
+                      </td>
+                      <td className="px-2 py-2.5 text-right tabular-nums text-slate-700">
+                        {item?.quantity ?? '—'}
+                      </td>
+                      <td className="px-2 py-2.5 text-right tabular-nums text-slate-700">
+                        {formatCurrency(Number(item?.unitPrice || 0))}
+                      </td>
+                      <td className="hidden px-2 py-2.5 text-right tabular-nums text-slate-600 sm:table-cell">
+                        {Number(item?.discount || 0)}%
+                      </td>
+                      <td className="px-2 py-2.5 text-right font-medium tabular-nums text-slate-900">
+                        {formatCurrency(lineTotal(item))}
+                      </td>
+                      <td className="px-2 py-2.5">
+                        <div className="flex items-center justify-end gap-0.5">
+                          <button
+                            type="button"
+                            onClick={() => setActiveIndex(index)}
+                            className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 hover:text-primary-700"
+                            title="Edit item"
+                            aria-label={`Edit item ${index + 1}`}
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            disabled={!removable}
+                            onClick={() => handleRemove(index)}
+                            className="rounded-lg p-1.5 text-slate-500 hover:bg-red-50 hover:text-red-600 disabled:opacity-30"
+                            title={removable ? 'Remove item' : 'Cannot remove'}
+                            aria-label={`Remove item ${index + 1}`}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         </div>
       )}
