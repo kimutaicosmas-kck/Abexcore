@@ -16,6 +16,7 @@ import {
   CircleCheck,
   DollarSign,
   Layers,
+  UserRound,
 } from 'lucide-react';
 import { operationsApi } from '../services/api';
 import { downloadFile } from '../utils/download';
@@ -148,10 +149,15 @@ export function SalesPage() {
   const [quoteFeedback, setQuoteFeedback] = useState<{ text: string; variant: 'error' | 'info' } | null>(null);
   const [pendingStatusChange, setPendingStatusChange] = useState<{ id: string; status: string; label: string } | null>(null);
   const [orderEditMode, setOrderEditMode] = useState(false);
+  const [orderReassignOpen, setOrderReassignOpen] = useState(false);
   const [selectedDeliveryOrderIds, setSelectedDeliveryOrderIds] = useState<string[]>([]);
 
   const canCreate = hasPermission('sales:create');
   const canUpdate = hasPermission('sales:update');
+  const canReassignOrder = (status: string) =>
+    !myBook
+    && !['DELIVERED', 'COMPLETED', 'CANCELLED'].includes(status)
+    && (canUpdate || canManageSalesTargets(user?.role?.name, hasPermission));
   const canReadSales = hasPermission('sales:read');
   const canCreateDelivery = hasPermission('delivery:create');
 
@@ -377,6 +383,7 @@ export function SalesPage() {
   const openOrderDetail = (order: SalesOrder) => {
     setStatusFeedback(null);
     setOrderEditMode(false);
+    setOrderReassignOpen(false);
     setSelectedOrder(order);
     setOrderDetailOpen(true);
   };
@@ -384,6 +391,7 @@ export function SalesPage() {
   const closeOrderDetail = () => {
     setOrderDetailOpen(false);
     setOrderEditMode(false);
+    setOrderReassignOpen(false);
     setSelectedOrder(null);
     setStatusFeedback(null);
     if (orderIdFromUrl) {
@@ -957,14 +965,25 @@ export function SalesPage() {
               </div>
               <div>
                 <p className="text-slate-500">Sales Person</p>
-                <p className="font-semibold">
-                  {(() => {
-                    const person = activeOrder.salesPerson || activeOrder.createdBy;
-                    return person
-                      ? `${person.firstName} ${person.lastName}`.trim()
-                      : '—';
-                  })()}
-                </p>
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <p className="font-semibold">
+                    {(() => {
+                      const person = activeOrder.salesPerson || activeOrder.createdBy;
+                      return person
+                        ? `${person.firstName} ${person.lastName}`.trim()
+                        : '—';
+                    })()}
+                  </p>
+                  {canReassignOrder(activeOrder.status) && (
+                    <button
+                      type="button"
+                      className="text-xs font-medium text-primary-600 hover:text-primary-700 underline-offset-2 hover:underline"
+                      onClick={() => setOrderReassignOpen((open) => !open)}
+                    >
+                      {orderReassignOpen ? 'Hide' : 'Change sales person'}
+                    </button>
+                  )}
+                </div>
               </div>
               <div>
                 <p className="text-slate-500">Sale date</p>
@@ -975,19 +994,6 @@ export function SalesPage() {
               <div><p className="text-slate-500">Status</p><Badge variant={getStatusBadge(activeOrder.status)}>{activeOrder.status.replace(/_/g, ' ')}</Badge></div>
               <div><p className="text-slate-500">Total</p><p className="font-semibold text-lg">{formatCurrency(Number(activeOrder.totalAmount))}</p>              </div>
             </div>
-            {canUpdate && !myBook && !['DELIVERED', 'COMPLETED', 'CANCELLED'].includes(activeOrder.status) && (
-              <SalesOrderReassignForm
-                order={activeOrder}
-                onSuccess={(updated) => {
-                  setSelectedOrder(updated);
-                  setStatusFeedback({
-                    text: 'Sales person updated for this order.',
-                    variant: 'info',
-                  });
-                  queryClient.setQueryData(['sales-order', updated.id], updated);
-                }}
-              />
-            )}
             {activeOrder.items?.length > 0 && (
               <Card title={`Line Items (${activeOrder.items.length})`}>
                 {activeOrder.items.map((item, index) => {
@@ -1064,6 +1070,20 @@ export function SalesPage() {
                 ))}
               </Card>
             )}
+            {orderReassignOpen && canReassignOrder(activeOrder.status) && (
+              <SalesOrderReassignForm
+                order={activeOrder}
+                onSuccess={(updated) => {
+                  setSelectedOrder(updated);
+                  setOrderReassignOpen(false);
+                  setStatusFeedback({
+                    text: 'Sales person updated for this order.',
+                    variant: 'info',
+                  });
+                  queryClient.setQueryData(['sales-order', updated.id], updated);
+                }}
+              />
+            )}
             <div className="flex flex-wrap justify-end gap-2 pt-2">
               <Button
                 variant="secondary"
@@ -1079,6 +1099,15 @@ export function SalesPage() {
                 <Button variant="secondary" onClick={() => setOrderEditMode(true)}>
                   <Pencil className="h-4 w-4 mr-2" />
                   Adjust order
+                </Button>
+              )}
+              {canReassignOrder(activeOrder.status) && (
+                <Button
+                  variant="secondary"
+                  onClick={() => setOrderReassignOpen((open) => !open)}
+                >
+                  <UserRound className="h-4 w-4 mr-2" />
+                  {orderReassignOpen ? 'Hide reassignment' : 'Change sales person'}
                 </Button>
               )}
               {canCreateDelivery
