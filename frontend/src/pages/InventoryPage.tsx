@@ -528,12 +528,6 @@ export function InventoryPage() {
         </StatGrid>
       )}
 
-      <Alert variant="info">
-        <strong>Raw materials</strong> and <strong>finished goods</strong> are valued separately above.
-        Use <strong>Materials</strong> for raw material qty/cost, or <strong>Stock Levels</strong> with the type filter.
-        Set unit costs on materials (edit row) or via goods receipt so raw material value is accurate.
-      </Alert>
-
       <PageHeader
         action={
           stats && stats.lowStockCount > 0 ? (
