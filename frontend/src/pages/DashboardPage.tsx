@@ -316,6 +316,24 @@ export function DashboardPage() {
             to={monthSalesLink}
           />
         )}
+        {showInventoryKpis && (
+          <StatCard
+            title="Stock value"
+            value={formatCurrency(kpis.inventoryValue ?? 0)}
+            icon={<Package className="h-5 w-5 text-white" />}
+            color="from-amber-500 to-orange-600"
+            to={linkTo('/inventory')}
+          />
+        )}
+        {showInventoryKpis && (
+          <StatCard
+            title="Low stock"
+            value={kpis.rawMaterialsLow}
+            icon={<AlertTriangle className="h-5 w-5 text-white" />}
+            color="from-rose-500 to-rose-700"
+            to={linkTo('/inventory')}
+          />
+        )}
         {showProductionKpis ? (
           <StatCard
             title="Production orders"
@@ -336,34 +354,6 @@ export function DashboardPage() {
               className="hidden sm:flex"
             />
           )
-        )}
-        {showInventoryKpis && (
-          <StatCard
-            title="Raw material value"
-            value={formatCurrency(kpis.rawMaterialValue ?? 0)}
-            icon={<Package className="h-5 w-5 text-white" />}
-            color="from-amber-500 to-orange-600"
-            to={linkTo('/inventory')}
-          />
-        )}
-        {showInventoryKpis && (
-          <StatCard
-            title="Finished goods value"
-            value={formatCurrency(kpis.finishedGoodsValue ?? 0)}
-            icon={<Package className="h-5 w-5 text-white" />}
-            color="from-emerald-500 to-teal-600"
-            to={linkTo('/inventory')}
-            className="hidden lg:flex"
-          />
-        )}
-        {showInventoryKpis && (
-          <StatCard
-            title="Low stock"
-            value={kpis.rawMaterialsLow}
-            icon={<AlertTriangle className="h-5 w-5 text-white" />}
-            color="from-rose-500 to-rose-700"
-            to={linkTo('/inventory')}
-          />
         )}
       </StatGrid>
 

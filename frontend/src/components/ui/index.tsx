@@ -906,16 +906,17 @@ export function QuickActionGrid({ children }: { children: React.ReactNode }) {
 }
 
 
-/** Responsive stat cards — equal width without stretching to viewport height. */
 /** Page KPI strip — hard cap of 5 cards so layouts stay consistent. */
 export function StatGrid({
   children,
   className,
+  maxItems = 5,
 }: {
   children: React.ReactNode;
   className?: string;
+  maxItems?: number;
 }) {
-  const items = Children.toArray(children).slice(0, 5);
+  const items = Children.toArray(children).slice(0, maxItems);
   return (
     <div
       className={clsx(
