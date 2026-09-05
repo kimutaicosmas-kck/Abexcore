@@ -3,7 +3,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { operationsApi, inventoryApi, qualityApi } from '../../services/api';
+import { operationsApi, inventoryApi, qualityApi, productsApi } from '../../services/api';
 import { Button, Input, getApiErrorMessage, formatCurrency } from '../ui';
 import { useAuth } from '../../contexts/AuthContext';
 import { QualityInspection, ProductionOrder } from '../../types';
@@ -155,40 +155,91 @@ export function CompleteProductionForm({
   const completedQty = watch('completedQty') || 1;
   const orderQty = productionOrder?.quantity || orderQuantity || 1;
   const scale = orderQty > 0 ? completedQty / orderQty : 1;
+  const hasStoredConsumption = (productionOrder?.consumption?.length || 0) > 0;
+
+  const { data: bomPreview, isLoading: bomPreviewLoading } = useQuery({
+    queryKey: ['bom-preview', productId, orderQty],
+    queryFn: () =>
+      productsApi.getBomPreview(productId, orderQty).then(
+        (r) =>
+          r.data.data as {
+            lines: Array<{
+              rawMaterialId: string;
+              rawMaterialCode: string;
+              rawMaterialName: string;
+              plannedQty: number;
+              unit: string;
+              lineCost: number;
+              unitCost: number;
+            }>;
+            estimatedCost: number;
+          }
+      ),
+    enabled: Boolean(productId) && !orderLoading && !hasStoredConsumption,
+  });
 
   const [actualByMaterial, setActualByMaterial] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    if (!productionOrder?.consumption?.length) return;
+    if (hasStoredConsumption && productionOrder?.consumption?.length) {
+      setActualByMaterial((prev) => {
+        const next = { ...prev };
+        for (const line of productionOrder.consumption || []) {
+          if (next[line.rawMaterialId] !== undefined) continue;
+          const planned = Number(line.plannedQty) * scale;
+          next[line.rawMaterialId] = planned.toFixed(3);
+        }
+        return next;
+      });
+      return;
+    }
+    if (!bomPreview?.lines?.length) return;
     setActualByMaterial((prev) => {
       const next = { ...prev };
-      for (const line of productionOrder.consumption || []) {
+      for (const line of bomPreview.lines) {
         if (next[line.rawMaterialId] !== undefined) continue;
         const planned = Number(line.plannedQty) * scale;
         next[line.rawMaterialId] = planned.toFixed(3);
       }
       return next;
     });
-  }, [productionOrder, scale]);
+  }, [productionOrder, bomPreview, scale, hasStoredConsumption]);
 
   const materialLines = useMemo(() => {
-    return (productionOrder?.consumption || []).map((line) => {
+    if (hasStoredConsumption) {
+      return (productionOrder?.consumption || []).map((line) => {
+        const planned = Number(line.plannedQty) * scale;
+        const actual = Number(actualByMaterial[line.rawMaterialId] ?? planned);
+        const rm = line.rawMaterial;
+        const unitCost = Number(rm?.unitCost || 0);
+        return {
+          rawMaterialId: line.rawMaterialId,
+          name: rm?.name || line.rawMaterialId,
+          code: rm?.code || '',
+          unit: line.unit || rm?.unit || 'pcs',
+          planned,
+          actual,
+          lineCost: actual * unitCost,
+          unitCost,
+        };
+      });
+    }
+    return (bomPreview?.lines || []).map((line) => {
       const planned = Number(line.plannedQty) * scale;
       const actual = Number(actualByMaterial[line.rawMaterialId] ?? planned);
-      const rm = line.rawMaterial;
-      const unitCost = Number(rm?.unitCost || 0);
+      const unitCost = Number(line.unitCost || 0);
       return {
         rawMaterialId: line.rawMaterialId,
-        name: rm?.name || line.rawMaterialId,
-        code: rm?.code || '',
-        unit: line.unit || rm?.unit || 'pcs',
+        name: line.rawMaterialName,
+        code: line.rawMaterialCode,
+        unit: line.unit || 'pcs',
         planned,
         actual,
         lineCost: actual * unitCost,
         unitCost,
       };
     });
-  }, [productionOrder, scale, actualByMaterial]);
+  }, [productionOrder, bomPreview, scale, actualByMaterial, hasStoredConsumption]);
 
   const totalMaterialCost = materialLines.reduce((sum, l) => sum + l.lineCost, 0);
 
@@ -212,7 +263,12 @@ export function CompleteProductionForm({
   });
 
   const qcBlocked = !passedInspection;
-  const noBom = !orderLoading && (productionOrder?.consumption?.length || 0) === 0;
+  const noBom =
+    !orderLoading &&
+    !bomPreviewLoading &&
+    !hasStoredConsumption &&
+    (bomPreview?.lines?.length || 0) === 0;
+  const usingBackfilledBom = !hasStoredConsumption && (bomPreview?.lines?.length || 0) > 0;
 
   return (
     <form onSubmit={handleSubmit((data) => mutation.mutate(data))} className="space-y-4">
@@ -222,14 +278,18 @@ export function CompleteProductionForm({
         </p>
       )}
 
-      {orderLoading ? (
+      {orderLoading || (!hasStoredConsumption && bomPreviewLoading) ? (
         <div className="p-3 rounded-lg bg-slate-50 text-slate-600 text-sm">Loading production order…</div>
       ) : noBom ? (
         <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-900 text-sm">
           <p className="font-medium">No material recipe (BOM)</p>
           <p className="mt-1">
-            Add a bill of materials to this product in Products → edit product → Materials recipe, then create a new production order.
+            Open Products → edit this product → Materials recipe, add raw materials, then return here to complete.
           </p>
+        </div>
+      ) : usingBackfilledBom ? (
+        <div className="p-3 rounded-lg bg-sky-50 border border-sky-200 text-sky-900 text-sm">
+          Using the product&apos;s current materials recipe for this order (created before BOM was linked).
         </div>
       ) : null}
 

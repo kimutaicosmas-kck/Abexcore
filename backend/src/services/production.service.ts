@@ -150,14 +150,28 @@ export class ProductionService {
 
     let totalMaterialCost = 0;
 
-    if (order.consumption.length === 0) {
-      throw new AppError(
-        'No material recipe (BOM) on this production order. Add a bill of materials to the product, then create a new production order.',
-        400
+    let consumptionRows = order.consumption;
+
+    if (consumptionRows.length === 0) {
+      const { lineCount } = await this.attachBomConsumption(
+        tx,
+        order.id,
+        order.productId,
+        order.quantity
       );
+      if (lineCount === 0) {
+        throw new AppError(
+          'No material recipe (BOM) for this product. Add a materials recipe under Products, then complete production.',
+          400
+        );
+      }
+      consumptionRows = await tx.productionConsumption.findMany({
+        where: { productionOrderId: order.id },
+        include: { rawMaterial: { select: { name: true, code: true } } },
+      });
     }
 
-    for (const consumption of order.consumption) {
+    for (const consumption of consumptionRows) {
       const override = overrideMap.get(consumption.rawMaterialId);
       const plannedForRun = Number(consumption.plannedQty) * scale;
       const wasteQty = override?.wasteQty ?? 0;
