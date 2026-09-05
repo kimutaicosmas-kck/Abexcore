@@ -29,7 +29,7 @@ export function ProductBomEditor({ productId }: ProductBomEditorProps) {
 
   const { data: materialsData, isError: materialsError, error: materialsFetchError } = useQuery({
     queryKey: ['materials', 'bom-picker', company?.id],
-    queryFn: () => inventoryApi.materials({ limit: 200 }).then((r) => r.data.data as RawMaterial[]),
+    queryFn: () => inventoryApi.materials({ limit: 100 }).then((r) => r.data.data as RawMaterial[]),
     enabled: !!company?.id,
   });
 
