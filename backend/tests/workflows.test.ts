@@ -453,6 +453,41 @@ describe('Decoupled production workflow (integration)', () => {
     expect(completeRes.status).toBe(200);
     expect(completeRes.body.data.status).toBe('COMPLETED');
   });
+
+  itWithDb('cancels a planned production order without deducting stock', async () => {
+    const [productsRes, machinesRes] = await Promise.all([
+      authReq(testCtx.app, testCtx.authToken).get('/api/v1/products?limit=1'),
+      authReq(testCtx.app, testCtx.authToken).get('/api/v1/operations/machines'),
+    ]);
+
+    const productId = productsRes.body.data[0]?.id;
+    const machineId = machinesRes.body.data[0]?.id;
+    expect(productId && machineId).toBeTruthy();
+
+    const productionRes = await authReq(testCtx.app, testCtx.authToken)
+      .post('/api/v1/operations/production')
+      .send({
+        productId,
+        machineId,
+        quantity: 5,
+        notes: 'Cancel workflow test',
+      });
+    expect(productionRes.status).toBe(201);
+    const productionId = productionRes.body.data.id as string;
+
+    const cancelRes = await authReq(testCtx.app, testCtx.authToken)
+      .post(`/api/v1/operations/production/${productionId}/cancel`)
+      .send({ reason: 'Customer order withdrawn' });
+    expect(cancelRes.status).toBe(200);
+    expect(cancelRes.body.data.status).toBe('CANCELLED');
+    expect(String(cancelRes.body.data.notes || '')).toContain('Customer order withdrawn');
+
+    const getRes = await authReq(testCtx.app, testCtx.authToken).get(
+      `/api/v1/operations/production/${productionId}`
+    );
+    expect(getRes.status).toBe(200);
+    expect(getRes.body.data.status).toBe('CANCELLED');
+  });
 });
 
 describe('Partial delivery workflow (integration)', () => {

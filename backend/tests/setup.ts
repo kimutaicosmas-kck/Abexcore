@@ -16,8 +16,12 @@ const connected = await checkDbConnected(app);
 testCtx.dbConnected = connected;
 
 if (connected) {
-  testCtx.authToken = await loginAsPlatformOwner(app);
-  await ensureWorkflowFixtures(testCtx.authToken);
+  try {
+    testCtx.authToken = await loginAsPlatformOwner(app);
+    await ensureWorkflowFixtures(testCtx.authToken);
+  } catch (err) {
+    console.warn('[tests] Platform login skipped:', err instanceof Error ? err.message : err);
+  }
 }
 
 /** Run an integration test only when the database is available (evaluated at run time, not collection). */
