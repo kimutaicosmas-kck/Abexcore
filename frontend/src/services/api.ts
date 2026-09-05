@@ -281,6 +281,7 @@ export const inventoryApi = {
   procurementStats: () => api.get('/inventory/procurement-stats'),
   transactions: (params?: object) => api.get('/inventory/transactions', { params }),
   materials: (params?: object) => api.get('/inventory/materials', { params }),
+  getMaterial: (id: string) => api.get(`/inventory/materials/${id}`),
   lowStock: () => api.get('/inventory/materials/low-stock'),
   materialTypes: () => api.get('/inventory/materials/types/list'),
   manageMaterialTypes: () => api.get('/inventory/materials/types/manage'),

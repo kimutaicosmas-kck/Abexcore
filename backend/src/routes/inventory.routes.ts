@@ -389,6 +389,11 @@ router.post('/materials', authorize('inventory:create'), validate(createRawMater
   res.status(201).json({ success: true, data });
 }));
 
+router.get('/materials/:id', authorizeMaterialPicker, asyncHandler(async (req: AuthRequest, res: Response) => {
+  const data = await materialService.getById(getParam(req.params.id));
+  res.json({ success: true, data });
+}));
+
 router.put('/materials/:id', authorize('inventory:update'), validate(createRawMaterialSchema.partial()), asyncHandler(async (req: AuthRequest, res: Response) => {
   if (req.body.typeId) {
     const materialType = await prisma.materialType.findFirst({

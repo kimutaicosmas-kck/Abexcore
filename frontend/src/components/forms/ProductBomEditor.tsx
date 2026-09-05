@@ -1,11 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, Trash2 } from 'lucide-react';
-import { productsApi, inventoryApi } from '../../services/api';
-import { Button, Input, Select, formatCurrency } from '../ui';
+import { productsApi } from '../../services/api';
+import { Button, Input, formatCurrency } from '../ui';
 import { RawMaterial } from '../../types';
 import { getApiErrorMessage } from '../../utils/apiError';
-import { useAuth } from '../../contexts/AuthContext';
+import { MaterialSearchSelect } from './MaterialSearchSelect';
 
 type BomLine = {
   rawMaterialId: string;
@@ -21,17 +21,11 @@ interface ProductBomEditorProps {
 
 export function ProductBomEditor({ productId }: ProductBomEditorProps) {
   const queryClient = useQueryClient();
-  const { company } = useAuth();
   const [lines, setLines] = useState<BomLine[]>([]);
   const [version, setVersion] = useState('1.0');
   const [notes, setNotes] = useState('');
   const [hydrated, setHydrated] = useState(false);
-
-  const { data: materialsData, isError: materialsError, error: materialsFetchError } = useQuery({
-    queryKey: ['materials', 'bom-picker', company?.id],
-    queryFn: () => inventoryApi.materials({ limit: 100 }).then((r) => r.data.data as RawMaterial[]),
-    enabled: !!company?.id,
-  });
+  const [materialById, setMaterialById] = useState<Record<string, RawMaterial>>({});
 
   const { data: bomData, isLoading } = useQuery({
     queryKey: ['product-bom', productId],
@@ -50,8 +44,20 @@ export function ProductBomEditor({ productId }: ProductBomEditorProps) {
         unit: string;
         wastePercent?: number | string;
         notes?: string;
+        rawMaterial?: RawMaterial;
       }>;
     } | null;
+
+    const seededMaterials: Record<string, RawMaterial> = {};
+    if (bom?.items) {
+      for (const item of bom.items) {
+        if (item.rawMaterial) {
+          seededMaterials[item.rawMaterialId] = item.rawMaterial as RawMaterial;
+        }
+      }
+    }
+    setMaterialById(seededMaterials);
+
     if (bom) {
       setVersion(bom.version || '1.0');
       setNotes(bom.notes || '');
@@ -70,20 +76,22 @@ export function ProductBomEditor({ productId }: ProductBomEditorProps) {
     setHydrated(true);
   }, [bomData, hydrated]);
 
-  const materialOptions = [
-    { value: '', label: 'Select material…' },
-    ...(materialsData || []).map((m) => ({
-      value: m.id,
-      label: `${m.code} — ${m.name} (${m.unit})`,
-    })),
-  ];
+  const rememberMaterial = (material: RawMaterial | null) => {
+    if (!material) return;
+    setMaterialById((prev) => ({ ...prev, [material.id]: material }));
+  };
 
-  const estimatedUnitCost = lines.reduce((sum, line) => {
-    if (!line.rawMaterialId) return sum;
-    const mat = materialsData?.find((m) => m.id === line.rawMaterialId);
-    const wasteFactor = 1 + (line.wastePercent || 0) / 100;
-    return sum + (line.quantity || 0) * wasteFactor * Number(mat?.unitCost || 0);
-  }, 0);
+  const estimatedUnitCost = useMemo(
+    () =>
+      lines.reduce((sum, line) => {
+        if (!line.rawMaterialId) return sum;
+        const mat = materialById[line.rawMaterialId];
+        const wasteFactor = 1 + (line.wastePercent || 0) / 100;
+        const unitCost = Number(mat?.effectiveUnitCost ?? mat?.unitCost ?? 0);
+        return sum + (line.quantity || 0) * wasteFactor * unitCost;
+      }, 0),
+    [lines, materialById]
+  );
 
   const saveMutation = useMutation({
     mutationFn: () => {
@@ -119,21 +127,9 @@ export function ProductBomEditor({ productId }: ProductBomEditorProps) {
       <div>
         <p className="text-sm font-medium text-slate-900">Materials recipe (BOM)</p>
         <p className="text-xs text-slate-500 mt-0.5">
-          Define raw materials per finished unit. Production orders use this to deduct stock and calculate cost.
+          Define raw materials per finished unit. Search by code or name to find any material in your catalog.
         </p>
       </div>
-
-      {materialsError && (
-        <p className="text-sm text-red-600">
-          Could not load materials: {getApiErrorMessage(materialsFetchError)}
-        </p>
-      )}
-
-      {!materialsError && materialsData && materialsData.length === 0 && (
-        <p className="text-sm text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
-          No raw materials found. Add materials under Inventory first.
-        </p>
-      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <Input label="Recipe version" value={version} onChange={(e) => setVersion(e.target.value)} />
@@ -144,17 +140,21 @@ export function ProductBomEditor({ productId }: ProductBomEditorProps) {
         {lines.map((line, index) => (
           <div key={index} className="grid grid-cols-12 gap-2 items-end p-2 bg-white rounded-lg border border-slate-100">
             <div className="col-span-12 sm:col-span-5">
-              <Select
+              <MaterialSearchSelect
                 label={index === 0 ? 'Raw material' : undefined}
-                options={materialOptions}
                 value={line.rawMaterialId}
-                onChange={(e) => {
-                  const id = e.target.value;
-                  const mat = materialsData?.find((m) => m.id === id);
+                onChange={(id) => {
+                  setLines((prev) =>
+                    prev.map((row, i) => (i === index ? { ...row, rawMaterialId: id } : row))
+                  );
+                }}
+                onMaterialSelect={(material) => {
+                  rememberMaterial(material);
+                  if (!material) return;
                   setLines((prev) =>
                     prev.map((row, i) =>
                       i === index
-                        ? { ...row, rawMaterialId: id, unit: mat?.unit || row.unit }
+                        ? { ...row, rawMaterialId: material.id, unit: material.unit || row.unit }
                         : row
                     )
                   );
