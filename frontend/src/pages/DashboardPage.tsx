@@ -23,7 +23,6 @@ import {
   AlertTriangle,
   TrendingUp,
   RefreshCw,
-  Factory,
 } from 'lucide-react';
 import { dashboardApi } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
@@ -113,7 +112,6 @@ export function DashboardPage() {
   const linkTo = (path: string) => (canAccessRoute(path) ? path : undefined);
   const monthSalesLink = linkTo('/finance') || linkTo('/sales');
   const showSalesKpis = companyHas('sales') || companyHas('finance') || companyHas('pos');
-  const showProductionKpis = companyHas('production');
   const showInventoryKpis = companyHas('inventory');
 
   const { data: kpis, isLoading, isError, refetch, isFetching } = useQuery({
@@ -333,27 +331,6 @@ export function DashboardPage() {
             color="from-rose-500 to-rose-700"
             to={linkTo('/inventory')}
           />
-        )}
-        {showProductionKpis ? (
-          <StatCard
-            title="Production orders"
-            value={kpis.productionOrders}
-            icon={<Factory className="h-5 w-5 text-white" />}
-            color="from-sky-500 to-sky-700"
-            to={linkTo('/production')}
-            className="hidden sm:flex"
-          />
-        ) : (
-          showSalesKpis && (
-            <StatCard
-              title="Orders awaiting"
-              value={kpis.ordersAwaitingProduction ?? 0}
-              icon={<TrendingUp className="h-5 w-5 text-white" />}
-              color="from-sky-500 to-sky-700"
-              to={linkTo('/sales')}
-              className="hidden sm:flex"
-            />
-          )
         )}
       </StatGrid>
 
