@@ -34,7 +34,7 @@ import { ExcelImportService } from '../services/excel-import.service';
 import { acceptExcelUpload } from '../middleware/excelImport';
 import { Prisma } from '@prisma/client';
 import { parseLocalDateInput } from '../utils/date';
-import { injectTenantData } from '../utils/tenant';
+import { injectTenantData, mergeTenantWhere, tenantEmployeeScope } from '../utils/tenant';
 import { normalizeLeaveType } from '../utils/leaveEntitlements';
 
 const router = Router();
@@ -85,7 +85,7 @@ router.get(
     }>(req.query);
     const skip = (page - 1) * limit;
 
-    const where: Prisma.EmployeeWhereInput = { deletedAt: null };
+    const where: Prisma.EmployeeWhereInput = mergeTenantWhere({ deletedAt: null });
     if (isActive !== undefined) where.isActive = isActive;
     if (search) {
       where.OR = [
@@ -310,16 +310,18 @@ router.get(
       req.query
     );
     const skip = (page - 1) * limit;
+    const employeeScope = tenantEmployeeScope();
 
-    const where: Prisma.AttendanceWhereInput = search
-      ? {
-          OR: [
-            { employee: { firstName: { contains: search } } },
-            { employee: { lastName: { contains: search } } },
-            { employee: { employeeNo: { contains: search } } },
-          ],
-        }
-      : {};
+    const where: Prisma.AttendanceWhereInput = {
+      employee: employeeScope,
+    };
+    if (search) {
+      where.OR = [
+        { employee: { ...employeeScope, firstName: { contains: search } } },
+        { employee: { ...employeeScope, lastName: { contains: search } } },
+        { employee: { ...employeeScope, employeeNo: { contains: search } } },
+      ];
+    }
 
     const [data, total] = await Promise.all([
       prisma.attendance.findMany({
@@ -541,13 +543,16 @@ router.get(
       status?: string;
     }>(req.query);
     const skip = (page - 1) * limit;
+    const employeeScope = tenantEmployeeScope();
 
-    const where: Prisma.LeaveRequestWhereInput = {};
+    const where: Prisma.LeaveRequestWhereInput = {
+      employee: employeeScope,
+    };
     if (status) where.status = status as Prisma.EnumLeaveStatusFilter['equals'];
     if (search) {
       where.OR = [
-        { employee: { firstName: { contains: search } } },
-        { employee: { lastName: { contains: search } } },
+        { employee: { ...employeeScope, firstName: { contains: search } } },
+        { employee: { ...employeeScope, lastName: { contains: search } } },
         { type: { contains: search } },
       ];
     }
@@ -716,16 +721,18 @@ router.get(
       req.query
     );
     const skip = (page - 1) * limit;
+    const employeeScope = tenantEmployeeScope();
 
-    const where: Prisma.PayrollRecordWhereInput = search
-      ? {
-          OR: [
-            { employee: { firstName: { contains: search } } },
-            { employee: { lastName: { contains: search } } },
-            { employee: { employeeNo: { contains: search } } },
-          ],
-        }
-      : {};
+    const where: Prisma.PayrollRecordWhereInput = {
+      employee: employeeScope,
+    };
+    if (search) {
+      where.OR = [
+        { employee: { ...employeeScope, firstName: { contains: search } } },
+        { employee: { ...employeeScope, lastName: { contains: search } } },
+        { employee: { ...employeeScope, employeeNo: { contains: search } } },
+      ];
+    }
 
     const [data, total] = await Promise.all([
       prisma.payrollRecord.findMany({

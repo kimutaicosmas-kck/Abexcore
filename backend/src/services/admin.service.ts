@@ -11,6 +11,7 @@ import {
   getMonthEnd,
 } from '../utils/finance-metrics';
 import { InvoiceMaintenanceService } from './invoice-maintenance.service';
+import { tenantEmployeeScope } from '../utils/tenant';
 
 export class FinanceService {
   static async getStats(opts?: { type?: string; status?: string; search?: string }) {
@@ -280,6 +281,9 @@ export class FinanceService {
 
 export class HrService {
   static async getStats() {
+    const employeeScope = tenantEmployeeScope();
+    const todayStart = new Date(new Date().setHours(0, 0, 0, 0));
+
     const [
       totalEmployees,
       activeEmployees,
@@ -290,12 +294,12 @@ export class HrService {
       activeAdvances,
       advancesOutstanding,
     ] = await Promise.all([
-      prisma.employee.count({ where: { deletedAt: null } }),
-      prisma.employee.count({ where: { deletedAt: null, isActive: true } }),
-      prisma.leaveRequest.count({ where: { status: 'PENDING' } }),
-      prisma.payrollRecord.count({ where: { isPaid: false } }),
+      prisma.employee.count({ where: employeeScope }),
+      prisma.employee.count({ where: { ...employeeScope, isActive: true } }),
+      prisma.leaveRequest.count({ where: { status: 'PENDING', employee: employeeScope } }),
+      prisma.payrollRecord.count({ where: { isPaid: false, employee: employeeScope } }),
       prisma.attendance.count({
-        where: { date: { gte: new Date(new Date().setHours(0, 0, 0, 0)) } },
+        where: { date: { gte: todayStart }, employee: employeeScope },
       }),
       prisma.salaryAdvance.count({ where: { status: 'PENDING' } }),
       prisma.salaryAdvance.count({ where: { status: 'ACTIVE' } }),
@@ -306,7 +310,7 @@ export class HrService {
     ]);
 
     const payrollDue = await prisma.payrollRecord.aggregate({
-      where: { isPaid: false },
+      where: { isPaid: false, employee: employeeScope },
       _sum: { netPay: true },
     });
 

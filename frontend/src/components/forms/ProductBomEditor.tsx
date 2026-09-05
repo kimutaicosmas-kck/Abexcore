@@ -5,6 +5,7 @@ import { productsApi, inventoryApi } from '../../services/api';
 import { Button, Input, Select, formatCurrency } from '../ui';
 import { RawMaterial } from '../../types';
 import { getApiErrorMessage } from '../../utils/apiError';
+import { useAuth } from '../../contexts/AuthContext';
 
 type BomLine = {
   rawMaterialId: string;
@@ -20,14 +21,16 @@ interface ProductBomEditorProps {
 
 export function ProductBomEditor({ productId }: ProductBomEditorProps) {
   const queryClient = useQueryClient();
+  const { company } = useAuth();
   const [lines, setLines] = useState<BomLine[]>([]);
   const [version, setVersion] = useState('1.0');
   const [notes, setNotes] = useState('');
   const [hydrated, setHydrated] = useState(false);
 
-  const { data: materialsData } = useQuery({
-    queryKey: ['materials'],
+  const { data: materialsData, isError: materialsError, error: materialsFetchError } = useQuery({
+    queryKey: ['materials', 'bom-picker', company?.id],
     queryFn: () => inventoryApi.materials({ limit: 200 }).then((r) => r.data.data as RawMaterial[]),
+    enabled: !!company?.id,
   });
 
   const { data: bomData, isLoading } = useQuery({
@@ -119,6 +122,18 @@ export function ProductBomEditor({ productId }: ProductBomEditorProps) {
           Define raw materials per finished unit. Production orders use this to deduct stock and calculate cost.
         </p>
       </div>
+
+      {materialsError && (
+        <p className="text-sm text-red-600">
+          Could not load materials: {getApiErrorMessage(materialsFetchError)}
+        </p>
+      )}
+
+      {!materialsError && materialsData && materialsData.length === 0 && (
+        <p className="text-sm text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
+          No raw materials found. Add materials under Inventory first.
+        </p>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <Input label="Recipe version" value={version} onChange={(e) => setVersion(e.target.value)} />

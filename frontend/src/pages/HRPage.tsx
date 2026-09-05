@@ -67,7 +67,7 @@ type HrModal = 'employee' | 'attendance' | 'leave' | 'payroll' | 'advance' | 're
 
 export function HRPage() {
   const queryClient = useQueryClient();
-  const { hasPermission } = useAuth();
+  const { hasPermission, company } = useAuth();
   const [activeTab, setActiveTab] = useState(0);
   const [modal, setModal] = useState<HrModal>(null);
   const [importOpen, setImportOpen] = useState(false);
@@ -108,38 +108,39 @@ export function HRPage() {
 
   const canCreate = hasPermission('hr:create');
   const canUpdate = hasPermission('hr:update');
+  const companyId = company?.id;
   const { data: stats } = useQuery({
-    queryKey: ['hr-stats'],
+    queryKey: ['hr-stats', companyId],
     queryFn: () => hrApi.stats().then((r) => r.data.data as HrStats),
   });
 
   const { data: employees, isLoading: empLoading } = useQuery({
-    queryKey: ['employees', empPage, empSearch],
+    queryKey: ['employees', companyId, empPage, empSearch],
     queryFn: () => hrApi.employees({ page: empPage, limit: 15, search: empSearch || undefined }).then((r) => r.data),
     enabled: activeTab === 0,
   });
 
   const { data: attendance, isLoading: attLoading } = useQuery({
-    queryKey: ['attendance', attPage, attSearch],
+    queryKey: ['attendance', companyId, attPage, attSearch],
     queryFn: () => hrApi.attendance({ page: attPage, limit: 15, search: attSearch || undefined }).then((r) => r.data),
     enabled: activeTab === 1,
   });
 
   const { data: leave, isLoading: leaveLoading } = useQuery({
-    queryKey: ['leave', leavePage, leaveSearch, leaveStatus],
+    queryKey: ['leave', companyId, leavePage, leaveSearch, leaveStatus],
     queryFn: () =>
       hrApi.leave({ page: leavePage, limit: 15, search: leaveSearch || undefined, status: leaveStatus || undefined }).then((r) => r.data),
     enabled: activeTab === 2,
   });
 
   const { data: onLeaveToday } = useQuery({
-    queryKey: ['leave-on-leave'],
+    queryKey: ['leave-on-leave', companyId],
     queryFn: () => hrApi.onLeave().then((r) => r.data.data as StaffOnLeaveRow[]),
     enabled: activeTab === 2,
   });
 
   const { data: balanceEmployees } = useQuery({
-    queryKey: ['employees-for-leave-balances'],
+    queryKey: ['employees-for-leave-balances', companyId],
     queryFn: () => hrApi.employees({ page: 1, limit: 100, isActive: true }).then((r) => r.data.data as Employee[]),
     enabled: activeTab === 2,
   });
@@ -154,7 +155,7 @@ export function HRPage() {
   });
 
   const { data: payroll, isLoading: payrollLoading } = useQuery({
-    queryKey: ['payroll', payPage, paySearch],
+    queryKey: ['payroll', companyId, payPage, paySearch],
     queryFn: () => hrApi.payroll({ page: payPage, limit: 15, search: paySearch || undefined }).then((r) => r.data),
     enabled: activeTab === 4,
   });

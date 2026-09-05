@@ -37,6 +37,11 @@ export function mergeTenantWhere<T extends Record<string, unknown>>(
   return { ...where, companyId: tenantId };
 }
 
+/** Active employees belonging to the current tenant. */
+export function tenantEmployeeScope(companyId?: string): { companyId: string; deletedAt: null } {
+  return { companyId: companyId ?? requireTenantId(), deletedAt: null };
+}
+
 /** Scope stock/inventory queries to warehouses owned by the current tenant. */
 export function mergeTenantWarehouseWhere<T extends Record<string, unknown>>(
   where: T = {} as T,

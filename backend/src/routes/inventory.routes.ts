@@ -1,5 +1,5 @@
 import { Router, Response } from 'express';
-import { authenticate, authorize, authorizeAny, AuthRequest } from '../middleware/auth';
+import { authenticate, authorize, authorizeAny, authorizeMaterialPicker, AuthRequest } from '../middleware/auth';
 import { validate } from '../middleware/validate';
 import { asyncHandler, AppError } from '../middleware/errorHandler';
 import { mutationAudit } from '../middleware/mutationAudit';
@@ -224,7 +224,7 @@ router.patch('/materials/types/:id', authorize('inventory:update'), validate(upd
   res.json({ success: true, data: updated });
 }));
 
-router.get('/materials', authorize('inventory:read'), validate(materialListQuerySchema, 'query'), asyncHandler(async (req: AuthRequest, res: Response) => {
+router.get('/materials', authorizeMaterialPicker, validate(materialListQuerySchema, 'query'), asyncHandler(async (req: AuthRequest, res: Response) => {
   const { page, limit, search, sortBy, sortOrder, type } = getQuery<{
     page: number; limit: number; search?: string; sortBy?: string; sortOrder?: 'asc' | 'desc'; type?: string;
   }>(req.query);

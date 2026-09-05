@@ -104,6 +104,15 @@ export const authorizeProductPicker = authorize(
   'customers:read'
 );
 
+/** Raw material lists for inventory, BOM, and production forms. */
+export const authorizeMaterialPicker = authorize(
+  'inventory:read',
+  'products:read',
+  'products:update',
+  'production:read',
+  'production:update'
+);
+
 export const requireSuperAdmin = (req: AuthRequest, _res: Response, next: NextFunction) => {
   if (!req.user) return next(new AppError('Authentication required', 401));
   if (req.user.roleName !== 'Super Admin') {
