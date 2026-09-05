@@ -101,6 +101,7 @@ export function assertOrderStatusTransition(
     if (current === 'CONFIRMED' && next === 'IN_PRODUCTION') return;
     if (current === 'CONFIRMED' && next === 'READY') return;
     if (current === 'IN_PRODUCTION' && next === 'READY') return;
+    if (current === 'IN_PRODUCTION' && next === 'CONFIRMED') return;
     if (current === 'READY' && next === 'DISPATCHED') return;
     if (current === 'READY' && next === 'PARTIALLY_DELIVERED') return;
     if (current === 'PARTIALLY_DELIVERED' && next === 'PARTIALLY_DELIVERED') return;

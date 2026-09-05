@@ -7,6 +7,7 @@ import {
   createSalesOrderSchema,
   updateSalesOrderItemsSchema,
   createProductionOrderSchema,
+  cancelProductionOrderSchema,
   completeProductionSchema,
   updateSalesOrderAssignmentSchema,
   createQuotationSchema,
@@ -1632,6 +1633,20 @@ router.post(
       })
     );
 
+    res.json({ success: true, data: result });
+  })
+);
+
+router.post(
+  '/production/:id/cancel',
+  authorize('production:update'),
+  validate(cancelProductionOrderSchema),
+  auditLog('production', 'update', 'production_order'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const { reason } = req.body as { reason?: string };
+    const result = await prisma.$transaction(async (tx) =>
+      ProductionService.cancelProductionOrder(tx, getParam(req.params.id), { reason })
+    );
     res.json({ success: true, data: result });
   })
 );

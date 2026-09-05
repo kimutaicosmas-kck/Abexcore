@@ -329,6 +329,45 @@ export class ProductionService {
 
     return productionResult;
   }
+
+  static async cancelProductionOrder(
+    tx: TxClient,
+    orderId: string,
+    opts?: { reason?: string }
+  ) {
+    const order = await tx.productionOrder.findUnique({ where: { id: orderId } });
+    if (!order) throw new AppError('Production order not found', 404);
+
+    const cancellable = ['PLANNED', 'SCHEDULED', 'IN_PROGRESS', 'ON_HOLD'];
+    if (!cancellable.includes(order.status)) {
+      throw new AppError(`Cannot cancel a production order with status ${order.status.replace(/_/g, ' ')}`, 400);
+    }
+    if (order.completedQty > 0) {
+      throw new AppError('Cannot cancel production that already has completed output', 400);
+    }
+
+    const cancelNote = opts?.reason?.trim()
+      ? `[Cancelled] ${opts.reason.trim()}`
+      : '[Cancelled]';
+
+    const updated = await tx.productionOrder.update({
+      where: { id: orderId },
+      data: {
+        status: 'CANCELLED',
+        notes: order.notes ? `${order.notes}\n${cancelNote}` : cancelNote,
+      },
+      include: {
+        product: true,
+        salesOrder: { select: { id: true, orderNumber: true, status: true } },
+      },
+    });
+
+    if (order.salesOrderId) {
+      await SalesOrderService.maybeRevertFromProduction(tx, order.salesOrderId);
+    }
+
+    return updated;
+  }
 }
 
 export default ProductionService;

@@ -370,6 +370,8 @@ export const operationsApi = {
   getProductionOrder: (id: string) => api.get(`/operations/production/${id}`),
   createProduction: (data: object) => api.post('/operations/production', data),
   startProduction: (id: string) => api.post(`/operations/production/${id}/start`),
+  cancelProduction: (id: string, data?: { reason?: string }) =>
+    api.post(`/operations/production/${id}/cancel`, data ?? {}),
   completeProduction: (id: string, data: object) =>
     api.post(`/operations/production/${id}/complete`, data),
   machines: () => api.get('/operations/machines'),

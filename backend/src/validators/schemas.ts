@@ -421,6 +421,10 @@ export const createProductionOrderSchema = z.object({
   notes: z.string().optional(),
 });
 
+export const cancelProductionOrderSchema = z.object({
+  reason: z.string().max(500).optional(),
+});
+
 export const completeProductionSchema = z.object({
   completedQty: z.coerce.number().int().min(1),
   rejectedQty: z.coerce.number().int().min(0).optional(),

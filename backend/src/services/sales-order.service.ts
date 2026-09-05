@@ -274,6 +274,31 @@ export class SalesOrderService {
     });
   }
 
+  /** When every linked production order is cancelled, return the sales order to confirmed. */
+  static async maybeRevertFromProduction(tx: TxClient, salesOrderId: string) {
+    const salesOrder = await tx.salesOrder.findUnique({ where: { id: salesOrderId } });
+    if (!salesOrder || salesOrder.status !== 'IN_PRODUCTION') return null;
+
+    const openCount = await tx.productionOrder.count({
+      where: {
+        salesOrderId,
+        status: { notIn: ['COMPLETED', 'CANCELLED'] },
+      },
+    });
+    if (openCount > 0) return null;
+
+    const completedCount = await tx.productionOrder.count({
+      where: { salesOrderId, status: 'COMPLETED' },
+    });
+    if (completedCount > 0) return null;
+
+    assertOrderStatusTransition(salesOrder.status, 'CONFIRMED', { system: true });
+    return tx.salesOrder.update({
+      where: { id: salesOrderId },
+      data: { status: 'CONFIRMED' },
+    });
+  }
+
   static async isFullyDelivered(tx: TxClient, salesOrderId: string): Promise<boolean> {
     const items = await tx.salesOrderItem.findMany({ where: { salesOrderId } });
     return items.length > 0 && items.every((item) => item.deliveredQty >= item.quantity);

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plus, Play, CheckCircle, Factory, Calendar, Clock, ChevronRight, Package } from 'lucide-react';
+import { Plus, Play, CheckCircle, Factory, Calendar, Clock, ChevronRight, Package, XCircle } from 'lucide-react';
 import { operationsApi } from '../services/api';
 import {
   PageHeader,
@@ -21,6 +21,7 @@ import {
   PageToolbar,
   ConfirmDialog,
   PageQueryStatus,
+  Textarea,
 } from '../components/ui';
 import { Modal } from '../components/ui/Modal';
 import { ProductionOrderForm } from '../components/forms/ProductionOrderForm';
@@ -46,6 +47,8 @@ const STATUS_OPTIONS = [
   { value: 'CANCELLED', label: 'Cancelled' },
 ];
 
+const CANCELLABLE_STATUSES = ['PLANNED', 'SCHEDULED', 'IN_PROGRESS', 'ON_HOLD'];
+
 export function ProductionPage() {
   const queryClient = useQueryClient();
   const { hasPermission } = useAuth();
@@ -61,8 +64,11 @@ export function ProductionPage() {
     orderNumber: string;
   } | null>(null);
   const [pendingStartId, setPendingStartId] = useState<string | null>(null);
+  const [pendingCancel, setPendingCancel] = useState<{ id: string; orderNumber: string } | null>(null);
+  const [cancelReason, setCancelReason] = useState('');
 
   const canCreate = hasPermission('production:create');
+  const canUpdate = hasPermission('production:update');
 
   const { data: stats } = useQuery({
     queryKey: ['production-stats', search, statusFilter],
@@ -89,6 +95,16 @@ export function ProductionPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['production'] });
       queryClient.invalidateQueries({ queryKey: ['production-stats'] });
+    },
+  });
+
+  const cancelMutation = useMutation({
+    mutationFn: ({ id, reason }: { id: string; reason?: string }) =>
+      operationsApi.cancelProduction(id, reason ? { reason } : undefined),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['production'] });
+      queryClient.invalidateQueries({ queryKey: ['production-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['sales-orders'] });
     },
   });
 
@@ -140,29 +156,54 @@ export function ProductionPage() {
       render: (_: unknown, row: Record<string, unknown>) => {
         const st = row.status as string;
         const id = row.id as string;
-        if (st === 'PLANNED' || st === 'SCHEDULED') {
-          return (
-            <Button size="sm" loading={startMutation.isPending} onClick={() => setPendingStartId(id)}>
-              <Play className="h-3 w-3 mr-1" /> Start
-            </Button>
-          );
-        }
-        if (st === 'IN_PROGRESS') {
-          return (
+        const orderNumber = String(row.orderNumber || id);
+
+        const cancelButton =
+          canUpdate && CANCELLABLE_STATUSES.includes(st) ? (
             <Button
               size="sm"
-              variant="secondary"
-              onClick={() =>
-                setCompletingOrder({
-                  id,
-                  productId: (row.product as { id: string })?.id || '',
-                  quantity: Number(row.quantity) || 1,
-                  orderNumber: String(row.orderNumber || id),
-                })
-              }
+              variant="ghost"
+              className="text-red-600 hover:text-red-700 hover:bg-red-50"
+              onClick={() => {
+                setCancelReason('');
+                setPendingCancel({ id, orderNumber });
+              }}
             >
-              <CheckCircle className="h-3 w-3 mr-1" /> Complete
+              <XCircle className="h-3 w-3 mr-1" /> Cancel
             </Button>
+          ) : null;
+
+        if (st === 'PLANNED' || st === 'SCHEDULED') {
+          return (
+            <div className="flex flex-wrap items-center gap-1">
+              <Button size="sm" loading={startMutation.isPending} onClick={() => setPendingStartId(id)}>
+                <Play className="h-3 w-3 mr-1" /> Start
+              </Button>
+              {cancelButton}
+            </div>
+          );
+        }
+        if (st === 'IN_PROGRESS' || st === 'ON_HOLD') {
+          return (
+            <div className="flex flex-wrap items-center gap-1">
+              {st === 'IN_PROGRESS' && (
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() =>
+                    setCompletingOrder({
+                      id,
+                      productId: (row.product as { id: string })?.id || '',
+                      quantity: Number(row.quantity) || 1,
+                      orderNumber,
+                    })
+                  }
+                >
+                  <CheckCircle className="h-3 w-3 mr-1" /> Complete
+                </Button>
+              )}
+              {cancelButton}
+            </div>
           );
         }
         return null;
@@ -302,6 +343,7 @@ export function ProductionPage() {
         title="Start production?"
         message="This begins manufacturing for the selected order."
         confirmLabel="Start"
+        variant="primary"
         loading={startMutation.isPending}
         onCancel={() => setPendingStartId(null)}
         onConfirm={() => {
@@ -309,6 +351,45 @@ export function ProductionPage() {
           startMutation.mutate(pendingStartId, { onSettled: () => setPendingStartId(null) });
         }}
       />
+
+      <Modal
+        open={pendingCancel !== null}
+        onClose={() => setPendingCancel(null)}
+        title="Cancel production order?"
+        size="md"
+      >
+        <p className="text-sm text-slate-600">
+          Cancel <span className="font-semibold">{pendingCancel?.orderNumber}</span>? No materials
+          have been deducted yet unless production was already completed.
+        </p>
+        <div className="mt-4">
+          <Textarea
+            label="Reason (optional)"
+            value={cancelReason}
+            onChange={(e) => setCancelReason(e.target.value)}
+            placeholder="Why is this order being cancelled?"
+            rows={3}
+          />
+        </div>
+        <div className="mt-6 flex justify-end gap-3">
+          <Button variant="secondary" onClick={() => setPendingCancel(null)} disabled={cancelMutation.isPending}>
+            Keep order
+          </Button>
+          <Button
+            variant="danger"
+            loading={cancelMutation.isPending}
+            onClick={() => {
+              if (!pendingCancel) return;
+              cancelMutation.mutate(
+                { id: pendingCancel.id, reason: cancelReason.trim() || undefined },
+                { onSuccess: () => setPendingCancel(null) }
+              );
+            }}
+          >
+            Cancel order
+          </Button>
+        </div>
+      </Modal>
     </div>
   );
 }
