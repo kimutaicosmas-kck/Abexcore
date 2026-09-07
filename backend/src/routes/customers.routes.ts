@@ -70,6 +70,23 @@ async function assertValidSalesPerson(salesPersonId: string | null | undefined) 
   }
 }
 
+async function resolveBalanceSummarySalesFilter(
+  req: AuthRequest,
+  querySalesPersonId?: string
+): Promise<{ salesPersonId?: string | null }> {
+  if (isSalesBookOwner(req.user!.roleName)) {
+    return { salesPersonId: req.user!.id };
+  }
+  if (querySalesPersonId === 'none') {
+    return { salesPersonId: null };
+  }
+  if (querySalesPersonId) {
+    await assertValidSalesPerson(querySalesPersonId);
+    return { salesPersonId: querySalesPersonId };
+  }
+  return {};
+}
+
 router.get(
   '/',
   authorize('customers:read'),
@@ -169,14 +186,15 @@ router.get(
   authorizeAny('customers:read', 'finance:read', 'reports:read'),
   validate(customerBalanceSummaryQuerySchema, 'query'),
   asyncHandler(async (req: AuthRequest, res: Response) => {
-    const { asOf, includeZero } = getQuery<{ asOf?: string; includeZero?: boolean }>(req.query);
-    let salesPersonId: string | undefined;
-    if (isSalesBookOwner(req.user!.roleName)) {
-      salesPersonId = req.user!.id;
-    }
+    const { asOf, includeZero, salesPersonId } = getQuery<{
+      asOf?: string;
+      includeZero?: boolean;
+      salesPersonId?: string;
+    }>(req.query);
+    const salesFilter = await resolveBalanceSummarySalesFilter(req, salesPersonId);
     const data = await CustomerStatementService.getBalanceSummary(asOf, {
       includeZero,
-      salesPersonId,
+      ...salesFilter,
     });
     res.json({ success: true, data });
   })
@@ -187,14 +205,15 @@ router.get(
   authorizeAny('customers:read', 'finance:read', 'reports:read'),
   validate(customerBalanceSummaryQuerySchema, 'query'),
   asyncHandler(async (req: AuthRequest, res: Response) => {
-    const { asOf, includeZero } = getQuery<{ asOf?: string; includeZero?: boolean }>(req.query);
-    let salesPersonId: string | undefined;
-    if (isSalesBookOwner(req.user!.roleName)) {
-      salesPersonId = req.user!.id;
-    }
+    const { asOf, includeZero, salesPersonId } = getQuery<{
+      asOf?: string;
+      includeZero?: boolean;
+      salesPersonId?: string;
+    }>(req.query);
+    const salesFilter = await resolveBalanceSummarySalesFilter(req, salesPersonId);
     const report = await CustomerStatementService.getBalanceSummary(asOf, {
       includeZero,
-      salesPersonId,
+      ...salesFilter,
     });
     const { ExportService } = await import('../services/export.service');
     const pdf = await ExportService.generateCustomerBalanceSummaryPDF(report);
@@ -209,14 +228,15 @@ router.get(
   authorizeAny('customers:read', 'finance:read', 'reports:read'),
   validate(customerBalanceSummaryQuerySchema, 'query'),
   asyncHandler(async (req: AuthRequest, res: Response) => {
-    const { asOf, includeZero } = getQuery<{ asOf?: string; includeZero?: boolean }>(req.query);
-    let salesPersonId: string | undefined;
-    if (isSalesBookOwner(req.user!.roleName)) {
-      salesPersonId = req.user!.id;
-    }
+    const { asOf, includeZero, salesPersonId } = getQuery<{
+      asOf?: string;
+      includeZero?: boolean;
+      salesPersonId?: string;
+    }>(req.query);
+    const salesFilter = await resolveBalanceSummarySalesFilter(req, salesPersonId);
     const report = await CustomerStatementService.getBalanceSummary(asOf, {
       includeZero,
-      salesPersonId,
+      ...salesFilter,
     });
     const { ExportService } = await import('../services/export.service');
     const excel = await ExportService.generateCustomerBalanceSummaryExcel(report);

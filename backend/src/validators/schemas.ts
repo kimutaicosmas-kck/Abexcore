@@ -256,6 +256,11 @@ export const customerBalanceSummaryQuerySchema = z.object({
     (v) => (v === '' || v === undefined ? undefined : v === 'true' || v === true),
     z.boolean().optional()
   ),
+  /** UUID of sales officer, or "none" for unassigned customers. */
+  salesPersonId: z.preprocess(
+    (v) => (v === '' || v === undefined ? undefined : v),
+    z.union([z.string().uuid(), z.literal('none')]).optional()
+  ),
 });
 
 export const createProductCategorySchema = z.object({

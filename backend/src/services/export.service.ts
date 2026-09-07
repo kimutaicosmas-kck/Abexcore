@@ -2373,6 +2373,9 @@ export class ExportService {
       });
       doc.font('Helvetica').fontSize(10).fillColor('#475569');
       doc.text('All Transactions', { width: pageWidth - 96, align: 'center' });
+      if (report.salesPersonName) {
+        doc.text(`Sales person: ${report.salesPersonName}`, { width: pageWidth - 96, align: 'center' });
+      }
       doc.moveDown(0.8);
 
       const left = 48;
@@ -2441,7 +2444,12 @@ export class ExportService {
       'B'
     );
     sheet.getCell(`A${nextRow}`).value = 'All Transactions';
-    sheet.getCell(`A${nextRow + 1}`).value = `As at ${asAt}`;
+    if (report.salesPersonName) {
+      sheet.getCell(`A${nextRow + 1}`).value = `Sales person: ${report.salesPersonName}`;
+      sheet.getCell(`A${nextRow + 2}`).value = `As at ${asAt}`;
+    } else {
+      sheet.getCell(`A${nextRow + 1}`).value = `As at ${asAt}`;
+    }
 
     const headerRow = sheet.addRow(['Customer', 'Balance']);
     headerRow.font = { bold: true };

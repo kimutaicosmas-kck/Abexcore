@@ -133,6 +133,7 @@ export function CustomersPage() {
   const [statementExporting, setStatementExporting] = useState<'pdf' | 'excel' | null>(null);
   const [balanceSummaryOpen, setBalanceSummaryOpen] = useState(false);
   const [balanceSummaryAsOf, setBalanceSummaryAsOf] = useState(() => new Date().toISOString().slice(0, 10));
+  const [balanceSummarySalesPerson, setBalanceSummarySalesPerson] = useState('');
   const [balanceSummaryExporting, setBalanceSummaryExporting] = useState<'pdf' | 'excel' | null>(null);
   const [balanceSummaryExportError, setBalanceSummaryExportError] = useState<string | null>(null);
 
@@ -247,13 +248,17 @@ export function CustomersPage() {
   });
 
   const { data: balanceSummary, isLoading: balanceSummaryLoading, refetch: refetchBalanceSummary } = useQuery({
-    queryKey: ['customer-balance-summary', balanceSummaryAsOf],
+    queryKey: ['customer-balance-summary', balanceSummaryAsOf, balanceSummarySalesPerson],
     queryFn: () =>
-      customersApi.balanceSummary({ asOf: balanceSummaryAsOf || undefined }).then((r) => r.data.data as {
+      customersApi.balanceSummary({
+        asOf: balanceSummaryAsOf || undefined,
+        salesPersonId: balanceSummarySalesPerson || undefined,
+      }).then((r) => r.data.data as {
         asOf: string;
         currency: string;
         customerCount: number;
         totalBalance: number;
+        salesPersonName?: string | null;
         customers: { id: string; code: string; name: string; balance: number }[];
       }),
     enabled: balanceSummaryOpen,
@@ -390,7 +395,10 @@ export function CustomersPage() {
       await downloadFile(
         `/customers/reports/balance-summary/${format}`,
         `customer-balance-summary.${ext}`,
-        { asOf: balanceSummaryAsOf || undefined }
+        {
+          asOf: balanceSummaryAsOf || undefined,
+          salesPersonId: balanceSummarySalesPerson || undefined,
+        }
       );
     } catch (err) {
       setBalanceSummaryExportError(err instanceof Error ? err.message : 'Export failed');
@@ -1113,6 +1121,16 @@ export function CustomersPage() {
               onChange={(e) => setBalanceSummaryAsOf(e.target.value)}
               className="w-44"
             />
+            {!isSalesOfficer && (
+              <div className="w-52">
+                <label className="block text-xs font-medium text-slate-600 mb-1">Sales person</label>
+                <Select
+                  options={salesPersonFilterOptions}
+                  value={balanceSummarySalesPerson}
+                  onChange={(e) => setBalanceSummarySalesPerson(e.target.value)}
+                />
+              </div>
+            )}
             <Button variant="secondary" size="sm" onClick={() => refetchBalanceSummary()}>
               Refresh
             </Button>
@@ -1138,6 +1156,11 @@ export function CustomersPage() {
             </Button>
           </PanelFilters>
           {balanceSummaryExportError && <Alert variant="error">{balanceSummaryExportError}</Alert>}
+          {balanceSummary?.salesPersonName && (
+            <p className="text-sm font-medium text-primary-800">
+              Showing customers for: {balanceSummary.salesPersonName}
+            </p>
+          )}
           {balanceSummaryLoading ? (
             <p className="text-sm text-slate-500 py-8 text-center">Loading balances…</p>
           ) : balanceSummary ? (

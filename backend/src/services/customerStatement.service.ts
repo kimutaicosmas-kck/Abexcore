@@ -173,6 +173,8 @@ export type CustomerBalanceSummaryResult = {
   customerCount: number;
   totalBalance: number;
   customers: CustomerBalanceSummaryRow[];
+  /** Set when filtered by sales person (name) or unassigned pool. */
+  salesPersonName?: string | null;
 };
 
 export class CustomerStatementService {
@@ -182,7 +184,7 @@ export class CustomerStatementService {
    */
   static async getBalanceSummary(
     asOf?: string,
-    opts?: { includeZero?: boolean; salesPersonId?: string }
+    opts?: { includeZero?: boolean; salesPersonId?: string | null }
   ): Promise<CustomerBalanceSummaryResult> {
     const companyId = requireTenantId();
     const toRange = asOf ? dayRangeFromInput(asOf) : null;
@@ -193,7 +195,9 @@ export class CustomerStatementService {
       deletedAt: null,
       isActive: true,
     };
-    if (opts?.salesPersonId) {
+    if (opts?.salesPersonId === null) {
+      customerWhere.salesPersonId = null;
+    } else if (opts?.salesPersonId) {
       customerWhere.salesPersonId = opts.salesPersonId;
     }
 
@@ -258,12 +262,26 @@ export class CustomerStatementService {
 
     const totalBalance = Math.round(rows.reduce((sum, r) => sum + r.balance, 0) * 100) / 100;
 
+    let salesPersonName: string | null | undefined;
+    if (opts?.salesPersonId === null) {
+      salesPersonName = 'Unassigned';
+    } else if (opts?.salesPersonId) {
+      const salesPerson = await prisma.user.findFirst({
+        where: { id: opts.salesPersonId, companyId },
+        select: { firstName: true, lastName: true },
+      });
+      salesPersonName = salesPerson
+        ? `${salesPerson.firstName} ${salesPerson.lastName}`.trim()
+        : null;
+    }
+
     return {
       asOf: toDate.toISOString(),
       currency: 'KES',
       customerCount: rows.length,
       totalBalance,
       customers: rows,
+      ...(salesPersonName !== undefined ? { salesPersonName } : {}),
     };
   }
 
