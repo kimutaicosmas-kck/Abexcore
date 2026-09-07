@@ -116,58 +116,6 @@ paths:
           description: Unauthorized
         '403':
           description: Forbidden
-  /auth/sso/callback:
-    get:
-      tags: [Auth]
-      summary: GET /auth/sso/callback
-      responses:
-        '200':
-          description: Success
-        '400':
-          description: Validation error
-        '401':
-          description: Unauthorized
-        '403':
-          description: Forbidden
-  /auth/sso/exchange:
-    post:
-      tags: [Auth]
-      summary: POST /auth/sso/exchange
-      responses:
-        '200':
-          description: Success
-        '400':
-          description: Validation error
-        '401':
-          description: Unauthorized
-        '403':
-          description: Forbidden
-  /auth/sso/start:
-    get:
-      tags: [Auth]
-      summary: GET /auth/sso/start
-      responses:
-        '200':
-          description: Success
-        '400':
-          description: Validation error
-        '401':
-          description: Unauthorized
-        '403':
-          description: Forbidden
-  /auth/sso/status:
-    get:
-      tags: [Auth]
-      summary: GET /auth/sso/status
-      responses:
-        '200':
-          description: Success
-        '400':
-          description: Validation error
-        '401':
-          description: Unauthorized
-        '403':
-          description: Forbidden
   /crm/complaints:
     get:
       tags: [CRM]
@@ -392,6 +340,51 @@ paths:
     get:
       tags: [Customers]
       summary: GET /customers/import/template
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /customers/reports/balance-summary:
+    get:
+      tags: [Customers]
+      summary: GET /customers/reports/balance-summary
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /customers/reports/balance-summary/excel:
+    get:
+      tags: [Customers]
+      summary: GET /customers/reports/balance-summary/excel
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /customers/reports/balance-summary/pdf:
+    get:
+      tags: [Customers]
+      summary: GET /customers/reports/balance-summary/pdf
       security:
         - bearerAuth: []
       responses:

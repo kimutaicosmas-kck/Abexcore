@@ -34,13 +34,27 @@ async function produceFinishedStock(productId: string, machineId: string, quanti
     `/api/v1/operations/production/${productionId}/start`
   );
 
-  const qcRes = await authReq(testCtx.app, testCtx.authToken).post('/api/v1/quality').send({
-    type: 'production',
-    productionOrderId: productionId,
-    status: 'PASSED',
-    result: 'Workflow test stock approved',
-  });
-  expect(qcRes.status).toBe(201);
+  const qcListRes = await authReq(testCtx.app, testCtx.authToken).get(
+    `/api/v1/quality?productionOrderId=${productionId}&limit=5`
+  );
+  expect(qcListRes.status).toBe(200);
+  const pendingQc = (qcListRes.body.data as { id: string; status: string }[]).find(
+    (row) => row.status === 'PENDING'
+  );
+  if (pendingQc) {
+    const patchRes = await authReq(testCtx.app, testCtx.authToken)
+      .patch(`/api/v1/quality/${pendingQc.id}`)
+      .send({ status: 'PASSED', result: 'Workflow test stock approved' });
+    expect(patchRes.status).toBe(200);
+  } else {
+    const qcRes = await authReq(testCtx.app, testCtx.authToken).post('/api/v1/quality').send({
+      type: 'production',
+      productionOrderId: productionId,
+      status: 'PASSED',
+      result: 'Workflow test stock approved',
+    });
+    expect(qcRes.status).toBe(201);
+  }
 
   const completeRes = await authReq(testCtx.app, testCtx.authToken)
     .post(`/api/v1/operations/production/${productionId}/complete`)

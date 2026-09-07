@@ -39,18 +39,36 @@ export async function ensureWorkflowFixtures(accessToken: string): Promise<void>
       });
     }
 
-    let warehouse = await prisma.warehouse.findFirst({
-      where: { companyId, deletedAt: null, isActive: true },
+    let rmWarehouse = await prisma.warehouse.findFirst({
+      where: { companyId, deletedAt: null, isActive: true, type: 'raw_materials' },
       select: { id: true },
     });
-    if (!warehouse) {
-      warehouse = await prisma.warehouse.create({
+    if (!rmWarehouse) {
+      rmWarehouse = await prisma.warehouse.create({
         data: {
           companyId,
           branchId: branch.id,
-          code: 'WH-TEST',
-          name: 'Test Warehouse',
-          type: 'general',
+          code: 'WH-RM',
+          name: 'Raw Materials',
+          type: 'raw_materials',
+          isActive: true,
+        },
+        select: { id: true },
+      });
+    }
+
+    let fgWarehouse = await prisma.warehouse.findFirst({
+      where: { companyId, deletedAt: null, isActive: true, type: 'finished_goods' },
+      select: { id: true },
+    });
+    if (!fgWarehouse) {
+      fgWarehouse = await prisma.warehouse.create({
+        data: {
+          companyId,
+          branchId: branch.id,
+          code: 'WH-FG',
+          name: 'Finished Goods',
+          type: 'finished_goods',
           isActive: true,
         },
         select: { id: true },
@@ -87,12 +105,12 @@ export async function ensureWorkflowFixtures(accessToken: string): Promise<void>
       });
     }
 
-    const material = await prisma.rawMaterial.findFirst({
+    let material = await prisma.rawMaterial.findFirst({
       where: { companyId, deletedAt: null, isActive: true },
-      select: { id: true },
+      select: { id: true, unitCost: true },
     });
     if (!material) {
-      await prisma.rawMaterial.create({
+      material = await prisma.rawMaterial.create({
         data: injectTenantData({
           code: 'RM-TEST',
           name: 'Test Raw Material',
@@ -104,6 +122,7 @@ export async function ensureWorkflowFixtures(accessToken: string): Promise<void>
           reorderQty: 10,
           isActive: true,
         }),
+        select: { id: true, unitCost: true },
       });
     }
 
@@ -124,9 +143,10 @@ export async function ensureWorkflowFixtures(accessToken: string): Promise<void>
       });
     }
 
-    const product = await prisma.product.findFirst({
+    let product = await prisma.product.findFirst({
       where: { companyId, deletedAt: null, isActive: true },
-      select: { id: true },
+      orderBy: { name: 'asc' },
+      select: { id: true, manufacturingCost: true },
     });
     if (!product) {
       let category = await prisma.productCategory.findFirst({
@@ -143,7 +163,7 @@ export async function ensureWorkflowFixtures(accessToken: string): Promise<void>
           select: { id: true },
         });
       }
-      await prisma.product.create({
+      product = await prisma.product.create({
         data: injectTenantData({
           sku: 'SKU-TEST-001',
           name: 'Test Product',
@@ -152,6 +172,74 @@ export async function ensureWorkflowFixtures(accessToken: string): Promise<void>
           manufacturingCost: 50,
           isActive: true,
         }),
+        select: { id: true, manufacturingCost: true },
+      });
+    }
+
+    const bom = await prisma.billOfMaterial.findUnique({
+      where: { productId: product.id },
+      include: { items: true },
+    });
+    if (!bom) {
+      await prisma.billOfMaterial.create({
+        data: {
+          productId: product.id,
+          version: '1.0',
+          isActive: true,
+          items: {
+            create: [{ rawMaterialId: material.id, quantity: 1, unit: 'pcs' }],
+          },
+        },
+      });
+    } else {
+      if (!bom.isActive) {
+        await prisma.billOfMaterial.update({
+          where: { id: bom.id },
+          data: { isActive: true },
+        });
+      }
+      if (bom.items.length === 0) {
+        await prisma.billOfMaterialItem.create({
+          data: {
+            bomId: bom.id,
+            rawMaterialId: material.id,
+            quantity: 1,
+            unit: 'pcs',
+          },
+        });
+      }
+    }
+
+    const rmStock = await prisma.stockLevel.findFirst({
+      where: { warehouseId: rmWarehouse.id, rawMaterialId: material.id },
+    });
+    if (!rmStock) {
+      await prisma.stockLevel.create({
+        data: {
+          warehouseId: rmWarehouse.id,
+          rawMaterialId: material.id,
+          quantity: 10000,
+          unitCost: material.unitCost,
+        },
+      });
+    } else if (Number(rmStock.quantity) < 100) {
+      await prisma.stockLevel.update({
+        where: { id: rmStock.id },
+        data: { quantity: 10000 },
+      });
+    }
+
+    const fgStock = await prisma.stockLevel.findFirst({
+      where: { warehouseId: fgWarehouse.id, productId: product.id },
+    });
+    if (!fgStock) {
+      await prisma.stockLevel.create({
+        data: {
+          warehouseId: fgWarehouse.id,
+          productId: product.id,
+          quantity: 500,
+          unitCost: product.manufacturingCost,
+        },
       });
     }
 
@@ -170,6 +258,7 @@ export async function ensureWorkflowFixtures(accessToken: string): Promise<void>
       });
     }
 
-    void warehouse;
+    void rmWarehouse;
+    void fgWarehouse;
   });
 }
