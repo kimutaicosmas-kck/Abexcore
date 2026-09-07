@@ -4,7 +4,7 @@ import {
   getMonthlySalesRevenue,
   getNetAccountsReceivable,
   getNetAccountsPayable,
-  getInvoicePaymentsReceived,
+  getMonthlyPaymentsReceived,
   getDueCohortCollectionRate,
   getCollectionRateTrend,
   getMonthStart,
@@ -121,14 +121,9 @@ export class FinanceService {
         : getNetAccountsPayable(),
       hasScope
         ? includeSales
-          ? prisma.invoice
-              .aggregate({
-                where: { ...salesWhere, status: { not: 'REFUNDED' } },
-                _sum: { paidAmount: true },
-              })
-              .then((a) => Number(a._sum.paidAmount || 0))
+          ? getMonthlyPaymentsReceived(monthStart, monthEnd, salesWhere)
           : Promise.resolve(0)
-        : getInvoicePaymentsReceived(),
+        : getMonthlyPaymentsReceived(monthStart, monthEnd),
       getDueCohortCollectionRate(monthStart, monthEnd),
     ]);
 

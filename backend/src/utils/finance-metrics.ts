@@ -104,7 +104,7 @@ export async function getNetAccountsPayable(): Promise<number> {
   );
 }
 
-/** Total amounts paid/received on sales invoices (customer collections). */
+/** Total amounts paid/received on sales invoices (customer collections), all time. */
 export async function getInvoicePaymentsReceived(): Promise<number> {
   const agg = await prisma.invoice.aggregate({
     where: {
@@ -114,6 +114,40 @@ export async function getInvoicePaymentsReceived(): Promise<number> {
     _sum: { paidAmount: true },
   });
   return Number(agg._sum.paidAmount || 0);
+}
+
+/** Cash collected from customers in a calendar period (by payment date, not invoice date). */
+export async function getMonthlyPaymentsReceived(
+  from = getMonthStart(),
+  to = getMonthEnd(from),
+  invoiceWhere?: Prisma.InvoiceWhereInput
+): Promise<number> {
+  const range = { gte: from, lte: to };
+  const salesInvoiceFilter: Prisma.InvoiceWhereInput = {
+    ...(invoiceWhere || {}),
+    type: 'SALES',
+    status: { not: 'REFUNDED' },
+  };
+
+  const [allocSum, legacySum] = await Promise.all([
+    prisma.paymentAllocation.aggregate({
+      where: {
+        payment: { paymentDate: range },
+        invoice: salesInvoiceFilter,
+      },
+      _sum: { amount: true },
+    }),
+    prisma.payment.aggregate({
+      where: {
+        paymentDate: range,
+        allocations: { none: {} },
+        invoice: salesInvoiceFilter,
+      },
+      _sum: { amount: true },
+    }),
+  ]);
+
+  return Number(allocSum._sum.amount || 0) + Number(legacySum._sum.amount || 0);
 }
 
 export type CollectionRateSnapshot = {
