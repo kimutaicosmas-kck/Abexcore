@@ -1,4 +1,4 @@
-import { Children, useId, useState } from 'react';
+import { Children, cloneElement, isValidElement, useId, useState } from 'react';
 import { Link } from 'react-router-dom';
 import clsx from 'clsx';
 import { ChevronRight } from 'lucide-react';
@@ -313,7 +313,7 @@ interface StatCardProps {
   to?: string;
   /** Same-page action (e.g. switch tab / apply filter). Ignored when `to` is set. */
   onClick?: () => void;
-  /** Extra classes (e.g. `hidden sm:flex` to hide on mobile). */
+  /** Extra classes for the card shell. The 5th KPI is desktop-only via StatGrid. */
   className?: string;
 }
 
@@ -906,7 +906,7 @@ export function QuickActionGrid({ children }: { children: React.ReactNode }) {
 }
 
 
-/** Page KPI strip — hard cap of 5 cards so layouts stay consistent. */
+/** Page KPI strip — 4 cards on mobile (2×2), 5 on large screens (one row). */
 export function StatGrid({
   children,
   className,
@@ -916,11 +916,24 @@ export function StatGrid({
   className?: string;
   maxItems?: number;
 }) {
-  const items = Children.toArray(children).slice(0, maxItems);
+  const items = Children.toArray(children).slice(0, maxItems).map((child, index) => {
+    if (!isValidElement<{ className?: string }>(child)) return child;
+    if (index < 4) {
+      const cleaned = child.props.className?.replace(/\bhidden\s+(?:sm|md|lg):flex\b/g, '').trim();
+      return cleaned !== child.props.className
+        ? cloneElement(child, { className: cleaned || undefined })
+        : child;
+    }
+    const cleaned = child.props.className?.replace(/\bhidden\s+(?:sm|md|lg):flex\b/g, '').trim();
+    return cloneElement(child, {
+      className: clsx(cleaned, 'hidden lg:flex'),
+    });
+  });
+
   return (
     <div
       className={clsx(
-        'grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-2 sm:gap-3 w-full mb-3 sm:mb-4 min-w-0',
+        'grid grid-cols-2 lg:grid-cols-5 gap-2 sm:gap-3 w-full mb-3 sm:mb-4 min-w-0',
         className
       )}
     >
