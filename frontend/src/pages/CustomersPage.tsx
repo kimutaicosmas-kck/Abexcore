@@ -733,7 +733,7 @@ export function CustomersPage() {
               <Select options={CUSTOMER_STATUS_OPTIONS} value={custActive} onChange={(e) => { setCustActive(e.target.value); setCustPage(1); }} />
             </FilterField>
             {!isSalesOfficer && (
-              <FilterField span="full" className="sm:max-w-xs">
+              <FilterField>
                 <Select
                   options={salesPersonFilterOptions}
                   value={custSalesPerson}

@@ -662,10 +662,6 @@ body {
   @apply flex w-full items-center justify-center gap-2 rounded-2xl border border-primary-200 bg-white px-4 py-2.5 text-sm font-semibold text-primary-900 shadow-sm active:scale-[0.99] transition-all;
 }
 
-.filter-bar-controls-collapsed {
-  display: none;
-}
-
 .filter-bar-controls {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -690,19 +686,23 @@ body {
 }
 
 .page-toolbar-shell {
+  @apply min-w-0;
+}
+
+.page-toolbar-inner {
   @apply flex flex-col gap-2.5 min-w-0;
 }
 
 .page-toolbar-tabs {
-  @apply w-full;
+  @apply w-full min-w-0;
 }
 
 .page-toolbar-actions {
-  @apply w-full;
+  @apply w-full shrink-0;
 }
 
 .page-toolbar-actions .flex {
-  @apply w-full flex-col gap-2 sm:flex-row sm:flex-wrap sm:w-auto;
+  @apply w-full flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:w-auto;
 }
 
 .page-toolbar-actions button[class*='bg-primary'],
@@ -765,8 +765,8 @@ body {
   .panel-filters {
     display: flex;
     flex-wrap: wrap;
-    align-items: flex-end;
-    gap: 0.75rem;
+    align-items: center;
+    gap: 0.5rem;
   }
 
   .page-toolbar-filters {
@@ -783,28 +783,67 @@ body {
   }
 
   .filter-field-full {
-    flex: 1 1 100%;
-    max-width: 28rem;
+    flex: 1 1 14rem;
+    max-width: 22rem;
   }
 }
 
 @media (min-width: 1024px) {
-  .filter-bar-controls-collapsed {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: flex-end;
-    gap: 0.75rem;
+  .page-toolbar-inner {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
   }
 
+  .page-toolbar-tabs {
+    flex: 1 1 auto;
+    min-width: 0;
+    max-width: none;
+  }
+
+  .page-toolbar-actions {
+    width: auto;
+    flex-shrink: 0;
+  }
+
+  .page-toolbar-actions .flex {
+    justify-content: flex-end;
+  }
+
+  .page-toolbar-actions button[class*='bg-primary'],
+  .page-toolbar-actions > button:first-child:last-child {
+    min-height: 2.25rem;
+    border-radius: 0.75rem;
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+
+  .filter-bar {
+    padding-top: 0.625rem;
+    padding-bottom: 0.625rem;
+    border-bottom: 1px solid rgb(226 232 240 / 0.9);
+  }
+
+  .filter-bar-pinned {
+    margin-bottom: 0;
+  }
+
+  .filter-bar-controls,
+  .panel-filters,
   .panel-filters-shell {
     display: flex;
     flex-wrap: wrap;
-    align-items: flex-end;
-    gap: 0.75rem;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .panel-filters-shell {
+    padding-top: 0.625rem;
+    padding-bottom: 0.625rem;
     padding-left: 1rem;
     padding-right: 1rem;
-    padding-top: 0.75rem;
-    padding-bottom: 0;
+    border-bottom: 1px solid rgb(226 232 240 / 0.9);
   }
 
   .panel-filters-pinned,
@@ -815,9 +854,81 @@ body {
   .panel-filters-rest.panel-filters {
     display: flex;
     flex-wrap: wrap;
-    align-items: flex-end;
-    gap: 0.75rem;
+    align-items: center;
+    gap: 0.5rem;
     padding: 0;
+  }
+
+  .filter-bar .space-y-1\.5 > label,
+  .panel-filters .space-y-1\.5 > label,
+  .page-toolbar-filters .space-y-1\.5 > label {
+    @apply sr-only;
+  }
+
+  .filter-bar .space-y-1\.5,
+  .panel-filters .space-y-1\.5,
+  .page-toolbar-filters .space-y-1\.5 {
+    gap: 0;
+  }
+
+  .filter-bar input,
+  .filter-bar select,
+  .panel-filters input,
+  .panel-filters select,
+  .page-toolbar-filters input,
+  .page-toolbar-filters select {
+    min-height: 2.25rem;
+    padding-top: 0.375rem;
+    padding-bottom: 0.375rem;
+    font-size: 0.8125rem;
+    border-radius: 0.625rem;
+  }
+
+  .filter-bar select,
+  .panel-filters select,
+  .page-toolbar-filters select {
+    width: 10.5rem;
+    min-width: 10.5rem;
+    max-width: 10.5rem;
+  }
+
+  .filter-field-full {
+    flex: 1 1 12rem;
+    min-width: 12rem;
+    max-width: 18rem;
+  }
+
+  .filter-field:not(.filter-field-full) {
+    flex: 0 0 auto;
+    width: auto;
+  }
+
+  .filter-bar button:not(.mobile-filter-toggle),
+  .panel-filters button:not(.mobile-filter-toggle),
+  .page-toolbar-filters button {
+    width: auto;
+    min-height: 2.25rem;
+    padding-left: 0.875rem;
+    padding-right: 0.875rem;
+    border-radius: 0.625rem;
+    font-size: 0.8125rem;
+  }
+
+  .page-tabs {
+    @apply inline-flex w-auto max-w-full rounded-xl p-0.5;
+  }
+
+  .page-toolbar-actions .flex {
+    @apply gap-1.5;
+  }
+
+  .page-toolbar-actions .flex button {
+    min-height: 2.25rem;
+    border-radius: 0.75rem;
+    font-size: 0.8125rem;
+    padding-left: 0.875rem;
+    padding-right: 0.875rem;
+    white-space: nowrap;
   }
 }
 

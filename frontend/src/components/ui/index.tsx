@@ -701,7 +701,7 @@ export function FilterBar({
       <div
         className={clsx(
           'filter-bar-controls',
-          hasCollapse && !open && 'filter-bar-controls-collapsed lg:!grid'
+          hasCollapse && !open && 'max-lg:hidden'
         )}
       >
         {hasCollapse ? collapsible : items}
@@ -863,10 +863,12 @@ interface PageToolbarProps {
 export function PageToolbar({ tabs, activeTab = 0, onTabChange, actions, className }: PageToolbarProps) {
   return (
     <div className={clsx('page-toolbar-shell mb-3 min-w-0', className)}>
-      {tabs && onTabChange && (
-        <TabGroup tabs={tabs} activeIndex={activeTab} onChange={onTabChange} className="page-toolbar-tabs" />
-      )}
-      {actions && <div className="page-toolbar-actions">{actions}</div>}
+      <div className="page-toolbar-inner">
+        {tabs && onTabChange && (
+          <TabGroup tabs={tabs} activeIndex={activeTab} onChange={onTabChange} className="page-toolbar-tabs" />
+        )}
+        {actions && <div className="page-toolbar-actions">{actions}</div>}
+      </div>
     </div>
   );
 }
