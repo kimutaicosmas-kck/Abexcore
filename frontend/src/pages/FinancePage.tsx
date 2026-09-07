@@ -48,6 +48,7 @@ import {
   getStatusBadge,
   PageToolbar,
   ConfirmDialog,
+  PanelFilters,
 } from '../components/ui';
 import { Modal } from '../components/ui/Modal';
 import { InvoiceForm } from '../components/forms/InvoiceForm';
@@ -747,7 +748,7 @@ export function FinancePage() {
       {/* Invoices */}
       {activeTab === 0 && (
         <DataPanel>
-          <div className="panel-filters">
+          <PanelFilters>
             <form
               className="flex-1 min-w-[200px] max-w-sm"
               onSubmit={(e) => { e.preventDefault(); setSearch(searchInput); setPage(1); }}
@@ -759,7 +760,7 @@ export function FinancePage() {
             <Button variant="secondary" size="sm" onClick={() => { setSearchInput(''); setSearch(''); setType(''); setStatus(''); setPage(1); }}>
               Clear
             </Button>
-          </div>
+          </PanelFilters>
           {invError && (
             <div className="px-4 pt-4">
               <Alert variant="error">
@@ -800,7 +801,7 @@ export function FinancePage() {
       {/* Payments */}
       {activeTab === 1 && (
         <DataPanel>
-          <div className="panel-filters">
+          <PanelFilters>
             <Input
               placeholder="Search payments…"
               value={paySearch}
@@ -877,7 +878,7 @@ export function FinancePage() {
               <FileSpreadsheet className="h-4 w-4 mr-1.5" />
               Export Excel
             </Button>
-          </div>
+          </PanelFilters>
           {(payments?.data?.length || 0) === 0 && !payLoading ? (
             <div className="p-6">
               <EmptyState
@@ -913,9 +914,9 @@ export function FinancePage() {
       {/* Journals */}
       {activeTab === 3 && (
         <DataPanel>
-          <div className="panel-filters max-w-sm">
+          <PanelFilters className="max-w-sm">
             <Input placeholder="Search journals…" value={journalSearch} onChange={(e) => { setJournalSearch(e.target.value); setJournalPage(1); }} />
-          </div>
+          </PanelFilters>
           {(journalEntries?.data?.length || 0) === 0 && !journalLoading ? (
             <div className="p-6">
               <EmptyState

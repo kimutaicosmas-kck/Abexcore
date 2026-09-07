@@ -1,7 +1,7 @@
 import { Children, cloneElement, isValidElement, useId, useState } from 'react';
 import { Link } from 'react-router-dom';
 import clsx from 'clsx';
-import { ChevronRight } from 'lucide-react';
+import { ChevronDown, ChevronRight, SlidersHorizontal } from 'lucide-react';
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: 'primary' | 'secondary' | 'danger' | 'ghost';
@@ -652,20 +652,60 @@ export function DataPanel({ children, className }: { children: React.ReactNode; 
   );
 }
 
-/** Compact filter row — 2-column grid on mobile, inline on desktop. */
+/** Compact filter row — collapsible on mobile, inline on desktop. */
 export function FilterBar({
   children,
   className,
   hint,
+  activeFilters = 0,
 }: {
   children: React.ReactNode;
   className?: string;
   hint?: React.ReactNode;
+  /** Shown on the mobile Filters chip when > 0 */
+  activeFilters?: number;
 }) {
+  const [open, setOpen] = useState(false);
+  const items = Children.toArray(children);
+  const pinned: React.ReactNode[] = [];
+  const collapsible: React.ReactNode[] = [];
+
+  items.forEach((child) => {
+    if (isValidElement<{ pinned?: boolean }>(child) && child.props.pinned) {
+      pinned.push(child);
+    } else {
+      collapsible.push(child);
+    }
+  });
+
+  const hasCollapse = collapsible.length > 0;
+
   return (
     <div className={clsx('filter-bar px-4 pt-3 sm:pt-4 pb-0', className)}>
       {hint && <p className="filter-bar-hint">{hint}</p>}
-      <div className="filter-bar-controls">{children}</div>
+      {pinned.length > 0 && <div className="filter-bar-pinned">{pinned}</div>}
+      {hasCollapse && (
+        <div className="filter-bar-mobile-bar lg:hidden">
+          <button
+            type="button"
+            className="mobile-filter-toggle"
+            onClick={() => setOpen((v) => !v)}
+            aria-expanded={open}
+          >
+            <SlidersHorizontal className="h-4 w-4 shrink-0" />
+            <span>Filters{activeFilters > 0 ? ` · ${activeFilters}` : ''}</span>
+            <ChevronDown className={clsx('h-4 w-4 shrink-0 transition-transform', open && 'rotate-180')} />
+          </button>
+        </div>
+      )}
+      <div
+        className={clsx(
+          'filter-bar-controls',
+          hasCollapse && !open && 'filter-bar-controls-collapsed lg:!grid'
+        )}
+      >
+        {hasCollapse ? collapsible : items}
+      </div>
     </div>
   );
 }
@@ -674,10 +714,13 @@ export function FilterField({
   children,
   className,
   span = 1,
+  pinned = false,
 }: {
   children: React.ReactNode;
   className?: string;
   span?: 1 | 2 | 'full';
+  /** Always visible on mobile (e.g. search). */
+  pinned?: boolean;
 }) {
   return (
     <div
@@ -702,13 +745,16 @@ interface TabGroupProps {
 
 export function TabGroup({ tabs, activeIndex, onChange, className }: TabGroupProps) {
   return (
-    <div className={clsx('page-tabs', className)}>
+    <div className={clsx('page-tabs', className)} role="tablist">
       {tabs.map((tab, i) => (
         <button
           key={`tab-${i}-${tab}`}
+          type="button"
+          role="tab"
+          aria-selected={activeIndex === i}
           onClick={() => onChange(i)}
           className={clsx(
-            'px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 whitespace-nowrap shrink-0',
+            'page-tab-btn flex-1 lg:flex-none px-3 py-2 lg:py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 whitespace-nowrap shrink-0 text-center',
             activeIndex === i
               ? 'bg-primary-600 text-white shadow-sm shadow-primary-600/25'
               : 'text-primary-700 hover:bg-white/80 hover:text-primary-800'
@@ -721,12 +767,87 @@ export function TabGroup({ tabs, activeIndex, onChange, className }: TabGroupPro
   );
 }
 
+/** Secondary page actions — horizontal chip strip on mobile. */
+export function ActionChip({
+  children,
+  className,
+  ...props
+}: React.ButtonHTMLAttributes<HTMLButtonElement>) {
+  return (
+    <button
+      type="button"
+      className={clsx(
+        'action-chip inline-flex items-center gap-1.5 shrink-0 rounded-full border border-primary-200/90 bg-white px-3.5 py-2 text-xs font-semibold text-primary-900 shadow-sm active:scale-[0.98] transition-all',
+        className
+      )}
+      {...props}
+    >
+      {children}
+    </button>
+  );
+}
+
+export function ActionChipLink({
+  to,
+  children,
+  className,
+}: {
+  to: string;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <Link to={to} className={clsx('action-chip inline-flex items-center gap-1.5 shrink-0 no-underline', className)}>
+      {children}
+    </Link>
+  );
+}
+
+/** List-page filters — first control stays visible; rest collapse on mobile. */
+export function PanelFilters({
+  children,
+  className,
+  activeFilters = 0,
+}: {
+  children: React.ReactNode;
+  className?: string;
+  activeFilters?: number;
+}) {
+  const [open, setOpen] = useState(false);
+  const items = Children.toArray(children);
+
+  if (items.length <= 1) {
+    return <div className={clsx('panel-filters', className)}>{children}</div>;
+  }
+
+  const [first, ...rest] = items;
+
+  return (
+    <div className={clsx('panel-filters-shell', className)}>
+      <div className="panel-filters-pinned">{first}</div>
+      <div className="panel-filters-mobile-bar lg:hidden">
+        <button
+          type="button"
+          className="mobile-filter-toggle"
+          onClick={() => setOpen((v) => !v)}
+          aria-expanded={open}
+        >
+          <SlidersHorizontal className="h-4 w-4 shrink-0" />
+          <span>Filters{activeFilters > 0 ? ` · ${activeFilters}` : ''}</span>
+          <ChevronDown className={clsx('h-4 w-4 shrink-0 transition-transform', open && 'rotate-180')} />
+        </button>
+      </div>
+      <div className={clsx('panel-filters panel-filters-rest', !open && 'max-lg:hidden')}>{rest}</div>
+    </div>
+  );
+}
+
 /** Page-level actions only — title lives in TopNav. */
 export function PageHeader({ action }: { title?: string; subtitle?: string; action?: React.ReactNode }) {
   if (!action) return null;
   return (
-    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end mb-3">
-      {action && <div className="flex flex-wrap items-center gap-2 shrink-0">{action}</div>}
+    <div className="page-header-actions mb-3 min-w-0">
+      <div className="page-action-strip">{action}</div>
     </div>
   );
 }
@@ -741,11 +862,11 @@ interface PageToolbarProps {
 
 export function PageToolbar({ tabs, activeTab = 0, onTabChange, actions, className }: PageToolbarProps) {
   return (
-    <div className={clsx('flex flex-col gap-2 md:flex-row md:items-center md:justify-between mb-3 min-w-0', className)}>
+    <div className={clsx('page-toolbar-shell mb-3 min-w-0', className)}>
       {tabs && onTabChange && (
-        <TabGroup tabs={tabs} activeIndex={activeTab} onChange={onTabChange} className="!mb-0 w-full md:w-auto" />
+        <TabGroup tabs={tabs} activeIndex={activeTab} onChange={onTabChange} className="page-toolbar-tabs" />
       )}
-      {actions && <div className="page-toolbar-filters shrink-0">{actions}</div>}
+      {actions && <div className="page-toolbar-actions">{actions}</div>}
     </div>
   );
 }

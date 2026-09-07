@@ -22,6 +22,7 @@ import {
   ConfirmDialog,
   PageQueryStatus,
   Textarea,
+  PanelFilters,
 } from '../components/ui';
 import { Modal } from '../components/ui/Modal';
 import { ProductionOrderForm } from '../components/forms/ProductionOrderForm';
@@ -278,7 +279,7 @@ export function ProductionPage() {
 
       {activeTab === 0 && (
         <DataPanel>
-          <div className="panel-filters">
+          <PanelFilters>
             <Input
               placeholder="Search orders…"
               value={search}
@@ -291,7 +292,7 @@ export function ProductionPage() {
               onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
               className="sm:w-44"
             />
-          </div>
+          </PanelFilters>
           {(data?.data?.length || 0) === 0 && !isLoading ? (
             <div className="p-6">
               <EmptyState

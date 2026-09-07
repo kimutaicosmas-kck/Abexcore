@@ -22,6 +22,7 @@ import {
   PageToolbar,
   ConfirmDialog,
   PageQueryStatus,
+  PanelFilters,
 } from '../components/ui';
 import { Modal } from '../components/ui/Modal';
 import { MaintenanceForm } from '../components/forms/MaintenanceForm';
@@ -172,14 +173,14 @@ export function MaintenancePage() {
 
       {activeTab === 0 && (
         <DataPanel>
-          <div className="panel-filters">
+          <PanelFilters>
             <Input
               placeholder="Search machines…"
               className="sm:max-w-md"
               value={search}
               onChange={(e) => { setSearch(e.target.value); setPage(1); }}
             />
-          </div>
+          </PanelFilters>
           {(machines?.data?.length || 0) === 0 && !machLoading ? (
             <div className="p-6">
               <EmptyState
@@ -218,7 +219,7 @@ export function MaintenancePage() {
 
       {activeTab === 1 && (
         <DataPanel>
-          <div className="panel-filters">
+          <PanelFilters>
             <Input
               placeholder="Search requests…"
               className="sm:max-w-md"
@@ -231,7 +232,7 @@ export function MaintenancePage() {
               onChange={(e) => { setStatus(e.target.value); setPage(1); }}
               className="sm:w-44"
             />
-          </div>
+          </PanelFilters>
           {(requests?.data?.length || 0) === 0 && !reqLoading ? (
             <div className="p-6">
               <EmptyState

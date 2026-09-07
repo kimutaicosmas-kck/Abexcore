@@ -363,8 +363,8 @@ export function ProductsPage() {
 
       {activeTabName === 'Catalog' && canManageProducts && (
         <DataPanel>
-          <FilterBar>
-            <FilterField span="full">
+          <FilterBar activeFilters={[category, status].filter(Boolean).length}>
+            <FilterField span="full" pinned>
               <form
                 className="min-w-0"
                 onSubmit={(e) => {

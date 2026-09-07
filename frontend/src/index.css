@@ -645,20 +645,103 @@ body {
   @apply hidden sm:block text-xs text-slate-600 mb-2;
 }
 
+.filter-bar-pinned {
+  margin-bottom: 0.5rem;
+}
+
+.filter-bar-pinned .space-y-1\.5 > label {
+  @apply sr-only;
+}
+
+.filter-bar-mobile-bar,
+.panel-filters-mobile-bar {
+  margin-bottom: 0.5rem;
+}
+
+.mobile-filter-toggle {
+  @apply flex w-full items-center justify-center gap-2 rounded-2xl border border-primary-200 bg-white px-4 py-2.5 text-sm font-semibold text-primary-900 shadow-sm active:scale-[0.99] transition-all;
+}
+
+.filter-bar-controls-collapsed {
+  display: none;
+}
+
 .filter-bar-controls {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.5rem;
+  gap: 0.625rem;
   align-items: end;
+}
+
+.panel-filters-shell {
+  @apply px-4 pt-3 sm:pt-4 pb-0;
+}
+
+.panel-filters-pinned .space-y-1\.5 > label {
+  @apply sr-only;
 }
 
 /* Shared compact filter row for all list pages */
 .panel-filters {
-  @apply px-4 pt-3 sm:pt-4 pb-0;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.5rem;
+  gap: 0.625rem;
   align-items: end;
+}
+
+.page-toolbar-shell {
+  @apply flex flex-col gap-2.5 min-w-0;
+}
+
+.page-toolbar-tabs {
+  @apply w-full;
+}
+
+.page-toolbar-actions {
+  @apply w-full;
+}
+
+.page-toolbar-actions .flex {
+  @apply w-full flex-col gap-2 sm:flex-row sm:flex-wrap sm:w-auto;
+}
+
+.page-toolbar-actions button[class*='bg-primary'],
+.page-toolbar-actions > button:first-child:last-child {
+  @apply w-full sm:w-auto min-h-[2.75rem] text-sm font-semibold rounded-2xl shadow-md shadow-primary-600/15;
+}
+
+.page-header-actions {
+  @apply min-w-0;
+}
+
+.page-action-strip {
+  display: flex;
+  gap: 0.5rem;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  padding-bottom: 0.125rem;
+}
+
+.page-action-strip::-webkit-scrollbar {
+  display: none;
+}
+
+.page-action-strip > * {
+  flex-shrink: 0;
+}
+
+.action-chip {
+  @apply rounded-full border border-primary-200/90 bg-white px-3.5 py-2 text-xs font-semibold text-primary-900 shadow-sm active:scale-[0.98] transition-all no-underline;
+}
+
+.page-action-strip .action-chip,
+.page-action-strip a.action-chip {
+  min-height: 2.375rem;
+}
+
+.page-action-strip button:not(.action-chip) {
+  @apply rounded-full px-3.5 py-2 text-xs font-semibold min-h-[2.375rem] whitespace-nowrap;
 }
 
 .page-toolbar-filters {
@@ -705,15 +788,59 @@ body {
   }
 }
 
+@media (min-width: 1024px) {
+  .filter-bar-controls-collapsed {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 0.75rem;
+  }
+
+  .panel-filters-shell {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 0.75rem;
+    padding-left: 1rem;
+    padding-right: 1rem;
+    padding-top: 0.75rem;
+    padding-bottom: 0;
+  }
+
+  .panel-filters-pinned,
+  .panel-filters-rest {
+    display: contents;
+  }
+
+  .panel-filters-rest.panel-filters {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 0.75rem;
+    padding: 0;
+  }
+}
+
 @media (max-width: 639px) {
-  .panel-filters > form,
-  .panel-filters > .flex-1,
-  .panel-filters > .min-w-\[200px\],
-  .panel-filters > .sm\:max-w-md,
-  .panel-filters > .relative,
-  .page-toolbar-filters > .relative,
-  .page-toolbar-filters > form {
-    grid-column: 1 / -1;
+  .filter-bar-controls:not(.filter-bar-controls-collapsed) {
+    grid-template-columns: 1fr;
+    gap: 0.625rem;
+  }
+
+  .panel-filters {
+    grid-template-columns: 1fr;
+    gap: 0.625rem;
+  }
+
+  .page-tabs {
+    @apply w-full p-1 gap-0.5;
+  }
+
+  .page-tab-btn {
+    min-height: 2.5rem;
+    font-size: 0.6875rem;
+    padding-left: 0.35rem;
+    padding-right: 0.35rem;
   }
 
   .filter-bar .space-y-1\.5 > label,
@@ -730,10 +857,11 @@ body {
   .panel-filters select,
   .page-toolbar-filters input,
   .page-toolbar-filters select {
-    padding-top: 0.4rem;
-    padding-bottom: 0.4rem;
-    font-size: 0.8125rem;
-    min-height: 2.25rem;
+    padding-top: 0.55rem;
+    padding-bottom: 0.55rem;
+    font-size: 0.875rem;
+    min-height: 2.75rem;
+    border-radius: 0.875rem;
   }
 
   .filter-bar .space-y-1\.5,
@@ -742,11 +870,12 @@ body {
     gap: 0.125rem;
   }
 
-  .filter-bar button,
-  .panel-filters button,
+  .filter-bar button:not(.mobile-filter-toggle),
+  .panel-filters button:not(.mobile-filter-toggle),
   .page-toolbar-filters button {
     width: 100%;
-    min-height: 2.25rem;
+    min-height: 2.75rem;
+    border-radius: 0.875rem;
   }
 }
 
@@ -772,7 +901,7 @@ body {
 }
 
 .page-tabs {
-  @apply flex max-w-full gap-1 p-1 rounded-xl bg-primary-50 border border-primary-100 overflow-x-auto text-xs;
+  @apply flex max-w-full gap-1 p-1 rounded-2xl bg-primary-50/80 border border-primary-100 overflow-x-auto text-xs;
 }
 
 .gradient-text {

@@ -23,6 +23,7 @@ import {
   QueryErrorAlert,
   Alert,
   Textarea,
+  PanelFilters,
 } from '../components/ui';
 import { Modal } from '../components/ui/Modal';
 import { EmployeeForm } from '../components/forms/EmployeeForm';
@@ -552,14 +553,14 @@ export function HRPage() {
 
       {activeTab === 0 && (
         <DataPanel>
-          <div className="panel-filters">
+          <PanelFilters>
             <Input
               placeholder="Search employees…"
               className="sm:max-w-md"
               value={empSearch}
               onChange={(e) => { setEmpSearch(e.target.value); setEmpPage(1); }}
             />
-          </div>
+          </PanelFilters>
           {(employees?.data?.length || 0) === 0 && !empLoading ? (
             <div className="p-6">
               <EmptyState
@@ -592,14 +593,14 @@ export function HRPage() {
 
       {activeTab === 1 && (
         <DataPanel>
-          <div className="panel-filters">
+          <PanelFilters>
             <Input
               placeholder="Search attendance…"
               className="sm:max-w-md"
               value={attSearch}
               onChange={(e) => { setAttSearch(e.target.value); setAttPage(1); }}
             />
-          </div>
+          </PanelFilters>
           {(attendance?.data?.length || 0) === 0 && !attLoading ? (
             <div className="p-6">
               <EmptyState
@@ -739,7 +740,7 @@ export function HRPage() {
           </Card>
 
           <DataPanel>
-            <div className="panel-filters">
+            <PanelFilters>
               <Input
                 placeholder="Search leave…"
                 className="sm:max-w-md"
@@ -752,7 +753,7 @@ export function HRPage() {
                 onChange={(e) => { setLeaveStatus(e.target.value); setLeavePage(1); }}
                 className="sm:w-40"
               />
-            </div>
+            </PanelFilters>
             {(leave?.data?.length || 0) === 0 && !leaveLoading ? (
               <div className="p-6">
                 <EmptyState
@@ -818,7 +819,7 @@ export function HRPage() {
       {activeTab === 3 && (
         <div className="space-y-4">
           <DataPanel>
-            <div className="panel-filters">
+            <PanelFilters>
               <Input
                 placeholder="Search advances…"
                 className="sm:max-w-md"
@@ -831,7 +832,7 @@ export function HRPage() {
                 onChange={(e) => { setAdvStatus(e.target.value); setAdvPage(1); }}
                 className="sm:w-44"
               />
-            </div>
+            </PanelFilters>
             {(advances?.data?.length || 0) === 0 && !advancesLoading ? (
               <div className="p-6">
                 <EmptyState
@@ -865,14 +866,14 @@ export function HRPage() {
 
       {activeTab === 4 && (
         <DataPanel>
-          <div className="panel-filters">
+          <PanelFilters>
             <Input
               placeholder="Search payroll…"
               className="sm:max-w-md"
               value={paySearch}
               onChange={(e) => { setPaySearch(e.target.value); setPayPage(1); }}
             />
-          </div>
+          </PanelFilters>
           {(payroll?.data?.length || 0) === 0 && !payrollLoading ? (
             <div className="p-6">
               <EmptyState

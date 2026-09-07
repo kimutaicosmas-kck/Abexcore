@@ -41,6 +41,7 @@ import {
   ConfirmDialog,
   FilterBar,
   FilterField,
+  PanelFilters,
 } from '../components/ui';
 import { Modal } from '../components/ui/Modal';
 import { CustomerForm } from '../components/forms/CustomerForm';
@@ -681,7 +682,7 @@ export function CustomersPage() {
       {activeTab === 0 && (
         <DataPanel>
           <FilterBar>
-            <FilterField span="full">
+            <FilterField span="full" pinned>
               <form
                 onSubmit={(e) => { e.preventDefault(); setCustSearch(custSearchInput); setCustPage(1); }}
               >
@@ -765,7 +766,7 @@ export function CustomersPage() {
       {activeTab === 1 && (
         <DataPanel>
           <FilterBar>
-            <FilterField span="full">
+            <FilterField span="full" pinned>
               <Input placeholder="Search complaints…" value={compSearch} onChange={(e) => { setCompSearch(e.target.value); setCompPage(1); }} />
             </FilterField>
             <FilterField>
@@ -805,7 +806,7 @@ export function CustomersPage() {
       {activeTab === 2 && (
         <DataPanel>
           <FilterBar>
-            <FilterField span="full">
+            <FilterField span="full" pinned>
               <Input placeholder="Search opportunities…" value={oppSearch} onChange={(e) => { setOppSearch(e.target.value); setOppPage(1); }} />
             </FilterField>
             <FilterField>
@@ -839,7 +840,7 @@ export function CustomersPage() {
       {activeTab === 3 && (
         <DataPanel>
           <FilterBar>
-            <FilterField span="full">
+            <FilterField span="full" pinned>
               <Input placeholder="Search warranties…" value={warrSearch} onChange={(e) => { setWarrSearch(e.target.value); setWarrPage(1); }} />
             </FilterField>
           </FilterBar>
@@ -1082,7 +1083,7 @@ export function CustomersPage() {
         size="xl"
       >
         <div className="space-y-4">
-          <div className="panel-filters !px-0 pt-0">
+          <PanelFilters className="!px-0 pt-0">
             <Select
               label="Statement type"
               options={STATEMENT_MODE_OPTIONS}
@@ -1127,7 +1128,7 @@ export function CustomersPage() {
               <FileSpreadsheet className="h-4 w-4 mr-1" />
               Excel
             </Button>
-          </div>
+          </PanelFilters>
           {statementCustomer && (
             <p className="text-xs text-slate-500">
               {statementCustomer.code}

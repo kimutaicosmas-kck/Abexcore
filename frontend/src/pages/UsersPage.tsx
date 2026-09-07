@@ -31,6 +31,7 @@ import {
   formatDate,
   formatDateTime,
   PageToolbar,
+  PanelFilters,
 } from '../components/ui';
 import { Modal } from '../components/ui/Modal';
 import { UserForm } from '../components/forms/UserForm';
@@ -322,7 +323,7 @@ export function UsersPage() {
 
       {activeTab === 0 && (
         <DataPanel>
-          <div className="panel-filters">
+          <PanelFilters>
             <form onSubmit={handleSearch} className="flex-1 min-w-[200px] sm:max-w-md">
               <Input
                 placeholder="Search name or email…"
@@ -348,7 +349,7 @@ export function UsersPage() {
             <Button variant="secondary" size="sm" onClick={() => refetch()}>
               <Search className="h-4 w-4" />
             </Button>
-          </div>
+          </PanelFilters>
 
           {isError && (
             <div className="px-4">
@@ -420,13 +421,13 @@ export function UsersPage() {
 
       {activeTab === 2 && (
         <DataPanel>
-          <div className="panel-filters sm:max-w-md">
+          <PanelFilters className="sm:max-w-md">
             <Input
               placeholder="Search audit logs…"
               value={auditSearch}
               onChange={(e) => { setAuditSearch(e.target.value); setAuditPage(1); }}
             />
-          </div>
+          </PanelFilters>
           {(auditRes?.data?.length || 0) === 0 && !auditLoading ? (
             <div className="p-6">
               <EmptyState title="No audit entries found" description="System actions and changes will be logged here." />

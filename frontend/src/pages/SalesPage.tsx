@@ -42,6 +42,8 @@ import {
   getApiErrorMessage,
   FilterBar,
   FilterField,
+  ActionChip,
+  ActionChipLink,
 } from '../components/ui';
 import { Modal } from '../components/ui/Modal';
 import { SalesOrderForm } from '../components/forms/SalesOrderForm';
@@ -720,43 +722,37 @@ export function SalesPage() {
 
       <PageHeader
         action={
-          <div className="flex flex-wrap items-center gap-2">
+          <>
             {myBook && (
-              <Link to="/my-sales">
-                <Button variant="secondary" size="sm">
-                  <Target className="h-4 w-4 mr-1.5" />
-                  My dashboard
-                </Button>
-              </Link>
+              <ActionChipLink to="/my-sales">
+                <Target className="h-3.5 w-3.5 text-primary-600" />
+                My dashboard
+              </ActionChipLink>
             )}
             {canViewPerformance && (
-              <Link to="/sales-performance">
-                <Button variant="secondary" size="sm">
-                  <Target className="h-4 w-4 mr-1.5" />
-                  Team performance
-                </Button>
-              </Link>
+              <ActionChipLink to="/sales-performance">
+                <Target className="h-3.5 w-3.5 text-primary-600" />
+                Team performance
+              </ActionChipLink>
             )}
             {canManageTargets && (
-              <Link to="/sales-performance?tab=targets">
-                <Button variant="secondary" size="sm">
-                  <Target className="h-4 w-4 mr-1.5" />
-                  Set targets
-                </Button>
-              </Link>
+              <ActionChipLink to="/sales-performance?tab=targets">
+                <Target className="h-3.5 w-3.5 text-primary-600" />
+                Set targets
+              </ActionChipLink>
             )}
             {stats && stats.pendingQuotations > 0 ? (
-              <Button variant="secondary" size="sm" onClick={() => goToTab(1)}>
-                <FileText className="h-4 w-4 mr-1.5 text-amber-500" />
+              <ActionChip onClick={() => goToTab(1)}>
+                <FileText className="h-3.5 w-3.5 text-amber-500" />
                 {stats.pendingQuotations} pending quotes
-              </Button>
+              </ActionChip>
             ) : stats && stats.openOrders > 0 ? (
-              <Button variant="secondary" size="sm" onClick={() => goToTab(0)}>
-                <ShoppingCart className="h-4 w-4 mr-1.5 text-primary-500" />
+              <ActionChip onClick={() => goToTab(0)}>
+                <ShoppingCart className="h-3.5 w-3.5 text-primary-500" />
                 {stats.openOrders} open orders
-              </Button>
+              </ActionChip>
             ) : null}
-          </div>
+          </>
         }
       />
 
@@ -773,8 +769,10 @@ export function SalesPage() {
 
       {activeTab === 0 && (
         <DataPanel className="min-w-0 max-w-full">
-          <FilterBar>
-            <FilterField span="full">
+          <FilterBar
+            activeFilters={[orderStatus, !myBook ? orderSalesPersonId : '', orderDate].filter(Boolean).length}
+          >
+            <FilterField span="full" pinned>
               <Input
                 placeholder={myBook ? 'Search my orders…' : 'Search orders…'}
                 value={orderSearch}
@@ -911,8 +909,8 @@ export function SalesPage() {
 
       {activeTab === 1 && (
         <DataPanel className="min-w-0 max-w-full">
-          <FilterBar>
-            <FilterField span="full">
+          <FilterBar activeFilters={quoteStatus ? 1 : 0}>
+            <FilterField span="full" pinned>
               <Input
                 placeholder="Search quotations…"
                 value={quoteSearch}

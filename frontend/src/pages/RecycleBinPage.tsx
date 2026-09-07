@@ -17,6 +17,7 @@ import {
   PageToolbar,
   ConfirmDialog,
   getApiErrorMessage,
+  PanelFilters,
 } from '../components/ui';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -188,7 +189,7 @@ export function RecycleBinPanel() {
 
       <PageToolbar
         actions={
-          <div className="panel-filters">
+          <PanelFilters>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
               <Input
@@ -222,7 +223,7 @@ export function RecycleBinPanel() {
               }}
               className="w-48"
             />
-          </div>
+          </PanelFilters>
         }
       />
 

@@ -136,7 +136,7 @@ export function AvailableProductsPanel() {
 
       <DataPanel>
         <FilterBar>
-          <FilterField span="full">
+          <FilterField span="full" pinned>
             <Input
               placeholder="Name or part number…"
               value={searchInput}

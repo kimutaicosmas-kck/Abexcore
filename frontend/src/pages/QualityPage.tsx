@@ -25,6 +25,7 @@ import {
   formatDate,
   getStatusBadge,
   PageToolbar,
+  PanelFilters,
 } from '../components/ui';
 import { Modal } from '../components/ui/Modal';
 import { QualityForm } from '../components/forms/QualityForm';
@@ -201,7 +202,7 @@ export function QualityPage() {
 
       {activeTab === 0 && (
         <DataPanel>
-          <div className="panel-filters">
+          <PanelFilters>
             <Input
               placeholder="Search inspections…"
               className="sm:max-w-md"
@@ -220,7 +221,7 @@ export function QualityPage() {
               onChange={(e) => { setStatus(e.target.value); setPage(1); }}
               className="sm:w-40"
             />
-          </div>
+          </PanelFilters>
 
           {isError && (
             <div className="px-4 pt-4">

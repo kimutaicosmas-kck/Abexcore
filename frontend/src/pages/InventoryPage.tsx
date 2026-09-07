@@ -35,6 +35,7 @@ import {
   getStatusBadge,
   PageToolbar,
   TablePagination,
+  PanelFilters,
 } from '../components/ui';
 import { Modal } from '../components/ui/Modal';
 import { RawMaterialForm } from '../components/forms/RawMaterialForm';
@@ -544,7 +545,7 @@ export function InventoryPage() {
       {/* Stock levels */}
       {activeTab === 0 && (
         <DataPanel>
-          <div className="panel-filters mb-4">
+          <PanelFilters className="mb-4">
             <Input
               placeholder="Search by item, warehouse, batch…"
               value={stockSearch}
@@ -573,7 +574,7 @@ export function InventoryPage() {
               onChange={(e) => { setStockWarehouseId(e.target.value); setStockPage(1); }}
               className="sm:w-64"
             />
-          </div>
+          </PanelFilters>
           {(stockWarehouseId || stockItemType) && (
             <Alert variant="info" className="mb-4">
               {stockItemType === 'RAW_MATERIAL' && 'Showing raw materials only. '}
@@ -627,7 +628,7 @@ export function InventoryPage() {
       {/* Materials */}
       {activeTab === 1 && (
         <DataPanel>
-          <div className="panel-filters mb-4">
+          <PanelFilters className="mb-4">
             <Input
               placeholder="Search materials…"
               className="sm:max-w-md"
@@ -640,7 +641,7 @@ export function InventoryPage() {
               onChange={(e) => { setMatType(e.target.value); setMatPage(1); }}
               className="sm:w-44"
             />
-          </div>
+          </PanelFilters>
           {(materials?.data?.length || 0) === 0 && !matLoading ? (
             <EmptyState
               title="No materials found"
@@ -841,7 +842,7 @@ export function InventoryPage() {
       {/* Movements */}
       {activeTab === 4 && (
         <DataPanel>
-          <div className="panel-filters mb-4">
+          <PanelFilters className="mb-4">
             <Input
               placeholder="Search movements…"
               value={txSearch}
@@ -854,7 +855,7 @@ export function InventoryPage() {
               onChange={(e) => setTxType(e.target.value)}
               className="sm:w-52"
             />
-          </div>
+          </PanelFilters>
           {(filteredTransactions?.length || 0) === 0 && !txLoading ? (
             <EmptyState
               title="No movements found"

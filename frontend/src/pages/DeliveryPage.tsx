@@ -23,6 +23,7 @@ import {
   ConfirmDialog,
   PageQueryStatus,
   Alert,
+  PanelFilters,
 } from '../components/ui';
 import { Modal } from '../components/ui/Modal';
 import { DeliveryForm } from '../components/forms/DeliveryForm';
@@ -945,7 +946,7 @@ export function DeliveryPage() {
 
       {showDeliveries && (
         <DataPanel>
-          <div className="panel-filters">
+          <PanelFilters>
             <Input
               placeholder="Search deliveries…"
               className="sm:max-w-md"
@@ -1063,7 +1064,7 @@ export function DeliveryPage() {
                 Mark delivered ({selectedDeliverable.length})
               </Button>
             )}
-          </div>
+          </PanelFilters>
           {(listRows.length || 0) === 0 && !isLoading && !tripsLoading ? (
             <div className="p-6">
               <EmptyState
@@ -1119,7 +1120,7 @@ export function DeliveryPage() {
 
       {showVehicles && (
         <DataPanel>
-          <div className="panel-filters">
+          <PanelFilters>
             <Input
               placeholder="Search vehicles…"
               className="sm:max-w-md"
@@ -1132,7 +1133,7 @@ export function DeliveryPage() {
               onChange={(e) => { setVehType(e.target.value); setVehPage(1); }}
               className="sm:w-44"
             />
-          </div>
+          </PanelFilters>
           {(vehicles?.data?.length || 0) === 0 && !vehLoading ? (
             <div className="p-6">
               <EmptyState

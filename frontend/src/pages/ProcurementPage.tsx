@@ -38,6 +38,7 @@ import {
   PageToolbar,
   ConfirmDialog,
   PageQueryStatus,
+  PanelFilters,
 } from '../components/ui';
 import { Modal } from '../components/ui/Modal';
 import { PurchaseOrderForm } from '../components/forms/PurchaseOrderForm';
@@ -648,9 +649,9 @@ export function ProcurementPage() {
 
       {activeTab === 0 && (
         <DataPanel>
-          <div className="panel-filters sm:max-w-md">
+          <PanelFilters className="sm:max-w-md">
             <Input placeholder="Search purchase orders…" value={poSearch} onChange={(e) => { setPoSearch(e.target.value); setPoPage(1); }} />
-          </div>
+          </PanelFilters>
           {(purchaseOrders?.data?.length || 0) === 0 && !poLoading ? (
             <div className="p-6">
               <EmptyState
@@ -683,10 +684,10 @@ export function ProcurementPage() {
 
       {activeTab === 1 && (
         <DataPanel>
-          <div className="panel-filters">
+          <PanelFilters>
             <Input placeholder="Search requisitions…" className="sm:max-w-md" value={reqSearch} onChange={(e) => { setReqSearch(e.target.value); setReqPage(1); }} />
             <Select options={STATUS_FILTER} value={reqStatus} onChange={(e) => { setReqStatus(e.target.value); setReqPage(1); }} className="w-40" />
-          </div>
+          </PanelFilters>
           {(requisitions?.data?.length || 0) === 0 && !reqLoading ? (
             <div className="p-6">
               <EmptyState
@@ -713,9 +714,9 @@ export function ProcurementPage() {
 
       {activeTab === 2 && (
         <DataPanel>
-          <div className="panel-filters sm:max-w-md">
+          <PanelFilters className="sm:max-w-md">
             <Input placeholder="Search RFQs…" value={rfqSearch} onChange={(e) => { setRfqSearch(e.target.value); setRfqPage(1); }} />
-          </div>
+          </PanelFilters>
           {(rfqs?.data?.length || 0) === 0 && !rfqLoading ? (
             <div className="p-6">
               <EmptyState title="No RFQs found" description="Create an RFQ from an approved requisition to collect supplier quotes." />
@@ -731,9 +732,9 @@ export function ProcurementPage() {
 
       {activeTab === 3 && (
         <DataPanel>
-          <div className="panel-filters sm:max-w-md">
+          <PanelFilters className="sm:max-w-md">
             <Input placeholder="Search goods receipts…" value={grSearch} onChange={(e) => { setGrSearch(e.target.value); setGrPage(1); }} />
-          </div>
+          </PanelFilters>
           {(goodsReceipts?.data?.length || 0) === 0 && !grLoading ? (
             <div className="p-6">
               <EmptyState
@@ -770,9 +771,9 @@ export function ProcurementPage() {
 
       {activeTab === 4 && (
         <DataPanel>
-          <div className="panel-filters sm:max-w-md">
+          <PanelFilters className="sm:max-w-md">
             <Input placeholder="Search suppliers…" value={supSearch} onChange={(e) => { setSupSearch(e.target.value); setSupPage(1); }} />
-          </div>
+          </PanelFilters>
           {(suppliers?.data?.length || 0) === 0 && !supLoading ? (
             <div className="p-6">
               <EmptyState
@@ -980,7 +981,7 @@ export function ProcurementPage() {
         size="xl"
       >
         <div className="space-y-4">
-          <div className="panel-filters !px-0 pt-0">
+          <PanelFilters className="!px-0 pt-0">
             <Select
               label="Statement type"
               options={STATEMENT_MODE_OPTIONS}
@@ -1025,7 +1026,7 @@ export function ProcurementPage() {
               <FileSpreadsheet className="h-4 w-4 mr-1" />
               Excel
             </Button>
-          </div>
+          </PanelFilters>
           {statementSupplier && (
             <p className="text-xs text-slate-500">
               {statementSupplier.code}
