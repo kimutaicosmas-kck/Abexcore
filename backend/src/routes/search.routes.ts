@@ -5,6 +5,8 @@ import { asyncHandler } from '../middleware/errorHandler';
 import prisma from '../config/database';
 import { getQuery } from '../utils/request';
 import { searchQuerySchema } from '../validators/schemas';
+import { isSalesBookOwner } from '../config/rolePermissions';
+import { salesBookCustomerFilter } from '../utils/customerVisibility';
 
 const router = Router();
 router.use(authenticate);
@@ -30,11 +32,18 @@ router.get(
       canCustomers
         ? prisma.customer.findMany({
             where: {
-              deletedAt: null,
-              OR: [
-                { name: { contains: term } },
-                { code: { contains: term } },
-                { email: { contains: term } },
+              AND: [
+                { deletedAt: null },
+                ...(isSalesBookOwner(req.user!.roleName)
+                  ? [salesBookCustomerFilter(req.user!.id)]
+                  : []),
+                {
+                  OR: [
+                    { name: { contains: term } },
+                    { code: { contains: term } },
+                    { email: { contains: term } },
+                  ],
+                },
               ],
             },
             take: 5,

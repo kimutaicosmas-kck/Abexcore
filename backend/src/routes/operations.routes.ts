@@ -46,6 +46,7 @@ import {
   SALES_TARGET_MANAGER_ROLES,
 } from '../config/rolePermissions';
 import { buildSalesOrdersWhere } from '../utils/sales-list-where';
+import { salesBookCustomerFilter, salesBookCustomerVisibility } from '../utils/customerVisibility';
 import { Prisma } from '@prisma/client';
 
 const router = Router();
@@ -909,7 +910,7 @@ router.get(
     const where: Prisma.SalesQuotationWhereInput = {};
     if (status) where.status = status as Prisma.EnumApprovalStatusFilter['equals'];
     if (isSalesBookOwner(req.user!.roleName)) {
-      where.customer = { salesPersonId: req.user!.id };
+      where.customer = salesBookCustomerFilter(req.user!.id);
     }
     if (search) {
       where.AND = [
@@ -990,7 +991,7 @@ router.post(
           id: customerId,
           deletedAt: null,
           ...(isSalesBookOwner(req.user!.roleName)
-            ? { salesPersonId: req.user!.id }
+            ? salesBookCustomerVisibility(req.user!.roleName, req.user!.id)
             : {}),
         },
         select: { id: true },
@@ -1056,7 +1057,7 @@ router.patch(
           id: customerId,
           deletedAt: null,
           ...(isSalesBookOwner(req.user!.roleName)
-            ? { salesPersonId: req.user!.id }
+            ? salesBookCustomerVisibility(req.user!.roleName, req.user!.id)
             : {}),
         },
         select: { id: true },
@@ -1142,7 +1143,7 @@ router.post(
         id: customerId,
         deletedAt: null,
         ...(isSalesBookOwner(req.user!.roleName)
-          ? { salesPersonId: req.user!.id }
+          ? salesBookCustomerVisibility(req.user!.roleName, req.user!.id)
           : {}),
       },
       select: { id: true, vatStatus: true },
@@ -1217,7 +1218,7 @@ router.patch(
         id: customerId,
         deletedAt: null,
         ...(isSalesBookOwner(req.user!.roleName)
-          ? { salesPersonId: req.user!.id }
+          ? salesBookCustomerVisibility(req.user!.roleName, req.user!.id)
           : {}),
       },
       select: { id: true, vatStatus: true },
@@ -1277,7 +1278,7 @@ router.post(
         id: customerId,
         deletedAt: null,
         ...(isSalesBookOwner(req.user!.roleName)
-          ? { salesPersonId: req.user!.id }
+          ? salesBookCustomerVisibility(req.user!.roleName, req.user!.id)
           : {}),
       },
       select: { id: true, vatStatus: true },

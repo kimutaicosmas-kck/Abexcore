@@ -16,6 +16,10 @@ import { getParam, getQuery } from '../utils/request';
 import prisma from '../config/database';
 import { requireTenantId } from '../utils/tenant';
 import { isSalesBookOwner, SALES_PERSON_ROLE_NAMES } from '../config/rolePermissions';
+import {
+  salesBookCustomerFilter,
+  salesBookCustomerVisibility,
+} from '../utils/customerVisibility';
 import { CustomerStatementService } from '../services/customerStatement.service';
 import { ExcelImportService } from '../services/excel-import.service';
 import { acceptExcelUpload } from '../middleware/excelImport';
@@ -73,9 +77,9 @@ async function assertValidSalesPerson(salesPersonId: string | null | undefined) 
 async function resolveBalanceSummarySalesFilter(
   req: AuthRequest,
   querySalesPersonId?: string
-): Promise<{ salesPersonId?: string | null }> {
+): Promise<{ salesPersonId?: string | null; includeUnassigned?: boolean }> {
   if (isSalesBookOwner(req.user!.roleName)) {
-    return { salesPersonId: req.user!.id };
+    return { salesPersonId: req.user!.id, includeUnassigned: true };
   }
   if (querySalesPersonId === 'none') {
     return { salesPersonId: null };
@@ -121,10 +125,9 @@ router.get(
     if (vatStatus) where.vatStatus = vatStatus;
     if (isActive !== undefined) where.isActive = isActive;
 
-    // Sales officers/reps see only customers assigned to them — not the free pool
-    // and never other officers' books.
+    // Sales officers/reps see their book plus the unassigned pool — never other officers' books.
     if (isSalesBookOwner(req.user!.roleName)) {
-      where.salesPersonId = req.user!.id;
+      Object.assign(where, salesBookCustomerFilter(req.user!.id));
     } else if (salesPersonId === 'none') {
       where.salesPersonId = null;
     } else if (salesPersonId) {
@@ -371,9 +374,7 @@ router.get(
     const data = await prisma.customer.findFirst({
       where: {
         id: getParam(req.params.id),
-        ...(isSalesBookOwner(req.user!.roleName)
-          ? { salesPersonId: req.user!.id }
-          : {}),
+        ...salesBookCustomerVisibility(req.user!.roleName, req.user!.id),
       },
       include: {
         contacts: true,
@@ -423,7 +424,7 @@ router.put(
       const existing = await prisma.customer.findFirst({
         where: {
           id: getParam(req.params.id),
-          salesPersonId: req.user!.id,
+          ...salesBookCustomerFilter(req.user!.id),
         },
         select: { id: true },
       });

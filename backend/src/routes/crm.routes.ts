@@ -17,6 +17,7 @@ import prisma from '../config/database';
 import { getParam, getQuery } from '../utils/request';
 import { Prisma } from '@prisma/client';
 import { isSalesBookOwner } from '../config/rolePermissions';
+import { salesBookCustomerFilter } from '../utils/customerVisibility';
 
 const router = Router();
 router.use(authenticate);
@@ -27,7 +28,7 @@ function bookOwnerId(req: AuthRequest): string | undefined {
   return isSalesBookOwner(req.user?.roleName) ? req.user!.id : undefined;
 }
 
-/** Limit CRM rows to customers assigned to the current salesperson. */
+/** Limit CRM rows to customers in the sales book plus the unassigned pool. */
 function applySalesBookCustomerFilter<T extends { customer?: Prisma.CustomerWhereInput }>(
   where: T,
   salesPersonId: string | undefined
@@ -35,7 +36,7 @@ function applySalesBookCustomerFilter<T extends { customer?: Prisma.CustomerWher
   if (!salesPersonId) return where;
   const existing =
     where.customer && typeof where.customer === 'object' ? where.customer : {};
-  where.customer = { ...existing, salesPersonId };
+  where.customer = { ...existing, ...salesBookCustomerFilter(salesPersonId) };
   return where;
 }
 

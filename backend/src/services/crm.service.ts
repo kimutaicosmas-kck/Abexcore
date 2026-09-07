@@ -2,12 +2,13 @@ import prisma from '../config/database';
 import { subDays } from '../utils/date';
 import { requireTenantId } from '../utils/tenant';
 import type { Prisma } from '@prisma/client';
+import { salesBookCustomerFilter } from '../utils/customerVisibility';
 
-/** Scope CRM entities to customers owned by a salesperson. */
+/** Scope CRM entities to a sales book plus the shared unassigned pool. */
 export function salesPersonCustomerFilter(
   salesPersonId: string
 ): Prisma.CustomerWhereInput {
-  return { salesPersonId };
+  return salesBookCustomerFilter(salesPersonId);
 }
 
 export class CrmService {
@@ -23,7 +24,7 @@ export class CrmService {
     };
 
     const ownedCustomer: Prisma.CustomerWhereInput | undefined = salesPersonId
-      ? { salesPersonId }
+      ? salesPersonCustomerFilter(salesPersonId)
       : { companyId };
 
     const [

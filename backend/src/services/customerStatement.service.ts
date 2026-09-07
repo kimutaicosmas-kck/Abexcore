@@ -184,7 +184,7 @@ export class CustomerStatementService {
    */
   static async getBalanceSummary(
     asOf?: string,
-    opts?: { includeZero?: boolean; salesPersonId?: string | null }
+    opts?: { includeZero?: boolean; salesPersonId?: string | null; includeUnassigned?: boolean }
   ): Promise<CustomerBalanceSummaryResult> {
     const companyId = requireTenantId();
     const toRange = asOf ? dayRangeFromInput(asOf) : null;
@@ -197,6 +197,8 @@ export class CustomerStatementService {
     };
     if (opts?.salesPersonId === null) {
       customerWhere.salesPersonId = null;
+    } else if (opts?.salesPersonId && opts?.includeUnassigned) {
+      customerWhere.OR = [{ salesPersonId: opts.salesPersonId }, { salesPersonId: null }];
     } else if (opts?.salesPersonId) {
       customerWhere.salesPersonId = opts.salesPersonId;
     }
