@@ -26,7 +26,11 @@ import {
   chekimaProductLineLabel,
   type ChekimaDocLine,
 } from '../utils/chekimaDocumentTemplate';
-import type { CustomerStatementResult, VatCustomerReportResult } from './customerStatement.service';
+import type {
+  CustomerStatementResult,
+  CustomerBalanceSummaryResult,
+  VatCustomerReportResult,
+} from './customerStatement.service';
 import type { VendorStatementResult } from './vendorStatement.service';
 
 type InvoiceWithRelations = Awaited<ReturnType<typeof ExportService.getInvoice>>;
@@ -2337,6 +2341,119 @@ export class ExportService {
 
       doc.end();
     });
+  }
+
+  static async generateCustomerBalanceSummaryPDF(
+    report: CustomerBalanceSummaryResult
+  ): Promise<Buffer> {
+    const company = await resolveCompanyDocHeader(requireTenantId());
+    const fmt = (n: number) =>
+      n.toLocaleString('en-KE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const asAt = new Date(report.asOf);
+    const asAtLabel = asAt.toLocaleDateString('en-KE', {
+      month: 'short',
+      day: 'numeric',
+      year: '2-digit',
+    });
+
+    return new Promise((resolve, reject) => {
+      const doc = new PDFDocument({ margin: 48, size: 'A4', bufferPages: true });
+      const chunks: Buffer[] = [];
+      doc.on('data', (chunk) => chunks.push(chunk));
+      doc.on('end', () => resolve(Buffer.concat(chunks)));
+      doc.on('error', reject);
+
+      const pageWidth = doc.page.width;
+      doc.font('Helvetica-Bold').fontSize(14).fillColor('#0f172a');
+      doc.text(company.name.toUpperCase(), 48, 48, { width: pageWidth - 96, align: 'center' });
+      doc.moveDown(0.4);
+      doc.fontSize(11).text('Customer Balance Summary (Values in Home Currency)', {
+        width: pageWidth - 96,
+        align: 'center',
+      });
+      doc.font('Helvetica').fontSize(10).fillColor('#475569');
+      doc.text('All Transactions', { width: pageWidth - 96, align: 'center' });
+      doc.moveDown(0.8);
+
+      const left = 48;
+      const right = pageWidth - 48;
+      const balanceColWidth = 90;
+      const nameWidth = right - left - balanceColWidth - 8;
+
+      doc.font('Helvetica-Bold').fontSize(9).fillColor('#0f172a');
+      doc.text('', left, doc.y, { width: nameWidth });
+      doc.text(asAtLabel, right - balanceColWidth, doc.y - doc.currentLineHeight(), {
+        width: balanceColWidth,
+        align: 'right',
+      });
+      doc.moveDown(0.2);
+      doc.moveTo(left, doc.y).lineTo(right, doc.y).strokeColor('#cbd5e1').stroke();
+      doc.moveDown(0.4);
+
+      doc.font('Helvetica').fontSize(9).fillColor('#0f172a');
+      let y = doc.y;
+      for (const row of report.customers) {
+        if (y > 740) {
+          doc.addPage();
+          y = 48;
+        }
+        const label = row.name.toUpperCase();
+        doc.text(label, left, y, { width: nameWidth, lineGap: 1 });
+        const lineH = doc.heightOfString(label, { width: nameWidth });
+        doc.text(fmt(row.balance), right - balanceColWidth, y, {
+          width: balanceColWidth,
+          align: 'right',
+        });
+        y += Math.max(lineH, 14) + 2;
+      }
+
+      doc.font('Helvetica-Bold').fontSize(9);
+      y += 8;
+      if (y > 740) {
+        doc.addPage();
+        y = 48;
+      }
+      doc.moveTo(left, y).lineTo(right, y).strokeColor('#cbd5e1').stroke();
+      y += 8;
+      doc.text('Total', left, y, { width: nameWidth });
+      doc.text(fmt(report.totalBalance), right - balanceColWidth, y, {
+        width: balanceColWidth,
+        align: 'right',
+      });
+
+      doc.end();
+    });
+  }
+
+  static async generateCustomerBalanceSummaryExcel(
+    report: CustomerBalanceSummaryResult
+  ): Promise<Buffer> {
+    const company = await resolveCompanyDocHeader(requireTenantId());
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet('Customer Balances');
+    const asAt = new Date(report.asOf).toLocaleDateString('en-KE');
+
+    const nextRow = addExcelCompanyLetterhead(
+      workbook,
+      sheet,
+      company,
+      `${company.name} — Customer Balance Summary`,
+      'B'
+    );
+    sheet.getCell(`A${nextRow}`).value = 'All Transactions';
+    sheet.getCell(`A${nextRow + 1}`).value = `As at ${asAt}`;
+
+    const headerRow = sheet.addRow(['Customer', 'Balance']);
+    headerRow.font = { bold: true };
+    for (const row of report.customers) {
+      sheet.addRow([row.name.toUpperCase(), row.balance]);
+    }
+    sheet.addRow(['Total', report.totalBalance]).font = { bold: true };
+    sheet.getColumn(2).numFmt = '#,##0.00';
+    sheet.columns = [{ width: 48 }, { width: 16 }];
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    return Buffer.from(buffer);
   }
 
   static async generateVatCustomerReportExcel(report: VatCustomerReportResult): Promise<Buffer> {

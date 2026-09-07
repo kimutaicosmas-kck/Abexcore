@@ -21,7 +21,6 @@ import {
 import { customersApi, crmApi, operationsApi } from '../services/api';
 import { downloadFile } from '../utils/download';
 import {
-  PageHeader,
   Table,
   Badge,
   Button,
@@ -132,6 +131,10 @@ export function CustomersPage() {
   const [statementMode, setStatementMode] = useState<'FULL' | 'OUTSTANDING'>('FULL');
   const [statementExportError, setStatementExportError] = useState<string | null>(null);
   const [statementExporting, setStatementExporting] = useState<'pdf' | 'excel' | null>(null);
+  const [balanceSummaryOpen, setBalanceSummaryOpen] = useState(false);
+  const [balanceSummaryAsOf, setBalanceSummaryAsOf] = useState(() => new Date().toISOString().slice(0, 10));
+  const [balanceSummaryExporting, setBalanceSummaryExporting] = useState<'pdf' | 'excel' | null>(null);
+  const [balanceSummaryExportError, setBalanceSummaryExportError] = useState<string | null>(null);
 
   const [compPage, setCompPage] = useState(1);
   const [compSearch, setCompSearch] = useState('');
@@ -163,6 +166,7 @@ export function CustomersPage() {
   const [pendingDeleteContact, setPendingDeleteContact] = useState<{ customerId: string; contactId: string; name: string } | null>(null);
 
   const canCreate = hasPermission('customers:create');
+  const canRead = hasPermission('customers:read');
   const canUpdate = hasPermission('customers:update');
   const canDelete = hasPermission('customers:delete');
 
@@ -240,6 +244,19 @@ export function CustomersPage() {
           }[];
         }),
     enabled: !!statementCustomer,
+  });
+
+  const { data: balanceSummary, isLoading: balanceSummaryLoading, refetch: refetchBalanceSummary } = useQuery({
+    queryKey: ['customer-balance-summary', balanceSummaryAsOf],
+    queryFn: () =>
+      customersApi.balanceSummary({ asOf: balanceSummaryAsOf || undefined }).then((r) => r.data.data as {
+        asOf: string;
+        currency: string;
+        customerCount: number;
+        totalBalance: number;
+        customers: { id: string; code: string; name: string; balance: number }[];
+      }),
+    enabled: balanceSummaryOpen,
   });
 
   const { data: complaintsRes, isLoading: compLoading } = useQuery({
@@ -365,6 +382,23 @@ export function CustomersPage() {
       setStatementExporting(null);
     }
   };
+  const exportBalanceSummary = async (format: 'pdf' | 'excel') => {
+    setBalanceSummaryExportError(null);
+    setBalanceSummaryExporting(format);
+    const ext = format === 'pdf' ? 'pdf' : 'xlsx';
+    try {
+      await downloadFile(
+        `/customers/reports/balance-summary/${format}`,
+        `customer-balance-summary.${ext}`,
+        { asOf: balanceSummaryAsOf || undefined }
+      );
+    } catch (err) {
+      setBalanceSummaryExportError(err instanceof Error ? err.message : 'Export failed');
+    } finally {
+      setBalanceSummaryExporting(null);
+    }
+  };
+
   const openEditOpportunity = (opp: Opportunity) => { setEditingOpportunity(opp); setOpportunityModalOpen(true); };
 
   const salesPersonFilterOptions = [
@@ -582,19 +616,30 @@ export function CustomersPage() {
     },
   ];
 
-  const toolbarActions = canCreate
-    ? activeTab === 0 ? (
-        <div className="flex flex-wrap gap-2">
-          <Button size="sm" variant="secondary" onClick={() => setImportOpen(true)}>
-            <FileSpreadsheet className="h-4 w-4 mr-1.5" />
-            Import Excel
+  const toolbarActions =
+    activeTab === 0 ? (
+      <div className="flex flex-wrap gap-2">
+        {canRead && (
+          <Button size="sm" variant="secondary" onClick={() => setBalanceSummaryOpen(true)}>
+            <FileText className="h-4 w-4 mr-1.5" />
+            Balance summary
           </Button>
-          <Button size="sm" onClick={openCreate}>
-            <Plus className="h-4 w-4 mr-1.5" />
-            Add Customer
-          </Button>
-        </div>
-      ) : activeTab === 1 ? (
+        )}
+        {canCreate && (
+          <>
+            <Button size="sm" variant="secondary" onClick={() => setImportOpen(true)}>
+              <FileSpreadsheet className="h-4 w-4 mr-1.5" />
+              Import Excel
+            </Button>
+            <Button size="sm" onClick={openCreate}>
+              <Plus className="h-4 w-4 mr-1.5" />
+              Add Customer
+            </Button>
+          </>
+        )}
+      </div>
+    ) : canCreate
+    ? activeTab === 1 ? (
         <Button size="sm" onClick={() => setComplaintModalOpen(true)}>
           <Plus className="h-4 w-4 mr-1.5" />
           Add Complaint
@@ -628,7 +673,7 @@ export function CustomersPage() {
             value={stats.complaints.open}
             icon={<AlertCircle className="h-5 w-5 text-white" />}
             color="from-sky-500 to-sky-700"
-            onClick={() => goToTab(1)}
+            onClick={() => { setCompStatus('open'); setCompPage(1); goToTab(1); }}
           />
           <StatCard
             title={myBook ? 'My Pipeline' : 'Pipeline Value'}
@@ -654,17 +699,6 @@ export function CustomersPage() {
           />
         </StatGrid>
       )}
-
-      <PageHeader
-        action={
-          stats && stats.complaints.open > 0 ? (
-            <Button variant="secondary" size="sm" onClick={() => goToTab(1)}>
-              <AlertCircle className="h-4 w-4 mr-1.5 text-red-500" />
-              {stats.complaints.open} {myBook ? 'my open complaints' : 'open complaints'}
-            </Button>
-          ) : undefined
-        }
-      />
 
       <PageToolbar
         tabs={tabs}
@@ -1057,6 +1091,85 @@ export function CustomersPage() {
           <Button variant="danger" loading={deactivateMutation.isPending} onClick={() => (selectedCustomer || customerDetail) && deactivateMutation.mutate((selectedCustomer || customerDetail)!.id)}>
             Deactivate
           </Button>
+        </div>
+      </Modal>
+
+      <Modal
+        open={balanceSummaryOpen}
+        onClose={() => setBalanceSummaryOpen(false)}
+        title="Customer balance summary"
+        size="xl"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-slate-600">
+            All customers with a ledger balance as at the selected date (invoices, credit notes, and payments).
+            Individual customer statements are still available from each customer row.
+          </p>
+          <PanelFilters className="!px-0 pt-0">
+            <Input
+              label="As at date"
+              type="date"
+              value={balanceSummaryAsOf}
+              onChange={(e) => setBalanceSummaryAsOf(e.target.value)}
+              className="w-44"
+            />
+            <Button variant="secondary" size="sm" onClick={() => refetchBalanceSummary()}>
+              Refresh
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              loading={balanceSummaryExporting === 'pdf'}
+              disabled={!!balanceSummaryExporting || balanceSummaryLoading}
+              onClick={() => exportBalanceSummary('pdf')}
+            >
+              <Download className="h-4 w-4 mr-1" />
+              PDF
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              loading={balanceSummaryExporting === 'excel'}
+              disabled={!!balanceSummaryExporting || balanceSummaryLoading}
+              onClick={() => exportBalanceSummary('excel')}
+            >
+              <FileSpreadsheet className="h-4 w-4 mr-1" />
+              Excel
+            </Button>
+          </PanelFilters>
+          {balanceSummaryExportError && <Alert variant="error">{balanceSummaryExportError}</Alert>}
+          {balanceSummaryLoading ? (
+            <p className="text-sm text-slate-500 py-8 text-center">Loading balances…</p>
+          ) : balanceSummary ? (
+            <div className="rounded-xl border border-primary-100 overflow-hidden">
+              <div className="grid grid-cols-[1fr_auto] gap-4 px-4 py-2 bg-primary-50/80 text-xs font-semibold uppercase tracking-wide text-primary-800 border-b border-primary-100">
+                <span>Customer</span>
+                <span className="text-right">
+                  {new Date(balanceSummary.asOf).toLocaleDateString('en-KE', {
+                    month: 'short',
+                    day: 'numeric',
+                    year: '2-digit',
+                  })}
+                </span>
+              </div>
+              <div className="max-h-[28rem] overflow-y-auto divide-y divide-slate-100">
+                {balanceSummary.customers.map((row) => (
+                  <div key={row.id} className="grid grid-cols-[1fr_auto] gap-4 px-4 py-2.5 text-sm">
+                    <span className="font-medium text-slate-900 uppercase leading-snug">{row.name}</span>
+                    <span className="tabular-nums text-right font-semibold text-slate-900">
+                      {formatCurrency(row.balance)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              <div className="grid grid-cols-[1fr_auto] gap-4 px-4 py-3 bg-slate-50 border-t border-slate-200 text-sm font-bold">
+                <span>Total ({balanceSummary.customerCount} customers)</span>
+                <span className="tabular-nums text-right">{formatCurrency(balanceSummary.totalBalance)}</span>
+              </div>
+            </div>
+          ) : (
+            <EmptyState title="No balance data" />
+          )}
         </div>
       </Modal>
 

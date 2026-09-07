@@ -3,7 +3,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, Pencil, Users, Calendar, DollarSign, UserCheck, ChevronRight, Clock, Download, FileText, Wallet, CircleCheck, FileSpreadsheet } from 'lucide-react';
 import { hrApi } from '../services/api';
 import {
-  PageHeader,
   Table,
   Badge,
   Button,
@@ -532,17 +531,6 @@ export function HRPage() {
           </StatGrid>
         )
       )}
-
-      <PageHeader
-        action={
-          stats && stats.pendingLeave > 0 ? (
-            <Button variant="secondary" size="sm" onClick={() => { setLeaveStatus('PENDING'); setLeavePage(1); goToTab(2); }}>
-              <Calendar className="h-4 w-4 mr-1.5 text-amber-500" />
-              {stats.pendingLeave} pending leave
-            </Button>
-          ) : undefined
-        }
-      />
 
       <PageToolbar
         tabs={tabs}

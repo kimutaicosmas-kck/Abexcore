@@ -160,11 +160,113 @@ async function computeCustomerAging(
   return aging;
 }
 
+export type CustomerBalanceSummaryRow = {
+  id: string;
+  code: string;
+  name: string;
+  balance: number;
+};
+
+export type CustomerBalanceSummaryResult = {
+  asOf: string;
+  currency: string;
+  customerCount: number;
+  totalBalance: number;
+  customers: CustomerBalanceSummaryRow[];
+};
+
 export class CustomerStatementService {
   /**
    * FULL — ledger of invoices + payments (running balance).
    * OUTSTANDING — open invoices the customer still owes (amount due).
    */
+  static async getBalanceSummary(
+    asOf?: string,
+    opts?: { includeZero?: boolean; salesPersonId?: string }
+  ): Promise<CustomerBalanceSummaryResult> {
+    const companyId = requireTenantId();
+    const toRange = asOf ? dayRangeFromInput(asOf) : null;
+    const toDate = toRange?.lte ? endOfDay(toRange.lte) : endOfDay(new Date());
+
+    const customerWhere: Prisma.CustomerWhereInput = {
+      companyId,
+      deletedAt: null,
+      isActive: true,
+    };
+    if (opts?.salesPersonId) {
+      customerWhere.salesPersonId = opts.salesPersonId;
+    }
+
+    const customers = await prisma.customer.findMany({
+      where: customerWhere,
+      select: { id: true, code: true, name: true },
+      orderBy: { name: 'asc' },
+    });
+
+    const customerIds = customers.map((c) => c.id);
+    const balances = new Map<string, number>();
+    for (const id of customerIds) balances.set(id, 0);
+
+    if (customerIds.length > 0) {
+      const [invoices, payments] = await Promise.all([
+        prisma.invoice.findMany({
+          where: {
+            companyId,
+            customerId: { in: customerIds },
+            type: { in: ['SALES', 'CREDIT_NOTE', 'DEBIT_NOTE'] },
+            invoiceDate: { lte: toDate },
+          },
+          select: { customerId: true, type: true, totalAmount: true },
+        }),
+        prisma.payment.findMany({
+          where: {
+            companyId,
+            paymentDate: { lte: toDate },
+            invoice: { customerId: { in: customerIds }, type: 'SALES' },
+          },
+          select: { amount: true, invoice: { select: { customerId: true } } },
+        }),
+      ]);
+
+      for (const inv of invoices) {
+        if (!inv.customerId) continue;
+        const amt = Number(inv.totalAmount);
+        const current = balances.get(inv.customerId) || 0;
+        balances.set(
+          inv.customerId,
+          inv.type === 'CREDIT_NOTE' ? current - amt : current + amt
+        );
+      }
+
+      for (const pay of payments) {
+        const customerId = pay.invoice?.customerId;
+        if (!customerId) continue;
+        balances.set(customerId, (balances.get(customerId) || 0) - Number(pay.amount));
+      }
+    }
+
+    let rows = customers.map((c) => ({
+      id: c.id,
+      code: c.code,
+      name: c.name,
+      balance: Math.round((balances.get(c.id) || 0) * 100) / 100,
+    }));
+
+    if (!opts?.includeZero) {
+      rows = rows.filter((r) => Math.abs(r.balance) > 0.001);
+    }
+
+    const totalBalance = Math.round(rows.reduce((sum, r) => sum + r.balance, 0) * 100) / 100;
+
+    return {
+      asOf: toDate.toISOString(),
+      currency: 'KES',
+      customerCount: rows.length,
+      totalBalance,
+      customers: rows,
+    };
+  }
+
   static async getStatement(
     customerId: string,
     from?: string,

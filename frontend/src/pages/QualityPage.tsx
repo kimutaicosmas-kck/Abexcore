@@ -9,7 +9,6 @@ import {
 } from 'lucide-react';
 import { qualityApi } from '../services/api';
 import {
-  PageHeader,
   Table,
   Badge,
   Button,
@@ -181,22 +180,6 @@ export function QualityPage() {
           />
         </StatGrid>
       )}
-
-      <PageHeader
-        action={
-          stats && stats.pending > 0 ? (
-            <Button variant="secondary" size="sm" onClick={() => { setStatus('PENDING'); setPage(1); goToTab(0); }}>
-              <ClipboardCheck className="h-4 w-4 mr-1.5 text-amber-500" />
-              {stats.pending} pending
-            </Button>
-          ) : stats && stats.failed > 0 ? (
-            <Button variant="secondary" size="sm" onClick={() => { setStatus('FAILED'); setPage(1); goToTab(0); }}>
-              <XCircle className="h-4 w-4 mr-1.5 text-red-500" />
-              {stats.failed} failed
-            </Button>
-          ) : undefined
-        }
-      />
 
       <PageToolbar tabs={tabs} activeTab={activeTab} onTabChange={setActiveTab} actions={toolbarActions} />
 

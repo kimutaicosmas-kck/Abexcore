@@ -213,6 +213,7 @@ export const customersApi = {
   activate: (id: string) => api.post(`/customers/${id}/activate`),
   orders: (id: string) => api.get(`/customers/${id}/orders`),
   statement: (id: string, params?: object) => api.get(`/customers/${id}/statement`, { params }),
+  balanceSummary: (params?: object) => api.get('/customers/reports/balance-summary', { params }),
   vatReport: (vatStatus: 'VAT' | 'NON_VAT' | 'ALL' = 'ALL') =>
     api.get('/customers/reports/vat-status', { params: { vatStatus } }),
   addContact: (customerId: string, data: object) => api.post(`/customers/${customerId}/contacts`, data),

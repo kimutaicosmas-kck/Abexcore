@@ -8,6 +8,7 @@ import {
   updateCustomerSchema,
   customerListQuerySchema,
   customerStatementQuerySchema,
+  customerBalanceSummaryQuerySchema,
   createContactSchema,
 } from '../validators/schemas';
 import { createCrudService } from '../utils/crud';
@@ -162,6 +163,68 @@ router.get(
 const vatStatusReportQuery = z.object({
   vatStatus: z.enum(['VAT', 'NON_VAT', 'ALL']).default('ALL'),
 });
+
+router.get(
+  '/reports/balance-summary',
+  authorizeAny('customers:read', 'finance:read', 'reports:read'),
+  validate(customerBalanceSummaryQuerySchema, 'query'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const { asOf, includeZero } = getQuery<{ asOf?: string; includeZero?: boolean }>(req.query);
+    let salesPersonId: string | undefined;
+    if (isSalesBookOwner(req.user!.roleName)) {
+      salesPersonId = req.user!.id;
+    }
+    const data = await CustomerStatementService.getBalanceSummary(asOf, {
+      includeZero,
+      salesPersonId,
+    });
+    res.json({ success: true, data });
+  })
+);
+
+router.get(
+  '/reports/balance-summary/pdf',
+  authorizeAny('customers:read', 'finance:read', 'reports:read'),
+  validate(customerBalanceSummaryQuerySchema, 'query'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const { asOf, includeZero } = getQuery<{ asOf?: string; includeZero?: boolean }>(req.query);
+    let salesPersonId: string | undefined;
+    if (isSalesBookOwner(req.user!.roleName)) {
+      salesPersonId = req.user!.id;
+    }
+    const report = await CustomerStatementService.getBalanceSummary(asOf, {
+      includeZero,
+      salesPersonId,
+    });
+    const { ExportService } = await import('../services/export.service');
+    const pdf = await ExportService.generateCustomerBalanceSummaryPDF(report);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', 'attachment; filename="customer-balance-summary.pdf"');
+    res.send(pdf);
+  })
+);
+
+router.get(
+  '/reports/balance-summary/excel',
+  authorizeAny('customers:read', 'finance:read', 'reports:read'),
+  validate(customerBalanceSummaryQuerySchema, 'query'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const { asOf, includeZero } = getQuery<{ asOf?: string; includeZero?: boolean }>(req.query);
+    let salesPersonId: string | undefined;
+    if (isSalesBookOwner(req.user!.roleName)) {
+      salesPersonId = req.user!.id;
+    }
+    const report = await CustomerStatementService.getBalanceSummary(asOf, {
+      includeZero,
+      salesPersonId,
+    });
+    const { ExportService } = await import('../services/export.service');
+    const excel = await ExportService.generateCustomerBalanceSummaryExcel(report);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', 'attachment; filename="customer-balance-summary.xlsx"');
+    res.send(excel);
+  })
+);
 
 router.get(
   '/reports/vat-status',

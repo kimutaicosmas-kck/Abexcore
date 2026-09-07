@@ -30,7 +30,6 @@ import {
 } from 'lucide-react';
 import { financeApi } from '../services/api';
 import {
-  PageHeader,
   Table,
   Badge,
   Card,
@@ -325,6 +324,12 @@ export function FinancePage() {
   };
 
   const goToTab = (index: number) => setActiveTab(index);
+
+  const showOverdueInvoices = () => {
+    setStatus('OVERDUE');
+    setPage(1);
+    goToTab(0);
+  };
 
   const invoiceColumns = [
     {
@@ -709,7 +714,7 @@ export function FinancePage() {
           <StatCard title="This month sales" value={formatCurrency(stats.monthlyRevenue)} icon={<TrendingUp className="h-5 w-5 text-white" />} color="from-blue-500 to-blue-700" onClick={() => goToTab(0)} />
           <StatCard title="Collected this month" value={formatCurrency(stats.paymentsReceived ?? 0)} icon={<TrendingUp className="h-5 w-5 text-white" />} color="from-emerald-500 to-emerald-700" onClick={() => goToTab(1)} />
           <StatCard title="Outstanding receivable" value={formatCurrency(stats.accountsReceivable)} icon={<Wallet className="h-5 w-5 text-white" />} color="from-lime-500 to-lime-700" onClick={() => goToTab(0)} />
-          <StatCard title="Overdue" value={stats.overdueInvoices} icon={<AlertCircle className="h-5 w-5 text-white" />} color="from-amber-500 to-amber-700" onClick={() => goToTab(0)} />
+          <StatCard title="Overdue" value={stats.overdueInvoices} icon={<AlertCircle className="h-5 w-5 text-white" />} color="from-amber-500 to-amber-700" onClick={showOverdueInvoices} />
           <StatCard
             title="Collection rate"
             value={`${(stats.collectionRate?.rate ?? 0).toFixed(stats.collectionRate?.rate != null && stats.collectionRate.rate % 1 ? 1 : 0)}%`}
@@ -721,17 +726,6 @@ export function FinancePage() {
           />
         </StatGrid>
       )}
-
-      <PageHeader
-        action={
-          stats && stats.overdueInvoices > 0 ? (
-            <Button variant="secondary" size="sm" onClick={() => goToTab(0)}>
-              <AlertCircle className="h-4 w-4 mr-1.5 text-amber-500" />
-              {stats.overdueInvoices} overdue
-            </Button>
-          ) : undefined
-        }
-      />
 
       <PageToolbar
         tabs={tabs}

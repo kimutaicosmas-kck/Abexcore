@@ -18,7 +18,6 @@ import {
 } from 'lucide-react';
 import { inventoryApi } from '../services/api';
 import {
-  PageHeader,
   Table,
   Badge,
   Card,
@@ -528,17 +527,6 @@ export function InventoryPage() {
           />
         </StatGrid>
       )}
-
-      <PageHeader
-        action={
-          stats && stats.lowStockCount > 0 ? (
-            <Button variant="secondary" size="sm" onClick={() => goToTab(3)}>
-              <AlertTriangle className="h-4 w-4 mr-1.5 text-amber-500" />
-              {stats.lowStockCount} low stock
-            </Button>
-          ) : undefined
-        }
-      />
 
       <PageToolbar tabs={tabs} activeTab={activeTab} onTabChange={setActiveTab} actions={toolbarActions} />
 

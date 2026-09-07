@@ -250,6 +250,14 @@ export const customerStatementQuerySchema = z.object({
   ),
 });
 
+export const customerBalanceSummaryQuerySchema = z.object({
+  asOf: z.preprocess((v) => (v === '' || v === undefined ? undefined : v), z.string().optional()),
+  includeZero: z.preprocess(
+    (v) => (v === '' || v === undefined ? undefined : v === 'true' || v === true),
+    z.boolean().optional()
+  ),
+});
+
 export const createProductCategorySchema = z.object({
   name: z.string().trim().min(1, 'Category name is required').max(100),
 });

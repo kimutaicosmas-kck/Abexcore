@@ -15,7 +15,6 @@ import {
 } from 'lucide-react';
 import { usersApi } from '../services/api';
 import {
-  PageHeader,
   Table,
   Badge,
   Button,
@@ -298,17 +297,6 @@ export function UsersPage() {
           <StatCard title="Roles" value={stats.byRole.length} icon={<ScrollText className="h-5 w-5 text-white" />} color="from-slate-500 to-slate-700" onClick={() => goToTab(1)} />
         </StatGrid>
       )}
-
-      <PageHeader
-        action={
-          stats && stats.inactive + stats.suspended > 0 ? (
-            <Button variant="secondary" size="sm" onClick={() => { setStatusFilter('INACTIVE'); setPage(1); goToTab(0); }}>
-              <UserX className="h-4 w-4 mr-1.5 text-red-500" />
-              {stats.inactive + stats.suspended} inactive
-            </Button>
-          ) : undefined
-        }
-      />
 
       <PageToolbar
         tabs={tabs}

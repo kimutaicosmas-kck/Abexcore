@@ -19,7 +19,6 @@ import { inventoryApi, financeApi } from '../services/api';
 import { downloadFile } from '../utils/download';
 import { getApiErrorMessage } from '../utils/apiError';
 import {
-  PageHeader,
   Table,
   Badge,
   Button,
@@ -621,17 +620,6 @@ export function ProcurementPage() {
           <StatCard title="Active POs" value={stats.activePurchaseOrders} icon={<PackageCheck className="h-5 w-5 text-white" />} color="from-cyan-500 to-cyan-700" onClick={() => goToTab(0)} />
         </StatGrid>
       )}
-
-      <PageHeader
-        action={
-          stats && stats.pendingRequisitions > 0 ? (
-            <Button variant="secondary" size="sm" onClick={() => goToTab(1)}>
-              <ClipboardList className="h-4 w-4 mr-1.5 text-amber-500" />
-              {stats.pendingRequisitions} pending requisitions
-            </Button>
-          ) : undefined
-        }
-      />
 
       <PageToolbar
         tabs={tabs}

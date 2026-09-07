@@ -3,7 +3,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, Play, CheckCircle, Factory, Calendar, Clock, ChevronRight, Package, XCircle } from 'lucide-react';
 import { operationsApi } from '../services/api';
 import {
-  PageHeader,
   Table,
   Badge,
   Button,
@@ -237,7 +236,7 @@ export function ProductionPage() {
             value={stats.inProgress}
             icon={<Clock className="h-5 w-5 text-white" />}
             color="from-lime-500 to-lime-700"
-            onClick={() => { setStatusFilter('IN_PROGRESS'); goToTab(0); }}
+            onClick={() => { setStatusFilter('IN_PROGRESS'); setPage(1); goToTab(0); }}
           />
           <StatCard
             title="Scheduled"
@@ -263,17 +262,6 @@ export function ProductionPage() {
           />
         </StatGrid>
       )}
-
-      <PageHeader
-        action={
-          stats && stats.inProgress > 0 ? (
-            <Button variant="secondary" size="sm" onClick={() => goToTab(0)}>
-              <Factory className="h-4 w-4 mr-1.5 text-orange-500" />
-              {stats.inProgress} in progress
-            </Button>
-          ) : undefined
-        }
-      />
 
       <PageToolbar tabs={tabs} activeTab={activeTab} onTabChange={setActiveTab} actions={toolbarActions} />
 

@@ -5,7 +5,6 @@ import { Plus, Truck, Package, MapPin, Bike, Container, AlertTriangle, ChevronRi
 import { deliveryApi } from '../services/api';
 import { downloadFile } from '../utils/download';
 import {
-  PageHeader,
   Table,
   Badge,
   Button,
@@ -920,22 +919,6 @@ export function DeliveryPage() {
           {getApiErrorMessage(statusMutation.error)}
         </div>
       )}
-
-      <PageHeader
-        action={
-          stats && stats.inTransit > 0 ? (
-            <Button variant="secondary" size="sm" onClick={() => { setStatus('IN_TRANSIT'); setPage(1); goToTab(0); }}>
-              <Truck className="h-4 w-4 mr-1.5 text-primary-500" />
-              {stats.inTransit} in transit
-            </Button>
-          ) : stats && stats.pending > 0 ? (
-            <Button variant="secondary" size="sm" onClick={() => { setStatus('PENDING'); setPage(1); goToTab(0); }}>
-              <Package className="h-4 w-4 mr-1.5 text-amber-500" />
-              {stats.pending} pending
-            </Button>
-          ) : undefined
-        }
-      />
 
       <PageToolbar
         tabs={visibleTabs}

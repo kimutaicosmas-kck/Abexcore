@@ -3,7 +3,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, Wrench, Cog, AlertTriangle, CheckCircle2, ChevronRight, Calendar } from 'lucide-react';
 import { maintenanceApi } from '../services/api';
 import {
-  PageHeader,
   Table,
   Badge,
   Button,
@@ -148,21 +147,6 @@ export function MaintenancePage() {
           <StatCard title="Completed (Month)" value={stats.completedMonth} icon={<Calendar className="h-5 w-5 text-white" />} color="from-rose-500 to-rose-700" onClick={() => goToTab(1)} />
         </StatGrid>
       )}
-
-      <PageHeader action={
-          stats && stats.overdueRequests > 0 ? (
-            <Button variant="secondary" size="sm" onClick={() => { setStatus('OVERDUE'); setPage(1); goToTab(1); }}>
-              <AlertTriangle className="h-4 w-4 mr-1.5 text-red-500" />
-              {stats.overdueRequests} overdue
-            </Button>
-          ) : stats && stats.openRequests > 0 ? (
-            <Button variant="secondary" size="sm" onClick={() => goToTab(1)}>
-              <Wrench className="h-4 w-4 mr-1.5 text-amber-500" />
-              {stats.openRequests} open requests
-            </Button>
-          ) : undefined
-        }
-      />
 
       <PageToolbar
         tabs={tabs}

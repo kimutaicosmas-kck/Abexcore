@@ -3,8 +3,7 @@ import { useFieldArray, useForm, Control, FieldErrors, UseFormRegister, UseFormS
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Check, Search, X } from 'lucide-react';
-import { operationsApi, customersApi } from '../../services/api';
+import { operationsApi } from '../../services/api';
 import { Alert, Button, Input, Select, formatCurrency, ModalFormBody } from '../ui';
 import { Customer } from '../../types';
 import { useAuth, useVatRate } from '../../contexts/AuthContext';
@@ -13,6 +12,7 @@ import { getApiErrorCode, getApiErrorMessage } from '../../utils/apiError';
 import { ProductLineItemsEditor } from './ProductLineItemsEditor';
 import { FORM_DRAFT_MODULES, useModuleFormDraft } from '../../hooks/useModuleFormDraft';
 import { FormDraftNotice } from './FormDraftNotice';
+import { CustomerSearchSelect } from './CustomerSearchSelect';
 
 const orderItemSchema = z.object({
   productId: z.string().min(1, 'Product required'),
@@ -65,14 +65,7 @@ export function SalesOrderForm({ onSuccess, onCancel }: SalesOrderFormProps) {
   const { user } = useAuth();
   const canAssignSalesPerson = !isSalesBookOwner(user?.role?.name);
   const [customerSearch, setCustomerSearch] = useState('');
-  const [debouncedSearch, setDebouncedSearch] = useState('');
-  const [customerListOpen, setCustomerListOpen] = useState(false);
-  const customerBoxRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const t = window.setTimeout(() => setDebouncedSearch(customerSearch.trim()), 250);
-    return () => window.clearTimeout(t);
-  }, [customerSearch]);
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
 
   const { register, control, handleSubmit, watch, setValue, getValues, reset: resetForm, formState: { errors } } = useForm<SalesOrderFormData>({
     resolver: zodResolver(salesOrderSchema),
@@ -112,29 +105,6 @@ export function SalesOrderForm({ onSuccess, onCancel }: SalesOrderFormProps) {
     enabled: canAssignSalesPerson,
   });
 
-  const customerFilterKey = canAssignSalesPerson
-    ? salesPersonId
-      ? salesPersonId
-      : 'none'
-    : 'self';
-
-  const { data: customersData, isFetching: customersLoading } = useQuery({
-    queryKey: ['customers-for-order', customerFilterKey, debouncedSearch],
-    queryFn: () =>
-      customersApi
-        .list({
-          limit: 100,
-          isActive: true,
-          search: debouncedSearch || undefined,
-          ...(canAssignSalesPerson
-            ? salesPersonId
-              ? { salesPersonId, includeUnassigned: true }
-              : { salesPersonId: 'none' }
-            : {}),
-        })
-        .then((r) => r.data.data as Customer[]),
-  });
-
   const salesPersonOptions = [
     { value: '', label: 'Me — this sale stays under my name' },
     ...(salesOfficers || []).map((o) => ({
@@ -146,29 +116,7 @@ export function SalesOrderForm({ onSuccess, onCancel }: SalesOrderFormProps) {
   const { fields, append, remove } = useFieldArray({ control, name: 'items' });
   const errorRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (!canAssignSalesPerson) return;
-    setValue('customerId', '');
-    setCustomerSearch('');
-    setCustomerListOpen(false);
-  }, [salesPersonId, canAssignSalesPerson, setValue]);
-
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (customerBoxRef.current && !customerBoxRef.current.contains(e.target as Node)) {
-        setCustomerListOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, []);
-
   const companyVatRate = useVatRate();
-  const selectedCustomer =
-    customersData?.find((c) => c.id === customerId) ||
-    (customerId
-      ? ({ id: customerId, name: customerSearch, code: '', vatStatus: 'VAT' } as Customer)
-      : undefined);
   const vatRate = selectedCustomer?.vatStatus === 'NON_VAT' ? 0 : companyVatRate;
   const isVatCustomer = selectedCustomer?.vatStatus === 'VAT';
 
@@ -223,19 +171,6 @@ export function SalesOrderForm({ onSuccess, onCancel }: SalesOrderFormProps) {
     reset();
   }, [customerId, total, reset]);
 
-  const pickCustomer = (c: Customer) => {
-    setValue('customerId', c.id, { shouldValidate: true });
-    const vatTag = c.vatStatus === 'NON_VAT' ? 'Non-VAT' : 'VAT';
-    setCustomerSearch(`${c.code} — ${c.name} (${vatTag})`);
-    setCustomerListOpen(false);
-  };
-
-  const clearCustomer = () => {
-    setValue('customerId', '', { shouldValidate: true });
-    setCustomerSearch('');
-    setCustomerListOpen(true);
-  };
-
   const addItem = () => {
     append({ productId: '', quantity: 1, unitPrice: 0, discount: 0 });
   };
@@ -285,78 +220,18 @@ export function SalesOrderForm({ onSuccess, onCancel }: SalesOrderFormProps) {
         />
       </div>
 
-      <div ref={customerBoxRef} className="rounded-xl border border-slate-200 bg-slate-50/60 p-3 space-y-2">
-        <p className="text-sm font-medium text-slate-800">Customer *</p>
-        {customerId && selectedCustomer && !customerListOpen ? (
-          <div className="flex items-center gap-2 rounded-xl border border-primary-100 bg-white px-3 py-2 text-sm shadow-sm">
-            <Check className="h-4 w-4 shrink-0 text-emerald-600" />
-            <button
-              type="button"
-              onClick={() => {
-                setCustomerListOpen(true);
-                setCustomerSearch('');
-              }}
-              className="min-w-0 flex-1 truncate text-left font-medium text-slate-900"
-            >
-              {customerSearch || selectedCustomer.name}
-            </button>
-            <button type="button" onClick={clearCustomer} className="rounded-lg p-1 text-slate-400 hover:bg-slate-100" aria-label="Clear customer">
-              <X className="h-3.5 w-3.5" />
-            </button>
-          </div>
-        ) : (
-          <div className="relative">
-            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
-            <input
-              type="search"
-              autoComplete="off"
-              placeholder="Search customer by name or code…"
-              value={customerSearch}
-              onChange={(e) => {
-                setCustomerSearch(e.target.value);
-                setCustomerListOpen(true);
-                if (customerId) setValue('customerId', '');
-              }}
-              onFocus={() => setCustomerListOpen(true)}
-              className="block w-full rounded-xl border border-primary-100 bg-white py-2 pl-8 pr-3 text-sm shadow-sm focus:border-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-500/20"
-            />
-            {customerListOpen && (
-              <div className="absolute z-30 mt-1 max-h-56 w-full overflow-y-auto rounded-xl border border-primary-100 bg-white shadow-float">
-                {customersLoading ? (
-                  <p className="px-3 py-3 text-sm text-slate-500">Searching…</p>
-                ) : (customersData?.length || 0) === 0 ? (
-                  <p className="px-3 py-3 text-sm text-slate-500">No matching customers</p>
-                ) : (
-                  <ul className="py-1">
-                    {(customersData || []).map((c) => {
-                      const vatTag = c.vatStatus === 'NON_VAT' ? 'Non-VAT' : 'VAT';
-                      return (
-                        <li key={c.id}>
-                          <button
-                            type="button"
-                            onClick={() => pickCustomer(c)}
-                            className="flex w-full flex-col px-3 py-2.5 text-left text-sm hover:bg-primary-50/80"
-                          >
-                            <span className="font-medium text-slate-900">
-                              {c.code} — {c.name}
-                            </span>
-                            <span className="text-xs text-slate-500">
-                              {vatTag}
-                              {!c.salesPersonId ? ' · unassigned' : ''}
-                            </span>
-                          </button>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                )}
-              </div>
-            )}
-          </div>
-        )}
-        {errors.customerId?.message && (
-          <p className="text-sm text-red-600">{errors.customerId.message}</p>
-        )}
+      <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-3">
+        <CustomerSearchSelect
+          label="Customer *"
+          value={customerId || ''}
+          onChange={(id) => setValue('customerId', id, { shouldValidate: true })}
+          onCustomerSelect={setSelectedCustomer}
+          onSearchTextChange={setCustomerSearch}
+          initialSearchText={customerSearch}
+          salesPersonId={salesPersonId}
+          canAssignSalesPerson={canAssignSalesPerson}
+          error={errors.customerId?.message}
+        />
       </div>
 
       {selectedCustomer && hasCreditLimit && (
