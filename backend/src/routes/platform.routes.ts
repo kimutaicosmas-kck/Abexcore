@@ -32,7 +32,7 @@ const decideSchema = z.object({
 
 router.get(
   '/approvals',
-  authorize('settings:read', 'users:read', 'procurement:approve', 'hr:approve', 'finance:approve'),
+  authorize('approvals:read'),
   asyncHandler(async (req: AuthRequest, res: Response) => {
     const status = typeof req.query.status === 'string' ? req.query.status : undefined;
     const data = await WorkflowService.list(status);
@@ -55,7 +55,7 @@ router.post(
 
 router.post(
   '/approvals/:id/decide',
-  authorize('settings:update', 'procurement:approve', 'hr:approve', 'finance:approve'),
+  authorize('approvals:approve'),
   validate(decideSchema),
   asyncHandler(async (req: AuthRequest, res: Response) => {
     const data = await WorkflowService.decide({

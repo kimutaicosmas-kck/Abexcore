@@ -27,6 +27,7 @@ export const TRADING_COMPANY_MODULES: readonly CompanyModule[] = [
   'finance',
   'hr',
   'reports',
+  'approvals',
 ];
 
 export const MANUFACTURING_COMPANY_MODULES: readonly CompanyModule[] = [...COMPANY_MODULES];

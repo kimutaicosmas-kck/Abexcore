@@ -18,6 +18,7 @@ export const TRADING_COMPANY_MODULES = [
   'finance',
   'hr',
   'reports',
+  'approvals',
 ] as const;
 
 export const MANUFACTURING_COMPANY_MODULES = [...ASSIGNABLE_MODULES] as const;

@@ -15,6 +15,7 @@ export const PERMISSION_MODULES = [
   'maintenance',
   'quality',
   'reports',
+  'approvals',
   'settings',
 ] as const;
 
@@ -54,14 +55,14 @@ export const SYSTEM_ROLES = [
 export const ROLE_MODULE_ACCESS: Record<string, readonly string[]> = {
   'Managing Director': PERMISSION_MODULES,
   'General Manager': PERMISSION_MODULES,
-  'Operations Manager': ['dashboard', 'production', 'inventory', 'procurement', 'quality', 'delivery'],
+  'Operations Manager': ['dashboard', 'production', 'inventory', 'procurement', 'quality', 'delivery', 'approvals'],
   'Production Manager': ['dashboard', 'production', 'inventory', 'quality'],
   'Sales Manager': ['dashboard', 'customers', 'sales', 'pos', 'delivery', 'reports'],
-  'Procurement Manager': ['dashboard', 'procurement', 'inventory', 'reports'],
+  'Procurement Manager': ['dashboard', 'procurement', 'inventory', 'reports', 'approvals'],
   'Warehouse Manager': ['dashboard', 'inventory', 'delivery'],
   'Quality Manager': ['dashboard', 'quality', 'production'],
-  'Finance Manager': ['dashboard', 'finance', 'reports', 'sales'],
-  'HR Manager': ['dashboard', 'hr'],
+  'Finance Manager': ['dashboard', 'finance', 'reports', 'sales', 'approvals'],
+  'HR Manager': ['dashboard', 'hr', 'approvals'],
   'Procurement Officer': ['dashboard', 'procurement', 'inventory'],
   'Warehouse Officer': ['dashboard', 'inventory'],
   Storekeeper: ['dashboard', 'inventory'],

@@ -16,6 +16,7 @@ export const MODULE_LABELS: Record<string, string> = {
   maintenance: 'Maintenance',
   quality: 'Quality control',
   reports: 'Reports & sales performance',
+  approvals: 'Approvals inbox',
   settings: 'Company settings',
 };
 
@@ -34,6 +35,7 @@ export const ASSIGNABLE_MODULES = [
   'maintenance',
   'quality',
   'reports',
+  'approvals',
   'settings',
   'users',
 ] as const;
@@ -42,14 +44,14 @@ export const ASSIGNABLE_MODULES = [
 const ROLE_MODULE_ACCESS: Record<string, readonly string[]> = {
   'Managing Director': ASSIGNABLE_MODULES,
   'General Manager': ASSIGNABLE_MODULES,
-  'Operations Manager': ['dashboard', 'production', 'inventory', 'procurement', 'quality', 'delivery'],
+  'Operations Manager': ['dashboard', 'production', 'inventory', 'procurement', 'quality', 'delivery', 'approvals'],
   'Production Manager': ['dashboard', 'production', 'inventory', 'quality'],
   'Sales Manager': ['dashboard', 'customers', 'sales', 'pos', 'delivery', 'reports'],
-  'Procurement Manager': ['dashboard', 'procurement', 'inventory', 'reports'],
+  'Procurement Manager': ['dashboard', 'procurement', 'inventory', 'reports', 'approvals'],
   'Warehouse Manager': ['dashboard', 'inventory', 'delivery'],
   'Quality Manager': ['dashboard', 'quality', 'production'],
-  'Finance Manager': ['dashboard', 'finance', 'reports', 'sales'],
-  'HR Manager': ['dashboard', 'hr'],
+  'Finance Manager': ['dashboard', 'finance', 'reports', 'sales', 'approvals'],
+  'HR Manager': ['dashboard', 'hr', 'approvals'],
   'Procurement Officer': ['dashboard', 'procurement', 'inventory'],
   'Warehouse Officer': ['dashboard', 'inventory'],
   Storekeeper: ['dashboard', 'inventory'],
