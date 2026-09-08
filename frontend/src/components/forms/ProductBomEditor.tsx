@@ -282,28 +282,66 @@ export function ProductBomEditor({ productId }: ProductBomEditorProps) {
     [lines, materialById]
   );
 
+  const [saveError, setSaveError] = useState('');
+
+  const validateLines = (): { items: BomLine[] } | { error: string } => {
+    const issues: string[] = [];
+    const items: BomLine[] = [];
+    lines.forEach((line, index) => {
+      const row = index + 1;
+      if (!line.rawMaterialId) {
+        if (line.unitsPerBatch || line.quantity > 0) {
+          issues.push(`Line ${row}: choose a raw material.`);
+        }
+        return;
+      }
+      if (!(line.quantity > 0)) {
+        if (line.entryMode === 'yield') {
+          issues.push(`Line ${row}: enter how many finished units one batch produces (e.g. 180).`);
+        } else {
+          issues.push(`Line ${row}: enter quantity per finished unit.`);
+        }
+        return;
+      }
+      items.push({
+        rawMaterialId: line.rawMaterialId,
+        quantity: line.quantity,
+        unit: line.unit,
+        wastePercent: line.wastePercent,
+        notes: line.notes,
+      });
+    });
+    if (items.length === 0) {
+      issues.push('Add at least one material line with a valid quantity.');
+    }
+    if (issues.length > 0) {
+      const message = issues.join(' ');
+      setSaveError(message);
+      return { error: message };
+    }
+    setSaveError('');
+    return { items };
+  };
+
   const saveMutation = useMutation({
     mutationFn: () => {
-      const payload = {
+      const validated = validateLines();
+      if ('error' in validated) {
+        throw new Error(validated.error);
+      }
+      return productsApi.upsertBom(productId, {
         version,
         notes: notes || undefined,
-        items: lines
-          .filter((l) => l.rawMaterialId && l.quantity > 0)
-          .map((l) => ({
-            rawMaterialId: l.rawMaterialId,
-            quantity: l.quantity,
-            unit: l.unit,
-            wastePercent: l.wastePercent,
-            notes: l.notes,
-          })),
-      };
-      if (payload.items.length === 0) {
-        throw new Error('Add at least one material line with a valid quantity');
-      }
-      return productsApi.upsertBom(productId, payload);
+        items: validated.items,
+      });
     },
     onSuccess: () => {
+      setSaveError('');
+      setHydrated(false);
       queryClient.invalidateQueries({ queryKey: ['product-bom', productId] });
+    },
+    onError: (err) => {
+      setSaveError(getApiErrorMessage(err));
     },
   });
 
@@ -355,8 +393,10 @@ export function ProductBomEditor({ productId }: ProductBomEditorProps) {
         Estimated material cost per unit: <span className="font-semibold">{formatCurrency(estimatedUnitCost)}</span>
       </p>
 
-      {saveMutation.isError && (
-        <p className="text-sm text-red-600">{getApiErrorMessage(saveMutation.error)}</p>
+      {(saveError || saveMutation.isError) && (
+        <p className="text-sm text-red-600">
+          {saveError || getApiErrorMessage(saveMutation.error)}
+        </p>
       )}
 
       <Button type="button" size="sm" loading={saveMutation.isPending} onClick={() => saveMutation.mutate()}>

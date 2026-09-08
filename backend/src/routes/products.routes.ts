@@ -706,7 +706,7 @@ router.post(
 
 router.get(
   '/:id/bom',
-  authorize('products:read'),
+  authorize('products:read', 'production:read'),
   asyncHandler(async (req: AuthRequest, res: Response) => {
     const productId = getParam(req.params.id);
     const product = await prisma.product.findFirst({
@@ -732,7 +732,7 @@ router.get(
 
 router.get(
   '/:id/bom/preview',
-  authorize('products:read'),
+  authorize('products:read', 'production:read'),
   asyncHandler(async (req: AuthRequest, res: Response) => {
     const productId = getParam(req.params.id);
     const quantity = Math.max(1, Number(req.query.quantity) || 1);
@@ -755,7 +755,7 @@ router.get(
 
 router.put(
   '/:id/bom',
-  authorize('products:update'),
+  authorize('products:update', 'production:update'),
   validate(upsertBomSchema),
   asyncHandler(async (req: AuthRequest, res: Response) => {
     const productId = getParam(req.params.id);

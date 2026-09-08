@@ -460,7 +460,7 @@ export const completeProductionSchema = z.object({
 
 export const upsertBomSchema = z.object({
   version: z.string().max(20).optional(),
-  notes: z.string().max(2000).optional(),
+  notes: z.string().max(2000).optional().nullable(),
   items: z
     .array(
       z.object({
