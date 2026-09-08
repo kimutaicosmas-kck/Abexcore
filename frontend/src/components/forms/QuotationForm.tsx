@@ -312,9 +312,11 @@ export function QuotationForm({ onSuccess, onCancel, draftId: initialDraftId, ed
 
       {mutation.isError && (
         <div className="p-3 rounded-lg bg-red-50 text-red-700 text-sm">
-          {isEditingPending
-            ? 'Failed to update quotation. Please check all fields.'
-            : 'Failed to create quotation. Please check all fields.'}
+          {(mutation.error as { response?: { data?: { message?: string } } })?.response?.data
+            ?.message ||
+            (isEditingPending
+              ? 'Failed to update quotation. Please check all fields.'
+              : 'Failed to create quotation. Please check all fields.')}
         </div>
       )}
 

@@ -49,6 +49,7 @@ export function useDocumentDraftAutosave<T extends FieldValues>({
           if (result.id !== draftIdRef.current) {
             onDraftId(result.id);
           }
+          draftIdRef.current = result.id;
           sessionStorage.setItem(storageKey, result.id);
         }
       } catch {

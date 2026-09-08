@@ -47,6 +47,7 @@ import {
 } from '../config/rolePermissions';
 import { buildSalesOrdersWhere } from '../utils/sales-list-where';
 import { salesBookCustomerFilter, salesBookCustomerVisibility } from '../utils/customerVisibility';
+import { nextQuotationNumber, withQuotationNumberRetry } from '../utils/numbering';
 import { Prisma } from '@prisma/client';
 
 const router = Router();
@@ -118,6 +119,106 @@ function mapQuotationDraftItems(items: QuotationDraftItem[] | undefined) {
         (item.quantity || 1) * (item.unitPrice || 0) * (1 - (item.discount || 0) / 100)
       ),
     }));
+}
+
+async function updateQuotationDraftRecord(
+  id: string,
+  data: {
+    customerId?: string;
+    validUntil?: string;
+    notes?: string;
+    items?: QuotationDraftItem[];
+  }
+) {
+  const { customerId, validUntil, notes, items } = data;
+  const totals = await computeQuotationDraftTotals(customerId, items);
+  const mappedItems = mapQuotationDraftItems(items);
+
+  return prisma.$transaction(async (tx) => {
+    await tx.quotationItem.deleteMany({ where: { quotationId: id } });
+    return tx.salesQuotation.update({
+      where: { id },
+      data: {
+        customerId: customerId ?? null,
+        validUntil: validUntil ? new Date(validUntil) : null,
+        notes,
+        subtotal: totals.subtotal,
+        taxAmount: totals.taxAmount,
+        totalAmount: totals.totalAmount,
+        ...(mappedItems.length > 0 ? { items: { create: mappedItems } } : {}),
+      },
+      include: { customer: true, items: { include: { product: true } } },
+    });
+  });
+}
+
+type FinalizedQuotationInput = {
+  customerId: string;
+  validUntil?: string;
+  notes?: string;
+  items: Array<{ productId: string; quantity: number; unitPrice: number; discount?: number }>;
+};
+
+async function finalizeQuotationRecord(
+  id: string,
+  body: FinalizedQuotationInput,
+  user: AuthRequest['user']
+) {
+  const existing = await prisma.salesQuotation.findUnique({
+    where: { id },
+    include: { salesOrders: { select: { id: true } } },
+  });
+  if (!existing) throw new AppError('Quotation not found', 404);
+  if (existing.status !== 'DRAFT') {
+    throw new AppError('Only draft quotations can be finalized', 400);
+  }
+  if (existing.salesOrders.length > 0) {
+    throw new AppError('Quotation has already been converted', 400);
+  }
+
+  const { customerId, validUntil, notes, items } = body;
+  const customer = await prisma.customer.findFirst({
+    where: {
+      id: customerId,
+      deletedAt: null,
+      ...(isSalesBookOwner(user!.roleName)
+        ? salesBookCustomerVisibility(user!.roleName, user!.id)
+        : {}),
+    },
+    select: { id: true, vatStatus: true },
+  });
+  if (!customer) throw new AppError('Customer not found', 404);
+  const vatRate = await getCustomerVatRate(customer);
+
+  const gross = items.reduce(
+    (sum, item) => sum + item.quantity * item.unitPrice * (1 - (item.discount || 0) / 100),
+    0
+  );
+  const { subtotal, taxAmount, totalAmount } = splitInclusiveAmount(gross, vatRate);
+  const mappedItems = items.map((item) => ({
+    ...item,
+    unitPrice: roundMoney(item.unitPrice),
+    totalPrice: roundMoney(item.quantity * item.unitPrice * (1 - (item.discount || 0) / 100)),
+  }));
+
+  return prisma.$transaction(async (tx) => {
+    await tx.quotationItem.deleteMany({ where: { quotationId: id } });
+    return tx.salesQuotation.update({
+      where: { id },
+      data: {
+        customerId,
+        validUntil: validUntil ? new Date(validUntil) : null,
+        notes,
+        subtotal,
+        taxAmount,
+        totalAmount,
+        status: 'PENDING',
+        createdById: existing.createdById ?? user!.id,
+        items: { create: mappedItems },
+      },
+      include: { customer: true, items: { include: { product: true } } },
+    });
+  });
 }
 
 function salesPersonLabel(order: {
@@ -999,28 +1100,52 @@ router.post(
       if (!customer) throw new AppError('Customer not found', 404);
     }
 
-    const totals = await computeQuotationDraftTotals(customerId, items);
-    const count = await prisma.salesQuotation.count();
-    const quotationNo = generateNumber('QT', count + 1);
-    const mappedItems = mapQuotationDraftItems(items);
-
-    const quotation = await prisma.salesQuotation.create({
-      data: injectTenantData({
-        quotationNo,
-        customerId: customerId || null,
-        validUntil: validUntil ? new Date(validUntil) : undefined,
-        notes,
+    const existingDraft = await prisma.salesQuotation.findFirst({
+      where: {
         status: 'DRAFT',
-        subtotal: totals.subtotal,
-        taxAmount: totals.taxAmount,
-        totalAmount: totals.totalAmount,
         createdById: req.user!.id,
-        ...(mappedItems.length > 0
-          ? { items: { create: mappedItems } }
-          : {}),
-      }),
-      include: { customer: true, items: { include: { product: true } } },
+        salesOrders: { none: {} },
+      },
+      orderBy: { updatedAt: 'desc' },
+      select: { id: true },
     });
+    if (existingDraft) {
+      const quotation = await updateQuotationDraftRecord(existingDraft.id, {
+        customerId,
+        validUntil,
+        notes,
+        items,
+      });
+      res.json({ success: true, data: quotation });
+      return;
+    }
+
+    const totals = await computeQuotationDraftTotals(customerId, items);
+    const mappedItems = mapQuotationDraftItems(items);
+    const companyId = requireTenantId();
+
+    const quotation = await withQuotationNumberRetry(() =>
+      prisma.$transaction(async (tx) => {
+        const quotationNo = await nextQuotationNumber(tx, companyId);
+        return tx.salesQuotation.create({
+          data: injectTenantData({
+            quotationNo,
+            customerId: customerId || null,
+            validUntil: validUntil ? new Date(validUntil) : undefined,
+            notes,
+            status: 'DRAFT',
+            subtotal: totals.subtotal,
+            taxAmount: totals.taxAmount,
+            totalAmount: totals.totalAmount,
+            createdById: req.user!.id,
+            ...(mappedItems.length > 0
+              ? { items: { create: mappedItems } }
+              : {}),
+          }),
+          include: { customer: true, items: { include: { product: true } } },
+        });
+      })
+    );
 
     res.status(201).json({ success: true, data: quotation });
   })
@@ -1065,26 +1190,11 @@ router.patch(
       if (!customer) throw new AppError('Customer not found', 404);
     }
 
-    const totals = await computeQuotationDraftTotals(customerId, items);
-    const mappedItems = mapQuotationDraftItems(items);
-
-    const quotation = await prisma.$transaction(async (tx) => {
-      await tx.quotationItem.deleteMany({ where: { quotationId: id } });
-      return tx.salesQuotation.update({
-        where: { id },
-        data: {
-          customerId: customerId ?? null,
-          validUntil: validUntil ? new Date(validUntil) : null,
-          notes,
-          subtotal: totals.subtotal,
-          taxAmount: totals.taxAmount,
-          totalAmount: totals.totalAmount,
-          ...(mappedItems.length > 0
-            ? { items: { create: mappedItems } }
-            : {}),
-        },
-        include: { customer: true, items: { include: { product: true } } },
-      });
+    const quotation = await updateQuotationDraftRecord(id, {
+      customerId,
+      validUntil,
+      notes,
+      items,
     });
 
     res.json({ success: true, data: quotation });
@@ -1124,68 +1234,11 @@ router.post(
   validate(createQuotationSchema),
   auditLog('sales', 'create', 'sales_quotation'),
   asyncHandler(async (req: AuthRequest, res: Response) => {
-    const id = getParam(req.params.id);
-    const existing = await prisma.salesQuotation.findUnique({
-      where: { id },
-      include: { salesOrders: { select: { id: true } } },
-    });
-    if (!existing) throw new AppError('Quotation not found', 404);
-    if (existing.status !== 'DRAFT') {
-      throw new AppError('Only draft quotations can be finalized', 400);
-    }
-    if (existing.salesOrders.length > 0) {
-      throw new AppError('Quotation has already been converted', 400);
-    }
-
-    const { customerId, validUntil, notes, items } = req.body;
-    const customer = await prisma.customer.findFirst({
-      where: {
-        id: customerId,
-        deletedAt: null,
-        ...(isSalesBookOwner(req.user!.roleName)
-          ? salesBookCustomerVisibility(req.user!.roleName, req.user!.id)
-          : {}),
-      },
-      select: { id: true, vatStatus: true },
-    });
-    if (!customer) throw new AppError('Customer not found', 404);
-    const vatRate = await getCustomerVatRate(customer);
-
-    const gross = items.reduce(
-      (sum: number, item: { quantity: number; unitPrice: number; discount?: number }) =>
-        sum + item.quantity * item.unitPrice * (1 - (item.discount || 0) / 100),
-      0
+    const quotation = await finalizeQuotationRecord(
+      getParam(req.params.id),
+      req.body,
+      req.user
     );
-    const { subtotal, taxAmount, totalAmount } = splitInclusiveAmount(gross, vatRate);
-    const mappedItems = items.map(
-      (item: { productId: string; quantity: number; unitPrice: number; discount?: number }) => ({
-        ...item,
-        unitPrice: roundMoney(item.unitPrice),
-        totalPrice: roundMoney(
-          item.quantity * item.unitPrice * (1 - (item.discount || 0) / 100)
-        ),
-      })
-    );
-
-    const quotation = await prisma.$transaction(async (tx) => {
-      await tx.quotationItem.deleteMany({ where: { quotationId: id } });
-      return tx.salesQuotation.update({
-        where: { id },
-        data: {
-          customerId,
-          validUntil: validUntil ? new Date(validUntil) : null,
-          notes,
-          subtotal,
-          taxAmount,
-          totalAmount,
-          status: 'PENDING',
-          createdById: existing.createdById ?? req.user!.id,
-          items: { create: mappedItems },
-        },
-        include: { customer: true, items: { include: { product: true } } },
-      });
-    });
-
     res.json({ success: true, data: quotation });
   })
 );
@@ -1271,8 +1324,27 @@ router.post(
   auditLog('sales', 'create', 'sales_quotation'),
   asyncHandler(async (req: AuthRequest, res: Response) => {
     const { customerId, validUntil, notes, items } = req.body;
-    const count = await prisma.salesQuotation.count();
-    const quotationNo = generateNumber('QT', count + 1);
+
+    const existingDraft = await prisma.salesQuotation.findFirst({
+      where: {
+        status: 'DRAFT',
+        createdById: req.user!.id,
+        salesOrders: { none: {} },
+      },
+      orderBy: { updatedAt: 'desc' },
+      select: { id: true },
+    });
+    if (existingDraft) {
+      const quotation = await finalizeQuotationRecord(
+        existingDraft.id,
+        { customerId, validUntil, notes, items },
+        req.user
+      );
+      res.status(201).json({ success: true, data: quotation });
+      return;
+    }
+
+    const companyId = requireTenantId();
     const customer = await prisma.customer.findFirst({
       where: {
         id: customerId,
@@ -1294,29 +1366,34 @@ router.post(
     );
     const { subtotal, taxAmount, totalAmount } = splitInclusiveAmount(gross, vatRate);
 
-    const quotation = await prisma.salesQuotation.create({
-      data: injectTenantData({
-        quotationNo,
-        customerId,
-        validUntil: validUntil ? new Date(validUntil) : undefined,
-        notes,
-        status: 'PENDING',
-        subtotal,
-        taxAmount,
-        totalAmount,
-        createdById: req.user!.id,
-        items: {
-          create: items.map((item: { productId: string; quantity: number; unitPrice: number; discount?: number }) => ({
-            ...item,
-            unitPrice: roundMoney(item.unitPrice),
-            totalPrice: roundMoney(
-              item.quantity * item.unitPrice * (1 - (item.discount || 0) / 100)
-            ),
-          })),
-        },
-      }),
-      include: { customer: true, items: { include: { product: true } } },
-    });
+    const quotation = await withQuotationNumberRetry(() =>
+      prisma.$transaction(async (tx) => {
+        const quotationNo = await nextQuotationNumber(tx, companyId);
+        return tx.salesQuotation.create({
+          data: injectTenantData({
+            quotationNo,
+            customerId,
+            validUntil: validUntil ? new Date(validUntil) : undefined,
+            notes,
+            status: 'PENDING',
+            subtotal,
+            taxAmount,
+            totalAmount,
+            createdById: req.user!.id,
+            items: {
+              create: items.map((item: { productId: string; quantity: number; unitPrice: number; discount?: number }) => ({
+                ...item,
+                unitPrice: roundMoney(item.unitPrice),
+                totalPrice: roundMoney(
+                  item.quantity * item.unitPrice * (1 - (item.discount || 0) / 100)
+                ),
+              })),
+            },
+          }),
+          include: { customer: true, items: { include: { product: true } } },
+        });
+      })
+    );
 
     res.status(201).json({ success: true, data: quotation });
   })
