@@ -192,7 +192,7 @@ export function SalesPage() {
     });
     navigate(`/delivery?${params.toString()}`);
   };
-  const canViewPerformance = hasPermission('reports:read') || hasPermission('finance:read');
+  const canViewPerformance = hasPermission('sales_performance:read');
   const canManageTargets = canManageSalesTargets(user?.role?.name, hasPermission);
   const canDownloadInvoice = hasPermission('finance:read');
   const [downloadingInvoiceId, setDownloadingInvoiceId] = useState<string | null>(null);

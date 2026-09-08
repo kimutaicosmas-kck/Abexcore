@@ -242,7 +242,7 @@ export function SalesPerformancePanel() {
 export function SalesPerformancePage() {
   const { hasPermission, user, isSuperAdmin } = useAuth();
   const [searchParams] = useSearchParams();
-  const canViewPerformance = hasPermission('reports:read') || hasPermission('finance:read');
+  const canViewPerformance = hasPermission('sales_performance:read');
   const canManageTargets =
     isSuperAdmin || canManageSalesTargets(user?.role?.name, hasPermission);
   const { from, to } = useSalesPerformancePeriod();

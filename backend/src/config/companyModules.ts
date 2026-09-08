@@ -28,6 +28,7 @@ export const TRADING_COMPANY_MODULES: readonly CompanyModule[] = [
   'hr',
   'reports',
   'approvals',
+  'sales_performance',
 ];
 
 export const MANUFACTURING_COMPANY_MODULES: readonly CompanyModule[] = [...COMPANY_MODULES];
@@ -44,19 +45,27 @@ function withModuleDependencies(modules: string[]): string[] {
 }
 
 /** Modules added after a company was provisioned — expose in catalog for standard packages. */
-const CATALOG_ADDITIONS: readonly CompanyModule[] = ['approvals'];
+const CATALOG_ADDITIONS: { module: CompanyModule; when: (modules: string[]) => boolean }[] = [
+  {
+    module: 'approvals',
+    when: (m) =>
+      m.includes('production') ||
+      m.includes('procurement') ||
+      m.includes('finance') ||
+      m.includes('hr') ||
+      m.filter((x) => (TRADING_COMPANY_MODULES as readonly string[]).includes(x)).length >= 8,
+  },
+  {
+    module: 'sales_performance',
+    when: (m) => m.includes('reports') || (m.includes('sales') && m.includes('finance')),
+  },
+];
 
 function mergeCatalogAdditions(modules: string[]): string[] {
   const next = [...modules];
-  for (const mod of CATALOG_ADDITIONS) {
+  for (const { module: mod, when } of CATALOG_ADDITIONS) {
     if (next.includes(mod)) continue;
-    const eligible =
-      next.includes('production') ||
-      next.includes('procurement') ||
-      next.includes('finance') ||
-      next.includes('hr') ||
-      next.filter((m) => (TRADING_COMPANY_MODULES as readonly string[]).includes(m)).length >= 8;
-    if (eligible && VALID.has(mod)) next.push(mod);
+    if (when(next) && VALID.has(mod)) next.push(mod);
   }
   return next;
 }

@@ -77,7 +77,7 @@ const navigationGroups: NavGroup[] = [
     label: 'Business',
     items: [
       { name: 'Finance', href: '/finance', icon: DollarSign, permission: 'finance:read' },
-      { name: 'Sales Performance', href: '/sales-performance', icon: Target, permissions: ['reports:read', 'finance:read', 'settings:read'] },
+      { name: 'Sales Performance', href: '/sales-performance', icon: Target, permission: 'sales_performance:read' },
       { name: 'HR', href: '/hr', icon: UserCircle, permission: 'hr:read' },
       { name: 'My Leave', href: '/my-leave', icon: CalendarDays },
       { name: 'Maintenance', href: '/maintenance', icon: Wrench, permission: 'maintenance:read' },

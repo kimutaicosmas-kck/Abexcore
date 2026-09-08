@@ -1465,7 +1465,7 @@ router.get(
 
 router.get(
   '/sales-performance',
-  authorizeAny('reports:read', 'finance:read'),
+  authorize('sales_performance:read'),
   validate(salesPerformanceQuerySchema, 'query'),
   asyncHandler(async (req: AuthRequest, res: Response) => {
     const { from, to } = getQuery<{ from?: string; to?: string }>(req.query);
@@ -1485,7 +1485,7 @@ router.get(
 
     if (
       canManageSalesTargets(req.user!.roleName, req.user!.permissions) ||
-      req.user!.permissions.includes('reports:read')
+      req.user!.permissions.includes('sales_performance:read')
     ) {
       const data = await MySalesService.listTargets(
         year ? Number(year) : undefined,
