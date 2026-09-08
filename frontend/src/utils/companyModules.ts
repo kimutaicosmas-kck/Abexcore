@@ -51,6 +51,24 @@ function withModuleDependencies(modules: string[]): string[] {
   return next;
 }
 
+/** Modules added after a company was provisioned — expose in catalog for standard packages. */
+const CATALOG_ADDITIONS = ['approvals'] as const;
+
+function mergeCatalogAdditions(modules: string[]): string[] {
+  const next = [...modules];
+  for (const mod of CATALOG_ADDITIONS) {
+    if (next.includes(mod)) continue;
+    const eligible =
+      next.includes('production') ||
+      next.includes('procurement') ||
+      next.includes('finance') ||
+      next.includes('hr') ||
+      next.filter((m) => (TRADING_COMPANY_MODULES as readonly string[]).includes(m)).length >= 8;
+    if (eligible) next.push(mod);
+  }
+  return next;
+}
+
 export function resolveCompanyModules(raw: unknown): string[] {
   if (!Array.isArray(raw) || raw.length === 0) {
     return [...MANUFACTURING_COMPANY_MODULES];
@@ -66,7 +84,7 @@ export function resolveCompanyModules(raw: unknown): string[] {
   for (const core of CORE_COMPANY_MODULES) {
     if (!modules.includes(core)) modules.unshift(core);
   }
-  return modules.length ? modules : [...MANUFACTURING_COMPANY_MODULES];
+  return mergeCatalogAdditions(modules.length ? modules : [...MANUFACTURING_COMPANY_MODULES]);
 }
 
 export function modulesForPreset(preset: CompanyModulePreset, custom?: string[]): string[] {

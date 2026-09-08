@@ -1276,11 +1276,7 @@ export function SettingsPage() {
                 <ModuleAccessPicker
                   value={inviteModules}
                   roleBaseline={inviteRoleBaseline}
-                  availableModules={
-                    Array.isArray(authCompany?.enabledModules)
-                      ? authCompany.enabledModules
-                      : undefined
-                  }
+                  availableModules={resolveCompanyModules(authCompany?.enabledModules)}
                   onChange={(next) =>
                     setInviteModules(mergeRoleAndExtraModules(inviteRoleName || 'Sales Executive', next))
                   }

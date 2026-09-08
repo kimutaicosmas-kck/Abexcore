@@ -75,6 +75,28 @@ async function main() {
   }
 
   console.log('\nDone. Users must log out and back in to pick up permission changes.');
+
+  console.log('\nSyncing company module catalogs (e.g. approvals)...');
+  const companies = await prisma.company.findMany({
+    select: { id: true, name: true, enabledModules: true },
+  });
+  const { resolveCompanyModules, normalizeCompanyModules } = await import('../src/config/companyModules');
+  let companiesUpdated = 0;
+  for (const company of companies) {
+    const merged = resolveCompanyModules(company.enabledModules);
+    const stored = normalizeCompanyModules(company.enabledModules) ?? [];
+    const changed =
+      merged.length !== stored.length || merged.some((m) => !stored.includes(m));
+    if (changed) {
+      await prisma.company.update({
+        where: { id: company.id },
+        data: { enabledModules: merged },
+      });
+      companiesUpdated += 1;
+      console.log(`  ${company.name}: added ${merged.filter((m) => !stored.includes(m)).join(', ') || 'catalog modules'}`);
+    }
+  }
+  console.log(`Companies updated: ${companiesUpdated}`);
 }
 
 main()

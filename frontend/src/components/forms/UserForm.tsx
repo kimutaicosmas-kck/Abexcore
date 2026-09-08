@@ -10,6 +10,7 @@ import { User } from '../../types';
 import { useAuth } from '../../contexts/AuthContext';
 import { ModuleAccessPicker } from './ModuleAccessPicker';
 import { mergeRoleAndExtraModules, modulesForRoleName } from '../../utils/roleModules';
+import { resolveCompanyModules } from '../../utils/companyModules';
 import { canAssignCompanySuperAdmin } from '../../utils/superAdmin';
 
 const userSchema = z.object({
@@ -90,9 +91,7 @@ export function UserForm({ user, onSuccess, onCancel }: UserFormProps) {
 
   const { user: authUser, company: authCompany } = useAuth();
   const canAssignSuperAdmin = canAssignCompanySuperAdmin(authUser?.role?.name);
-  const companyAvailableModules = Array.isArray(authCompany?.enabledModules)
-    ? authCompany.enabledModules
-    : undefined;
+  const companyAvailableModules = resolveCompanyModules(authCompany?.enabledModules);
   const editingIsSuperAdmin = user?.role?.name === 'Super Admin';
   // Per-company seats (Amazon ≠ Company X). Hide only when this tenant is full.
   const atSuperAdminCapacity =
