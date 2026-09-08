@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { platformApi } from '../services/api';
 import { Alert, Badge, Button, Card, EmptyState, QueryErrorAlert, formatDateTime } from '../components/ui';
 import { getApiErrorMessage } from '../utils/apiError';
-import { useAuth } from '../../contexts/AuthContext';
+import { useAuth } from '../contexts/AuthContext';
 import { useState } from 'react';
 
 type ApprovalRow = {
