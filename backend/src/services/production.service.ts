@@ -3,6 +3,7 @@ import prisma from '../config/database';
 import { AppError } from '../middleware/errorHandler';
 import { generateNumber } from '../utils/date';
 import { StockMovementService } from './inventory.service';
+import { weightedStockUnitCost } from '../utils/stock';
 import { AccountingService } from './accounting.service';
 import { SalesOrderService } from './sales-order.service';
 
@@ -50,12 +51,12 @@ export class ProductionService {
     for (const item of bom.items) {
       const wasteFactor = 1 + Number(item.wastePercent || 0) / 100;
       const plannedQty = Number(item.quantity) * wasteFactor * orderQuantity;
-      const stockLevel = await tx.stockLevel.findFirst({
-        where: { rawMaterialId: item.rawMaterialId, warehouseId: rmWarehouseId },
+      const stockLevels = await tx.stockLevel.findMany({
+        where: { rawMaterialId: item.rawMaterialId },
       });
-      const stockCost = Number(stockLevel?.unitCost ?? 0);
+      const rmLevel = stockLevels.find((l) => l.warehouseId === rmWarehouseId);
       const catalogCost = Number(item.rawMaterial.unitCost ?? 0);
-      const unitCost = stockCost > 0 ? stockCost : catalogCost;
+      const unitCost = weightedStockUnitCost(stockLevels, catalogCost);
       const lineCost = plannedQty * unitCost;
       estimatedCost += lineCost;
 
@@ -69,7 +70,7 @@ export class ProductionService {
         plannedQty,
         unitCost,
         lineCost,
-        onHand: Number(stockLevel?.quantity ?? 0),
+        onHand: Number(rmLevel?.quantity ?? 0),
       });
     }
 
@@ -135,6 +136,35 @@ export class ProductionService {
     }
 
     return orders.length;
+  }
+
+  /** Ensure open orders reflect the current BOM (cost + planned consumption). */
+  static async ensureBomPlan(
+    tx: TxClient,
+    productionOrderId: string,
+    productId: string,
+    orderQuantity: number,
+    options?: { force?: boolean }
+  ): Promise<number> {
+    const order = await tx.productionOrder.findUnique({
+      where: { id: productionOrderId },
+      include: { consumption: { select: { id: true } } },
+    });
+    if (!order) return 0;
+
+    const stored = Number(order.estimatedCost);
+    const { estimatedCost: computed } = await this.explodeBom(tx, productId, orderQuantity);
+    if (computed <= 0) return stored > 0 ? stored : 0;
+
+    const needsRefresh =
+      Boolean(options?.force) || stored <= 0 || order.consumption.length === 0;
+
+    if (needsRefresh) {
+      await this.refreshBomConsumption(tx, productionOrderId, productId, orderQuantity);
+      return computed;
+    }
+
+    return stored;
   }
 
   static async completeProduction(

@@ -1519,7 +1519,7 @@ const listProductionOrders = asyncHandler(async (req: AuthRequest, res: Response
     where.status = status as Prisma.EnumProductionStatusFilter['equals'];
   }
 
-  const [data, total] = await Promise.all([
+  const [rows, total] = await Promise.all([
     prisma.productionOrder.findMany({
       where,
       skip,
@@ -1534,6 +1534,25 @@ const listProductionOrders = asyncHandler(async (req: AuthRequest, res: Response
     }),
     prisma.productionOrder.count({ where }),
   ]);
+
+  const openStatuses = new Set(['PLANNED', 'SCHEDULED', 'IN_PROGRESS', 'ON_HOLD']);
+  const data = await Promise.all(
+    rows.map(async (order) => {
+      if (
+        order.completedQty === 0 &&
+        openStatuses.has(order.status) &&
+        Number(order.estimatedCost) <= 0
+      ) {
+        const estimatedCost = await prisma.$transaction((tx) =>
+          ProductionService.ensureBomPlan(tx, order.id, order.productId, order.quantity)
+        );
+        if (estimatedCost > 0) {
+          return { ...order, estimatedCost };
+        }
+      }
+      return order;
+    })
+  );
 
   res.json({
     success: true,
@@ -1636,6 +1655,8 @@ router.post(
     if (!order) throw new AppError('Production order not found', 404);
 
     const result = await prisma.$transaction(async (tx) => {
+      await ProductionService.ensureBomPlan(tx, order.id, order.productId, order.quantity);
+
       const updated = await tx.productionOrder.update({
         where: { id: order.id },
         data: { status: 'IN_PROGRESS', actualStart: new Date() },
