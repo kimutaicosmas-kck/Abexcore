@@ -14,6 +14,7 @@ import { compressProductImage } from '../utils/image';
 import { AccountingService } from '../services/accounting.service';
 import { injectTenantData, requireTenantId } from '../utils/tenant';
 import { ExcelImportService } from '../services/excel-import.service';
+import { ProductionService } from '../services/production.service';
 
 const router = Router();
 router.use(authenticate);
@@ -808,6 +809,8 @@ router.put(
           notes: item.notes,
         })),
       });
+
+      await ProductionService.syncOpenProductionOrdersForProduct(tx, productId);
 
       return tx.billOfMaterial.findUniqueOrThrow({
         where: { id: header.id },

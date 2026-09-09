@@ -105,6 +105,38 @@ export class ProductionService {
     return { estimatedCost, lineCount: lines.length };
   }
 
+  /** Replace planned consumption lines from the current BOM. */
+  static async refreshBomConsumption(
+    tx: TxClient,
+    productionOrderId: string,
+    productId: string,
+    orderQuantity: number
+  ): Promise<{ estimatedCost: number; lineCount: number }> {
+    await tx.productionConsumption.deleteMany({ where: { productionOrderId } });
+    return this.attachBomConsumption(tx, productionOrderId, productId, orderQuantity);
+  }
+
+  /** Recalculate material plans for open production orders after a BOM change. */
+  static async syncOpenProductionOrdersForProduct(
+    tx: TxClient,
+    productId: string
+  ): Promise<number> {
+    const orders = await tx.productionOrder.findMany({
+      where: {
+        productId,
+        completedQty: 0,
+        status: { in: ['PLANNED', 'SCHEDULED', 'IN_PROGRESS', 'ON_HOLD'] },
+      },
+      select: { id: true, quantity: true },
+    });
+
+    for (const order of orders) {
+      await this.refreshBomConsumption(tx, order.id, productId, order.quantity);
+    }
+
+    return orders.length;
+  }
+
   static async completeProduction(
     tx: TxClient,
     order: {
