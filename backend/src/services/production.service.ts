@@ -118,7 +118,7 @@ export class ProductionService {
         id: string;
         rawMaterialId: string;
         plannedQty: Prisma.Decimal;
-        rawMaterial?: { name: string; code: string } | null;
+        rawMaterial?: { name: string; code: string; unitCost?: Prisma.Decimal | number | null } | null;
       }>;
     },
     params: {
