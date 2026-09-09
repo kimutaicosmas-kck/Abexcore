@@ -531,7 +531,6 @@ export class StockMovementService {
 
     const current = levels.reduce((s, l) => s + Number(l.quantity), 0);
     const delta = desired - current;
-    if (delta === 0 && levels.length > 0) return { warehouseId, quantity: desired, adjusted: false };
 
     const unitCost =
       opts.unitCost !== undefined
@@ -539,6 +538,17 @@ export class StockMovementService {
         : levels[0]
           ? Number(levels[0].unitCost)
           : 0;
+
+    if (delta === 0 && levels.length > 0) {
+      if (opts.unitCost !== undefined && Number(levels[0].unitCost) !== opts.unitCost) {
+        await tx.stockLevel.update({
+          where: { id: levels[0].id },
+          data: { unitCost: opts.unitCost },
+        });
+        return { warehouseId, quantity: desired, adjusted: true };
+      }
+      return { warehouseId, quantity: desired, adjusted: false };
+    }
 
     if (levels.length === 0) {
       if (desired > 0) {

@@ -43,5 +43,6 @@ export function weightedStockUnitCost(
     (sum, l) => sum + toStockQty(l.quantity) * toStockQty(l.unitCost),
     0
   );
-  return total / qty;
+  const weighted = total / qty;
+  return weighted > 0 ? weighted : fallback;
 }

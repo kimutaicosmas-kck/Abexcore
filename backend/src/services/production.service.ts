@@ -53,7 +53,9 @@ export class ProductionService {
       const stockLevel = await tx.stockLevel.findFirst({
         where: { rawMaterialId: item.rawMaterialId, warehouseId: rmWarehouseId },
       });
-      const unitCost = Number(stockLevel?.unitCost ?? item.rawMaterial.unitCost ?? 0);
+      const stockCost = Number(stockLevel?.unitCost ?? 0);
+      const catalogCost = Number(item.rawMaterial.unitCost ?? 0);
+      const unitCost = stockCost > 0 ? stockCost : catalogCost;
       const lineCost = plannedQty * unitCost;
       estimatedCost += lineCost;
 
@@ -167,7 +169,7 @@ export class ProductionService {
       }
       consumptionRows = await tx.productionConsumption.findMany({
         where: { productionOrderId: order.id },
-        include: { rawMaterial: { select: { name: true, code: true } } },
+        include: { rawMaterial: { select: { name: true, code: true, unitCost: true } } },
       });
     }
 
@@ -206,7 +208,9 @@ export class ProductionService {
         );
       }
 
-      const unitCost = Number(stockLevel.unitCost);
+      const stockCost = Number(stockLevel.unitCost);
+      const catalogCost = Number(consumption.rawMaterial?.unitCost ?? 0);
+      const unitCost = stockCost > 0 ? stockCost : catalogCost;
       const lineCost = actualQty * unitCost;
       totalMaterialCost += lineCost;
 

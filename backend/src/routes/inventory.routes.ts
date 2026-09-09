@@ -452,6 +452,13 @@ router.put('/materials/:id', authorize('inventory:update'), validate(createRawMa
       },
     });
 
+    if (rest.unitCost !== undefined) {
+      await tx.stockLevel.updateMany({
+        where: { rawMaterialId: materialId },
+        data: { unitCost: Number(rest.unitCost) },
+      });
+    }
+
     if (stockQty !== undefined && !Number.isNaN(stockQty)) {
       await StockMovementService.setRawMaterialOnHand(tx, {
         rawMaterialId: materialId,
