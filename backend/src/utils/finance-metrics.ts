@@ -150,6 +150,41 @@ export async function getMonthlyPaymentsReceived(
   return Number(allocSum._sum.amount || 0) + Number(legacySum._sum.amount || 0);
 }
 
+/** Cash collected this month on sales invoices that were also issued this month. */
+export async function getSameMonthInvoicedAndCollected(
+  from = getMonthStart(),
+  to = getMonthEnd(from),
+  invoiceWhere?: Prisma.InvoiceWhereInput
+): Promise<number> {
+  const paymentRange = { gte: from, lte: to };
+  const salesInvoiceFilter: Prisma.InvoiceWhereInput = {
+    ...(invoiceWhere || {}),
+    type: 'SALES',
+    status: { not: 'REFUNDED' },
+    invoiceDate: { gte: from, lte: to },
+  };
+
+  const [allocSum, legacySum] = await Promise.all([
+    prisma.paymentAllocation.aggregate({
+      where: {
+        payment: { paymentDate: paymentRange },
+        invoice: salesInvoiceFilter,
+      },
+      _sum: { amount: true },
+    }),
+    prisma.payment.aggregate({
+      where: {
+        paymentDate: paymentRange,
+        allocations: { none: {} },
+        invoice: salesInvoiceFilter,
+      },
+      _sum: { amount: true },
+    }),
+  ]);
+
+  return Number(allocSum._sum.amount || 0) + Number(legacySum._sum.amount || 0);
+}
+
 export type CollectionRateSnapshot = {
   /** Cleared amount ÷ billed for invoices due in the period (0–100). */
   rate: number;

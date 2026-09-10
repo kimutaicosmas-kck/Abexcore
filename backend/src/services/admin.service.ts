@@ -5,6 +5,7 @@ import {
   getNetAccountsReceivable,
   getNetAccountsPayable,
   getMonthlyPaymentsReceived,
+  getSameMonthInvoicedAndCollected,
   getDueCohortCollectionRate,
   getCollectionRateTrend,
   getMonthStart,
@@ -63,6 +64,7 @@ export class FinanceService {
       accountsReceivable,
       accountsPayable,
       paymentsReceived,
+      invoicedAndCollectedThisMonth,
       collectionRate,
     ] = await Promise.all([
       includeSales
@@ -124,6 +126,11 @@ export class FinanceService {
           ? getMonthlyPaymentsReceived(monthStart, monthEnd, salesWhere)
           : Promise.resolve(0)
         : getMonthlyPaymentsReceived(monthStart, monthEnd),
+      hasScope
+        ? includeSales
+          ? getSameMonthInvoicedAndCollected(monthStart, monthEnd, salesWhere)
+          : Promise.resolve(0)
+        : getSameMonthInvoicedAndCollected(monthStart, monthEnd),
       getDueCohortCollectionRate(monthStart, monthEnd),
     ]);
 
@@ -133,6 +140,7 @@ export class FinanceService {
       accountsReceivable,
       accountsPayable,
       paymentsReceived,
+      invoicedAndCollectedThisMonth,
       overdueInvoices: overdueCount,
       monthlyRevenue: monthlySales,
       journalEntries: journalCount,

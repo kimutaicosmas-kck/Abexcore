@@ -26,7 +26,6 @@ import {
   ArrowRight,
   CircleDollarSign,
   Download,
-  Percent,
 } from 'lucide-react';
 import { financeApi } from '../services/api';
 import {
@@ -712,17 +711,21 @@ export function FinancePage() {
       {stats && (
         <StatGrid>
           <StatCard title="This month sales" value={formatCurrency(stats.monthlyRevenue)} icon={<TrendingUp className="h-5 w-5 text-white" />} color="from-blue-500 to-blue-700" onClick={() => goToTab(0)} />
-          <StatCard title="Collected this month" value={formatCurrency(stats.paymentsReceived ?? 0)} icon={<TrendingUp className="h-5 w-5 text-white" />} color="from-emerald-500 to-emerald-700" onClick={() => goToTab(1)} />
+          <StatCard
+            title="Invoiced & collected this month"
+            value={formatCurrency(stats.invoicedAndCollectedThisMonth ?? 0)}
+            icon={<TrendingUp className="h-5 w-5 text-white" />}
+            color="from-emerald-500 to-emerald-700"
+            onClick={() => goToTab(0)}
+          />
           <StatCard title="Outstanding receivable" value={formatCurrency(stats.accountsReceivable)} icon={<Wallet className="h-5 w-5 text-white" />} color="from-lime-500 to-lime-700" onClick={() => goToTab(0)} />
           <StatCard title="Overdue" value={stats.overdueInvoices} icon={<AlertCircle className="h-5 w-5 text-white" />} color="from-amber-500 to-amber-700" onClick={showOverdueInvoices} />
           <StatCard
-            title="Collection rate"
-            value={`${(stats.collectionRate?.rate ?? 0).toFixed(stats.collectionRate?.rate != null && stats.collectionRate.rate % 1 ? 1 : 0)}%`}
-            icon={<Percent className="h-5 w-5 text-white" />}
+            title="Total collected this month"
+            value={formatCurrency(stats.paymentsReceived ?? 0)}
+            icon={<Wallet className="h-5 w-5 text-white" />}
             color="from-sky-500 to-sky-700"
-            onClick={() => {
-              document.getElementById('finance-collection-rate')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }}
+            onClick={() => goToTab(1)}
           />
         </StatGrid>
       )}

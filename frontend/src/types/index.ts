@@ -791,8 +791,10 @@ export interface FinanceStats {
   totalPurchases: number;
   accountsReceivable: number;
   accountsPayable: number;
-  /** Total paid/received on sales invoices (customer collections). */
+  /** Total cash collected this month (by payment date). */
   paymentsReceived: number;
+  /** Payments this month on invoices also issued this month. */
+  invoicedAndCollectedThisMonth?: number;
   overdueInvoices: number;
   monthlyRevenue: number;
   journalEntries: number;
