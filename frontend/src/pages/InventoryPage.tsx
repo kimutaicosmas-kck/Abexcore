@@ -507,15 +507,11 @@ export function InventoryPage() {
             className="hidden sm:flex"
           />
           <StatCard
-            title="Finished goods in stock"
-            value={stats.finishedGoodsInStock ?? 0}
-            icon={<Boxes className="h-5 w-5 text-white" />}
-            color="from-cyan-500 to-cyan-700"
-            onClick={() => {
-              setStockItemType('PRODUCT');
-              setStockPage(1);
-              goToTab(0);
-            }}
+            title="Low material stock"
+            value={stats.lowMaterialStockCount ?? 0}
+            icon={<TrendingDown className="h-5 w-5 text-white" />}
+            color="from-rose-500 to-red-600"
+            onClick={() => goToTab(3)}
             className="hidden md:flex"
           />
           <StatCard

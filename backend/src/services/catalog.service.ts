@@ -100,6 +100,7 @@ export class InventoryService {
       materialsCount,
       rawMaterialsInStock,
       finishedGoodsInStock,
+      lowMaterialStockCount: lowMaterials.length,
       warehouses,
       lowStockCount: lowMaterials.length + lowProducts.length,
       inventoryValue,
