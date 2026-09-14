@@ -1,5 +1,8 @@
 type AxiosLikeError = {
-  response?: { data?: { message?: string; code?: string }; status?: number };
+  response?: {
+    data?: { message?: string; code?: string; details?: Record<string, unknown> };
+    status?: number;
+  };
   code?: string;
   message?: string;
 };
@@ -21,6 +24,12 @@ function isBrowserOffline(): boolean {
 export function getApiErrorCode(err: unknown): string | undefined {
   if (err == null) return undefined;
   return (err as AxiosLikeError).response?.data?.code;
+}
+
+export function getApiErrorDetails(err: unknown): Record<string, unknown> | undefined {
+  if (err == null) return undefined;
+  const details = (err as AxiosLikeError).response?.data?.details;
+  return details && typeof details === 'object' ? details : undefined;
 }
 
 export function classifyApiError(err: unknown): ApiErrorKind {

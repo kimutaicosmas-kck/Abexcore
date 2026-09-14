@@ -6,11 +6,13 @@ export class AppError extends Error {
   statusCode: number;
   isOperational: boolean;
   code?: string;
+  details?: Record<string, unknown>;
 
-  constructor(message: string, statusCode = 500, code?: string) {
+  constructor(message: string, statusCode = 500, code?: string, details?: Record<string, unknown>) {
     super(message);
     this.statusCode = statusCode;
     this.code = code;
+    this.details = details;
     this.isOperational = true;
     Error.captureStackTrace(this, this.constructor);
   }
@@ -79,6 +81,7 @@ export const errorHandler = (
       ? 'Internal server error'
       : message,
     ...(finalErr instanceof AppError && finalErr.code ? { code: finalErr.code } : {}),
+    ...(finalErr instanceof AppError && finalErr.details ? { details: finalErr.details } : {}),
     ...(exposeStack && finalErr.stack ? { stack: finalErr.stack } : {}),
   });
 };

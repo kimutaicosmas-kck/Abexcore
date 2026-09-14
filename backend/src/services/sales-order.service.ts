@@ -1,7 +1,8 @@
 import { Prisma, OrderStatus } from '@prisma/client';
 import { assertOrderStatusTransition, assertCreditLimit, syncCustomerCreditUsed } from '../utils/credit';
 import { AppError } from '../middleware/errorHandler';
-import { generateNumber, startOfDay, endOfDay } from '../utils/date';
+import { generateNumber, startOfDay, endOfDay, toLocalDateKey } from '../utils/date';
+import { salesOrderInDateRange } from '../utils/salesDate';
 import { getCustomerVatRate, roundMoney, splitInclusiveAmount } from '../utils/company';
 import { StockMovementService } from './inventory.service';
 
@@ -35,7 +36,7 @@ export class SalesOrderService {
     return JSON.stringify(lines);
   }
 
-  /** Reject duplicate sales orders (same LPO, or accidental double-submit of identical lines). */
+  /** Reject duplicate sales orders (same LPO on the same sale day, or accidental double-submit). */
   static async assertUniqueSalesOrder(
     tx: TxClient,
     input: {
@@ -46,27 +47,48 @@ export class SalesOrderService {
     }
   ): Promise<void> {
     const po = input.customerPoNumber?.trim();
+    const businessDay = {
+      gte: startOfDay(input.businessDate),
+      lte: endOfDay(input.businessDate),
+    };
+    const businessDateLabel = toLocalDateKey(input.businessDate);
+
     if (po) {
       const byPo = await tx.salesOrder.findFirst({
         where: {
-          customerId: input.customerId,
-          customerPoNumber: po,
-          status: { not: 'CANCELLED' },
+          AND: [
+            { customerId: input.customerId },
+            { customerPoNumber: po },
+            { status: { not: 'CANCELLED' } },
+            salesOrderInDateRange(businessDay),
+          ],
         },
-        select: { orderNumber: true },
+        select: {
+          id: true,
+          orderNumber: true,
+          orderDate: true,
+          requiredDate: true,
+        },
       });
       if (byPo) {
+        const existingDay = toLocalDateKey(byPo.requiredDate ?? byPo.orderDate);
         throw new AppError(
-          `A sales order already exists for this customer with LPO / PO "${po}" (${byPo.orderNumber}).`,
+          `A sales order already exists for this customer with LPO / PO "${po}" on ${existingDay} (${byPo.orderNumber}). Clear "Today" on Sales to find it, or use a different LPO.`,
           409,
-          'DUPLICATE_SALES_ORDER'
+          'DUPLICATE_SALES_ORDER',
+          {
+            existingOrderId: byPo.id,
+            existingOrderNumber: byPo.orderNumber,
+            existingBusinessDate: existingDay,
+            reason: 'duplicate_lpo',
+          }
         );
       }
     }
 
     // Same customer may buy the same products/qty many times in a day (esp. Trading).
     // Only block near-identical re-submits (double-click / retry) within a short window.
-    const DOUBLE_SUBMIT_WINDOW_MS = 5 * 60 * 1000;
+    const DOUBLE_SUBMIT_WINDOW_MS = 2 * 60 * 1000;
     const fingerprint = this.buildLineFingerprint(input.items);
     const recentSince = new Date(Date.now() - DOUBLE_SUBMIT_WINDOW_MS);
     const candidates = await tx.salesOrder.findMany({
@@ -92,10 +114,17 @@ export class SalesOrderService {
         }))
       );
       if (existingFp === fingerprint) {
+        const existingDay = toLocalDateKey(order.requiredDate ?? order.orderDate);
         throw new AppError(
-          `This looks like a duplicate submit of ${order.orderNumber} (same customer and lines just now). Open that order, or wait a moment and try again if this is a new sale.`,
+          `This looks like a duplicate submit of ${order.orderNumber} (${existingDay}) — same customer and lines within the last few minutes. Open that order on Sales (try All dates), or wait a moment and try again.`,
           409,
-          'DUPLICATE_SALES_ORDER'
+          'DUPLICATE_SALES_ORDER',
+          {
+            existingOrderId: order.id,
+            existingOrderNumber: order.orderNumber,
+            existingBusinessDate: existingDay,
+            reason: 'duplicate_submit',
+          }
         );
       }
     }

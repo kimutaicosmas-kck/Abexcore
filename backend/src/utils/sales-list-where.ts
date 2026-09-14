@@ -25,6 +25,7 @@ export function salesOrderSearchFilter(search: string): Prisma.SalesOrderWhereIn
   return {
     OR: [
       { orderNumber: { contains: search } },
+      { customerPoNumber: { contains: search } },
       { customer: { name: { contains: search } } },
       { customer: { code: { contains: search } } },
     ],

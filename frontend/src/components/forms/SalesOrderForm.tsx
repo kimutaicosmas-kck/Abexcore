@@ -8,7 +8,7 @@ import { Alert, Button, Input, Select, formatCurrency, ModalFormBody } from '../
 import { Customer } from '../../types';
 import { useAuth, useVatRate } from '../../contexts/AuthContext';
 import { isSalesBookOwner } from '../../utils/salesTargets';
-import { getApiErrorCode, getApiErrorMessage } from '../../utils/apiError';
+import { getApiErrorCode, getApiErrorDetails, getApiErrorMessage } from '../../utils/apiError';
 import { ProductLineItemsEditor } from './ProductLineItemsEditor';
 import { FORM_DRAFT_MODULES, useModuleFormDraft } from '../../hooks/useModuleFormDraft';
 import { FormDraftNotice } from './FormDraftNotice';
@@ -160,6 +160,12 @@ export function SalesOrderForm({ onSuccess, onCancel }: SalesOrderFormProps) {
 
   const errorMessage = isError ? getApiErrorMessage(error) : '';
   const isCreditLimitError = isError && getApiErrorCode(error) === 'CREDIT_LIMIT_EXCEEDED';
+  const isDuplicateOrderError = isError && getApiErrorCode(error) === 'DUPLICATE_SALES_ORDER';
+  const duplicateDetails = isDuplicateOrderError ? getApiErrorDetails(error) : undefined;
+  const duplicateOrderNumber =
+    typeof duplicateDetails?.existingOrderNumber === 'string'
+      ? duplicateDetails.existingOrderNumber
+      : null;
 
   useEffect(() => {
     if (isError) {
@@ -298,7 +304,21 @@ export function SalesOrderForm({ onSuccess, onCancel }: SalesOrderFormProps) {
 
       {isError && !isCreditLimitError && (
         <div ref={errorRef}>
-          <Alert variant="error">{errorMessage}</Alert>
+          <Alert variant="error">
+            <p>{errorMessage}</p>
+            {isDuplicateOrderError && (
+              <p className="mt-2 text-sm">
+                On Sales, click <strong>All dates</strong>
+                {duplicateOrderNumber ? (
+                  <>
+                    {' '}
+                    and search for <strong>{duplicateOrderNumber}</strong>
+                  </>
+                ) : null}{' '}
+                to open the existing order. If this is a new sale, change the LPO or wait a minute and try again.
+              </p>
+            )}
+          </Alert>
         </div>
       )}
       </ModalFormBody>
