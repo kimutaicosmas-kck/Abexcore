@@ -1,4 +1,5 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Chart as ChartJS,
@@ -86,9 +87,21 @@ const tabs = ['Invoices', 'Payments', 'Expenses', 'Journals', 'Accounts', 'Recon
 
 const TYPE_FILTER = [
   { value: '', label: 'All types' },
-  { value: 'SALES', label: 'Sales' },
-  { value: 'PURCHASE', label: 'Purchase' },
+  { value: 'SALES', label: 'Sales invoice' },
+  { value: 'CREDIT_NOTE', label: 'Credit note' },
+  { value: 'PURCHASE', label: 'Purchase invoice' },
 ];
+
+function invoiceTypeLabel(type: string) {
+  return type.replace(/_/g, ' ');
+}
+
+function invoiceTypeBadgeVariant(type: string): 'success' | 'info' | 'warning' | 'default' {
+  if (type === 'SALES') return 'success';
+  if (type === 'CREDIT_NOTE') return 'warning';
+  if (type === 'PURCHASE') return 'info';
+  return 'default';
+}
 
 const STATUS_FILTER = [
   { value: '', label: 'All statuses' },
@@ -117,6 +130,11 @@ function invoiceBalance(inv: Invoice) {
 
 function invoiceDisplayStatus(inv: Invoice) {
   if (inv.status === 'DRAFT') return 'DRAFT';
+  if (inv.type === 'CREDIT_NOTE') {
+    return inv.status === 'PAID' || Number(inv.paidAmount) >= Number(inv.totalAmount) - 0.009
+      ? 'APPLIED'
+      : inv.status;
+  }
   if (inv.type === 'SALES' && invoiceBalance(inv) <= 0.009) return 'PAID';
   return inv.status;
 }
@@ -129,6 +147,7 @@ function isOverdue(inv: Invoice) {
 export function FinancePage() {
   const queryClient = useQueryClient();
   const { hasPermission } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState(0);
   const expensesPanelRef = useRef<ExpensesPanelHandle>(null);
 
@@ -284,10 +303,20 @@ export function FinancePage() {
     },
   });
 
-  const openInvoiceDetail = (inv: Invoice) => {
+  const openInvoiceDetail = (inv: Invoice | { id: string }) => {
     setSelectedInvoiceId(inv.id);
     setDetailOpen(true);
+    setActiveTab(0);
   };
+
+  useEffect(() => {
+    const invoiceId = searchParams.get('invoiceId');
+    if (!invoiceId) return;
+    openInvoiceDetail({ id: invoiceId });
+    const next = new URLSearchParams(searchParams);
+    next.delete('invoiceId');
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   const openPaymentModal = (invoiceId?: string) => {
     setPaymentForInvoiceId(invoiceId);
@@ -333,7 +362,7 @@ export function FinancePage() {
   const invoiceColumns = [
     {
       key: 'invoiceNumber',
-      label: 'Invoice #',
+      label: 'Document #',
       render: (val: unknown, row: Record<string, unknown>) => (
         <div>
           <span className="font-medium text-slate-900">{val as string}</span>
@@ -347,7 +376,7 @@ export function FinancePage() {
       key: 'type',
       label: 'Type',
       render: (val: unknown) => (
-        <Badge variant={val === 'SALES' ? 'success' : 'info'}>{(val as string).replace(/_/g, ' ')}</Badge>
+        <Badge variant={invoiceTypeBadgeVariant(val as string)}>{invoiceTypeLabel(val as string)}</Badge>
       ),
     },
     {
@@ -390,11 +419,69 @@ export function FinancePage() {
       key: 'balance',
       label: 'Balance',
       render: (_: unknown, row: Record<string, unknown>) => {
-        const bal = invoiceBalance(row as unknown as Invoice);
+        const inv = row as unknown as Invoice;
+        if (inv.type === 'CREDIT_NOTE') {
+          return (
+            <span className="font-semibold text-violet-700">
+              {formatCurrency(Number(inv.totalAmount))}
+            </span>
+          );
+        }
+        const bal = invoiceBalance(inv);
         return (
           <span className={bal > 0 ? 'font-semibold text-amber-700' : 'text-slate-500'}>
             {formatCurrency(bal)}
           </span>
+        );
+      },
+    },
+    {
+      key: 'creditNotes',
+      label: 'Credit note',
+      render: (_: unknown, row: Record<string, unknown>) => {
+        const inv = row as unknown as Invoice;
+        if (inv.type === 'CREDIT_NOTE') {
+          return inv.originalInvoice ? (
+            <button
+              type="button"
+              className="text-sm text-blue-700 hover:underline"
+              onClick={(e) => {
+                e.stopPropagation();
+                openInvoiceDetail(inv.originalInvoice!);
+              }}
+            >
+              ← {inv.originalInvoice.invoiceNumber}
+            </button>
+          ) : (
+            <span className="text-slate-400">—</span>
+          );
+        }
+        const notes = inv.creditNotes || [];
+        if (!notes.length) {
+          return Number(inv.creditedAmount || 0) > 0 ? (
+            <span className="text-xs text-violet-700">
+              {formatCurrency(Number(inv.creditedAmount))} credited
+            </span>
+          ) : (
+            <span className="text-slate-400">—</span>
+          );
+        }
+        return (
+          <div className="space-y-0.5">
+            {notes.map((cn) => (
+              <button
+                key={cn.id}
+                type="button"
+                className="block text-sm font-medium text-violet-700 hover:underline"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  openInvoiceDetail(cn);
+                }}
+              >
+                {cn.invoiceNumber}
+              </button>
+            ))}
+          </div>
         );
       },
     },
@@ -752,7 +839,7 @@ export function FinancePage() {
             >
               <Input placeholder="Search invoice # or party…" value={searchInput} onChange={(e) => setSearchInput(e.target.value)} />
             </form>
-            <Select options={TYPE_FILTER} value={type} onChange={(e) => { setType(e.target.value); setPage(1); }} className="w-36" />
+            <Select options={TYPE_FILTER} value={type} onChange={(e) => { setType(e.target.value); setPage(1); }} className="w-40" />
             <Select options={STATUS_FILTER} value={status} onChange={(e) => { setStatus(e.target.value); setPage(1); }} className="w-36" />
             <Button variant="secondary" size="sm" onClick={() => { setSearchInput(''); setSearch(''); setType(''); setStatus(''); setPage(1); }}>
               Clear
@@ -769,7 +856,7 @@ export function FinancePage() {
             <div className="p-6">
               <EmptyState
                 title="No invoices found"
-                description="Create a sales or purchase invoice to get started."
+                description="Sales invoices, credit notes, and purchase invoices appear here. Credit notes from returns are listed alongside invoices."
                 action={
                   canCreate ? (
                     <Button onClick={() => setInvoiceModalOpen(true)}>
@@ -1288,7 +1375,13 @@ export function FinancePage() {
       <Modal
         open={detailOpen}
         onClose={() => { setDetailOpen(false); setSelectedInvoiceId(null); }}
-        title={invoiceDetail ? `Invoice ${invoiceDetail.invoiceNumber}` : 'Invoice Details'}
+        title={
+          invoiceDetail
+            ? invoiceDetail.type === 'CREDIT_NOTE'
+              ? `Credit Note ${invoiceDetail.invoiceNumber}`
+              : `Invoice ${invoiceDetail.invoiceNumber}`
+            : 'Invoice Details'
+        }
         size="xl"
       >
         {detailLoading ? (
@@ -1298,7 +1391,9 @@ export function FinancePage() {
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
                 <div className="flex items-center gap-2 mb-1">
-                  <Badge variant={invoiceDetail.type === 'SALES' ? 'success' : 'info'}>{invoiceDetail.type}</Badge>
+                  <Badge variant={invoiceTypeBadgeVariant(invoiceDetail.type)}>
+                    {invoiceTypeLabel(invoiceDetail.type)}
+                  </Badge>
                   <Badge variant={getStatusBadge(invoiceDisplayStatus(invoiceDetail))}>
                     {invoiceDisplayStatus(invoiceDetail)}
                   </Badge>
@@ -1388,9 +1483,18 @@ export function FinancePage() {
                 <Card title="Credit notes (returns)" padding>
                   <div className="space-y-2">
                     {invoiceDetail.creditNotes.map((cn) => (
-                      <div key={cn.id} className="flex justify-between text-sm py-1.5 border-b border-slate-100 last:border-0">
-                        <div>
-                          <p className="font-medium">{cn.invoiceNumber}</p>
+                      <div
+                        key={cn.id}
+                        className="flex items-center justify-between gap-3 text-sm py-1.5 border-b border-slate-100 last:border-0"
+                      >
+                        <div className="min-w-0">
+                          <button
+                            type="button"
+                            className="font-medium text-violet-700 hover:underline"
+                            onClick={() => openInvoiceDetail(cn)}
+                          >
+                            {cn.invoiceNumber}
+                          </button>
                           <p className="text-xs text-slate-500">
                             {(cn.status || '').replace(/_/g, ' ')}
                             {(cn.notes || '').includes('[INVOICE_ADJUSTED]')
@@ -1398,9 +1502,38 @@ export function FinancePage() {
                               : ''}
                           </p>
                         </div>
-                        <span className="font-semibold text-violet-700">{formatCurrency(Number(cn.totalAmount))}</span>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className="font-semibold text-violet-700">{formatCurrency(Number(cn.totalAmount))}</span>
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => openInvoiceDetail(cn)}
+                          >
+                            View
+                          </Button>
+                        </div>
                       </div>
                     ))}
+                  </div>
+                </Card>
+              )}
+
+              {invoiceDetail.type === 'CREDIT_NOTE' && invoiceDetail.originalInvoice && (
+                <Card title="Applied to invoice" padding>
+                  <div className="flex items-center justify-between gap-3 text-sm">
+                    <div>
+                      <button
+                        type="button"
+                        className="font-medium text-blue-700 hover:underline"
+                        onClick={() => openInvoiceDetail(invoiceDetail.originalInvoice!)}
+                      >
+                        {invoiceDetail.originalInvoice.invoiceNumber}
+                      </button>
+                      <p className="text-xs text-slate-500 mt-1">
+                        {invoiceDetail.originalInvoice.customer?.name || invoiceDetail.customer?.name || '—'}
+                      </p>
+                    </div>
+                    <span className="font-semibold">{formatCurrency(Number(invoiceDetail.originalInvoice.totalAmount))}</span>
                   </div>
                 </Card>
               )}
@@ -1477,7 +1610,9 @@ export function FinancePage() {
               >
                 <FileSpreadsheet className="h-4 w-4 mr-1.5" /> Excel
               </Button>
-              {canCreate && invoiceBalance(invoiceDetail) > 0 && (
+              {canCreate &&
+                invoiceDetail.type === 'SALES' &&
+                invoiceBalance(invoiceDetail) > 0 && (
                 <Button size="sm" onClick={() => { setDetailOpen(false); openPaymentModal(invoiceDetail.id); }}>
                   <CreditCard className="h-4 w-4 mr-1.5" /> Record Payment
                 </Button>

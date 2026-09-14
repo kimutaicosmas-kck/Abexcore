@@ -398,6 +398,8 @@ router.get(
         { invoiceNumber: { contains: search } },
         { customer: { name: { contains: search } } },
         { supplier: { name: { contains: search } } },
+        { creditNotes: { some: { invoiceNumber: { contains: search } } } },
+        { originalInvoice: { is: { invoiceNumber: { contains: search } } } },
       ];
     }
 
@@ -406,6 +408,26 @@ router.get(
       supplier: true,
       items: true,
       payments: true,
+      creditNotes: {
+        where: { type: 'CREDIT_NOTE' },
+        select: {
+          id: true,
+          invoiceNumber: true,
+          totalAmount: true,
+          status: true,
+          notes: true,
+          createdAt: true,
+        },
+        orderBy: { createdAt: 'desc' as const },
+      },
+      originalInvoice: {
+        select: {
+          id: true,
+          invoiceNumber: true,
+          totalAmount: true,
+          status: true,
+        },
+      },
       salesOrder: {
         select: {
           id: true,
@@ -495,6 +517,15 @@ router.get(
             createdAt: true,
           },
           orderBy: { createdAt: 'desc' },
+        },
+        originalInvoice: {
+          select: {
+            id: true,
+            invoiceNumber: true,
+            totalAmount: true,
+            status: true,
+            customer: { select: { id: true, name: true } },
+          },
         },
         salesOrder: {
           select: {

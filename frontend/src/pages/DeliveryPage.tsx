@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, Truck, Package, MapPin, Bike, Container, AlertTriangle, ChevronRight, Download } from 'lucide-react';
 import { deliveryApi } from '../services/api';
@@ -122,6 +122,7 @@ function selectionKey(kind: 'note' | 'trip', id: string) {
 
 export function DeliveryPage() {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { hasPermission, isDriver } = useAuth();
   const [activeTab, setActiveTab] = useState(0);
@@ -1350,10 +1351,30 @@ export function DeliveryPage() {
                     <p className="text-slate-600 text-xs mt-1">{ret.reason}</p>
                     {ret.creditNote && (
                       <p className="text-xs text-emerald-700 mt-1">
-                        Credit note {ret.creditNote.invoiceNumber} · {Number(ret.creditNote.totalAmount).toLocaleString()}
-                        {ret.originalInvoice
-                          ? ` · invoice ${ret.originalInvoice.invoiceNumber} now ${Number(ret.originalInvoice.totalAmount).toLocaleString()}`
-                          : ''}
+                        Credit note{' '}
+                        <button
+                          type="button"
+                          className="font-medium underline hover:text-emerald-900"
+                          onClick={() => navigate(`/finance?invoiceId=${ret.creditNote!.id}`)}
+                        >
+                          {ret.creditNote.invoiceNumber}
+                        </button>
+                        {' · '}
+                        {Number(ret.creditNote.totalAmount).toLocaleString()}
+                        {ret.originalInvoice ? (
+                          <>
+                            {' · invoice '}
+                            <button
+                              type="button"
+                              className="font-medium underline hover:text-emerald-900"
+                              onClick={() => navigate(`/finance?invoiceId=${ret.originalInvoice!.id}`)}
+                            >
+                              {ret.originalInvoice.invoiceNumber}
+                            </button>
+                            {' now '}
+                            {Number(ret.originalInvoice.totalAmount).toLocaleString()}
+                          </>
+                        ) : null}
                       </p>
                     )}
                   </div>

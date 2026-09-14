@@ -510,6 +510,13 @@ export interface Invoice {
     notes?: string | null;
     createdAt?: string;
   }[];
+  originalInvoice?: {
+    id: string;
+    invoiceNumber: string;
+    totalAmount: number | string;
+    status: string;
+    customer?: { id: string; name: string };
+  } | null;
   salesOrder?: {
     id: string;
     orderNumber: string;
