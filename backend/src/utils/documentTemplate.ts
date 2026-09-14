@@ -411,55 +411,67 @@ type TableColumn = {
   align?: 'left' | 'right' | 'center';
 };
 
-/** Colored-header table matching the delivery note Qty | Description layout. */
-export function drawDocTable(
+const TABLE_HEADER_H = 22;
+const TABLE_ROW_H = 18;
+const TABLE_FOOTER_H = 18;
+
+function pageBottom(doc: PDFKit.PDFDocument): number {
+  return doc.page.height - doc.page.margins.bottom;
+}
+
+function pageTop(doc: PDFKit.PDFDocument): number {
+  return doc.page.margins.top;
+}
+
+/** Move to a new page when content below y will not fit. */
+export function ensureDocSpace(doc: PDFKit.PDFDocument, y: number, needed: number): number {
+  if (y + needed > pageBottom(doc)) {
+    doc.addPage();
+    return pageTop(doc);
+  }
+  return y;
+}
+
+function drawDocTableSegment(
   doc: PDFKit.PDFDocument,
-  startY: number,
+  segmentY: number,
   columns: TableColumn[],
-  rows: Record<string, string>[],
-  opts?: { minBodyRows?: number; footerLeft?: string; footerCenter?: string }
+  dataRows: Record<string, string>[],
+  bodyRowCount: number,
+  opts: { footerLeft?: string; footerCenter?: string; drawFooter: boolean }
 ): number {
   const ink = inkFor(doc);
-  const headerH = 22;
-  const rowH = 18;
-  const minRows = opts?.minBodyRows ?? Math.max(rows.length, 8);
   const tableW = columns.reduce((s, c) => s + c.width, 0);
   const tableX = PAGE_LEFT;
-  let y = startY;
+  const totalH = TABLE_HEADER_H + bodyRowCount * TABLE_ROW_H;
 
-  // Outer border
-  const bodyH = minRows * rowH;
-  const totalH = headerH + bodyH;
+  doc.rect(tableX, segmentY, tableW, totalH).strokeColor(ink.primary).lineWidth(1.2).stroke();
+  doc.rect(tableX, segmentY, tableW, TABLE_HEADER_H).fill(ink.primary);
 
-  doc.rect(tableX, y, tableW, totalH).strokeColor(ink.primary).lineWidth(1.2).stroke();
-
-  // Header bar
-  doc.rect(tableX, y, tableW, headerH).fill(ink.primary);
   let x = tableX;
   doc.font('Helvetica-Bold').fontSize(10).fillColor('#ffffff');
   for (const col of columns) {
-    doc.text(col.label, x + 4, y + 6, {
+    doc.text(col.label, x + 4, segmentY + 6, {
       width: col.width - 8,
       align: col.align || 'left',
     });
     x += col.width;
   }
 
-  // Vertical column dividers + horizontal row lines
-  y += headerH;
   x = tableX;
   for (let i = 0; i < columns.length - 1; i++) {
     x += columns[i].width;
     doc
-      .moveTo(x, startY)
-      .lineTo(x, startY + totalH)
+      .moveTo(x, segmentY)
+      .lineTo(x, segmentY + totalH)
       .strokeColor(ink.primary)
       .lineWidth(0.8)
       .stroke();
   }
 
-  for (let r = 1; r < minRows; r++) {
-    const ly = y + r * rowH;
+  const bodyTop = segmentY + TABLE_HEADER_H;
+  for (let r = 1; r < bodyRowCount; r++) {
+    const ly = bodyTop + r * TABLE_ROW_H;
     doc
       .moveTo(tableX, ly)
       .lineTo(tableX + tableW, ly)
@@ -468,14 +480,12 @@ export function drawDocTable(
       .stroke();
   }
 
-  // Row content
   doc.font('Helvetica').fontSize(9).fillColor('#0f172a');
-  for (let i = 0; i < rows.length; i++) {
-    const rowY = y + i * rowH + 4;
-    if (rowY + rowH > startY + totalH - 4) break;
+  for (let i = 0; i < dataRows.length; i++) {
+    const rowY = bodyTop + i * TABLE_ROW_H + 4;
     let cx = tableX;
     for (const col of columns) {
-      doc.text(rows[i][col.key] || '', cx + 4, rowY, {
+      doc.text(dataRows[i][col.key] || '', cx + 4, rowY, {
         width: col.width - 8,
         align: col.align || 'left',
         lineBreak: false,
@@ -485,20 +495,117 @@ export function drawDocTable(
     }
   }
 
-  // Footer inside table bottom
-  const footerY = startY + totalH - 16;
-  if (opts?.footerLeft) {
-    doc.font('Helvetica-Bold').fontSize(9).fillColor(ink.primary).text(opts.footerLeft, tableX + 6, footerY);
-  }
-  if (opts?.footerCenter) {
-    doc
-      .font('Helvetica-Bold')
-      .fontSize(10)
-      .fillColor('#b91c1c')
-      .text(opts.footerCenter, tableX, footerY, { width: tableW, align: 'center' });
+  if (opts.drawFooter) {
+    const footerY = segmentY + totalH - 16;
+    if (opts.footerLeft) {
+      doc
+        .font('Helvetica-Bold')
+        .fontSize(9)
+        .fillColor(ink.primary)
+        .text(opts.footerLeft, tableX + 6, footerY, { lineBreak: false });
+    }
+    if (opts.footerCenter) {
+      doc
+        .font('Helvetica-Bold')
+        .fontSize(10)
+        .fillColor('#b91c1c')
+        .text(opts.footerCenter, tableX, footerY, { width: tableW, align: 'center', lineBreak: false });
+    }
   }
 
-  return startY + totalH + 10;
+  return segmentY + totalH + 10;
+}
+
+/** Colored-header table; line items continue across pages without blank overflow pages. */
+export function drawDocTable(
+  doc: PDFKit.PDFDocument,
+  startY: number,
+  columns: TableColumn[],
+  rows: Record<string, string>[],
+  opts?: {
+    /** Minimum body rows (incl. padding) on the last page segment only. */
+    minBodyRows?: number;
+    footerLeft?: string;
+    footerCenter?: string;
+    /** Reserve space below the last table segment (totals, signatures, etc.). */
+    closingBlockHeight?: number;
+  }
+): number {
+  const footerH = opts?.footerLeft || opts?.footerCenter ? TABLE_FOOTER_H : 0;
+  const closingBlock = opts?.closingBlockHeight ?? 0;
+  const minLastPageRows = opts?.minBodyRows ?? 3;
+
+  let y = startY;
+  let rowIndex = 0;
+
+  if (rows.length === 0) {
+    y = ensureDocSpace(doc, y, TABLE_HEADER_H + minLastPageRows * TABLE_ROW_H + footerH + closingBlock);
+    return drawDocTableSegment(doc, y, columns, [], minLastPageRows, {
+      footerLeft: opts?.footerLeft,
+      footerCenter: opts?.footerCenter,
+      drawFooter: true,
+    });
+  }
+
+  while (rowIndex < rows.length) {
+    y = ensureDocSpace(doc, y, TABLE_HEADER_H + TABLE_ROW_H);
+
+    const remaining = rows.length - rowIndex;
+    const bottom = pageBottom(doc);
+    const needForFinal =
+      TABLE_HEADER_H + remaining * TABLE_ROW_H + footerH + closingBlock;
+    const needForBodyOnly = TABLE_HEADER_H + remaining * TABLE_ROW_H + footerH;
+
+    if (y + needForFinal <= bottom) {
+      let bodyRows = remaining;
+      if (bodyRows < minLastPageRows) {
+        const maxPadded = Math.floor(
+          (bottom - y - TABLE_HEADER_H - footerH - closingBlock) / TABLE_ROW_H
+        );
+        bodyRows = Math.min(Math.max(bodyRows, minLastPageRows), Math.max(bodyRows, maxPadded));
+      }
+      const chunk = rows.slice(rowIndex, rowIndex + remaining);
+      y = drawDocTableSegment(doc, y, columns, chunk, bodyRows, {
+        footerLeft: opts?.footerLeft,
+        footerCenter: opts?.footerCenter,
+        drawFooter: true,
+      });
+      break;
+    }
+
+    if (remaining > 0 && y + needForBodyOnly > bottom) {
+      const maxRows = Math.floor((bottom - y - TABLE_HEADER_H) / TABLE_ROW_H);
+      if (maxRows < 1) {
+        doc.addPage();
+        y = pageTop(doc);
+        continue;
+      }
+
+      const chunkSize = Math.min(maxRows, remaining);
+      const chunk = rows.slice(rowIndex, rowIndex + chunkSize);
+      y = drawDocTableSegment(doc, y, columns, chunk, chunkSize, { drawFooter: false });
+      rowIndex += chunkSize;
+      doc.addPage();
+      y = pageTop(doc);
+      continue;
+    }
+
+    // Rows fit on this page; totals/signatures move to the next page via drawMoneyTotals.
+    let bodyRows = remaining;
+    if (bodyRows < minLastPageRows) {
+      const maxPadded = Math.floor((bottom - y - TABLE_HEADER_H - footerH) / TABLE_ROW_H);
+      bodyRows = Math.min(Math.max(bodyRows, minLastPageRows), Math.max(bodyRows, maxPadded));
+    }
+    const chunk = rows.slice(rowIndex, rowIndex + remaining);
+    y = drawDocTableSegment(doc, y, columns, chunk, bodyRows, {
+      footerLeft: opts?.footerLeft,
+      footerCenter: opts?.footerCenter,
+      drawFooter: true,
+    });
+    break;
+  }
+
+  return y;
 }
 
 export function drawSignatureBlock(
@@ -514,20 +621,28 @@ export function drawSignatureBlock(
   }
 ): number {
   const ink = inkFor(doc);
+  const blockH = (opts?.instruction ? 24 : 0) + 44;
+  y = ensureDocSpace(doc, y, blockH);
+
   if (opts?.instruction) {
     doc
       .font('Helvetica-Bold')
       .fontSize(9)
       .fillColor(ink.primary)
-      .text(opts.instruction, PAGE_LEFT, y, { width: PAGE_WIDTH, align: 'center' });
-    y = doc.y + 12;
+      .text(opts.instruction, PAGE_LEFT, y, {
+        width: PAGE_WIDTH,
+        align: 'center',
+        lineBreak: false,
+      });
+    y += 24;
   }
 
   const confirm = opts?.confirmLabel || 'Confirmed by:';
   const receive = opts?.receiveLabel || 'Received by:';
 
+  y = ensureDocSpace(doc, y, 22);
   doc.font('Helvetica-Bold').fontSize(9).fillColor(ink.primary);
-  doc.text(confirm, PAGE_LEFT, y);
+  doc.text(confirm, PAGE_LEFT, y, { lineBreak: false });
   doc
     .moveTo(PAGE_LEFT + 80, y + 11)
     .lineTo(260, y + 11)
@@ -539,9 +654,11 @@ export function drawSignatureBlock(
       .font('Helvetica')
       .fontSize(9)
       .fillColor('#0f172a')
-      .text(opts.confirmName, PAGE_LEFT + 82, y, { width: 175 });
+      .text(opts.confirmName, PAGE_LEFT + 82, y, { width: 175, lineBreak: false });
   }
-  doc.font('Helvetica-Bold').fontSize(9).fillColor(ink.primary).text('Sign:', 270, y);
+  doc.font('Helvetica-Bold').fontSize(9).fillColor(ink.primary).text('Sign:', 270, y, {
+    lineBreak: false,
+  });
   doc
     .moveTo(300, y + 11)
     .lineTo(PAGE_RIGHT, y + 11)
@@ -550,7 +667,8 @@ export function drawSignatureBlock(
     .stroke();
 
   y += 22;
-  doc.text(receive, PAGE_LEFT, y);
+  y = ensureDocSpace(doc, y, 22);
+  doc.text(receive, PAGE_LEFT, y, { lineBreak: false });
   doc
     .moveTo(PAGE_LEFT + 80, y + 11)
     .lineTo(260, y + 11)
@@ -562,9 +680,11 @@ export function drawSignatureBlock(
       .font('Helvetica')
       .fontSize(9)
       .fillColor('#0f172a')
-      .text(opts.receiveName, PAGE_LEFT + 82, y, { width: 175 });
+      .text(opts.receiveName, PAGE_LEFT + 82, y, { width: 175, lineBreak: false });
   }
-  doc.font('Helvetica-Bold').fontSize(9).fillColor(ink.primary).text('Sign:', 270, y);
+  doc.font('Helvetica-Bold').fontSize(9).fillColor(ink.primary).text('Sign:', 270, y, {
+    lineBreak: false,
+  });
   doc
     .moveTo(300, y + 11)
     .lineTo(PAGE_RIGHT, y + 11)
@@ -582,17 +702,23 @@ export function drawMoneyTotals(
   lines: { label: string; value: string; bold?: boolean }[]
 ): number {
   const ink = inkFor(doc);
+  const lineStep = (bold?: boolean) => (bold ? 16 : 14);
+  const totalH = lines.reduce((sum, line) => sum + lineStep(line.bold), 0);
+  y = ensureDocSpace(doc, y, totalH);
+
   for (const line of lines) {
+    const step = lineStep(line.bold);
+    y = ensureDocSpace(doc, y, step);
     doc
       .font(line.bold ? 'Helvetica-Bold' : 'Helvetica')
       .fontSize(line.bold ? 11 : 9)
       .fillColor(ink.primary)
-      .text(line.label, 320, y, { width: 100, align: 'right' });
+      .text(line.label, 320, y, { width: 100, align: 'right', lineBreak: false });
     doc
       .font(line.bold ? 'Helvetica-Bold' : 'Helvetica')
       .fillColor('#0f172a')
-      .text(line.value, 430, y, { width: PAGE_RIGHT - 430, align: 'right' });
-    y += line.bold ? 16 : 14;
+      .text(line.value, 430, y, { width: PAGE_RIGHT - 430, align: 'right', lineBreak: false });
+    y += step;
   }
   return y;
 }

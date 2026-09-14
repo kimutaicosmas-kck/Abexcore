@@ -18,6 +18,7 @@ import {
   drawDocTable,
   drawSignatureBlock,
   drawMoneyTotals,
+  ensureDocSpace,
   type CompanyDocHeader,
 } from '../utils/documentTemplate';
 import {
@@ -36,6 +37,12 @@ import type { VendorStatementResult } from './vendorStatement.service';
 type InvoiceWithRelations = Awaited<ReturnType<typeof ExportService.getInvoice>>;
 
 const LOGO_EXCEL_SIZE = 88;
+/** Space below the last table segment for totals, notes, and signature lines. */
+const SIGNATURE_BLOCK_H = 72;
+
+function tableClosingHeight(totalLines: number, hasNotes = false): number {
+  return totalLines * 14 + 16 + (hasNotes ? 36 : 0) + SIGNATURE_BLOCK_H;
+}
 
 function money2(n: number) {
   return Number(n || 0).toLocaleString('en-KE', {
@@ -240,6 +247,8 @@ export class ExportService {
         total: money(Number(item.totalPrice)),
       }));
 
+      const totalLines = credited > 0.009 ? 6 : 5;
+      const closingH = tableClosingHeight(totalLines, Boolean(invoice.notes));
       y = drawDocTable(
         doc,
         y,
@@ -251,12 +260,14 @@ export class ExportService {
         ],
         rows,
         {
-          minBodyRows: Math.max(rows.length + 1, 3),
+          minBodyRows: 3,
           footerLeft: 'E.& O.E',
           footerCenter: `No. ${invoice.invoiceNumber}`,
+          closingBlockHeight: closingH,
         }
       );
 
+      y = ensureDocSpace(doc, y, closingH);
       y = drawMoneyTotals(doc, y, [
         { label: 'Subtotal', value: `KES ${money(Number(invoice.subtotal))}` },
         { label: `VAT (${vatRate}%)`, value: `KES ${money(Number(invoice.taxAmount))}` },
@@ -275,11 +286,12 @@ export class ExportService {
       if (invoice.notes) {
         doc.font('Helvetica').fontSize(8).fillColor(company.primaryColor || DOC_BLUE).text(`Notes: ${invoice.notes}`, PAGE_LEFT, y, {
           width: PAGE_WIDTH,
+          lineBreak: true,
         });
         y = doc.y + 10;
       }
 
-      drawSignatureBlock(doc, Math.max(y + 8, 700), {
+      drawSignatureBlock(doc, y + 8, {
         instruction: 'Please receive the following goods in good order and condition.',
         confirmLabel: 'Confirmed by:',
         receiveLabel: 'Received by:',
@@ -411,6 +423,7 @@ export class ExportService {
         };
       });
 
+      const closingH = tableClosingHeight(3, Boolean(quotation.notes));
       y = drawDocTable(
         doc,
         y,
@@ -422,12 +435,14 @@ export class ExportService {
         ],
         rows,
         {
-          minBodyRows: Math.max(rows.length + 1, 3),
+          minBodyRows: 3,
           footerLeft: 'E.& O.E',
           footerCenter: `No. ${quotation.quotationNo}`,
+          closingBlockHeight: closingH,
         }
       );
 
+      y = ensureDocSpace(doc, y, closingH);
       y = drawMoneyTotals(doc, y, [
         { label: 'Subtotal', value: `KES ${money(Number(quotation.subtotal))}` },
         { label: `VAT (${vatRate}%)`, value: `KES ${money(Number(quotation.taxAmount))}` },
@@ -441,7 +456,7 @@ export class ExportService {
         y = doc.y + 10;
       }
 
-      drawSignatureBlock(doc, Math.max(y + 8, 700), {
+      drawSignatureBlock(doc, y + 8, {
         instruction: 'Prices are valid until the date shown above unless withdrawn earlier.',
         confirmLabel: 'Prepared by:',
         receiveLabel: 'Accepted by:',
@@ -552,6 +567,7 @@ export class ExportService {
         };
       });
 
+      const closingH = tableClosingHeight(3, Boolean(order.notes));
       y = drawDocTable(
         doc,
         y,
@@ -563,12 +579,14 @@ export class ExportService {
         ],
         rows,
         {
-          minBodyRows: Math.max(rows.length + 1, 3),
+          minBodyRows: 3,
           footerLeft: 'E.& O.E',
           footerCenter: `No. ${order.orderNumber}`,
+          closingBlockHeight: closingH,
         }
       );
 
+      y = ensureDocSpace(doc, y, closingH);
       y = drawMoneyTotals(doc, y, [
         { label: 'Subtotal', value: `KES ${money(Number(order.subtotal))}` },
         { label: `VAT (${vatRate}%)`, value: `KES ${money(Number(order.taxAmount))}` },
@@ -584,7 +602,7 @@ export class ExportService {
         y = doc.y + 10;
       }
 
-      drawSignatureBlock(doc, Math.max(y + 8, 700), {
+      drawSignatureBlock(doc, y + 8, {
         instruction: 'Order confirmed subject to stock and company terms.',
         confirmLabel: 'Prepared by:',
         receiveLabel: 'Accepted by:',
@@ -684,9 +702,10 @@ export class ExportService {
         ],
         rows,
         {
-          minBodyRows: Math.max(rows.length + 2, 12),
+          minBodyRows: 12,
           footerLeft: 'E.& O.E',
           footerCenter: `No. ${delivery.deliveryNo}`,
+          closingBlockHeight: SIGNATURE_BLOCK_H + (delivery.notes ? 36 : 0) + 24,
         }
       );
 
@@ -721,7 +740,8 @@ export class ExportService {
         y = doc.y + 8;
       }
 
-      drawSignatureBlock(doc, Math.max(y + 4, 700), {
+      y = ensureDocSpace(doc, y + 4, SIGNATURE_BLOCK_H);
+      drawSignatureBlock(doc, y, {
         instruction: 'Please receive the following goods in good order and condition.',
         confirmLabel: 'Confirmed by:',
         confirmName: salesPersonName || undefined,
@@ -787,6 +807,7 @@ export class ExportService {
         total: money(Number(item.totalPrice)),
       }));
 
+      const closingH = tableClosingHeight(3, Boolean(po.notes));
       y = drawDocTable(
         doc,
         y,
@@ -798,12 +819,14 @@ export class ExportService {
         ],
         rows,
         {
-          minBodyRows: Math.max(rows.length + 1, 3),
+          minBodyRows: 3,
           footerLeft: 'E.& O.E',
           footerCenter: `No. ${po.poNumber}`,
+          closingBlockHeight: closingH,
         }
       );
 
+      y = ensureDocSpace(doc, y, closingH);
       y = drawMoneyTotals(doc, y, [
         { label: 'Subtotal', value: `KES ${money(Number(po.subtotal))}` },
         { label: `VAT (${vatRate}%)`, value: `KES ${money(Number(po.taxAmount))}` },
@@ -817,7 +840,7 @@ export class ExportService {
         y = doc.y + 8;
       }
 
-      drawSignatureBlock(doc, Math.max(y + 8, 700), {
+      drawSignatureBlock(doc, y + 8, {
         instruction: 'Please confirm this purchase order and advise delivery schedule.',
         confirmLabel: 'Authorised by:',
         receiveLabel: 'Acknowledged by:',
