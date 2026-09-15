@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Copy, Check, Upload } from 'lucide-react';
+import { Copy, Check, Upload, Pencil } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { settingsApi, authApi, tenantApi, usersApi, productsApi, inventoryApi } from '../services/api';
 import { Card, Button, Input, Textarea, Alert, PageToolbar, EmptyState, Select, formatDate, formatDateTime, Modal, ModalFormBody } from '../components/ui';
@@ -886,6 +886,9 @@ export function SettingsPage() {
       {activeTabName === 'Companies' && isPlatformOwner && (
         <Card title="Registered companies">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+            <p className="text-sm text-slate-600">
+              Click <strong>Edit</strong> or a company <strong>code</strong> to change name, login code, and contact details.
+            </p>
             <Link to="/admin/register-company">
               <Button type="button">Register new company</Button>
             </Link>
@@ -932,7 +935,16 @@ export function SettingsPage() {
                             </div>
                           </div>
                         </td>
-                        <td className="py-3 px-2 font-mono text-xs text-slate-700">{entry.slug}</td>
+                        <td className="py-3 px-2">
+                          <button
+                            type="button"
+                            onClick={() => openProfileEditor(entry)}
+                            className="font-mono text-xs text-primary-700 underline decoration-primary-300 underline-offset-2 hover:text-primary-900 hover:decoration-primary-500"
+                            title={`Edit ${entry.name}`}
+                          >
+                            {entry.slug}
+                          </button>
+                        </td>
                         <td className="py-3 px-2">
                           <span className="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700">
                             {isPlatformCompany ? 'Platform' : packageLabel(entry.enabledModules)}
@@ -955,10 +967,11 @@ export function SettingsPage() {
                           <div className="flex items-center justify-end gap-1 flex-wrap">
                             <Button
                               type="button"
-                              variant="secondary"
+                              variant="primary"
                               size="sm"
                               onClick={() => openProfileEditor(entry)}
                             >
+                              <Pencil className="mr-1 h-3.5 w-3.5" aria-hidden />
                               Edit
                             </Button>
                             {isPlatformCompany ? (
