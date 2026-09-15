@@ -5,6 +5,8 @@ import { AppError } from '../middleware/errorHandler';
 import { generateNumber } from '../utils/date';
 import { injectTenantData, requireTenantId, getTenantStore, runWithTenant } from '../utils/tenant';
 import { AccountingService } from './accounting.service';
+import { isSalesBookOwner } from '../config/rolePermissions';
+import { salesBookCustomerFilter } from '../utils/customerVisibility';
 
 export type ImportEntity = 'products' | 'customers' | 'materials' | 'suppliers' | 'employees';
 
@@ -369,7 +371,198 @@ async function loadRows(buffer: Buffer): Promise<RowMap[]> {
   return rows;
 }
 
+type MasterExportEntity = Extract<ImportEntity, 'products' | 'customers'>;
+
 export class ExcelImportService {
+  private static async buildMasterExportWorkbook(
+    entity: MasterExportEntity,
+    rows: (string | number)[][]
+  ): Promise<Buffer> {
+    const def = TEMPLATES[entity];
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet(def.sheetName);
+    sheet.addRow(def.headers);
+    sheet.getRow(1).font = { bold: true };
+    for (const row of rows) {
+      sheet.addRow(row);
+    }
+    def.headers.forEach((_, i) => {
+      sheet.getColumn(i + 1).width = Math.max(14, String(def.headers[i]).length + 4);
+    });
+
+    const notes = workbook.addWorksheet('Instructions');
+    notes.addRow(['Export notes']);
+    notes.getRow(1).font = { bold: true };
+    notes.addRow([`Exported ${rows.length} row(s) on ${new Date().toLocaleString('en-KE')}`]);
+    notes.addRow(['This file uses the same columns as the import template and can be edited and re-imported.']);
+    def.notes.forEach((line) => notes.addRow([line]));
+    notes.getColumn(1).width = 100;
+
+    const buf = await workbook.xlsx.writeBuffer();
+    return Buffer.from(buf);
+  }
+
+  /** Export existing products in import-compatible columns for backup / re-import. */
+  static async exportProducts(opts?: {
+    search?: string;
+    category?: string;
+    isActive?: boolean;
+  }): Promise<Buffer> {
+    requireTenantId();
+
+    const fgWarehouses = await prisma.warehouse.findMany({
+      where: { isActive: true, deletedAt: null, type: 'finished_goods' },
+      select: { id: true },
+    });
+    const warehouseIds = fgWarehouses.map((warehouse) => warehouse.id);
+
+    const products = await prisma.product.findMany({
+      where: {
+        deletedAt: null,
+        ...(opts?.category ? { categoryId: opts.category } : {}),
+        ...(opts?.isActive !== undefined ? { isActive: opts.isActive } : {}),
+        ...(opts?.search
+          ? {
+              OR: [
+                { name: { contains: opts.search } },
+                { sku: { contains: opts.search } },
+                { barcode: { contains: opts.search } },
+              ],
+            }
+          : {}),
+      },
+      orderBy: [{ sku: 'asc' }],
+      take: 10000,
+      select: {
+        sku: true,
+        name: true,
+        barcode: true,
+        description: true,
+        sellingPrice: true,
+        distributorPrice: true,
+        retailPrice: true,
+        manufacturingCost: true,
+        minStockLevel: true,
+        category: { select: { name: true } },
+        stockLevels: {
+          where: warehouseIds.length ? { warehouseId: { in: warehouseIds } } : undefined,
+          select: {
+            quantity: true,
+            warehouse: { select: { code: true } },
+          },
+        },
+      },
+    });
+
+    const rows = products.map((product) => {
+      const stockByWarehouse = product.stockLevels.map((level) => ({
+        code: level.warehouse.code,
+        qty: Number(level.quantity),
+      }));
+      const totalQty = stockByWarehouse.reduce((sum, row) => sum + row.qty, 0);
+      const primaryWarehouse = [...stockByWarehouse].sort((a, b) => b.qty - a.qty)[0];
+
+      return [
+        product.sku,
+        product.name,
+        product.category?.name || '',
+        product.barcode || '',
+        product.description || '',
+        Number(product.sellingPrice),
+        Number(product.distributorPrice),
+        Number(product.retailPrice),
+        Number(product.manufacturingCost),
+        product.minStockLevel,
+        totalQty > 0 ? totalQty : '',
+        primaryWarehouse?.code || '',
+      ];
+    });
+
+    return this.buildMasterExportWorkbook('products', rows);
+  }
+
+  /** Export existing customers in import-compatible columns for backup / re-import. */
+  static async exportCustomers(opts?: {
+    search?: string;
+    type?: string;
+    vatStatus?: string;
+    isActive?: boolean;
+    salesPersonId?: string;
+    includeUnassigned?: boolean;
+    viewerRoleName?: string;
+    viewerUserId?: string;
+  }): Promise<Buffer> {
+    requireTenantId();
+
+    const where: Record<string, unknown> = {};
+    if (opts?.type) where.type = opts.type;
+    if (opts?.vatStatus) where.vatStatus = opts.vatStatus;
+
+    if (opts?.viewerRoleName && opts?.viewerUserId && isSalesBookOwner(opts.viewerRoleName)) {
+      Object.assign(where, salesBookCustomerFilter(opts.viewerUserId));
+    } else if (opts?.salesPersonId === 'none') {
+      where.salesPersonId = null;
+    } else if (opts?.salesPersonId) {
+      where.OR = opts.includeUnassigned
+        ? [{ salesPersonId: opts.salesPersonId }, { salesPersonId: null }]
+        : [{ salesPersonId: opts.salesPersonId }];
+    }
+
+    const visibility =
+      opts?.isActive === false
+        ? { deletedAt: null, isActive: false }
+        : opts?.isActive === true
+          ? { deletedAt: null, isActive: true }
+          : { deletedAt: null };
+
+    const searchFilter = opts?.search
+      ? {
+          OR: [
+            { name: { contains: opts.search } },
+            { code: { contains: opts.search } },
+            { email: { contains: opts.search } },
+          ],
+        }
+      : {};
+
+    const customers = await prisma.customer.findMany({
+      where: { AND: [where, visibility, searchFilter] },
+      orderBy: [{ code: 'asc' }],
+      take: 10000,
+      select: {
+        code: true,
+        name: true,
+        vatStatus: true,
+        type: true,
+        email: true,
+        phone: true,
+        address: true,
+        city: true,
+        taxPin: true,
+        creditLimit: true,
+        paymentTerms: true,
+        notes: true,
+      },
+    });
+
+    const rows = customers.map((customer) => [
+      customer.code,
+      customer.name,
+      customer.vatStatus,
+      customer.type,
+      customer.email || '',
+      customer.phone || '',
+      customer.address || '',
+      customer.city || '',
+      customer.taxPin || '',
+      Number(customer.creditLimit),
+      customer.paymentTerms,
+      customer.notes || '',
+    ]);
+
+    return this.buildMasterExportWorkbook('customers', rows);
+  }
+
   static async buildTemplate(entity: ImportEntity): Promise<Buffer> {
     const def = TEMPLATES[entity];
     const workbook = new ExcelJS.Workbook();

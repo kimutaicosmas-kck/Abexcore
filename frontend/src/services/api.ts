@@ -220,6 +220,7 @@ export const customersApi = {
   deleteContact: (customerId: string, contactId: string) =>
     api.delete(`/customers/${customerId}/contacts/${contactId}`),
   importTemplatePath: '/customers/import/template',
+  exportExcelPath: '/customers/export/excel',
   importExcel: (file: File) => {
     const form = new FormData();
     form.append('file', file);
@@ -264,6 +265,7 @@ export const productsApi = {
     return api.post(`/products/${id}/image`, form);
   },
   importTemplatePath: '/products/import/template',
+  exportExcelPath: '/products/export/excel',
   importExcel: (file: File) => {
     const form = new FormData();
     form.append('file', file);

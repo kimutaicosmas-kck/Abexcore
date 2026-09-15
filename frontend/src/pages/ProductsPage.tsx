@@ -111,6 +111,7 @@ export function ProductsPage() {
   const [formOpen, setFormOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [catalogueExporting, setCatalogueExporting] = useState<'excel' | 'pdf' | null>(null);
+  const [masterExporting, setMasterExporting] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
   const [deactivateOpen, setDeactivateOpen] = useState(false);
   const [editing, setEditing] = useState<Product | null>(null);
@@ -259,8 +260,29 @@ export function ProductsPage() {
         <Button
           size="sm"
           variant="secondary"
+          loading={masterExporting}
+          disabled={masterExporting || !!catalogueExporting}
+          onClick={async () => {
+            setMasterExporting(true);
+            try {
+              await downloadFile(productsApi.exportExcelPath, 'products-export.xlsx', {
+                search: search || undefined,
+                category: category || undefined,
+                isActive: isActive || undefined,
+              });
+            } finally {
+              setMasterExporting(false);
+            }
+          }}
+        >
+          <Download className="h-4 w-4 mr-1.5" />
+          Export Excel
+        </Button>
+        <Button
+          size="sm"
+          variant="secondary"
           loading={catalogueExporting === 'excel'}
-          disabled={!!catalogueExporting}
+          disabled={!!catalogueExporting || masterExporting}
           onClick={async () => {
             setCatalogueExporting('excel');
             try {

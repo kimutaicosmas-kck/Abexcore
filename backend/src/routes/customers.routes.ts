@@ -51,6 +51,36 @@ router.post(
   })
 );
 
+router.get(
+  '/export/excel',
+  authorize('customers:read'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const search = typeof req.query.search === 'string' ? req.query.search : undefined;
+    const type = typeof req.query.type === 'string' ? req.query.type : undefined;
+    const vatStatus = typeof req.query.vatStatus === 'string' ? req.query.vatStatus : undefined;
+    const isActiveRaw = req.query.isActive;
+    const isActive =
+      isActiveRaw === 'true' ? true : isActiveRaw === 'false' ? false : undefined;
+    const salesPersonId =
+      typeof req.query.salesPersonId === 'string' ? req.query.salesPersonId : undefined;
+    const includeUnassigned =
+      req.query.includeUnassigned === 'true' || req.query.includeUnassigned === '1';
+    const buffer = await ExcelImportService.exportCustomers({
+      search,
+      type,
+      vatStatus,
+      isActive,
+      salesPersonId,
+      includeUnassigned,
+      viewerRoleName: req.user!.roleName,
+      viewerUserId: req.user!.id,
+    });
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', 'attachment; filename="customers-export.xlsx"');
+    res.send(buffer);
+  })
+);
+
 const customerService = createCrudService('customer', ['name', 'code', 'email'], {
   contacts: true,
   salesPerson: { select: { id: true, firstName: true, lastName: true } },

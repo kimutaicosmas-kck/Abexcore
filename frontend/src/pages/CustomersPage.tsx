@@ -150,6 +150,7 @@ export function CustomersPage() {
 
   const [customerModalOpen, setCustomerModalOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  const [masterExporting, setMasterExporting] = useState(false);
   const [complaintModalOpen, setComplaintModalOpen] = useState(false);
   const [opportunityModalOpen, setOpportunityModalOpen] = useState(false);
   const [warrantyModalOpen, setWarrantyModalOpen] = useState(false);
@@ -628,10 +629,34 @@ export function CustomersPage() {
     activeTab === 0 ? (
       <div className="flex flex-wrap gap-2">
         {canRead && (
-          <Button size="sm" variant="secondary" onClick={() => setBalanceSummaryOpen(true)}>
-            <FileText className="h-4 w-4 mr-1.5" />
-            Balance summary
-          </Button>
+          <>
+            <Button
+              size="sm"
+              variant="secondary"
+              loading={masterExporting}
+              onClick={async () => {
+                setMasterExporting(true);
+                try {
+                  await downloadFile(customersApi.exportExcelPath, 'customers-export.xlsx', {
+                    search: custSearch || undefined,
+                    type: custType || undefined,
+                    vatStatus: custVatStatus || undefined,
+                    isActive: custActive || undefined,
+                    salesPersonId: custSalesPerson || undefined,
+                  });
+                } finally {
+                  setMasterExporting(false);
+                }
+              }}
+            >
+              <Download className="h-4 w-4 mr-1.5" />
+              Export Excel
+            </Button>
+            <Button size="sm" variant="secondary" onClick={() => setBalanceSummaryOpen(true)}>
+              <FileText className="h-4 w-4 mr-1.5" />
+              Balance summary
+            </Button>
+          </>
         )}
         {canCreate && (
           <>

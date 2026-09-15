@@ -375,6 +375,22 @@ router.get(
 );
 
 router.get(
+  '/export/excel',
+  authorize('products:read'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const search = typeof req.query.search === 'string' ? req.query.search : undefined;
+    const category = typeof req.query.category === 'string' ? req.query.category : undefined;
+    const isActiveRaw = req.query.isActive;
+    const isActive =
+      isActiveRaw === 'true' ? true : isActiveRaw === 'false' ? false : undefined;
+    const buffer = await ExcelImportService.exportProducts({ search, category, isActive });
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', 'attachment; filename="products-export.xlsx"');
+    res.send(buffer);
+  })
+);
+
+router.get(
   '/catalogue/excel',
   authorize('products:read', 'sales:read'),
   asyncHandler(async (req: AuthRequest, res: Response) => {
