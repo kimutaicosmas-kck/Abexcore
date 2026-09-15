@@ -531,7 +531,7 @@ router.post(
         );
       }
     } else if (isSalesOfficer) {
-      if (customer.salesPersonId !== assignedSalesPersonId) {
+      if (customer.salesPersonId && customer.salesPersonId !== assignedSalesPersonId) {
         throw new AppError('You can only sell to customers assigned to you.', 400);
       }
     } else if (customer.salesPersonId && customer.salesPersonId !== assignedSalesPersonId) {

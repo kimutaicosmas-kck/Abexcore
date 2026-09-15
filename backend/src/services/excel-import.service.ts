@@ -5,8 +5,7 @@ import { AppError } from '../middleware/errorHandler';
 import { generateNumber } from '../utils/date';
 import { injectTenantData, requireTenantId, getTenantStore, runWithTenant } from '../utils/tenant';
 import { AccountingService } from './accounting.service';
-import { isSalesBookOwner } from '../config/rolePermissions';
-import { salesBookCustomerFilter } from '../utils/customerVisibility';
+import { customerModuleListFilter } from '../utils/customerVisibility';
 
 export type ImportEntity = 'products' | 'customers' | 'materials' | 'suppliers' | 'employees';
 
@@ -498,14 +497,13 @@ export class ExcelImportService {
     if (opts?.type) where.type = opts.type;
     if (opts?.vatStatus) where.vatStatus = opts.vatStatus;
 
-    if (opts?.viewerRoleName && opts?.viewerUserId && isSalesBookOwner(opts.viewerRoleName)) {
-      Object.assign(where, salesBookCustomerFilter(opts.viewerUserId));
-    } else if (opts?.salesPersonId === 'none') {
-      where.salesPersonId = null;
-    } else if (opts?.salesPersonId) {
-      where.OR = opts.includeUnassigned
-        ? [{ salesPersonId: opts.salesPersonId }, { salesPersonId: null }]
-        : [{ salesPersonId: opts.salesPersonId }];
+    if (opts?.viewerRoleName && opts?.viewerUserId) {
+      Object.assign(
+        where,
+        customerModuleListFilter(opts.viewerRoleName, opts.viewerUserId, {
+          salesPersonId: opts.salesPersonId,
+        })
+      );
     }
 
     const visibility =

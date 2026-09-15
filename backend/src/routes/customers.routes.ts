@@ -18,7 +18,8 @@ import { requireTenantId } from '../utils/tenant';
 import { isSalesBookOwner, SALES_PERSON_ROLE_NAMES } from '../config/rolePermissions';
 import {
   salesBookCustomerFilter,
-  salesBookCustomerVisibility,
+  canAccessCustomerRecord,
+  customerModuleListFilter,
 } from '../utils/customerVisibility';
 import { CustomerStatementService } from '../services/customerStatement.service';
 import { ExcelImportService } from '../services/excel-import.service';
@@ -155,16 +156,10 @@ router.get(
     if (vatStatus) where.vatStatus = vatStatus;
     if (isActive !== undefined) where.isActive = isActive;
 
-    // Sales officers/reps see their book plus the unassigned pool — never other officers' books.
-    if (isSalesBookOwner(req.user!.roleName)) {
-      Object.assign(where, salesBookCustomerFilter(req.user!.id));
-    } else if (salesPersonId === 'none') {
-      where.salesPersonId = null;
-    } else if (salesPersonId) {
-      where.OR = includeUnassigned
-        ? [{ salesPersonId }, { salesPersonId: null }]
-        : [{ salesPersonId }];
-    }
+    Object.assign(
+      where,
+      customerModuleListFilter(req.user!.roleName, req.user!.id, { salesPersonId })
+    );
 
     // Soft-deleted customers live in Recycle Bin only.
     const visibility =
@@ -404,7 +399,7 @@ router.get(
     const data = await prisma.customer.findFirst({
       where: {
         id: getParam(req.params.id),
-        ...salesBookCustomerVisibility(req.user!.roleName, req.user!.id),
+        deletedAt: null,
       },
       include: {
         contacts: true,
@@ -414,7 +409,9 @@ router.get(
         },
       },
     });
-    if (!data) throw new AppError('Customer not found', 404);
+    if (!data || !canAccessCustomerRecord(data, req.user!.roleName, req.user!.id)) {
+      throw new AppError('Customer not found', 404);
+    }
     res.json({ success: true, data });
   })
 );

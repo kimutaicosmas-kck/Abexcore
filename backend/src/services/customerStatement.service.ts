@@ -197,10 +197,8 @@ export class CustomerStatementService {
     };
     if (opts?.salesPersonId === null) {
       customerWhere.salesPersonId = null;
-    } else if (opts?.salesPersonId && opts?.includeUnassigned) {
-      customerWhere.OR = [{ salesPersonId: opts.salesPersonId }, { salesPersonId: null }];
     } else if (opts?.salesPersonId) {
-      customerWhere.salesPersonId = opts.salesPersonId;
+      customerWhere.OR = [{ salesPersonId: opts.salesPersonId }, { salesPersonId: null }];
     }
 
     const customers = await prisma.customer.findMany({
