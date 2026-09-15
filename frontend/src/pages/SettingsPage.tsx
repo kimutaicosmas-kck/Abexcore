@@ -373,6 +373,12 @@ export function SettingsPage() {
       phone?: string | null;
     }) => tenantApi.updateRegisteredCompany(id, { name, slug, email, phone }),
     onSuccess: (res) => {
+      const updated = res.data.data as RegisteredCompany | undefined;
+      if (updated) {
+        queryClient.setQueryData<RegisteredCompany[]>(['tenant-companies'], (prev) =>
+          prev?.map((row) => (row.id === updated.id ? { ...row, ...updated } : row))
+        );
+      }
       queryClient.invalidateQueries({ queryKey: ['tenant-companies'] });
       setProfileEditing(null);
       setSuccessMessage(res.data.message || 'Company profile updated.');
@@ -467,11 +473,14 @@ export function SettingsPage() {
       .replace(/^-+|-+$/g, '')
       .slice(0, 48);
 
+  const companyContactEmail = (entry: RegisteredCompany) =>
+    entry.email || entry.adminLoginEmail || '';
+
   const openProfileEditor = (entry: RegisteredCompany) => {
     setEditCompanyName(entry.name);
     setEditCompanySlug(entry.slug);
-    setEditCompanyEmail(entry.email || '');
-    setEditCompanyPhone('');
+    setEditCompanyEmail(companyContactEmail(entry));
+    setEditCompanyPhone(entry.phone || '');
     setProfileEditing(entry);
   };
 
@@ -507,7 +516,7 @@ export function SettingsPage() {
       name,
       ...(isPlatformCompany ? {} : { slug }),
       email: editCompanyEmail.trim() || null,
-      ...(editCompanyPhone.trim() ? { phone: editCompanyPhone.trim() } : {}),
+      phone: editCompanyPhone.trim() || null,
     });
   };
 
@@ -931,7 +940,9 @@ export function SettingsPage() {
                             <CompanyLogoMark logo={entry.logo} name={entry.name} companySlug={entry.slug} size="sm" />
                             <div className="min-w-0">
                               <p className="font-medium text-slate-900 truncate">{entry.name}</p>
-                              {entry.email && <p className="text-xs text-slate-500 truncate">{entry.email}</p>}
+                              {companyContactEmail(entry) && (
+                                <p className="text-xs text-slate-500 truncate">{companyContactEmail(entry)}</p>
+                              )}
                             </div>
                           </div>
                         </td>
@@ -1094,12 +1105,17 @@ export function SettingsPage() {
                       : 'Lowercase letters, numbers, and hyphens only.'}
                   </p>
                 </div>
-                <Input
-                  label="Contact email"
-                  type="email"
-                  value={editCompanyEmail}
-                  onChange={(e) => setEditCompanyEmail(e.target.value)}
-                />
+                <div>
+                  <Input
+                    label="Admin login / contact email"
+                    type="email"
+                    value={editCompanyEmail}
+                    onChange={(e) => setEditCompanyEmail(e.target.value)}
+                  />
+                  <p className="mt-1 text-xs text-slate-500">
+                    Updates the company contact email and the Super Admin sign-in email for this workspace.
+                  </p>
+                </div>
                 <Input
                   label="Phone"
                   value={editCompanyPhone}

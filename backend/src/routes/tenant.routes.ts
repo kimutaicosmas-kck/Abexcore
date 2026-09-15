@@ -20,7 +20,6 @@ import { companyLogoUpload } from '../middleware/upload';
 import { processCompanyLogo } from '../utils/image';
 import prisma from '../config/database';
 import { config } from '../config';
-import { sanitizeCompanyBrand } from '../utils/platform';
 import { getParam } from '../utils/request';
 import { deleteCompanyCompletely } from '../services/companyDeletion.service';
 import { resetPlatformDemoWorkspace } from '../services/platformDemoReset.service';
@@ -97,11 +96,25 @@ router.patch(
   auditLog('tenant', 'update', 'company'),
   asyncHandler(async (req: AuthRequest, res: Response) => {
     const companyId = requireTenantId();
+    const payload = { ...req.body } as Record<string, unknown>;
+    if (payload.email !== undefined) {
+      const raw = payload.email;
+      payload.email =
+        raw && String(raw).trim() ? String(raw).trim().toLowerCase() : null;
+    }
+
     const company = await prisma.company.update({
       where: { id: companyId },
-      data: req.body,
+      data: payload,
       include: { branches: true, taxRates: true },
     });
+
+    if (payload.email !== undefined && payload.email) {
+      await runWithoutTenant(() =>
+        TenantService.syncCompanyAdminLoginEmail(companyId, payload.email as string)
+      );
+    }
+
     res.json({ success: true, data: company });
   })
 );
@@ -301,35 +314,8 @@ router.get(
   '/companies',
   requirePlatformOwner,
   asyncHandler(async (_req: AuthRequest, res: Response) => {
-    const companies = await prisma.company.findMany({
-      orderBy: { createdAt: 'desc' },
-      select: {
-        id: true,
-        slug: true,
-        name: true,
-        logo: true,
-        email: true,
-        isActive: true,
-        enabledModules: true,
-        qualityModuleEnabled: true,
-        brandMode: true,
-        brandPrimary: true,
-        brandAccent: true,
-        docPrimaryColor: true,
-        createdAt: true,
-        _count: { select: { users: { where: { deletedAt: null } } } },
-      },
-    });
-
-    res.json({
-      success: true,
-      data: companies.map(({ _count, ...company }) =>
-        sanitizeCompanyBrand({
-          ...company,
-          userCount: _count.users,
-        })
-      ),
-    });
+    const companies = await TenantService.listRegisteredCompanies();
+    res.json({ success: true, data: companies });
   })
 );
 

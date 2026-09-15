@@ -1,4 +1,5 @@
 import bcrypt from 'bcrypt';
+import type { Prisma } from '@prisma/client';
 import prisma from '../config/database';
 import { AppError } from '../middleware/errorHandler';
 import { slugifyCompany, runWithoutTenant } from '../utils/tenant';
@@ -15,6 +16,67 @@ import { CompanyModulePreset, modulesForPreset } from '../config/companyModules'
 
 const SALT_ROUNDS = 12;
 const DEFAULT_COMPANY_ID = '00000000-0000-0000-0000-000000000001';
+
+type TenantDb = Prisma.TransactionClient | typeof prisma;
+
+async function syncSuperAdminLoginEmail(
+  companyId: string,
+  email: string | null | undefined,
+  db: TenantDb = prisma
+) {
+  const normalized = email?.trim().toLowerCase();
+  if (!normalized) return;
+
+  const superAdminRole = await db.role.findUnique({ where: { name: 'Super Admin' } });
+  if (!superAdminRole) return;
+
+  const admin = await db.user.findFirst({
+    where: { companyId, roleId: superAdminRole.id, deletedAt: null },
+    orderBy: { createdAt: 'asc' },
+    select: { id: true, email: true },
+  });
+  if (!admin || admin.email === normalized) return;
+
+  const conflict = await db.user.findFirst({
+    where: { companyId, email: normalized, deletedAt: null, id: { not: admin.id } },
+  });
+  if (conflict) {
+    throw new AppError('Another user in this company already uses that email', 409);
+  }
+
+  await db.user.update({
+    where: { id: admin.id },
+    data: { email: normalized },
+  });
+}
+
+function formatRegisteredCompany(
+  company: {
+    id: string;
+    slug: string;
+    name: string;
+    logo: string | null;
+    email: string | null;
+    phone?: string | null;
+    isActive: boolean;
+    enabledModules: unknown;
+    qualityModuleEnabled: boolean;
+    brandMode: string;
+    brandPrimary: string | null;
+    brandAccent: string | null;
+    docPrimaryColor: string | null;
+    createdAt: Date;
+    _count: { users: number };
+  },
+  adminLoginEmail?: string | null
+) {
+  const { _count, ...rest } = company;
+  return sanitizeCompanyBrand({
+    ...rest,
+    userCount: _count.users,
+    adminLoginEmail: adminLoginEmail ?? null,
+  });
+}
 
 function parseModulesInput(raw: unknown): string[] | undefined {
   if (raw == null || raw === '') return undefined;
@@ -213,86 +275,164 @@ export class TenantService {
       currency?: string;
     }
   ) {
-    const target = await prisma.company.findUnique({
-      where: { id: companyId },
-      select: { id: true, slug: true },
+    return runWithoutTenant(async () => {
+      const target = await prisma.company.findUnique({
+        where: { id: companyId },
+        select: { id: true, slug: true },
+      });
+      if (!target) throw new AppError('Company not found', 404);
+
+      const data: {
+        name?: string;
+        legalName?: string;
+        slug?: string;
+        email?: string | null;
+        phone?: string | null;
+        country?: string;
+        currency?: string;
+      } = {};
+
+      if (input.name !== undefined) {
+        const name = input.name.trim();
+        if (name.length < 2) throw new AppError('Company name is required', 400);
+        data.name = name;
+        data.legalName = name;
+      }
+
+      if (input.slug !== undefined) {
+        if (target.slug === PLATFORM_OWNER_SLUG) {
+          throw new AppError('Platform company code cannot be changed', 400);
+        }
+        const slug = slugifyCompany(input.slug);
+        if (!slug || slug.length < 2) throw new AppError('Company code is required', 400);
+        if (slug === PLATFORM_OWNER_SLUG) {
+          throw new AppError('This company code is reserved', 400);
+        }
+        if (slug !== target.slug) {
+          const existing = await prisma.company.findUnique({ where: { slug } });
+          if (existing) throw new AppError('This company code is already taken', 409);
+        }
+        data.slug = slug;
+      }
+
+      let nextEmail: string | null | undefined;
+      if (input.email !== undefined) {
+        const raw = input.email;
+        nextEmail = raw && String(raw).trim() ? String(raw).trim().toLowerCase() : null;
+        data.email = nextEmail;
+      }
+      if (input.phone !== undefined) {
+        data.phone = input.phone?.trim() || null;
+      }
+      if (input.country !== undefined) {
+        const country = input.country.trim();
+        if (country) data.country = country;
+      }
+      if (input.currency !== undefined) {
+        const currency = input.currency.trim();
+        if (currency) data.currency = currency;
+      }
+
+      const company = await prisma.$transaction(async (tx) => {
+        const updated = await tx.company.update({
+          where: { id: companyId },
+          data,
+          select: {
+            id: true,
+            slug: true,
+            name: true,
+            logo: true,
+            email: true,
+            phone: true,
+            isActive: true,
+            enabledModules: true,
+            qualityModuleEnabled: true,
+            brandMode: true,
+            brandPrimary: true,
+            brandAccent: true,
+            docPrimaryColor: true,
+            createdAt: true,
+            _count: { select: { users: { where: { deletedAt: null } } } },
+          },
+        });
+
+        if (input.email !== undefined) {
+          await syncSuperAdminLoginEmail(companyId, nextEmail, tx);
+        }
+
+        return updated;
+      });
+
+      const adminLoginEmail =
+        input.email !== undefined
+          ? nextEmail
+          : (
+              await prisma.user.findFirst({
+                where: {
+                  companyId,
+                  deletedAt: null,
+                  role: { name: 'Super Admin' },
+                },
+                orderBy: { createdAt: 'asc' },
+                select: { email: true },
+              })
+            )?.email ?? null;
+
+      return formatRegisteredCompany(company, adminLoginEmail);
     });
-    if (!target) throw new AppError('Company not found', 404);
+  }
 
-    const data: {
-      name?: string;
-      legalName?: string;
-      slug?: string;
-      email?: string | null;
-      phone?: string | null;
-      country?: string;
-      currency?: string;
-    } = {};
+  static async syncCompanyAdminLoginEmail(
+    companyId: string,
+    email: string | null | undefined,
+    db?: TenantDb
+  ) {
+    return syncSuperAdminLoginEmail(companyId, email, db);
+  }
 
-    if (input.name !== undefined) {
-      const name = input.name.trim();
-      if (name.length < 2) throw new AppError('Company name is required', 400);
-      data.name = name;
-      data.legalName = name;
-    }
+  static async listRegisteredCompanies() {
+    return runWithoutTenant(async () => {
+      const companies = await prisma.company.findMany({
+        orderBy: { createdAt: 'desc' },
+        select: {
+          id: true,
+          slug: true,
+          name: true,
+          logo: true,
+          email: true,
+          phone: true,
+          isActive: true,
+          enabledModules: true,
+          qualityModuleEnabled: true,
+          brandMode: true,
+          brandPrimary: true,
+          brandAccent: true,
+          docPrimaryColor: true,
+          createdAt: true,
+          _count: { select: { users: { where: { deletedAt: null } } } },
+        },
+      });
 
-    if (input.slug !== undefined) {
-      if (target.slug === PLATFORM_OWNER_SLUG) {
-        throw new AppError('Platform company code cannot be changed', 400);
+      const adminUsers = await prisma.user.findMany({
+        where: {
+          deletedAt: null,
+          role: { name: 'Super Admin' },
+          companyId: { in: companies.map((company) => company.id) },
+        },
+        select: { companyId: true, email: true, createdAt: true },
+        orderBy: { createdAt: 'asc' },
+      });
+
+      const adminLoginByCompany = new Map<string, string>();
+      for (const user of adminUsers) {
+        if (!adminLoginByCompany.has(user.companyId)) {
+          adminLoginByCompany.set(user.companyId, user.email);
+        }
       }
-      const slug = slugifyCompany(input.slug);
-      if (!slug || slug.length < 2) throw new AppError('Company code is required', 400);
-      if (slug === PLATFORM_OWNER_SLUG) {
-        throw new AppError('This company code is reserved', 400);
-      }
-      if (slug !== target.slug) {
-        const existing = await prisma.company.findUnique({ where: { slug } });
-        if (existing) throw new AppError('This company code is already taken', 409);
-      }
-      data.slug = slug;
-    }
 
-    if (input.email !== undefined) {
-      const raw = input.email;
-      data.email = raw && String(raw).trim() ? String(raw).trim().toLowerCase() : null;
-    }
-    if (input.phone !== undefined) {
-      data.phone = input.phone?.trim() || null;
-    }
-    if (input.country !== undefined) {
-      const country = input.country.trim();
-      if (country) data.country = country;
-    }
-    if (input.currency !== undefined) {
-      const currency = input.currency.trim();
-      if (currency) data.currency = currency;
-    }
-
-    const company = await prisma.company.update({
-      where: { id: companyId },
-      data,
-      select: {
-        id: true,
-        slug: true,
-        name: true,
-        logo: true,
-        email: true,
-        isActive: true,
-        enabledModules: true,
-        qualityModuleEnabled: true,
-        brandMode: true,
-        brandPrimary: true,
-        brandAccent: true,
-        docPrimaryColor: true,
-        createdAt: true,
-        _count: { select: { users: { where: { deletedAt: null } } } },
-      },
-    });
-
-    const { _count, ...rest } = company;
-    return sanitizeCompanyBrand({
-      ...rest,
-      userCount: _count.users,
+      return companies.map((company) =>
+        formatRegisteredCompany(company, adminLoginByCompany.get(company.id) ?? null)
+      );
     });
   }
 

@@ -1103,6 +1103,9 @@ export interface RegisteredCompany {
   name: string;
   logo?: string | null;
   email?: string | null;
+  phone?: string | null;
+  /** Super Admin sign-in email (kept in sync when platform owner edits contact email). */
+  adminLoginEmail?: string | null;
   isActive: boolean;
   userCount: number;
   createdAt: string;
