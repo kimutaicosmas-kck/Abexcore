@@ -562,6 +562,17 @@ export const tenantApi = {
   listCompanies: () => api.get('/tenant/companies'),
   updateCompanyStatus: (id: string, isActive: boolean) =>
     api.patch(`/tenant/companies/${id}/status`, { isActive }),
+  updateRegisteredCompany: (
+    id: string,
+    data: {
+      name?: string;
+      slug?: string;
+      email?: string | null;
+      phone?: string | null;
+      country?: string;
+      currency?: string;
+    }
+  ) => api.patch(`/tenant/companies/${id}`, data),
   updateCompanyModules: (
     id: string,
     data: { modulePreset?: string; enabledModules?: string[] }

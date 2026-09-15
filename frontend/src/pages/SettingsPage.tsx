@@ -94,6 +94,11 @@ export function SettingsPage() {
   const [deletingCompanyId, setDeletingCompanyId] = useState<string | null>(null);
   const [modulesEditing, setModulesEditing] = useState<RegisteredCompany | null>(null);
   const [brandingEditing, setBrandingEditing] = useState<RegisteredCompany | null>(null);
+  const [profileEditing, setProfileEditing] = useState<RegisteredCompany | null>(null);
+  const [editCompanyName, setEditCompanyName] = useState('');
+  const [editCompanySlug, setEditCompanySlug] = useState('');
+  const [editCompanyEmail, setEditCompanyEmail] = useState('');
+  const [editCompanyPhone, setEditCompanyPhone] = useState('');
   const [editBrandMode, setEditBrandMode] = useState<'abexcore' | 'unique'>('unique');
   const [editBrandPrimary, setEditBrandPrimary] = useState('#2563eb');
   const [editBrandAccent, setEditBrandAccent] = useState('#0284c7');
@@ -353,6 +358,28 @@ export function SettingsPage() {
     onSettled: () => setDeletingCompanyId(null),
   });
 
+  const companyProfileMutation = useMutation({
+    mutationFn: ({
+      id,
+      name,
+      slug,
+      email,
+      phone,
+    }: {
+      id: string;
+      name?: string;
+      slug?: string;
+      email?: string | null;
+      phone?: string | null;
+    }) => tenantApi.updateRegisteredCompany(id, { name, slug, email, phone }),
+    onSuccess: (res) => {
+      queryClient.invalidateQueries({ queryKey: ['tenant-companies'] });
+      setProfileEditing(null);
+      setSuccessMessage(res.data.message || 'Company profile updated.');
+      setTimeout(() => setSuccessMessage(''), 4000);
+    },
+  });
+
   const companyModulesMutation = useMutation({
     mutationFn: ({
       id,
@@ -431,6 +458,58 @@ export function SettingsPage() {
       setTimeout(() => setSuccessMessage(''), 6000);
     },
   });
+
+  const slugifyCompanyCode = (input: string) =>
+    input
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 48);
+
+  const openProfileEditor = (entry: RegisteredCompany) => {
+    setEditCompanyName(entry.name);
+    setEditCompanySlug(entry.slug);
+    setEditCompanyEmail(entry.email || '');
+    setEditCompanyPhone('');
+    setProfileEditing(entry);
+  };
+
+  const saveCompanyProfile = () => {
+    if (!profileEditing) return;
+    const name = editCompanyName.trim();
+    if (name.length < 2) {
+      window.alert('Company name must be at least 2 characters.');
+      return;
+    }
+    const isPlatformCompany = profileEditing.slug === PLATFORM_COMPANY_SLUG;
+    const slug = slugifyCompanyCode(editCompanySlug);
+    if (!isPlatformCompany) {
+      if (slug.length < 2) {
+        window.alert('Company code must be at least 2 characters.');
+        return;
+      }
+      if (!/^[a-z0-9-]+$/.test(slug)) {
+        window.alert('Company code may only use lowercase letters, numbers, and hyphens.');
+        return;
+      }
+    }
+    if (
+      slug !== profileEditing.slug &&
+      !window.confirm(
+        `Changing the company code updates the login URL for all users of "${profileEditing.name}". Continue?`
+      )
+    ) {
+      return;
+    }
+    companyProfileMutation.mutate({
+      id: profileEditing.id,
+      name,
+      ...(isPlatformCompany ? {} : { slug }),
+      email: editCompanyEmail.trim() || null,
+      ...(editCompanyPhone.trim() ? { phone: editCompanyPhone.trim() } : {}),
+    });
+  };
 
   const openModulesEditor = (entry: RegisteredCompany) => {
     const preset = detectModulePreset(entry.enabledModules);
@@ -873,10 +952,19 @@ export function SettingsPage() {
                           </span>
                         </td>
                         <td className="py-3 px-2 text-right">
-                          {isPlatformCompany ? (
-                            <span className="text-xs text-slate-400">Platform owner</span>
-                          ) : (
-                            <div className="flex items-center justify-end gap-1 flex-wrap">
+                          <div className="flex items-center justify-end gap-1 flex-wrap">
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              size="sm"
+                              onClick={() => openProfileEditor(entry)}
+                            >
+                              Edit
+                            </Button>
+                            {isPlatformCompany ? (
+                              <span className="text-xs text-slate-400 px-1">Platform owner</span>
+                            ) : (
+                              <>
                               <Button
                                 type="button"
                                 variant="secondary"
@@ -914,8 +1002,9 @@ export function SettingsPage() {
                               >
                                 Delete
                               </Button>
-                            </div>
-                          )}
+                              </>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     );
@@ -929,6 +1018,82 @@ export function SettingsPage() {
               description="Register the first company workspace to get started."
             />
           )}
+
+          <Modal
+            open={!!profileEditing}
+            onClose={() => !companyProfileMutation.isPending && setProfileEditing(null)}
+            title={profileEditing ? `Edit — ${profileEditing.name}` : 'Edit company'}
+            size="md"
+          >
+            <ModalFormBody
+              footer={
+                <div className="flex justify-end gap-2">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    disabled={companyProfileMutation.isPending}
+                    onClick={() => setProfileEditing(null)}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="button"
+                    loading={companyProfileMutation.isPending}
+                    onClick={saveCompanyProfile}
+                  >
+                    Save changes
+                  </Button>
+                </div>
+              }
+            >
+              {companyProfileMutation.isError && (
+                <Alert variant="error">{getApiErrorMessage(companyProfileMutation.error)}</Alert>
+              )}
+              {profileEditing && profileEditing.slug !== PLATFORM_COMPANY_SLUG && (
+                <Alert variant="info" className="mb-3">
+                  Changing the company code updates the login URL (
+                  <span className="font-mono text-xs">{buildTenantLoginUrl(editCompanySlug || profileEditing.slug)}</span>
+                  ). Users must sign in with the new code.
+                </Alert>
+              )}
+              <div className="space-y-3">
+                <Input
+                  label="Company name"
+                  value={editCompanyName}
+                  onChange={(e) => setEditCompanyName(e.target.value)}
+                  required
+                />
+                <Input
+                  label="Company code"
+                  value={editCompanySlug}
+                  onChange={(e) => setEditCompanySlug(e.target.value.toLowerCase())}
+                  onBlur={() => {
+                    if (profileEditing?.slug === PLATFORM_COMPANY_SLUG) return;
+                    setEditCompanySlug((prev) => slugifyCompanyCode(prev || editCompanyName));
+                  }}
+                  disabled={profileEditing?.slug === PLATFORM_COMPANY_SLUG}
+                  hint={
+                    profileEditing?.slug === PLATFORM_COMPANY_SLUG
+                      ? 'Platform company code cannot be changed.'
+                      : 'Lowercase letters, numbers, and hyphens only.'
+                  }
+                  className="font-mono"
+                />
+                <Input
+                  label="Contact email"
+                  type="email"
+                  value={editCompanyEmail}
+                  onChange={(e) => setEditCompanyEmail(e.target.value)}
+                />
+                <Input
+                  label="Phone"
+                  value={editCompanyPhone}
+                  onChange={(e) => setEditCompanyPhone(e.target.value)}
+                  placeholder="Optional"
+                />
+              </div>
+            </ModalFormBody>
+          </Modal>
 
           <Modal
             open={!!modulesEditing}

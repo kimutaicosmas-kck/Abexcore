@@ -7,6 +7,7 @@ import {
   createUserSchema,
   companySettingsSchema,
   registerCompanySchema,
+  updateCompanySchema,
   deleteCompanySchema,
   resetDemoWorkspaceSchema,
 } from '../validators/schemas';
@@ -328,6 +329,29 @@ router.get(
           userCount: _count.users,
         })
       ),
+    });
+  })
+);
+
+router.patch(
+  '/companies/:id',
+  requirePlatformOwner,
+  validate(updateCompanySchema),
+  auditLog('tenant', 'update', 'company_profile'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const companyId = getParam(req.params.id);
+    const company = await TenantService.updateCompanyProfile(companyId, {
+      name: req.body.name,
+      slug: req.body.slug,
+      email: req.body.email,
+      phone: req.body.phone,
+      country: req.body.country,
+      currency: req.body.currency,
+    });
+    res.json({
+      success: true,
+      data: company,
+      message: `Company profile updated for ${company.name}.`,
     });
   })
 );

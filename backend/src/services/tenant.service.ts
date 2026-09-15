@@ -202,6 +202,100 @@ export class TenantService {
     );
   }
 
+  static async updateCompanyProfile(
+    companyId: string,
+    input: {
+      name?: string;
+      slug?: string;
+      email?: string | null;
+      phone?: string | null;
+      country?: string;
+      currency?: string;
+    }
+  ) {
+    const target = await prisma.company.findUnique({
+      where: { id: companyId },
+      select: { id: true, slug: true },
+    });
+    if (!target) throw new AppError('Company not found', 404);
+
+    const data: {
+      name?: string;
+      legalName?: string;
+      slug?: string;
+      email?: string | null;
+      phone?: string | null;
+      country?: string;
+      currency?: string;
+    } = {};
+
+    if (input.name !== undefined) {
+      const name = input.name.trim();
+      if (name.length < 2) throw new AppError('Company name is required', 400);
+      data.name = name;
+      data.legalName = name;
+    }
+
+    if (input.slug !== undefined) {
+      if (target.slug === PLATFORM_OWNER_SLUG) {
+        throw new AppError('Platform company code cannot be changed', 400);
+      }
+      const slug = slugifyCompany(input.slug);
+      if (!slug || slug.length < 2) throw new AppError('Company code is required', 400);
+      if (slug === PLATFORM_OWNER_SLUG) {
+        throw new AppError('This company code is reserved', 400);
+      }
+      if (slug !== target.slug) {
+        const existing = await prisma.company.findUnique({ where: { slug } });
+        if (existing) throw new AppError('This company code is already taken', 409);
+      }
+      data.slug = slug;
+    }
+
+    if (input.email !== undefined) {
+      const raw = input.email;
+      data.email = raw && String(raw).trim() ? String(raw).trim().toLowerCase() : null;
+    }
+    if (input.phone !== undefined) {
+      data.phone = input.phone?.trim() || null;
+    }
+    if (input.country !== undefined) {
+      const country = input.country.trim();
+      if (country) data.country = country;
+    }
+    if (input.currency !== undefined) {
+      const currency = input.currency.trim();
+      if (currency) data.currency = currency;
+    }
+
+    const company = await prisma.company.update({
+      where: { id: companyId },
+      data,
+      select: {
+        id: true,
+        slug: true,
+        name: true,
+        logo: true,
+        email: true,
+        isActive: true,
+        enabledModules: true,
+        qualityModuleEnabled: true,
+        brandMode: true,
+        brandPrimary: true,
+        brandAccent: true,
+        docPrimaryColor: true,
+        createdAt: true,
+        _count: { select: { users: { where: { deletedAt: null } } } },
+      },
+    });
+
+    const { _count, ...rest } = company;
+    return sanitizeCompanyBrand({
+      ...rest,
+      userCount: _count.users,
+    });
+  }
+
   static async updateCompanyModules(
     companyId: string,
     input: { modulePreset?: CompanyModulePreset; enabledModules?: unknown }

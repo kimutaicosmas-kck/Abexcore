@@ -23,6 +23,26 @@ export const registerCompanySchema = z.object({
   enabledModules: z.union([z.array(z.string()), z.string()]).optional(),
 });
 
+export const updateCompanySchema = z
+  .object({
+    name: z.string().min(2, 'Company name is required').optional(),
+    slug: z.string().min(2).max(48).optional(),
+    email: z.union([z.string().email('Invalid email address'), z.literal(''), z.null()]).optional(),
+    phone: z.string().nullable().optional(),
+    country: z.string().optional(),
+    currency: z.string().optional(),
+  })
+  .refine(
+    (body) =>
+      body.name !== undefined ||
+      body.slug !== undefined ||
+      body.email !== undefined ||
+      body.phone !== undefined ||
+      body.country !== undefined ||
+      body.currency !== undefined,
+    { message: 'Provide at least one field to update' }
+  );
+
 export const refreshTokenSchema = z.object({
   refreshToken: z.string().min(1),
 });
