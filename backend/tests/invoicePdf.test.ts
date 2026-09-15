@@ -129,4 +129,54 @@ describe('invoice PDF pagination', () => {
     const buf = await renderInvoicePdf(45);
     expect(countPages(buf)).toBeLessThanOrEqual(3);
   });
+
+  it('wraps long line descriptions without extra blank pages', async () => {
+    const longRows = [
+      {
+        qty: '1',
+        description: '2065234 / 35 AIR CLEANER — 2065234 / 35 AIR CLEANER',
+        unit: '1,050',
+        total: '1,050',
+      },
+      {
+        qty: '1',
+        description: '4600310 FUEL WATER SEPARATOR — 4600310 FUEL WATER SEPARATOR',
+        unit: '430',
+        total: '430',
+      },
+      {
+        qty: '1',
+        description: '1R1804 — 1R1804 FUEL FILTER',
+        unit: '250',
+        total: '250',
+      },
+    ];
+    const closingH = 5 * 14 + 16 + 16 + 72;
+    const doc = new PDFDocument({ margin: 40, size: 'A4' });
+    const chunks: Buffer[] = [];
+    doc.on('data', (c) => chunks.push(c));
+    const done = new Promise<Buffer>((res) => doc.on('end', () => res(Buffer.concat(chunks))));
+
+    let y = drawInstructionLine(doc, 40, 'We are pleased to quote the following goods and prices');
+    y = drawDocTable(
+      doc,
+      y,
+      [
+        { key: 'qty', label: 'Qty', width: 50, align: 'center' },
+        { key: 'description', label: 'Description', width: 265 },
+        { key: 'unit', label: 'Unit Price', width: 92, align: 'right' },
+        { key: 'total', label: 'Amount', width: 92, align: 'right' },
+      ],
+      longRows,
+      {
+        minBodyRows: 3,
+        footerLeft: 'E.& O.E',
+        footerCenter: 'No. QT-2026-00001',
+        closingBlockHeight: closingH,
+      }
+    );
+    doc.end();
+    const buf = await done;
+    expect(countPages(buf)).toBe(1);
+  });
 });

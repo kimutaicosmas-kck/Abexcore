@@ -412,7 +412,9 @@ type TableColumn = {
 };
 
 const TABLE_HEADER_H = 22;
-const TABLE_ROW_H = 18;
+const TABLE_ROW_MIN_H = 18;
+const TABLE_ROW_PAD = 8;
+const TABLE_BODY_FONT_SIZE = 9;
 const TABLE_FOOTER_H = 18;
 
 function pageBottom(doc: PDFKit.PDFDocument): number {
@@ -432,18 +434,62 @@ export function ensureDocSpace(doc: PDFKit.PDFDocument, y: number, needed: numbe
   return y;
 }
 
+function measureTableRowHeights(
+  doc: PDFKit.PDFDocument,
+  columns: TableColumn[],
+  dataRows: Record<string, string>[]
+): number[] {
+  doc.font('Helvetica').fontSize(TABLE_BODY_FONT_SIZE);
+  return dataRows.map((row) => {
+    let maxH = TABLE_ROW_MIN_H;
+    for (const col of columns) {
+      const text = row[col.key] || '';
+      const textH = doc.heightOfString(text, {
+        width: col.width - 8,
+        align: col.align || 'left',
+      });
+      maxH = Math.max(maxH, textH + TABLE_ROW_PAD);
+    }
+    return maxH;
+  });
+}
+
+function tableBodyHeight(rowHeights: number[], paddingRows: number): number {
+  const dataH = rowHeights.reduce((sum, h) => sum + h, 0);
+  return dataH + paddingRows * TABLE_ROW_MIN_H;
+}
+
+function countRowsForPageHeight(
+  rowHeights: number[],
+  startIndex: number,
+  maxBodyHeight: number
+): number {
+  let used = 0;
+  let count = 0;
+  for (let i = startIndex; i < rowHeights.length; i++) {
+    const rowH = rowHeights[i];
+    if (count > 0 && used + rowH > maxBodyHeight) break;
+    if (count === 0 && rowH > maxBodyHeight) return 1;
+    used += rowH;
+    count++;
+  }
+  return count;
+}
+
 function drawDocTableSegment(
   doc: PDFKit.PDFDocument,
   segmentY: number,
   columns: TableColumn[],
   dataRows: Record<string, string>[],
-  bodyRowCount: number,
+  rowHeights: number[],
+  paddingRows: number,
   opts: { footerLeft?: string; footerCenter?: string; drawFooter: boolean }
 ): number {
   const ink = inkFor(doc);
   const tableW = columns.reduce((s, c) => s + c.width, 0);
   const tableX = PAGE_LEFT;
-  const totalH = TABLE_HEADER_H + bodyRowCount * TABLE_ROW_H;
+  const bodyH = tableBodyHeight(rowHeights, paddingRows);
+  const totalH = TABLE_HEADER_H + bodyH;
 
   doc.rect(tableX, segmentY, tableW, totalH).strokeColor(ink.primary).lineWidth(1.2).stroke();
   doc.rect(tableX, segmentY, tableW, TABLE_HEADER_H).fill(ink.primary);
@@ -470,29 +516,39 @@ function drawDocTableSegment(
   }
 
   const bodyTop = segmentY + TABLE_HEADER_H;
-  for (let r = 1; r < bodyRowCount; r++) {
-    const ly = bodyTop + r * TABLE_ROW_H;
+  let rowTop = bodyTop;
+  for (let i = 0; i < rowHeights.length; i++) {
+    rowTop += rowHeights[i];
     doc
-      .moveTo(tableX, ly)
-      .lineTo(tableX + tableW, ly)
+      .moveTo(tableX, rowTop)
+      .lineTo(tableX + tableW, rowTop)
+      .strokeColor(ink.line)
+      .lineWidth(0.5)
+      .stroke();
+  }
+  for (let i = 0; i < paddingRows; i++) {
+    rowTop += TABLE_ROW_MIN_H;
+    doc
+      .moveTo(tableX, rowTop)
+      .lineTo(tableX + tableW, rowTop)
       .strokeColor(ink.line)
       .lineWidth(0.5)
       .stroke();
   }
 
-  doc.font('Helvetica').fontSize(9).fillColor('#0f172a');
+  doc.font('Helvetica').fontSize(TABLE_BODY_FONT_SIZE).fillColor('#0f172a');
+  rowTop = bodyTop;
   for (let i = 0; i < dataRows.length; i++) {
-    const rowY = bodyTop + i * TABLE_ROW_H + 4;
+    const rowY = rowTop + 4;
     let cx = tableX;
     for (const col of columns) {
       doc.text(dataRows[i][col.key] || '', cx + 4, rowY, {
         width: col.width - 8,
         align: col.align || 'left',
-        lineBreak: false,
-        ellipsis: true,
       });
       cx += col.width;
     }
+    rowTop += rowHeights[i];
   }
 
   if (opts.drawFooter) {
@@ -534,13 +590,18 @@ export function drawDocTable(
   const footerH = opts?.footerLeft || opts?.footerCenter ? TABLE_FOOTER_H : 0;
   const closingBlock = opts?.closingBlockHeight ?? 0;
   const minLastPageRows = opts?.minBodyRows ?? 3;
+  const allRowHeights = measureTableRowHeights(doc, columns, rows);
 
   let y = startY;
   let rowIndex = 0;
 
   if (rows.length === 0) {
-    y = ensureDocSpace(doc, y, TABLE_HEADER_H + minLastPageRows * TABLE_ROW_H + footerH + closingBlock);
-    return drawDocTableSegment(doc, y, columns, [], minLastPageRows, {
+    y = ensureDocSpace(
+      doc,
+      y,
+      TABLE_HEADER_H + minLastPageRows * TABLE_ROW_MIN_H + footerH + closingBlock
+    );
+    return drawDocTableSegment(doc, y, columns, [], [], minLastPageRows, {
       footerLeft: opts?.footerLeft,
       footerCenter: opts?.footerCenter,
       drawFooter: true,
@@ -548,24 +609,28 @@ export function drawDocTable(
   }
 
   while (rowIndex < rows.length) {
-    y = ensureDocSpace(doc, y, TABLE_HEADER_H + TABLE_ROW_H);
+    y = ensureDocSpace(doc, y, TABLE_HEADER_H + TABLE_ROW_MIN_H);
 
     const remaining = rows.length - rowIndex;
     const bottom = pageBottom(doc);
-    const needForFinal =
-      TABLE_HEADER_H + remaining * TABLE_ROW_H + footerH + closingBlock;
-    const needForBodyOnly = TABLE_HEADER_H + remaining * TABLE_ROW_H + footerH;
+    const remainingHeights = allRowHeights.slice(rowIndex);
+    const remainingBodyH = tableBodyHeight(remainingHeights, 0);
+    const needForFinal = TABLE_HEADER_H + remainingBodyH + footerH + closingBlock;
 
     if (y + needForFinal <= bottom) {
-      let bodyRows = remaining;
-      if (bodyRows < minLastPageRows) {
-        const maxPadded = Math.floor(
-          (bottom - y - TABLE_HEADER_H - footerH - closingBlock) / TABLE_ROW_H
-        );
-        bodyRows = Math.min(Math.max(bodyRows, minLastPageRows), Math.max(bodyRows, maxPadded));
-      }
       const chunk = rows.slice(rowIndex, rowIndex + remaining);
-      y = drawDocTableSegment(doc, y, columns, chunk, bodyRows, {
+      const chunkHeights = allRowHeights.slice(rowIndex, rowIndex + remaining);
+      let paddingRows = 0;
+      if (chunk.length < minLastPageRows) {
+        const minBodyH = minLastPageRows * TABLE_ROW_MIN_H;
+        const maxBodyH = bottom - y - TABLE_HEADER_H - footerH - closingBlock;
+        const targetBodyH = Math.min(Math.max(tableBodyHeight(chunkHeights, 0), minBodyH), maxBodyH);
+        paddingRows = Math.max(
+          0,
+          Math.ceil((targetBodyH - tableBodyHeight(chunkHeights, 0)) / TABLE_ROW_MIN_H)
+        );
+      }
+      y = drawDocTableSegment(doc, y, columns, chunk, chunkHeights, paddingRows, {
         footerLeft: opts?.footerLeft,
         footerCenter: opts?.footerCenter,
         drawFooter: true,
@@ -573,36 +638,45 @@ export function drawDocTable(
       break;
     }
 
-    if (remaining > 0 && y + needForBodyOnly > bottom) {
-      const maxRows = Math.floor((bottom - y - TABLE_HEADER_H) / TABLE_ROW_H);
-      if (maxRows < 1) {
-        doc.addPage();
-        y = pageTop(doc);
-        continue;
-      }
+    const maxBodyH = bottom - y - TABLE_HEADER_H;
+    const chunkSize = countRowsForPageHeight(allRowHeights, rowIndex, maxBodyH);
 
-      const chunkSize = Math.min(maxRows, remaining);
-      const chunk = rows.slice(rowIndex, rowIndex + chunkSize);
-      y = drawDocTableSegment(doc, y, columns, chunk, chunkSize, { drawFooter: false });
-      rowIndex += chunkSize;
+    if (chunkSize < 1) {
       doc.addPage();
       y = pageTop(doc);
       continue;
     }
 
-    // Rows fit on this page; totals/signatures move to the next page via drawMoneyTotals.
-    let bodyRows = remaining;
-    if (bodyRows < minLastPageRows) {
-      const maxPadded = Math.floor((bottom - y - TABLE_HEADER_H - footerH) / TABLE_ROW_H);
-      bodyRows = Math.min(Math.max(bodyRows, minLastPageRows), Math.max(bodyRows, maxPadded));
+    const chunk = rows.slice(rowIndex, rowIndex + chunkSize);
+    const chunkHeights = allRowHeights.slice(rowIndex, rowIndex + chunkSize);
+    const isLastChunk = rowIndex + chunkSize >= rows.length;
+
+    if (isLastChunk && chunkSize === remaining) {
+      let paddingRows = 0;
+      if (chunk.length < minLastPageRows) {
+        const minBodyH = minLastPageRows * TABLE_ROW_MIN_H;
+        const maxPaddedBodyH = bottom - y - TABLE_HEADER_H - footerH;
+        const targetBodyH = Math.min(
+          Math.max(tableBodyHeight(chunkHeights, 0), minBodyH),
+          maxPaddedBodyH
+        );
+        paddingRows = Math.max(
+          0,
+          Math.ceil((targetBodyH - tableBodyHeight(chunkHeights, 0)) / TABLE_ROW_MIN_H)
+        );
+      }
+      y = drawDocTableSegment(doc, y, columns, chunk, chunkHeights, paddingRows, {
+        footerLeft: opts?.footerLeft,
+        footerCenter: opts?.footerCenter,
+        drawFooter: true,
+      });
+      break;
     }
-    const chunk = rows.slice(rowIndex, rowIndex + remaining);
-    y = drawDocTableSegment(doc, y, columns, chunk, bodyRows, {
-      footerLeft: opts?.footerLeft,
-      footerCenter: opts?.footerCenter,
-      drawFooter: true,
-    });
-    break;
+
+    y = drawDocTableSegment(doc, y, columns, chunk, chunkHeights, 0, { drawFooter: false });
+    rowIndex += chunkSize;
+    doc.addPage();
+    y = pageTop(doc);
   }
 
   return y;
