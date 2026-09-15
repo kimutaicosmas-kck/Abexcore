@@ -1076,22 +1076,24 @@ export function SettingsPage() {
                   onChange={(e) => setEditCompanyName(e.target.value)}
                   required
                 />
-                <Input
-                  label="Company code"
-                  value={editCompanySlug}
-                  onChange={(e) => setEditCompanySlug(e.target.value.toLowerCase())}
-                  onBlur={() => {
-                    if (profileEditing?.slug === PLATFORM_COMPANY_SLUG) return;
-                    setEditCompanySlug((prev) => slugifyCompanyCode(prev || editCompanyName));
-                  }}
-                  disabled={profileEditing?.slug === PLATFORM_COMPANY_SLUG}
-                  hint={
-                    profileEditing?.slug === PLATFORM_COMPANY_SLUG
+                <div>
+                  <Input
+                    label="Company code"
+                    value={editCompanySlug}
+                    onChange={(e) => setEditCompanySlug(e.target.value.toLowerCase())}
+                    onBlur={() => {
+                      if (profileEditing?.slug === PLATFORM_COMPANY_SLUG) return;
+                      setEditCompanySlug((prev) => slugifyCompanyCode(prev || editCompanyName));
+                    }}
+                    disabled={profileEditing?.slug === PLATFORM_COMPANY_SLUG}
+                    className="font-mono"
+                  />
+                  <p className="mt-1 text-xs text-slate-500">
+                    {profileEditing?.slug === PLATFORM_COMPANY_SLUG
                       ? 'Platform company code cannot be changed.'
-                      : 'Lowercase letters, numbers, and hyphens only.'
-                  }
-                  className="font-mono"
-                />
+                      : 'Lowercase letters, numbers, and hyphens only.'}
+                  </p>
+                </div>
                 <Input
                   label="Contact email"
                   type="email"
