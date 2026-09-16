@@ -76,8 +76,10 @@ export function CustomerSearchSelect({
     queryKey: ['customers', 'search-picker', company?.id, customerFilterKey, debouncedQuery],
     queryFn: () => {
       const params: Record<string, unknown> = {
-        limit: 100,
+        limit: 500,
         isActive: true,
+        sortBy: 'name',
+        sortOrder: 'asc',
         search: debouncedQuery || undefined,
       };
       if (canAssignSalesPerson) {

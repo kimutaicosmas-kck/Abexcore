@@ -4,11 +4,12 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, Trash2 } from 'lucide-react';
-import { financeApi, customersApi, inventoryApi } from '../../services/api';
+import { financeApi, inventoryApi } from '../../services/api';
 import { Button, Input, Select, Alert, FormActions, ModalFormBody } from '../ui';
 import { getApiErrorMessage } from '../../utils/apiError';
 import { Customer, Invoice, Supplier } from '../../types';
 import { useVatRate } from '../../contexts/AuthContext';
+import { CustomerSearchSelect } from './CustomerSearchSelect';
 import {
   readStoredDraftId,
   useDocumentDraftAutosave,
@@ -93,31 +94,20 @@ export function InvoiceForm({ onSuccess, onCancel, draftId: initialDraftId }: In
   const [draftDiscarded, setDraftDiscarded] = useState(false);
   const [discarding, setDiscarding] = useState(false);
   const hydratedDraftIdRef = useRef<string | undefined>(undefined);
-
-  const { data: customersData } = useQuery({
-    queryKey: ['customers'],
-    queryFn: () => customersApi.list({ limit: 100 }).then((r) => r.data.data as Customer[]),
-  });
+  const [customerSearch, setCustomerSearch] = useState('');
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
 
   const { data: suppliersData } = useQuery({
     queryKey: ['suppliers'],
     queryFn: () => inventoryApi.suppliers({ limit: 100 }).then((r) => r.data.data as Supplier[]),
   });
 
-  const customerOptions = [
-    { value: '', label: 'Select customer...' },
-    ...(customersData || []).map((c) => ({
-      value: c.id,
-      label: `${c.code} - ${c.name} (${c.vatStatus === 'NON_VAT' ? 'Non-VAT' : 'VAT'})`,
-    })),
-  ];
-
   const supplierOptions = [
     { value: '', label: 'Select supplier...' },
     ...(suppliersData || []).map((s) => ({ value: s.id, label: `${s.code} - ${s.name}` })),
   ];
 
-  const { register, control, handleSubmit, watch, reset, getValues, formState: { errors } } =
+  const { register, control, handleSubmit, watch, reset, getValues, setValue, formState: { errors } } =
     useForm<InvoiceFormData>({
       resolver: zodResolver(invoiceSchema),
       defaultValues: {
@@ -153,6 +143,9 @@ export function InvoiceForm({ onSuccess, onCancel, draftId: initialDraftId }: In
             }))
           : [{ description: '', quantity: 1, unitPrice: 0 }],
     });
+    if (existingDraft.customer) {
+      setSelectedCustomer(existingDraft.customer as Customer);
+    }
     setDraftRestored(true);
   }, [existingDraft, reset]);
 
@@ -210,10 +203,10 @@ export function InvoiceForm({ onSuccess, onCancel, draftId: initialDraftId }: In
   const isCustomerType = invoiceType === 'SALES' || invoiceType === 'CREDIT_NOTE';
 
   const companyVatRate = useVatRate();
-  const selectedCustomer = customersData?.find((c) => c.id === customerId) || existingDraft?.customer;
+  const vatCustomer = selectedCustomer || existingDraft?.customer;
   const vatRate =
-    isCustomerType && selectedCustomer?.vatStatus === 'NON_VAT' ? 0 : companyVatRate;
-  const isVatCustomer = isCustomerType && selectedCustomer?.vatStatus === 'VAT';
+    isCustomerType && vatCustomer?.vatStatus === 'NON_VAT' ? 0 : companyVatRate;
+  const isVatCustomer = isCustomerType && vatCustomer?.vatStatus === 'VAT';
   const keyedTotal = items.reduce(
     (sum, item) => sum + (item.quantity || 0) * (item.unitPrice || 0),
     0
@@ -282,7 +275,16 @@ export function InvoiceForm({ onSuccess, onCancel, draftId: initialDraftId }: In
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Select label="Type *" options={invoiceTypeOptions} {...register('type')} />
         {isCustomerType ? (
-          <Select label="Customer" options={customerOptions} {...register('customerId')} />
+          <CustomerSearchSelect
+            label="Customer"
+            value={customerId || ''}
+            onChange={(id) => setValue('customerId', id, { shouldValidate: true })}
+            onCustomerSelect={setSelectedCustomer}
+            onSearchTextChange={setCustomerSearch}
+            initialSearchText={customerSearch}
+            salesPersonFilterMode="quotation"
+            placeholder="Search customer by name or code…"
+          />
         ) : (
           <Select label="Supplier" options={supplierOptions} {...register('supplierId')} />
         )}

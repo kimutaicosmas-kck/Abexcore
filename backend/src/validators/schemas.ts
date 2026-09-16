@@ -236,6 +236,7 @@ export const userListQuerySchema = paginationSchema.extend({
 });
 
 export const customerListQuerySchema = paginationSchema.extend({
+  limit: z.coerce.number().int().min(1).max(500).default(20),
   type: z.preprocess(
     (v) => (v === '' || v === undefined ? undefined : v),
     z.enum(['DEALER', 'RETAIL_SHOP', 'INDUSTRY', 'GOVERNMENT', 'NGO']).optional()
