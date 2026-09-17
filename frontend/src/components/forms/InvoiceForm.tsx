@@ -47,6 +47,8 @@ interface InvoiceFormProps {
   onSuccess: () => void;
   onCancel: () => void;
   draftId?: string;
+  /** Pre-select document type when opening the form (e.g. credit note). */
+  defaultType?: InvoiceFormData['type'];
 }
 
 function toInvoiceDraftPayload(data: InvoiceFormData) {
@@ -84,7 +86,12 @@ function formatDueDate(value?: string | null) {
   return value.slice(0, 10);
 }
 
-export function InvoiceForm({ onSuccess, onCancel, draftId: initialDraftId }: InvoiceFormProps) {
+export function InvoiceForm({
+  onSuccess,
+  onCancel,
+  draftId: initialDraftId,
+  defaultType = 'SALES',
+}: InvoiceFormProps) {
   const queryClient = useQueryClient();
   const [draftId, setDraftId] = useState(
     () => initialDraftId || readStoredDraftId(INVOICE_DRAFT_STORAGE_KEY)
@@ -111,7 +118,7 @@ export function InvoiceForm({ onSuccess, onCancel, draftId: initialDraftId }: In
     useForm<InvoiceFormData>({
       resolver: zodResolver(invoiceSchema),
       defaultValues: {
-        type: 'SALES',
+        type: defaultType,
         items: [{ description: '', quantity: 1, unitPrice: 0 }],
       },
     });
@@ -274,18 +281,7 @@ export function InvoiceForm({ onSuccess, onCancel, draftId: initialDraftId }: In
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Select label="Type *" options={invoiceTypeOptions} {...register('type')} />
-        {isCustomerType ? (
-          <CustomerSearchSelect
-            label="Customer"
-            value={customerId || ''}
-            onChange={(id) => setValue('customerId', id, { shouldValidate: true })}
-            onCustomerSelect={setSelectedCustomer}
-            onSearchTextChange={setCustomerSearch}
-            initialSearchText={customerSearch}
-            salesPersonFilterMode="quotation"
-            placeholder="Search customer by name or code…"
-          />
-        ) : (
+        {!isCustomerType && (
           <Select label="Supplier" options={supplierOptions} {...register('supplierId')} />
         )}
         <Input label="Due Date" type="date" {...register('dueDate')} />
@@ -298,6 +294,22 @@ export function InvoiceForm({ onSuccess, onCancel, draftId: initialDraftId }: In
           />
         )}
       </div>
+
+      {isCustomerType && (
+        <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-3">
+          <CustomerSearchSelect
+            label="Customer *"
+            value={customerId || ''}
+            onChange={(id) => setValue('customerId', id, { shouldValidate: true })}
+            onCustomerSelect={setSelectedCustomer}
+            onSearchTextChange={setCustomerSearch}
+            initialSearchText={customerSearch}
+            salesPersonFilterMode="quotation"
+            autoFocus={invoiceType === 'CREDIT_NOTE'}
+            placeholder="Search customer by name or code…"
+          />
+        </div>
+      )}
 
       <div>
         <div className="flex items-center justify-between mb-2">

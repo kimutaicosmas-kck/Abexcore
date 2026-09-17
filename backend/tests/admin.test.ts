@@ -21,6 +21,23 @@ describe('Finance schema validation', () => {
   });
   it('validates invoice list query', () => {
     expect(financeListQuerySchema.safeParse({ page: 1, limit: 15, type: 'SALES' }).success).toBe(true);
+    expect(
+      financeListQuerySchema.safeParse({
+        page: 1,
+        limit: 15,
+        vatStatus: 'VAT',
+        period: 'this_month',
+      }).success
+    ).toBe(true);
+    expect(
+      financeListQuerySchema.safeParse({
+        page: 1,
+        limit: 15,
+        vatStatus: 'NON_VAT',
+        from: '2026-01-01',
+        to: '2026-01-31',
+      }).success
+    ).toBe(true);
   });
   it('validates journal entry', () => {
     expect(createJournalEntrySchema.safeParse({

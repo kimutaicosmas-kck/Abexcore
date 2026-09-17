@@ -13,29 +13,16 @@ import {
 } from '../utils/finance-metrics';
 import { InvoiceMaintenanceService } from './invoice-maintenance.service';
 import { tenantEmployeeScope } from '../utils/tenant';
+import { buildInvoiceListWhere, type InvoiceListFilters } from '../utils/invoiceListWhere';
 
 export class FinanceService {
-  static async getStats(opts?: { type?: string; status?: string; search?: string }) {
+  static async getStats(opts?: InvoiceListFilters) {
     await InvoiceMaintenanceService.markOverdueInvoices();
 
     const monthStart = getMonthStart();
     const monthEnd = getMonthEnd();
 
-    const invScope: Prisma.InvoiceWhereInput = {};
-    if (opts?.type) {
-      invScope.type = opts.type as Prisma.EnumInvoiceTypeFilter['equals'];
-    }
-    if (opts?.status) {
-      invScope.status = opts.status as Prisma.EnumPaymentStatusFilter['equals'];
-    }
-    if (opts?.search?.trim()) {
-      const q = opts.search.trim();
-      invScope.OR = [
-        { invoiceNumber: { contains: q } },
-        { customer: { name: { contains: q } } },
-        { supplier: { name: { contains: q } } },
-      ];
-    }
+    const invScope = buildInvoiceListWhere(opts);
     const hasScope = Object.keys(invScope).length > 0;
 
     const salesWhere: Prisma.InvoiceWhereInput = {

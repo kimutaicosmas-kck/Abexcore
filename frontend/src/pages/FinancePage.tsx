@@ -112,6 +112,21 @@ const STATUS_FILTER = [
   { value: 'OVERDUE', label: 'Overdue' },
 ];
 
+const VAT_FILTER = [
+  { value: '', label: 'All VAT types' },
+  { value: 'VAT', label: 'VAT customers' },
+  { value: 'NON_VAT', label: 'Non-VAT customers' },
+];
+
+const INV_PERIOD_OPTIONS = [
+  { value: '', label: 'All dates' },
+  { value: 'this_week', label: 'This week' },
+  { value: 'last_week', label: 'Last week' },
+  { value: 'this_month', label: 'This month' },
+  { value: 'last_month', label: 'Last month' },
+  { value: 'custom', label: 'Custom range…' },
+];
+
 const ACCOUNT_TYPE_LABELS: Record<string, string> = {
   ASSET: 'Assets',
   LIABILITY: 'Liabilities',
@@ -156,6 +171,10 @@ export function FinancePage() {
   const [searchInput, setSearchInput] = useState('');
   const [type, setType] = useState('');
   const [status, setStatus] = useState('');
+  const [vatStatus, setVatStatus] = useState('');
+  const [invPeriod, setInvPeriod] = useState('');
+  const [invFrom, setInvFrom] = useState('');
+  const [invTo, setInvTo] = useState('');
 
   const [payPage, setPayPage] = useState(1);
   const [paySearch, setPaySearch] = useState('');
@@ -171,6 +190,22 @@ export function FinancePage() {
   const [paymentsExporting, setPaymentsExporting] = useState(false);
   const [invoiceModalOpen, setInvoiceModalOpen] = useState(false);
   const [editingInvoiceId, setEditingInvoiceId] = useState<string | undefined>();
+  const [invoiceFormDefaultType, setInvoiceFormDefaultType] = useState<
+    'SALES' | 'PURCHASE' | 'CREDIT_NOTE' | 'DEBIT_NOTE'
+  >('SALES');
+
+  const openInvoiceModal = (opts?: {
+    defaultType?: 'SALES' | 'PURCHASE' | 'CREDIT_NOTE' | 'DEBIT_NOTE';
+    draftId?: string;
+  }) => {
+    if (opts?.draftId) {
+      setEditingInvoiceId(opts.draftId);
+    } else {
+      setEditingInvoiceId(undefined);
+      setInvoiceFormDefaultType(opts?.defaultType ?? 'SALES');
+    }
+    setInvoiceModalOpen(true);
+  };
   const [pendingDraftDiscard, setPendingDraftDiscard] = useState<{ id: string; label: string } | null>(null);
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
   const [journalModalOpen, setJournalModalOpen] = useState(false);
@@ -184,16 +219,19 @@ export function FinancePage() {
   const canCreate = hasPermission('finance:create');
   const canUpdate = hasPermission('finance:update');
 
+  const invoiceFilterParams = {
+    search: search || undefined,
+    type: type || undefined,
+    status: status || undefined,
+    vatStatus: vatStatus || undefined,
+    period: invPeriod && invPeriod !== 'custom' ? invPeriod : undefined,
+    from: invPeriod === 'custom' && invFrom ? invFrom : undefined,
+    to: invPeriod === 'custom' && invTo ? invTo : undefined,
+  };
+
   const { data: stats } = useQuery({
-    queryKey: ['finance-stats', search, type, status],
-    queryFn: () =>
-      financeApi
-        .stats({
-          search: search || undefined,
-          type: type || undefined,
-          status: status || undefined,
-        })
-        .then((r) => r.data.data as FinanceStats),
+    queryKey: ['finance-stats', search, type, status, vatStatus, invPeriod, invFrom, invTo],
+    queryFn: () => financeApi.stats(invoiceFilterParams).then((r) => r.data.data as FinanceStats),
   });
 
   const { data: overview, isLoading: overviewLoading } = useQuery({
@@ -202,11 +240,9 @@ export function FinancePage() {
   });
 
   const { data: invoices, isLoading: invLoading, isError: invError, refetch: refetchInvoices } = useQuery({
-    queryKey: ['invoices', page, search, type, status],
+    queryKey: ['invoices', page, search, type, status, vatStatus, invPeriod, invFrom, invTo],
     queryFn: () =>
-      financeApi
-        .invoices({ page, limit: 15, search: search || undefined, type: type || undefined, status: status || undefined })
-        .then((r) => r.data),
+      financeApi.invoices({ page, limit: 15, ...invoiceFilterParams }).then((r) => r.data),
     enabled: activeTab === 0,
   });
 
@@ -386,6 +422,18 @@ export function FinancePage() {
         (row.customer as { name: string })?.name || (row.supplier as { name: string })?.name || '—',
     },
     {
+      key: 'vatStatus',
+      label: 'VAT',
+      render: (_: unknown, row: Record<string, unknown>) => {
+        const inv = row as unknown as Invoice;
+        const customerVat = inv.customer?.vatStatus;
+        if (customerVat === 'VAT') return <Badge variant="info">VAT</Badge>;
+        if (customerVat === 'NON_VAT') return <Badge variant="default">Non-VAT</Badge>;
+        if (Number(inv.taxAmount || 0) > 0) return <Badge variant="info">VAT</Badge>;
+        return <Badge variant="default">Non-VAT</Badge>;
+      },
+    },
+    {
       key: 'customerPoNumber',
       label: 'LPO',
       render: (val: unknown, row: Record<string, unknown>) => {
@@ -506,10 +554,7 @@ export function FinancePage() {
                 <Button
                   variant="secondary"
                   size="sm"
-                  onClick={() => {
-                    setEditingInvoiceId(inv.id);
-                    setInvoiceModalOpen(true);
-                  }}
+                  onClick={() => openInvoiceModal({ draftId: inv.id })}
                 >
                   Continue
                 </Button>
@@ -770,7 +815,10 @@ export function FinancePage() {
           <Button size="sm" variant="secondary" onClick={() => openPaymentModal()}>
             <CreditCard className="h-4 w-4 mr-1.5" /> Record Payment
           </Button>
-          <Button size="sm" onClick={() => setInvoiceModalOpen(true)}>
+          <Button size="sm" variant="secondary" onClick={() => openInvoiceModal({ defaultType: 'CREDIT_NOTE' })}>
+            <Plus className="h-4 w-4 mr-1.5" /> New Credit Note
+          </Button>
+          <Button size="sm" onClick={() => openInvoiceModal()}>
             <Plus className="h-4 w-4 mr-1.5" /> New Invoice
           </Button>
         </>
@@ -841,7 +889,60 @@ export function FinancePage() {
             </form>
             <Select options={TYPE_FILTER} value={type} onChange={(e) => { setType(e.target.value); setPage(1); }} className="w-40" />
             <Select options={STATUS_FILTER} value={status} onChange={(e) => { setStatus(e.target.value); setPage(1); }} className="w-36" />
-            <Button variant="secondary" size="sm" onClick={() => { setSearchInput(''); setSearch(''); setType(''); setStatus(''); setPage(1); }}>
+            <Select
+              options={VAT_FILTER}
+              value={vatStatus}
+              onChange={(e) => { setVatStatus(e.target.value); setPage(1); }}
+              className="w-40"
+            />
+            <Select
+              label="Invoice period"
+              options={INV_PERIOD_OPTIONS}
+              value={invPeriod}
+              onChange={(e) => {
+                const v = e.target.value;
+                setInvPeriod(v);
+                if (v !== 'custom') {
+                  setInvFrom('');
+                  setInvTo('');
+                }
+                setPage(1);
+              }}
+              className="w-44"
+            />
+            {invPeriod === 'custom' && (
+              <>
+                <Input
+                  label="From"
+                  type="date"
+                  value={invFrom}
+                  onChange={(e) => { setInvFrom(e.target.value); setPage(1); }}
+                  className="w-40"
+                />
+                <Input
+                  label="To"
+                  type="date"
+                  value={invTo}
+                  onChange={(e) => { setInvTo(e.target.value); setPage(1); }}
+                  className="w-40"
+                />
+              </>
+            )}
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => {
+                setSearchInput('');
+                setSearch('');
+                setType('');
+                setStatus('');
+                setVatStatus('');
+                setInvPeriod('');
+                setInvFrom('');
+                setInvTo('');
+                setPage(1);
+              }}
+            >
               Clear
             </Button>
           </PanelFilters>
@@ -859,7 +960,7 @@ export function FinancePage() {
                 description="Sales invoices, credit notes, and purchase invoices appear here. Credit notes from returns are listed alongside invoices."
                 action={
                   canCreate ? (
-                    <Button onClick={() => setInvoiceModalOpen(true)}>
+                    <Button onClick={() => openInvoiceModal()}>
                       <Plus className="h-4 w-4 mr-2" />
                       New Invoice
                     </Button>
@@ -1337,19 +1438,29 @@ export function FinancePage() {
         onClose={() => {
           setInvoiceModalOpen(false);
           setEditingInvoiceId(undefined);
+          setInvoiceFormDefaultType('SALES');
         }}
-        title={editingInvoiceId ? 'Continue Invoice' : 'Create Invoice'}
+        title={
+          editingInvoiceId
+            ? 'Continue Invoice'
+            : invoiceFormDefaultType === 'CREDIT_NOTE'
+              ? 'Create Credit Note'
+              : 'Create Invoice'
+        }
         size="xl"
       >
         <InvoiceForm
           draftId={editingInvoiceId}
+          defaultType={invoiceFormDefaultType}
           onSuccess={() => {
             setInvoiceModalOpen(false);
             setEditingInvoiceId(undefined);
+            setInvoiceFormDefaultType('SALES');
           }}
           onCancel={() => {
             setInvoiceModalOpen(false);
             setEditingInvoiceId(undefined);
+            setInvoiceFormDefaultType('SALES');
           }}
         />
       </Modal>
@@ -1571,8 +1682,7 @@ export function FinancePage() {
                     size="sm"
                     onClick={() => {
                       setDetailOpen(false);
-                      setEditingInvoiceId(invoiceDetail.id);
-                      setInvoiceModalOpen(true);
+                      openInvoiceModal({ draftId: invoiceDetail.id });
                     }}
                   >
                     Continue

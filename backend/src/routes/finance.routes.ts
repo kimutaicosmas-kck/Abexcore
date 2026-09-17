@@ -290,12 +290,16 @@ router.get(
   authorize('finance:read'),
   validate(financeListQuerySchema, 'query'),
   asyncHandler(async (req: AuthRequest, res: Response) => {
-    const { search, type, status } = getQuery<{
+    const { search, type, status, vatStatus, period, from, to } = getQuery<{
       search?: string;
       type?: string;
       status?: string;
+      vatStatus?: 'VAT' | 'NON_VAT';
+      period?: 'this_week' | 'last_week' | 'this_month' | 'last_month';
+      from?: string;
+      to?: string;
     }>(req.query);
-    const data = await FinanceService.getStats({ search, type, status });
+    const data = await FinanceService.getStats({ search, type, status, vatStatus, period, from, to });
     res.json({ success: true, data });
   })
 );
@@ -381,27 +385,21 @@ router.get(
   asyncHandler(async (req: AuthRequest, res: Response) => {
     await InvoiceMaintenanceService.markOverdueInvoices();
 
-    const { page, limit, search, type, status, cursor } = getQuery<{
+    const { page, limit, search, type, status, vatStatus, period, from, to, cursor } = getQuery<{
       page: number;
       limit: number;
       search?: string;
       type?: string;
       status?: string;
+      vatStatus?: 'VAT' | 'NON_VAT';
+      period?: 'this_week' | 'last_week' | 'this_month' | 'last_month';
+      from?: string;
+      to?: string;
       cursor?: string;
     }>(req.query);
 
-    const where: Prisma.InvoiceWhereInput = {};
-    if (type) where.type = type as Prisma.EnumInvoiceTypeFilter['equals'];
-    if (status) where.status = status as Prisma.EnumPaymentStatusFilter['equals'];
-    if (search) {
-      where.OR = [
-        { invoiceNumber: { contains: search } },
-        { customer: { name: { contains: search } } },
-        { supplier: { name: { contains: search } } },
-        { creditNotes: { some: { invoiceNumber: { contains: search } } } },
-        { originalInvoice: { is: { invoiceNumber: { contains: search } } } },
-      ];
-    }
+    const { buildInvoiceListWhere } = await import('../utils/invoiceListWhere');
+    const where = buildInvoiceListWhere({ search, type, status, vatStatus, period, from, to });
 
     const invoiceInclude = {
       customer: true,

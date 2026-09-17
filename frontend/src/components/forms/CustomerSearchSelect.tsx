@@ -36,6 +36,7 @@ export interface CustomerSearchSelectProps {
   placeholder?: string;
   allowClear?: boolean;
   disabled?: boolean;
+  autoFocus?: boolean;
   className?: string;
 }
 
@@ -54,6 +55,7 @@ export function CustomerSearchSelect({
   placeholder = 'Search customer by name or code…',
   allowClear = true,
   disabled = false,
+  autoFocus = false,
   className,
 }: CustomerSearchSelectProps) {
   const { company } = useAuth();
@@ -204,6 +206,7 @@ export function CustomerSearchSelect({
             id={searchId}
             type="search"
             disabled={disabled}
+            autoFocus={autoFocus}
             autoComplete="off"
             placeholder={placeholder}
             value={query}

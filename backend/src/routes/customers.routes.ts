@@ -124,7 +124,7 @@ async function resolveBalanceSummarySalesFilter(
 
 router.get(
   '/',
-  authorize('customers:read'),
+  authorizeAny('customers:read', 'finance:read', 'finance:create'),
   validate(customerListQuerySchema, 'query'),
   asyncHandler(async (req: AuthRequest, res: Response) => {
     const {
@@ -394,7 +394,7 @@ router.get(
 
 router.get(
   '/:id',
-  authorize('customers:read'),
+  authorizeAny('customers:read', 'finance:read', 'finance:create'),
   asyncHandler(async (req: AuthRequest, res: Response) => {
     const data = await prisma.customer.findFirst({
       where: {

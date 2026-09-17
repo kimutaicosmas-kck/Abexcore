@@ -1212,6 +1212,16 @@ export const financeListQuerySchema = paginationSchema.extend({
     (v) => (v === '' || v === undefined ? undefined : v),
     z.enum(['UNPAID', 'PARTIAL', 'PAID', 'OVERDUE', 'REFUNDED']).optional()
   ),
+  vatStatus: z.preprocess(
+    (v) => (v === '' || v === undefined ? undefined : v),
+    z.enum(['VAT', 'NON_VAT']).optional()
+  ),
+  period: z.preprocess(
+    (v) => (v === '' || v === undefined ? undefined : v),
+    z.enum(['this_week', 'last_week', 'this_month', 'last_month']).optional()
+  ),
+  from: z.preprocess((v) => (v === '' || v === undefined ? undefined : v), z.string().optional()),
+  to: z.preprocess((v) => (v === '' || v === undefined ? undefined : v), z.string().optional()),
 });
 
 /** Payments list: filter by when money was received and/or vs invoice date. */
