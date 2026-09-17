@@ -83,3 +83,20 @@ export function buildInvoiceListWhere(filters: InvoiceListFilters = {}): Prisma.
   if (and.length === 1) return and[0]!;
   return { AND: and };
 }
+
+/** Human-readable summary for invoice list exports. */
+export function describeInvoiceListFilters(filters: InvoiceListFilters = {}): string {
+  const parts: string[] = [];
+  if (filters.type) parts.push(`Type: ${filters.type.replace(/_/g, ' ')}`);
+  if (filters.status) parts.push(`Status: ${filters.status}`);
+  if (filters.vatStatus) {
+    parts.push(filters.vatStatus === 'VAT' ? 'VAT customers' : 'Non-VAT customers');
+  }
+  if (filters.period) {
+    parts.push(`Period: ${filters.period.replace(/_/g, ' ')}`);
+  } else if (filters.from || filters.to) {
+    parts.push(`Dates: ${filters.from || '…'} to ${filters.to || '…'}`);
+  }
+  if (filters.search?.trim()) parts.push(`Search: ${filters.search.trim()}`);
+  return parts.join(' · ');
+}

@@ -353,6 +353,50 @@ router.put(
 
 // Invoices
 router.get(
+  '/invoices/excel',
+  authorize('finance:read'),
+  validate(financeListQuerySchema, 'query'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const filters = getQuery<{
+      search?: string;
+      type?: string;
+      status?: string;
+      vatStatus?: 'VAT' | 'NON_VAT';
+      period?: 'this_week' | 'last_week' | 'this_month' | 'last_month';
+      from?: string;
+      to?: string;
+    }>(req.query);
+    const { ExportService } = await import('../services/export.service');
+    const excel = await ExportService.generateInvoicesListExcel(filters);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', 'attachment; filename="invoices.xlsx"');
+    res.send(excel);
+  })
+);
+
+router.get(
+  '/invoices/pdf',
+  authorize('finance:read'),
+  validate(financeListQuerySchema, 'query'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const filters = getQuery<{
+      search?: string;
+      type?: string;
+      status?: string;
+      vatStatus?: 'VAT' | 'NON_VAT';
+      period?: 'this_week' | 'last_week' | 'this_month' | 'last_month';
+      from?: string;
+      to?: string;
+    }>(req.query);
+    const { ExportService } = await import('../services/export.service');
+    const pdf = await ExportService.generateInvoicesListPDF(filters);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', 'attachment; filename="invoices.pdf"');
+    res.send(pdf);
+  })
+);
+
+router.get(
   '/invoices/:id/pdf',
   authorize('finance:read'),
   asyncHandler(async (req: AuthRequest, res: Response) => {

@@ -1068,6 +1068,189 @@ export class ExportService {
     });
   }
 
+  private static invoiceListVatLabel(invoice: {
+    customer?: { vatStatus?: string | null } | null;
+    taxAmount?: unknown;
+  }): string {
+    if (invoice.customer?.vatStatus === 'VAT') return 'VAT';
+    if (invoice.customer?.vatStatus === 'NON_VAT') return 'Non-VAT';
+    return Number(invoice.taxAmount || 0) > 0 ? 'VAT' : 'Non-VAT';
+  }
+
+  private static async fetchInvoicesForListExport(filters: import('../utils/invoiceListWhere').InvoiceListFilters) {
+    const { buildInvoiceListWhere } = await import('../utils/invoiceListWhere');
+    const where = buildInvoiceListWhere(filters);
+    const rows = await prisma.invoice.findMany({
+      where,
+      take: 5000,
+      include: {
+        customer: { select: { name: true, code: true, vatStatus: true } },
+        supplier: { select: { name: true, code: true } },
+        salesOrder: {
+          select: {
+            orderNumber: true,
+            customerPoNumber: true,
+            salesPerson: { select: { firstName: true, lastName: true } },
+            createdBy: { select: { firstName: true, lastName: true } },
+          },
+        },
+      },
+      orderBy: { invoiceDate: 'desc' },
+    });
+    const { enrichInvoicesWithBalances } = await import('../utils/invoiceBalance');
+    return enrichInvoicesWithBalances(prisma, rows);
+  }
+
+  static async generateInvoicesListExcel(
+    filters: import('../utils/invoiceListWhere').InvoiceListFilters = {}
+  ): Promise<Buffer> {
+    const { describeInvoiceListFilters } = await import('../utils/invoiceListWhere');
+    const company = await resolveCompanyDocHeader(requireTenantId());
+    const invoices = await this.fetchInvoicesForListExport(filters);
+    const filterLabel = describeInvoiceListFilters(filters);
+
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet('Invoices');
+    const nextRow = addExcelCompanyLetterhead(
+      workbook,
+      sheet,
+      company,
+      `${company.name} — Invoices`,
+      'L'
+    );
+    if (filterLabel) {
+      sheet.getCell(`A${nextRow}`).value = filterLabel;
+    }
+
+    const headerRow = sheet.addRow([
+      'Document #',
+      'Type',
+      'Customer / Supplier',
+      'VAT',
+      'Date',
+      'Due',
+      'Total (KES)',
+      'Paid (KES)',
+      'Balance (KES)',
+      'Status',
+      'LPO',
+      'Sales Person',
+    ]);
+    headerRow.font = { bold: true };
+
+    let totalAmount = 0;
+    let totalPaid = 0;
+    let totalBalance = 0;
+    for (const inv of invoices) {
+      const amount = Number(inv.totalAmount) || 0;
+      const paid = Number(inv.paidAmount) || 0;
+      const balance = Number(inv.balanceDue ?? Math.max(0, amount - paid)) || 0;
+      totalAmount += amount;
+      totalPaid += paid;
+      totalBalance += balance;
+      const person = inv.salesOrder?.salesPerson || inv.salesOrder?.createdBy;
+      const salesPerson = person ? `${person.firstName || ''} ${person.lastName || ''}`.trim() : '';
+      const lpo = inv.customerPoNumber || inv.salesOrder?.customerPoNumber || '';
+      sheet.addRow([
+        inv.invoiceNumber,
+        String(inv.type).replace(/_/g, ' '),
+        inv.customer?.name || inv.supplier?.name || '',
+        this.invoiceListVatLabel(inv),
+        inv.invoiceDate,
+        inv.dueDate || '',
+        Math.round(amount),
+        Math.round(paid),
+        Math.round(balance),
+        inv.status,
+        lpo,
+        salesPerson,
+      ]);
+    }
+
+    sheet.addRow([]);
+    sheet.addRow([
+      '',
+      '',
+      '',
+      '',
+      '',
+      'Totals',
+      Math.round(totalAmount),
+      Math.round(totalPaid),
+      Math.round(totalBalance),
+      '',
+      '',
+      `${invoices.length} rows`,
+    ]);
+
+    sheet.columns = [
+      { width: 18 },
+      { width: 14 },
+      { width: 28 },
+      { width: 10 },
+      { width: 14 },
+      { width: 14 },
+      { width: 14 },
+      { width: 14 },
+      { width: 14 },
+      { width: 12 },
+      { width: 16 },
+      { width: 20 },
+    ];
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    return Buffer.from(buffer);
+  }
+
+  static async generateInvoicesListPDF(
+    filters: import('../utils/invoiceListWhere').InvoiceListFilters = {}
+  ): Promise<Buffer> {
+    const { describeInvoiceListFilters } = await import('../utils/invoiceListWhere');
+    const company = await resolveCompanyDocHeader(requireTenantId());
+    const invoices = await this.fetchInvoicesForListExport(filters);
+    const filterLabel = describeInvoiceListFilters(filters);
+    const fmt = (n: number) =>
+      Math.round(n).toLocaleString('en-KE', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+
+    let totalAmount = 0;
+    let totalBalance = 0;
+    const rows = invoices.map((inv) => {
+      const amount = Number(inv.totalAmount) || 0;
+      const balance = Number(inv.balanceDue ?? Math.max(0, amount - Number(inv.paidAmount || 0))) || 0;
+      totalAmount += amount;
+      totalBalance += balance;
+      return {
+        doc: inv.invoiceNumber,
+        type: String(inv.type).replace(/_/g, ' '),
+        party: inv.customer?.name || inv.supplier?.name || '',
+        vat: this.invoiceListVatLabel(inv),
+        date: new Date(inv.invoiceDate).toLocaleDateString('en-KE'),
+        total: fmt(amount),
+        balance: fmt(balance),
+        status: inv.status,
+      };
+    });
+
+    return this.generateTabularReportPDF({
+      company,
+      docType: 'INVOICE LIST',
+      title: `${company.name} — Invoices`,
+      subtitle: filterLabel || 'All invoices',
+      columns: [
+        { key: 'doc', label: 'Document', width: 68 },
+        { key: 'type', label: 'Type', width: 52 },
+        { key: 'party', label: 'Party', width: 96 },
+        { key: 'vat', label: 'VAT', width: 36 },
+        { key: 'date', label: 'Date', width: 48 },
+        { key: 'total', label: 'Total', width: 52, align: 'right' },
+        { key: 'balance', label: 'Balance', width: 52, align: 'right' },
+        { key: 'status', label: 'Status', width: 44 },
+      ],
+      rows,
+      footer: `Total: KES ${fmt(totalAmount)} · Balance: KES ${fmt(totalBalance)} · ${rows.length} invoices`,
+    });
+  }
+
   static async generatePaymentsExcel(
     rows: Array<{
       paymentNumber: string;

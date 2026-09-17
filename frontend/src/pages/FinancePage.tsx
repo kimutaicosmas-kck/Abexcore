@@ -188,6 +188,7 @@ export function FinancePage() {
 
   const [downloading, setDownloading] = useState<string | null>(null);
   const [paymentsExporting, setPaymentsExporting] = useState(false);
+  const [invoicesExporting, setInvoicesExporting] = useState<'excel' | 'pdf' | null>(null);
   const [invoiceModalOpen, setInvoiceModalOpen] = useState(false);
   const [editingInvoiceId, setEditingInvoiceId] = useState<string | undefined>();
   const [invoiceFormDefaultType, setInvoiceFormDefaultType] = useState<
@@ -369,6 +370,22 @@ export function FinancePage() {
       await downloadFile(path, `${invoiceNumber}.${exportType === 'pdf' ? 'pdf' : 'xlsx'}`);
     } finally {
       setDownloading(null);
+    }
+  };
+
+  const exportInvoices = async (format: 'excel' | 'pdf') => {
+    setInvoicesExporting(format);
+    try {
+      const suffix = vatStatus ? `-${vatStatus.toLowerCase().replace('_', '-')}` : '';
+      const periodSuffix = invPeriod && invPeriod !== 'custom' ? `-${invPeriod}` : '';
+      const filename = `invoices${suffix}${periodSuffix}.${format === 'pdf' ? 'pdf' : 'xlsx'}`;
+      await downloadFile(
+        format === 'pdf' ? financeApi.invoicesPdfPath() : financeApi.invoicesExcelPath(),
+        filename,
+        invoiceFilterParams
+      );
+    } finally {
+      setInvoicesExporting(null);
     }
   };
 
@@ -944,6 +961,26 @@ export function FinancePage() {
               }}
             >
               Clear
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              loading={invoicesExporting === 'pdf'}
+              disabled={invLoading || invoicesExporting !== null}
+              onClick={() => void exportInvoices('pdf')}
+            >
+              <FileText className="h-4 w-4 mr-1.5" />
+              Export PDF
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              loading={invoicesExporting === 'excel'}
+              disabled={invLoading || invoicesExporting !== null}
+              onClick={() => void exportInvoices('excel')}
+            >
+              <FileSpreadsheet className="h-4 w-4 mr-1.5" />
+              Export Excel
             </Button>
           </PanelFilters>
           {invError && (
