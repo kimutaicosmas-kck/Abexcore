@@ -48,6 +48,8 @@ interface ProductLineItemsEditorProps {
   getQuantityMin?: (index: number, item: ProductLineItemValues | undefined) => number;
   allowAdd?: boolean;
   onProductSelected?: (index: number, product: Product | null) => void;
+  /** card = one active row (POS/create); list = all rows editable (order adjustment). */
+  layout?: 'card' | 'list';
 }
 
 function ProductLineLabel({ productId }: { productId: string }) {
@@ -97,6 +99,7 @@ export function ProductLineItemsEditor({
   getQuantityMin,
   allowAdd = true,
   onProductSelected,
+  layout = 'card',
 }: ProductLineItemsEditorProps) {
   const [activeIndex, setActiveIndex] = useState(() => Math.max(0, fields.length - 1));
 
@@ -130,6 +133,129 @@ export function ProductLineItemsEditor({
   const productEditable = isProductEditable(activeIndex, activeItem);
   const readOnlyLabel = getProductLabel?.(activeIndex, activeItem);
   const quantityMin = getQuantityMin?.(activeIndex, activeItem) ?? 1;
+
+  if (layout === 'list') {
+    return (
+      <div>
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <label className="text-sm font-medium text-slate-800">{sectionLabel} *</label>
+          {allowAdd && (
+            <Button type="button" size="sm" variant="secondary" onClick={handleAppend}>
+              <Plus className="mr-1 h-3 w-3" /> Add item
+            </Button>
+          )}
+        </div>
+
+        {errors.items && typeof errors.items === 'object' && 'message' in errors.items && (
+          <p className="mb-2 text-sm text-red-600">{String(errors.items.message)}</p>
+        )}
+
+        <div className="space-y-3">
+          {fields.map((field, index) => {
+            const item = items[index];
+            const rowProductEditable = isProductEditable(index, item);
+            const rowReadOnlyLabel = getProductLabel?.(index, item);
+            const rowQuantityMin = getQuantityMin?.(index, item) ?? 1;
+            const removable = canRemoveItem ? canRemoveItem(index, item) : fields.length > 1;
+
+            return (
+              <div
+                key={field.id}
+                className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm space-y-3 ring-1 ring-primary-50"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-primary-700">
+                    Item {index + 1}
+                  </p>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="!px-2 !py-1 shrink-0"
+                    disabled={!removable}
+                    onClick={() => handleRemove(index)}
+                    aria-label={`Remove item ${index + 1}`}
+                    title={removable ? 'Remove item' : 'Keep at least one item / cannot remove delivered lines'}
+                  >
+                    <Trash2 className="h-4 w-4 text-red-500" />
+                  </Button>
+                </div>
+
+                {renderEditorExtras?.(index, item)}
+
+                {rowProductEditable ? (
+                  <Controller
+                    name={`items.${index}.productId`}
+                    control={control}
+                    render={({ field: productField }) => (
+                      <ProductSearchSelect
+                        label="Product"
+                        value={productField.value}
+                        onChange={productField.onChange}
+                        onProductSelect={(product) => {
+                          onProductSelected?.(index, product ?? null);
+                          if (product) {
+                            const currentPrice = items[index]?.unitPrice;
+                            if (!currentPrice || currentPrice === 0) {
+                              setValue(`items.${index}.unitPrice`, Number(product.sellingPrice));
+                            }
+                          }
+                        }}
+                        error={itemFieldError(errors, index, 'productId')}
+                      />
+                    )}
+                  />
+                ) : (
+                  <div>
+                    <p className="mb-1 text-sm font-medium text-slate-700">Product</p>
+                    <p className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-900">
+                      {rowReadOnlyLabel || 'Product'}
+                    </p>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-3 gap-2 sm:gap-3">
+                  <Input
+                    label="Qty"
+                    type="number"
+                    min={rowQuantityMin}
+                    inputMode="numeric"
+                    {...register(`items.${index}.quantity`)}
+                    error={itemFieldError(errors, index, 'quantity')}
+                  />
+                  <Input
+                    label={isVatCustomer ? 'Price*' : 'Price'}
+                    type="number"
+                    step="0.01"
+                    inputMode="decimal"
+                    title={isVatCustomer ? 'Price includes VAT' : undefined}
+                    {...register(`items.${index}.unitPrice`)}
+                    error={itemFieldError(errors, index, 'unitPrice')}
+                  />
+                  <Input
+                    label="Disc %"
+                    type="number"
+                    min={0}
+                    max={100}
+                    inputMode="decimal"
+                    {...register(`items.${index}.discount`)}
+                    error={itemFieldError(errors, index, 'discount')}
+                  />
+                </div>
+
+                <div className="flex items-center justify-between border-t border-slate-200/80 pt-2">
+                  <span className="text-xs text-slate-500">Line total</span>
+                  <span className="text-sm font-semibold tabular-nums text-slate-900">
+                    {formatCurrency(lineTotal(item))}
+                  </span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div>

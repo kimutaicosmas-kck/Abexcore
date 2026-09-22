@@ -219,7 +219,7 @@ export function SalesPage() {
       });
   }, [orderIdFromUrl]);
 
-  const { data: orderDetail } = useQuery({
+  const { data: orderDetail, isFetching: orderDetailLoading } = useQuery({
     queryKey: ['sales-order', selectedOrder?.id],
     queryFn: () =>
       operationsApi.getSalesOrder(selectedOrder!.id).then((r) => r.data.data as SalesOrder),
@@ -264,6 +264,8 @@ export function SalesPage() {
         })
         .then((r) => r.data),
     enabled: canReadSales && activeTab === 0,
+    staleTime: 0,
+    refetchOnMount: 'always',
   });
 
   const { data: salesOfficers = [] } = useQuery({
@@ -344,11 +346,11 @@ export function SalesPage() {
       } else {
         setStatusFeedback(null);
       }
-      queryClient.invalidateQueries({ queryKey: ['sales-orders'] });
-      queryClient.invalidateQueries({ queryKey: ['sales-stats'] });
-      queryClient.invalidateQueries({ queryKey: ['sales-order'] });
+      void queryClient.refetchQueries({ queryKey: ['sales-orders'] });
+      void queryClient.refetchQueries({ queryKey: ['sales-stats'] });
+      void queryClient.refetchQueries({ queryKey: ['sales-order'] });
       if (variables.status === 'CANCELLED') {
-        queryClient.invalidateQueries({ queryKey: ['sales-orders-deliverable'] });
+        void queryClient.refetchQueries({ queryKey: ['sales-orders-deliverable'] });
       }
     },
     onError: (err) => setStatusFeedback({ text: getApiErrorMessage(err), variant: 'error' }),
@@ -999,9 +1001,9 @@ export function SalesPage() {
         title={orderEditMode ? 'Adjust Sales Order' : 'Sales Order Details'}
         size="lg"
       >
-        {activeOrder && orderEditMode ? (
+        {activeOrder && orderEditMode && orderDetail ? (
           <SalesOrderEditForm
-            order={activeOrder}
+            order={orderDetail}
             onSuccess={(updated) => {
               setSelectedOrder(updated);
               setOrderEditMode(false);
@@ -1013,6 +1015,8 @@ export function SalesPage() {
             }}
             onCancel={() => setOrderEditMode(false)}
           />
+        ) : activeOrder && orderEditMode && orderDetailLoading ? (
+          <p className="py-8 text-center text-sm text-slate-500">Loading order details…</p>
         ) : activeOrder && (
           <div className="space-y-4 text-sm">
             {statusFeedback && <Alert variant={statusFeedback.variant}>{statusFeedback.text}</Alert>}
@@ -1156,7 +1160,12 @@ export function SalesPage() {
               {canUpdate
                 && EDITABLE_ORDER_STATUSES.includes(activeOrder.status)
                 && (!isSalesOfficer || activeOrder.status === 'PENDING') && (
-                <Button variant="secondary" onClick={() => setOrderEditMode(true)}>
+                <Button
+                  variant="secondary"
+                  loading={orderDetailLoading}
+                  disabled={orderDetailLoading}
+                  onClick={() => setOrderEditMode(true)}
+                >
                   <Pencil className="h-4 w-4 mr-2" />
                   Adjust order
                 </Button>

@@ -10,8 +10,10 @@ export function RealtimeSync() {
   const queryClient = useQueryClient();
 
   const refreshLive = useCallback(() => {
-    queryClient.invalidateQueries({
+    // Refetch active queries immediately — invalidate alone can leave stale UI until remount.
+    void queryClient.refetchQueries({
       predicate: (query) => isLiveQuery(query.queryKey),
+      type: 'active',
     });
   }, [queryClient]);
 

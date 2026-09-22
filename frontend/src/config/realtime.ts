@@ -6,7 +6,8 @@ const STATIC_QUERY_ROOTS = new Set([
 ]);
 
 export const LIVE_POLL_MS = 20_000;
-export const LIVE_STALE_MS = 10_000;
+/** Keep lists/stats fresh without requiring a manual browser refresh. */
+export const LIVE_STALE_MS = 0;
 export const NOTIFICATION_POLL_MS = 20_000;
 
 export function isLiveQuery(queryKey: readonly unknown[]): boolean {

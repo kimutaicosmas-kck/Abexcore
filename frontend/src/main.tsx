@@ -32,9 +32,19 @@ document.addEventListener(
 );
 
 // autoUpdate — apply new SW immediately so production deploys aren't stuck on a stale shell.
+let swReloadPending = false;
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (swReloadPending) {
+      window.location.reload();
+    }
+  });
+}
+
 const updateSW = registerSW({
   immediate: true,
   onNeedRefresh() {
+    swReloadPending = true;
     void updateSW(true);
   },
 });

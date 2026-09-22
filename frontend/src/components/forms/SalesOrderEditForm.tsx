@@ -88,14 +88,22 @@ export function SalesOrderEditForm({ order, onSuccess, onCancel }: SalesOrderEdi
           discount,
         })),
       }),
-    onSuccess: (res) => {
-      queryClient.invalidateQueries({ queryKey: ['sales-orders'] });
-      queryClient.invalidateQueries({ queryKey: ['sales-order'] });
-      queryClient.invalidateQueries({ queryKey: ['sales-stats'] });
-      queryClient.invalidateQueries({ queryKey: ['sales-orders-deliverable'] });
-      queryClient.invalidateQueries({ queryKey: ['customers'] });
-      queryClient.invalidateQueries({ queryKey: ['deliveries'] });
-      onSuccess(res.data.data as SalesOrder);
+    onSuccess: async (res) => {
+      const updated = res.data.data as SalesOrder;
+      queryClient.setQueryData(['sales-order', updated.id], updated);
+      await Promise.all([
+        queryClient.refetchQueries({ queryKey: ['sales-orders'] }),
+        queryClient.refetchQueries({ queryKey: ['sales-order', updated.id] }),
+        queryClient.refetchQueries({ queryKey: ['sales-stats'] }),
+        queryClient.refetchQueries({ queryKey: ['sales-orders-deliverable'] }),
+        queryClient.refetchQueries({ queryKey: ['customers'] }),
+        queryClient.refetchQueries({ queryKey: ['deliveries'] }),
+        queryClient.refetchQueries({ queryKey: ['invoices'] }),
+        queryClient.refetchQueries({ queryKey: ['finance-invoices'] }),
+        queryClient.refetchQueries({ queryKey: ['inventory-stats'] }),
+        queryClient.refetchQueries({ queryKey: ['stock-levels'] }),
+      ]);
+      onSuccess(updated);
     },
   });
 
@@ -115,11 +123,13 @@ export function SalesOrderEditForm({ order, onSuccess, onCancel }: SalesOrderEdi
       />
 
       <p className="text-xs text-slate-600">
-        You can add or remove lines until the order is marked delivered. Open dispatches are reversed
-        automatically when you reduce or remove undelivered quantities.
+        Use Add item for new products, the trash icon to remove a line, and edit quantity or price on
+        any row. Lines already customer-delivered cannot be removed or reduced below the delivered
+        quantity.
       </p>
 
       <ProductLineItemsEditor
+        layout="list"
         fields={fields}
         items={items}
         control={control as Control<any>}
