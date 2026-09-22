@@ -17,7 +17,14 @@ import { StockMovementService } from '../services/inventory.service';
 import { AccountingService } from '../services/accounting.service';
 import { ProcurementService } from '../services/procurement.service';
 import { Prisma, TransactionType } from '@prisma/client';
-import { isLowStock, sumStockQuantities, toStockQty, weightedStockUnitCost } from '../utils/stock';
+import {
+  isLowStock,
+  productCatalogUnitCost,
+  resolveStockLevelUnitCost,
+  sumStockQuantities,
+  toStockQty,
+  weightedStockUnitCost,
+} from '../utils/stock';
 import { ExcelImportService } from '../services/excel-import.service';
 import { acceptExcelUpload } from '../middleware/excelImport';
 
@@ -625,6 +632,28 @@ router.get('/warehouses', authorize('inventory:read'), asyncHandler(async (_req:
   });
 }));
 
+function enrichStockLevelRow<
+  T extends {
+    quantity: unknown;
+    unitCost?: unknown;
+    product?: {
+      sellingPrice?: unknown;
+      distributorPrice?: unknown;
+      retailPrice?: unknown;
+    } | null;
+    rawMaterial?: { unitCost?: unknown } | null;
+  },
+>(row: T) {
+  const catalog = row.product || row.rawMaterial;
+  const effectiveUnitCost = resolveStockLevelUnitCost(row, catalog);
+  const qty = toStockQty(row.quantity);
+  return {
+    ...row,
+    effectiveUnitCost,
+    lineValue: qty * effectiveUnitCost,
+  };
+}
+
 const listStockLevels = asyncHandler(async (req: AuthRequest, res: Response) => {
   await StockMovementService.relocateMisplacedRawMaterialStock();
 
@@ -688,12 +717,11 @@ const listStockLevels = asyncHandler(async (req: AuthRequest, res: Response) => 
         const quantity = levels.reduce((s, l) => s + Number(l.quantity), 0);
         const reservedQty = levels.reduce((s, l) => s + Number(l.reservedQty || 0), 0);
         const primary = levels[0];
+        const catalogCost = Number(m.unitCost || 0);
         const unitCost =
-          quantity > 0
-            ? levels.reduce((s, l) => s + Number(l.unitCost) * Number(l.quantity), 0) / quantity
-            : Number(m.unitCost || 0);
+          quantity > 0 ? weightedStockUnitCost(levels, catalogCost) : catalogCost;
 
-        return {
+        return enrichStockLevelRow({
           id: primary?.id || `material-${m.id}`,
           warehouseId: warehouse.id,
           warehouse,
@@ -707,7 +735,7 @@ const listStockLevels = asyncHandler(async (req: AuthRequest, res: Response) => 
           unitCost,
           expiryDate: primary?.expiryDate ?? null,
           updatedAt: primary?.updatedAt ?? m.updatedAt,
-        };
+        });
       });
 
       res.json({
@@ -746,7 +774,11 @@ const listStockLevels = asyncHandler(async (req: AuthRequest, res: Response) => 
     prisma.stockLevel.count({ where }),
   ]);
 
-  res.json({ success: true, data, pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } });
+  res.json({
+    success: true,
+    data: data.map(enrichStockLevelRow),
+    pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
+  });
 });
 
 router.get('/stock-levels', authorize('inventory:read'), validate(stockLevelListQuerySchema, 'query'), listStockLevels);
@@ -772,7 +804,21 @@ router.post('/adjust', authorize('inventory:update'), validate(stockAdjustSchema
       },
     });
 
-    const unitCost = Number(existing?.unitCost || 0);
+    let unitCost = Number(existing?.unitCost || 0);
+    if (unitCost <= 0 && productId) {
+      const product = await tx.product.findUnique({
+        where: { id: productId },
+        select: { sellingPrice: true, distributorPrice: true, retailPrice: true },
+      });
+      unitCost = productCatalogUnitCost(product);
+    } else if (unitCost <= 0 && rawMaterialId) {
+      const material = await tx.rawMaterial.findUnique({
+        where: { id: rawMaterialId },
+        select: { unitCost: true },
+      });
+      unitCost = toStockQty(material?.unitCost);
+    }
+
     const adjustQty = Math.abs(Number(quantity));
     const newQty = type === 'add'
       ? Number(existing?.quantity || 0) + adjustQty
@@ -783,7 +829,10 @@ router.post('/adjust', authorize('inventory:update'), validate(stockAdjustSchema
     const stockLevel = existing
       ? await tx.stockLevel.update({
           where: { id: existing.id },
-          data: { quantity: newQty },
+          data: {
+            quantity: newQty,
+            ...(unitCost > 0 && toStockQty(existing.unitCost) <= 0 ? { unitCost } : {}),
+          },
         })
       : await tx.stockLevel.create({
           data: {
@@ -792,6 +841,7 @@ router.post('/adjust', authorize('inventory:update'), validate(stockAdjustSchema
             rawMaterialId,
             batchNumber,
             quantity: newQty,
+            unitCost,
           },
         });
 

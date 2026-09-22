@@ -127,6 +127,8 @@ export function InventoryPage() {
         })
         .then((r) => r.data),
     enabled: activeTab === 0,
+    refetchOnWindowFocus: true,
+    staleTime: 30_000,
   });
 
   const { data: materials, isLoading: matLoading } = useQuery({
@@ -260,13 +262,32 @@ export function InventoryPage() {
     {
       key: 'unitCost',
       label: 'Unit cost',
-      render: (val: unknown) => formatCurrency(val as number),
+      render: (_: unknown, row: Record<string, unknown>) => {
+        const effective = Number(
+          (row as { effectiveUnitCost?: number }).effectiveUnitCost ?? row.unitCost ?? 0
+        );
+        const stored = Number(row.unitCost || 0);
+        return (
+          <span>
+            {formatCurrency(effective)}
+            {stored > 0 && effective !== stored && (
+              <span className="block text-xs text-slate-500">Stored: {formatCurrency(stored)}</span>
+            )}
+          </span>
+        );
+      },
     },
     {
       key: 'lineValue',
       label: 'Value',
-      render: (_: unknown, row: Record<string, unknown>) =>
-        formatCurrency(Number(row.quantity) * Number(row.unitCost || 0)),
+      render: (_: unknown, row: Record<string, unknown>) => {
+        const lineValue = (row as { lineValue?: number }).lineValue;
+        if (lineValue != null) return formatCurrency(lineValue);
+        const effective = Number(
+          (row as { effectiveUnitCost?: number }).effectiveUnitCost ?? row.unitCost ?? 0
+        );
+        return formatCurrency(Number(row.quantity) * effective);
+      },
     },
   ];
 

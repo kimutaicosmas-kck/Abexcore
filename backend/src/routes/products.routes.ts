@@ -584,7 +584,26 @@ router.put(
         },
       });
 
+      const catalogCost = Number(
+        updated.sellingPrice || updated.distributorPrice || updated.retailPrice || 0
+      );
+      if (catalogCost > 0) {
+        await tx.stockLevel.updateMany({
+          where: { productId: id, unitCost: { lte: 0 } },
+          data: { unitCost: catalogCost },
+        });
+      }
+
       if (desiredQty == null || Number.isNaN(desiredQty)) {
+        if (catalogCost > 0) {
+          return tx.product.findUniqueOrThrow({
+            where: { id },
+            include: {
+              category: { select: { id: true, name: true } },
+              stockLevels: { include: { warehouse: { select: { id: true, name: true, code: true } } } },
+            },
+          });
+        }
         return updated;
       }
 

@@ -46,3 +46,35 @@ export function weightedStockUnitCost(
   const weighted = total / qty;
   return weighted > 0 ? weighted : fallback;
 }
+
+/** Catalog selling price for finished goods (used when stock-level cost was never set). */
+export function productCatalogUnitCost(product?: {
+  sellingPrice?: unknown;
+  distributorPrice?: unknown;
+  retailPrice?: unknown;
+} | null): number {
+  if (!product) return 0;
+  return (
+    toStockQty(product.sellingPrice) ||
+    toStockQty(product.distributorPrice) ||
+    toStockQty(product.retailPrice)
+  );
+}
+
+/** Stored stock cost, or catalog price when the level was saved with zero cost. */
+export function resolveStockLevelUnitCost(
+  level: { unitCost?: unknown },
+  catalog?: {
+    sellingPrice?: unknown;
+    distributorPrice?: unknown;
+    retailPrice?: unknown;
+    unitCost?: unknown;
+  } | null
+): number {
+  const stored = toStockQty(level.unitCost);
+  if (stored > 0) return stored;
+  if (!catalog) return 0;
+  const productCost = productCatalogUnitCost(catalog);
+  if (productCost > 0) return productCost;
+  return toStockQty(catalog.unitCost);
+}
