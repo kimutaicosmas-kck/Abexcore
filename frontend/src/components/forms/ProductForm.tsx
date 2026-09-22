@@ -8,7 +8,9 @@ import { productsApi } from '../../services/api';
 import { Button, Input, Select, NumberInput } from '../ui';
 import { Product, ProductCategoryOption } from '../../types';
 import { getApiErrorMessage } from '../../utils/apiError';
+import { useAuth } from '../../contexts/AuthContext';
 import { FORM_DRAFT_MODULES, useModuleFormDraft } from '../../hooks/useModuleFormDraft';
+import { resolveCompanyModules } from '../../utils/companyModules';
 import { FormDraftNotice } from './FormDraftNotice';
 import { ProductBomEditor } from './ProductBomEditor';
 
@@ -65,6 +67,8 @@ interface ProductFormProps {
 
 export function ProductForm({ product, onSuccess, onCancel }: ProductFormProps) {
   const queryClient = useQueryClient();
+  const { company } = useAuth();
+  const showMaterialsRecipe = resolveCompanyModules(company?.enabledModules).includes('production');
   const isEdit = !!product;
   const [newCategoryName, setNewCategoryName] = useState('');
   const [categoryError, setCategoryError] = useState('');
@@ -255,7 +259,7 @@ export function ProductForm({ product, onSuccess, onCancel }: ProductFormProps) 
       </div>
       <Input label="Description" {...register('description')} />
 
-      {isEdit && product?.id && <ProductBomEditor productId={product.id} />}
+      {isEdit && product?.id && showMaterialsRecipe && <ProductBomEditor productId={product.id} />}
 
       <div className="flex justify-end gap-3 pt-4 border-t">
         <Button type="button" variant="secondary" onClick={onCancel}>Cancel</Button>
