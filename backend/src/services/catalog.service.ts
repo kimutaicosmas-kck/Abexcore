@@ -1,6 +1,6 @@
 import prisma from '../config/database';
 import { mergeTenantWarehouseWhere, requireTenantId } from '../utils/tenant';
-import { isLowStock, sumStockQuantities } from '../utils/stock';
+import { enrichStockLevelForDisplay, isLowStock, sumStockQuantities } from '../utils/stock';
 
 export class ProductService {
   static async getStats() {
@@ -72,7 +72,8 @@ export class InventoryService {
     let rawMaterialValue = 0;
     let finishedGoodsValue = 0;
     for (const sl of stockLevels) {
-      const lineValue = Number(sl.quantity) * Number(sl.unitCost);
+      const display = enrichStockLevelForDisplay(sl);
+      const lineValue = display.lineValue;
       if (sl.rawMaterialId) rawMaterialValue += lineValue;
       else if (sl.productId) finishedGoodsValue += lineValue;
     }

@@ -19,8 +19,11 @@ import { ProcurementService } from '../services/procurement.service';
 import { Prisma, TransactionType } from '@prisma/client';
 import {
   isLowStock,
+  isMeaningfulUnitCost,
   productCatalogUnitCost,
-  resolveStockLevelUnitCost,
+  enrichStockLevelForDisplay,
+  PRODUCT_PRICE_SELECT,
+  serializeStockLevelForApi,
   sumStockQuantities,
   toStockQty,
   weightedStockUnitCost,
@@ -632,30 +635,73 @@ router.get('/warehouses', authorize('inventory:read'), asyncHandler(async (_req:
   });
 }));
 
-function enrichStockLevelRow<
-  T extends {
-    quantity: unknown;
+/** Repair stock rows saved with zero cost while the product/material has a catalog price. */
+async function syncMissingProductStockCosts() {
+  for (let batch = 0; batch < 20; batch += 1) {
+    const levels = await prisma.stockLevel.findMany({
+      where: mergeTenantWarehouseWhere({
+        productId: { not: null },
+        quantity: { gt: 0 },
+        unitCost: { lt: 0.01 },
+      }),
+      include: {
+        product: { select: PRODUCT_PRICE_SELECT },
+      },
+      take: 500,
+      orderBy: { updatedAt: 'desc' },
+    });
+
+    const updates = levels
+      .map((sl) => ({
+        id: sl.id,
+        unitCost: productCatalogUnitCost(sl.product),
+      }))
+      .filter((row) => isMeaningfulUnitCost(row.unitCost));
+
+    if (updates.length === 0) return;
+
+    await Promise.all(
+      updates.map((row) =>
+        prisma.stockLevel.update({
+          where: { id: row.id },
+          data: { unitCost: row.unitCost },
+        })
+      )
+    );
+
+    if (levels.length < 500) return;
+  }
+}
+
+async function backfillZeroStockUnitCosts(
+  rows: Array<{
+    id?: string;
     unitCost?: unknown;
-    product?: {
-      sellingPrice?: unknown;
-      distributorPrice?: unknown;
-      retailPrice?: unknown;
-    } | null;
-    rawMaterial?: { unitCost?: unknown } | null;
-  },
->(row: T) {
-  const catalog = row.product || row.rawMaterial;
-  const effectiveUnitCost = resolveStockLevelUnitCost(row, catalog);
-  const qty = toStockQty(row.quantity);
-  return {
-    ...row,
-    effectiveUnitCost,
-    lineValue: qty * effectiveUnitCost,
-  };
+    storedUnitCost?: number;
+    effectiveUnitCost?: number;
+  }>
+) {
+  const updates = rows.filter(
+    (row) =>
+      row.id &&
+      !String(row.id).startsWith('material-') &&
+      (row.storedUnitCost ?? toStockQty(row.unitCost)) <= 0 &&
+      (row.effectiveUnitCost ?? 0) > 0
+  );
+  if (updates.length === 0) return;
+  await Promise.all(
+    updates.map((row) =>
+      prisma.stockLevel.update({
+        where: { id: row.id! },
+        data: { unitCost: row.effectiveUnitCost! },
+      })
+    )
+  );
 }
 
 const listStockLevels = asyncHandler(async (req: AuthRequest, res: Response) => {
   await StockMovementService.relocateMisplacedRawMaterialStock();
+  await syncMissingProductStockCosts();
 
   const { page, limit, search, warehouseId, itemType } = getQuery<{
     page: number;
@@ -721,7 +767,7 @@ const listStockLevels = asyncHandler(async (req: AuthRequest, res: Response) => 
         const unitCost =
           quantity > 0 ? weightedStockUnitCost(levels, catalogCost) : catalogCost;
 
-        return enrichStockLevelRow({
+        return enrichStockLevelForDisplay({
           id: primary?.id || `material-${m.id}`,
           warehouseId: warehouse.id,
           warehouse,
@@ -738,9 +784,12 @@ const listStockLevels = asyncHandler(async (req: AuthRequest, res: Response) => 
         });
       });
 
+      const enrichedMaterials = data.map(serializeStockLevelForApi);
+      await backfillZeroStockUnitCosts(enrichedMaterials);
+
       res.json({
         success: true,
-        data,
+        data: enrichedMaterials,
         pagination: { page, limit, total, totalPages: Math.ceil(total / limit) || 1 },
       });
       return;
@@ -755,7 +804,9 @@ const listStockLevels = asyncHandler(async (req: AuthRequest, res: Response) => 
       ? {
           OR: [
             { product: { name: { contains: search } } },
+            { product: { sku: { contains: search } } },
             { rawMaterial: { name: { contains: search } } },
+            { rawMaterial: { code: { contains: search } } },
             { warehouse: { name: { contains: search } } },
             { batchNumber: { contains: search } },
           ],
@@ -768,15 +819,31 @@ const listStockLevels = asyncHandler(async (req: AuthRequest, res: Response) => 
       where,
       skip,
       take: limit,
-      include: { warehouse: true, product: true, rawMaterial: true },
+      include: {
+        warehouse: true,
+        product: { select: PRODUCT_PRICE_SELECT },
+        rawMaterial: {
+          select: {
+            id: true,
+            code: true,
+            name: true,
+            unit: true,
+            unitCost: true,
+            minStockLevel: true,
+          },
+        },
+      },
       orderBy: { updatedAt: 'desc' },
     }),
     prisma.stockLevel.count({ where }),
   ]);
 
+  const enriched = data.map(serializeStockLevelForApi);
+  await backfillZeroStockUnitCosts(enriched);
+
   res.json({
     success: true,
-    data: data.map(enrichStockLevelRow),
+    data: enriched,
     pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
   });
 });

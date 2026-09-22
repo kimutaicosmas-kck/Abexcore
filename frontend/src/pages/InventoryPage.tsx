@@ -44,6 +44,7 @@ import { StockTransferForm } from '../components/forms/StockTransferForm';
 import { useAuth } from '../contexts/AuthContext';
 import { InventoryStats, InventoryTransaction, MaterialTypeOption, RawMaterial } from '../types';
 import { formatPartNumberLine } from '../utils/productDisplay';
+import { stockLevelLineValue, stockLevelUnitCost } from '../utils/stockDisplay';
 
 const tabs = ['Stock Levels', 'Materials', 'Warehouses', 'Low Stock', 'Movements'];
 
@@ -128,7 +129,8 @@ export function InventoryPage() {
         .then((r) => r.data),
     enabled: activeTab === 0,
     refetchOnWindowFocus: true,
-    staleTime: 30_000,
+    staleTime: 0,
+    refetchOnMount: 'always',
   });
 
   const { data: materials, isLoading: matLoading } = useQuery({
@@ -263,14 +265,12 @@ export function InventoryPage() {
       key: 'unitCost',
       label: 'Unit cost',
       render: (_: unknown, row: Record<string, unknown>) => {
-        const effective = Number(
-          (row as { effectiveUnitCost?: number }).effectiveUnitCost ?? row.unitCost ?? 0
-        );
-        const stored = Number(row.unitCost || 0);
+        const unitCost = stockLevelUnitCost(row);
+        const stored = Number((row as { storedUnitCost?: number }).storedUnitCost ?? 0);
         return (
           <span>
-            {formatCurrency(effective)}
-            {stored > 0 && effective !== stored && (
+            {formatCurrency(unitCost)}
+            {stored > 0 && Math.abs(stored - unitCost) > 0.009 && (
               <span className="block text-xs text-slate-500">Stored: {formatCurrency(stored)}</span>
             )}
           </span>
@@ -280,14 +280,8 @@ export function InventoryPage() {
     {
       key: 'lineValue',
       label: 'Value',
-      render: (_: unknown, row: Record<string, unknown>) => {
-        const lineValue = (row as { lineValue?: number }).lineValue;
-        if (lineValue != null) return formatCurrency(lineValue);
-        const effective = Number(
-          (row as { effectiveUnitCost?: number }).effectiveUnitCost ?? row.unitCost ?? 0
-        );
-        return formatCurrency(Number(row.quantity) * effective);
-      },
+      render: (_: unknown, row: Record<string, unknown>) =>
+        formatCurrency(stockLevelLineValue(row)),
     },
   ];
 

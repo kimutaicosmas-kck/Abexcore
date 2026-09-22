@@ -589,7 +589,7 @@ router.put(
       );
       if (catalogCost > 0) {
         await tx.stockLevel.updateMany({
-          where: { productId: id, unitCost: { lte: 0 } },
+          where: { productId: id, unitCost: { lt: 0.01 } },
           data: { unitCost: catalogCost },
         });
       }
