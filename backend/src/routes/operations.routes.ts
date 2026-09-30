@@ -416,6 +416,50 @@ router.get(
 );
 
 router.get(
+  '/orders/excel',
+  authorizeAny('sales:read', 'finance:read', 'finance:create', 'delivery:read', 'delivery:create'),
+  validate(salesStatsQuerySchema, 'query'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const filters = getQuery<{
+      search?: string;
+      status?: string;
+      salesPersonId?: string;
+      date?: string;
+      from?: string;
+      to?: string;
+    }>(req.query);
+    const { ExportService } = await import('../services/export.service');
+    const bookOwnerId = isSalesBookOwner(req.user!.roleName) ? req.user!.id : undefined;
+    const excel = await ExportService.generateSalesOrdersListExcel(filters, bookOwnerId);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', 'attachment; filename="sales-orders.xlsx"');
+    res.send(excel);
+  })
+);
+
+router.get(
+  '/orders/pdf',
+  authorizeAny('sales:read', 'finance:read', 'finance:create', 'delivery:read', 'delivery:create'),
+  validate(salesStatsQuerySchema, 'query'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const filters = getQuery<{
+      search?: string;
+      status?: string;
+      salesPersonId?: string;
+      date?: string;
+      from?: string;
+      to?: string;
+    }>(req.query);
+    const { ExportService } = await import('../services/export.service');
+    const bookOwnerId = isSalesBookOwner(req.user!.roleName) ? req.user!.id : undefined;
+    const pdf = await ExportService.generateSalesOrdersListPDF(filters, bookOwnerId);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', 'attachment; filename="sales-orders.pdf"');
+    res.send(pdf);
+  })
+);
+
+router.get(
   '/orders/:id',
   authorizeAny('sales:read', 'finance:read', 'finance:create'),
   asyncHandler(async (req: AuthRequest, res: Response) => {

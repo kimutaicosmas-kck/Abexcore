@@ -1,13 +1,17 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useSearchParams } from 'react-router-dom';
-import { TrendingUp, Wallet, AlertCircle } from 'lucide-react';
+import { TrendingUp, Wallet, AlertCircle, FileSpreadsheet, FileText } from 'lucide-react';
 import { financeApi } from '../services/api';
 import {
   Alert,
+  Button,
   Card,
   DataPanel,
   EmptyState,
+  FilterBar,
+  FilterField,
+  Input,
   PageToolbar,
   StatCard,
   StatGrid,
@@ -18,22 +22,22 @@ import {
 import { SalesTeamPerformance } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { canManageSalesTargets } from '../utils/salesTargets';
+import {
+  formatMonthLabel,
+  monthBounds,
+  previousMonthInput,
+  toLocalDateInput,
+  toMonthInput,
+} from '../utils/salesDate';
+import { downloadFile } from '../utils/download';
 import { SalesTargetsPanel } from './SalesTargetsPage';
 
-function localDateInput(date = new Date()) {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  const d = String(date.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
+function todayDateInput(date = new Date()) {
+  return toLocalDateInput(date);
 }
 
 function startOfMonth(date = new Date()) {
-  return localDateInput(new Date(date.getFullYear(), date.getMonth(), 1));
-}
-
-function useSalesPerformancePeriod() {
-  const today = localDateInput();
-  return { from: startOfMonth(), to: today };
+  return toLocalDateInput(new Date(date.getFullYear(), date.getMonth(), 1));
 }
 
 function SalesPerformanceSummary({ data }: { data: SalesTeamPerformance }) {
@@ -81,9 +85,12 @@ function SalesPerformanceSummary({ data }: { data: SalesTeamPerformance }) {
   );
 }
 
-export function SalesPerformancePanel() {
-  const { from, to } = useSalesPerformancePeriod();
+interface SalesPerformancePanelProps {
+  from: string;
+  to: string;
+}
 
+function SalesPerformancePanel({ from, to }: SalesPerformancePanelProps) {
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['sales-performance', from, to],
     queryFn: () =>
@@ -245,7 +252,42 @@ export function SalesPerformancePage() {
   const canViewPerformance = hasPermission('sales_performance:read');
   const canManageTargets =
     isSuperAdmin || canManageSalesTargets(user?.role?.name, hasPermission);
-  const { from, to } = useSalesPerformancePeriod();
+
+  const todayStr = todayDateInput();
+  const thisMonthKey = toMonthInput();
+  const lastMonthKey = previousMonthInput();
+
+  const [from, setFrom] = useState(() => startOfMonth());
+  const [to, setTo] = useState(() => todayStr);
+  const [exporting, setExporting] = useState<'excel' | 'pdf' | null>(null);
+
+  const selectedMonthKey = from.slice(0, 7);
+  const isThisMonth = selectedMonthKey === thisMonthKey && to === todayStr;
+  const isLastMonth = selectedMonthKey === lastMonthKey;
+
+  const applyMonthFilter = (monthKey: string) => {
+    const bounds = monthBounds(monthKey);
+    if (!bounds) return;
+    setFrom(bounds.from);
+    setTo(bounds.to);
+  };
+
+  const exportReport = async (format: 'excel' | 'pdf') => {
+    setExporting(format);
+    try {
+      const suffix = selectedMonthKey.replace('-', '');
+      const path =
+        format === 'excel'
+          ? '/finance/sales-performance/excel'
+          : '/finance/sales-performance/pdf';
+      await downloadFile(path, `sales-performance-${suffix}.${format === 'excel' ? 'xlsx' : 'pdf'}`, {
+        from,
+        to,
+      });
+    } finally {
+      setExporting(null);
+    }
+  };
 
   const { data: summaryData } = useQuery({
     queryKey: ['sales-performance', from, to],
@@ -275,12 +317,101 @@ export function SalesPerformancePage() {
   return (
     <div className="space-y-4">
       {canViewPerformance && summaryData && <SalesPerformanceSummary data={summaryData} />}
+
+      {canViewPerformance && activeTabName === 'Performance' && (
+        <DataPanel className="min-w-0 max-w-full">
+          <FilterBar activeFilters={[from !== startOfMonth() || to !== todayStr ? 1 : 0].filter(Boolean).length}>
+            <FilterField>
+              <Input
+                type="month"
+                aria-label="Performance month"
+                value={selectedMonthKey}
+                onChange={(e) => applyMonthFilter(e.target.value)}
+              />
+            </FilterField>
+            <FilterField>
+              <Input
+                type="date"
+                aria-label="From date"
+                value={from}
+                onChange={(e) => setFrom(e.target.value)}
+              />
+            </FilterField>
+            <FilterField>
+              <Input
+                type="date"
+                aria-label="To date"
+                value={to}
+                onChange={(e) => setTo(e.target.value)}
+              />
+            </FilterField>
+            <FilterField>
+              <Button
+                type="button"
+                size="sm"
+                variant={isThisMonth ? 'primary' : 'secondary'}
+                onClick={() => {
+                  setFrom(startOfMonth());
+                  setTo(todayStr);
+                }}
+              >
+                This month
+              </Button>
+            </FilterField>
+            <FilterField>
+              <Button
+                type="button"
+                size="sm"
+                variant={isLastMonth ? 'primary' : 'secondary'}
+                onClick={() => applyMonthFilter(lastMonthKey)}
+              >
+                Last month
+              </Button>
+            </FilterField>
+            <FilterField>
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                loading={exporting === 'pdf'}
+                disabled={exporting !== null}
+                onClick={() => void exportReport('pdf')}
+              >
+                <FileText className="h-4 w-4 mr-1.5" />
+                Export PDF
+              </Button>
+            </FilterField>
+            <FilterField>
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                loading={exporting === 'excel'}
+                disabled={exporting !== null}
+                onClick={() => void exportReport('excel')}
+              >
+                <FileSpreadsheet className="h-4 w-4 mr-1.5" />
+                Export Excel
+              </Button>
+            </FilterField>
+          </FilterBar>
+          {summaryData && (
+            <p className="px-4 pb-2 text-xs text-slate-500 border-b border-border/60">
+              Comparing {formatMonthLabel(selectedMonthKey)} ({formatDate(from)} – {formatDate(to)}).
+              Change the month to review earlier periods.
+            </p>
+          )}
+        </DataPanel>
+      )}
+
       <PageToolbar
         tabs={tabs}
         activeTab={activeTab >= 0 ? activeTab : 0}
         onTabChange={(index) => setActiveTabName(tabs[index])}
       />
-      {activeTabName === 'Performance' && canViewPerformance && <SalesPerformancePanel />}
+      {activeTabName === 'Performance' && canViewPerformance && (
+        <SalesPerformancePanel from={from} to={to} />
+      )}
       {activeTabName === 'Set targets' && canManageTargets && <SalesTargetsPanel />}
     </div>
   );

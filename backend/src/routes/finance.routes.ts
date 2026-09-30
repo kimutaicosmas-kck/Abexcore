@@ -1549,6 +1549,34 @@ router.get(
 );
 
 router.get(
+  '/sales-performance/excel',
+  authorize('sales_performance:read'),
+  validate(salesPerformanceQuerySchema, 'query'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const { from, to } = getQuery<{ from?: string; to?: string }>(req.query);
+    const { ExportService } = await import('../services/export.service');
+    const excel = await ExportService.generateSalesPerformanceExcel(from, to);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', 'attachment; filename="sales-performance.xlsx"');
+    res.send(excel);
+  })
+);
+
+router.get(
+  '/sales-performance/pdf',
+  authorize('sales_performance:read'),
+  validate(salesPerformanceQuerySchema, 'query'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const { from, to } = getQuery<{ from?: string; to?: string }>(req.query);
+    const { ExportService } = await import('../services/export.service');
+    const pdf = await ExportService.generateSalesPerformancePDF(from, to);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', 'attachment; filename="sales-performance.pdf"');
+    res.send(pdf);
+  })
+);
+
+router.get(
   '/sales-targets',
   authorize('sales:read'),
   asyncHandler(async (req: AuthRequest, res: Response) => {

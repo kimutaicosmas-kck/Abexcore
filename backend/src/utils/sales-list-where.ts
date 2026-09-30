@@ -88,3 +88,26 @@ export async function buildSalesOrdersWhere(opts: {
 
   return where;
 }
+
+export type SalesOrderListFilters = {
+  status?: string;
+  salesPersonId?: string;
+  date?: string;
+  from?: string;
+  to?: string;
+  search?: string;
+};
+
+/** Human-readable summary for sales order list exports. */
+export function describeSalesOrderListFilters(filters: SalesOrderListFilters = {}): string {
+  const parts: string[] = [];
+  if (filters.status) parts.push(`Status: ${filters.status.replace(/_/g, ' ')}`);
+  if (filters.salesPersonId === 'unassigned') parts.push('Sales person: Unassigned');
+  else if (filters.salesPersonId) parts.push('Sales person: filtered');
+  if (filters.date) parts.push(`Date: ${filters.date}`);
+  else if (filters.from || filters.to) {
+    parts.push(`Period: ${filters.from || '…'} to ${filters.to || '…'}`);
+  }
+  if (filters.search?.trim()) parts.push(`Search: ${filters.search.trim()}`);
+  return parts.join(' · ');
+}

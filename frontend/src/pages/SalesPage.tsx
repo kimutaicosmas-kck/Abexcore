@@ -17,6 +17,7 @@ import {
   DollarSign,
   Layers,
   UserRound,
+  FileSpreadsheet,
 } from 'lucide-react';
 import { operationsApi } from '../services/api';
 import { downloadFile } from '../utils/download';
@@ -204,6 +205,7 @@ export function SalesPage() {
   const [downloadingInvoiceId, setDownloadingInvoiceId] = useState<string | null>(null);
   const [downloadingQuoteId, setDownloadingQuoteId] = useState<string | null>(null);
   const [downloadingOrderId, setDownloadingOrderId] = useState<string | null>(null);
+  const [ordersExporting, setOrdersExporting] = useState<'excel' | 'pdf' | null>(null);
 
   useEffect(() => {
     if (!orderIdFromUrl) return;
@@ -383,6 +385,25 @@ export function SalesPage() {
       await downloadFile(operationsApi.quotationPdfPath(quoteId), `${quotationNo}.pdf`);
     } finally {
       setDownloadingQuoteId(null);
+    }
+  };
+
+  const exportOrdersList = async (format: 'excel' | 'pdf') => {
+    setOrdersExporting(format);
+    try {
+      const params: Record<string, string | undefined> = {
+        search: orderSearch || undefined,
+        status: orderStatus || undefined,
+        salesPersonId: orderSalesPersonId || undefined,
+        date: orderDate || undefined,
+        from: orderFrom || undefined,
+        to: orderTo || undefined,
+      };
+      const path = format === 'excel' ? '/operations/orders/excel' : '/operations/orders/pdf';
+      const suffix = orderFrom ? orderFrom.slice(0, 7).replace('-', '') : orderDate || 'all';
+      await downloadFile(path, `sales-orders-${suffix}.${format === 'excel' ? 'xlsx' : 'pdf'}`, params);
+    } finally {
+      setOrdersExporting(null);
     }
   };
 
@@ -935,6 +956,32 @@ export function SalesPage() {
                 }}
               >
                 All dates
+              </Button>
+            </FilterField>
+            <FilterField>
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                loading={ordersExporting === 'pdf'}
+                disabled={ordersLoading || ordersExporting !== null}
+                onClick={() => void exportOrdersList('pdf')}
+              >
+                <FileText className="h-4 w-4 mr-1.5" />
+                Export PDF
+              </Button>
+            </FilterField>
+            <FilterField>
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                loading={ordersExporting === 'excel'}
+                disabled={ordersLoading || ordersExporting !== null}
+                onClick={() => void exportOrdersList('excel')}
+              >
+                <FileSpreadsheet className="h-4 w-4 mr-1.5" />
+                Export Excel
               </Button>
             </FilterField>
           </FilterBar>

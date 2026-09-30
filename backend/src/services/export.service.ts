@@ -1457,6 +1457,268 @@ export class ExportService {
     });
   }
 
+  private static async fetchSalesOrdersForListExport(
+    filters: import('../utils/sales-list-where').SalesOrderListFilters,
+    bookOwnerId?: string
+  ) {
+    const { buildSalesOrdersWhere } = await import('../utils/sales-list-where');
+    const where = await buildSalesOrdersWhere({
+      ...filters,
+      bookOwnerId,
+      includeDate: true,
+    });
+    return prisma.salesOrder.findMany({
+      where,
+      take: 5000,
+      include: {
+        customer: { select: { name: true, code: true } },
+        salesPerson: { select: { firstName: true, lastName: true } },
+        createdBy: { select: { firstName: true, lastName: true } },
+      },
+      orderBy: [{ requiredDate: 'desc' }, { orderDate: 'desc' }],
+    });
+  }
+
+  static async generateSalesOrdersListExcel(
+    filters: import('../utils/sales-list-where').SalesOrderListFilters = {},
+    bookOwnerId?: string
+  ): Promise<Buffer> {
+    const { describeSalesOrderListFilters } = await import('../utils/sales-list-where');
+    const company = await resolveCompanyDocHeader(requireTenantId());
+    const orders = await this.fetchSalesOrdersForListExport(filters, bookOwnerId);
+    const filterLabel = describeSalesOrderListFilters(filters);
+
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet('Sales Orders');
+    const nextRow = addExcelCompanyLetterhead(
+      workbook,
+      sheet,
+      company,
+      `${company.name} — Sales Orders`,
+      'J'
+    );
+    if (filterLabel) {
+      sheet.getCell(`A${nextRow}`).value = filterLabel;
+    }
+
+    const headerRow = sheet.addRow([
+      'Order #',
+      'Sale date',
+      'Customer',
+      'Sales person',
+      'LPO',
+      'Total (KES)',
+      'Status',
+      'Created',
+    ]);
+    headerRow.font = { bold: true };
+
+    let total = 0;
+    for (const order of orders) {
+      const amount = Number(order.totalAmount) || 0;
+      total += amount;
+      const person = order.salesPerson || order.createdBy;
+      const salesPerson = person
+        ? `${person.firstName || ''} ${person.lastName || ''}`.trim()
+        : '';
+      const saleDate = order.requiredDate || order.orderDate;
+      sheet.addRow([
+        order.orderNumber,
+        saleDate,
+        order.customer?.name || '',
+        salesPerson || 'Unassigned',
+        order.customerPoNumber || '',
+        Math.round(amount),
+        order.status,
+        order.createdAt,
+      ]);
+    }
+
+    sheet.addRow([]);
+    sheet.addRow(['', '', '', '', 'Totals', Math.round(total), '', `${orders.length} orders`]);
+
+    sheet.columns = [
+      { width: 16 },
+      { width: 14 },
+      { width: 28 },
+      { width: 22 },
+      { width: 16 },
+      { width: 14 },
+      { width: 18 },
+      { width: 18 },
+    ];
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    return Buffer.from(buffer);
+  }
+
+  static async generateSalesOrdersListPDF(
+    filters: import('../utils/sales-list-where').SalesOrderListFilters = {},
+    bookOwnerId?: string
+  ): Promise<Buffer> {
+    const { describeSalesOrderListFilters } = await import('../utils/sales-list-where');
+    const company = await resolveCompanyDocHeader(requireTenantId());
+    const orders = await this.fetchSalesOrdersForListExport(filters, bookOwnerId);
+    const filterLabel = describeSalesOrderListFilters(filters);
+    const fmt = (n: number) =>
+      Math.round(n).toLocaleString('en-KE', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+
+    let total = 0;
+    const rows = orders.map((order) => {
+      const amount = Number(order.totalAmount) || 0;
+      total += amount;
+      const person = order.salesPerson || order.createdBy;
+      const salesPerson = person
+        ? `${person.firstName || ''} ${person.lastName || ''}`.trim()
+        : 'Unassigned';
+      const saleDate = new Date(order.requiredDate || order.orderDate).toLocaleDateString('en-KE');
+      return {
+        order: order.orderNumber,
+        date: saleDate,
+        customer: order.customer?.name || '',
+        person: salesPerson,
+        amount: fmt(amount),
+        status: order.status.replace(/_/g, ' '),
+      };
+    });
+
+    return this.generateTabularReportPDF({
+      company,
+      docType: 'SALES ORDERS',
+      title: `${company.name} — Sales Orders`,
+      subtitle: filterLabel || 'All dates',
+      columns: [
+        { key: 'order', label: 'Order', width: 62 },
+        { key: 'date', label: 'Date', width: 58 },
+        { key: 'customer', label: 'Customer', width: 110 },
+        { key: 'person', label: 'Sales Person', width: 88 },
+        { key: 'amount', label: 'Amount', width: 62, align: 'right' as const },
+        { key: 'status', label: 'Status', width: 72 },
+      ],
+      rows,
+      footer: `Total: KES ${fmt(total)} · ${rows.length} orders`,
+    });
+  }
+
+  static async generateSalesPerformanceExcel(from?: string, to?: string): Promise<Buffer> {
+    const { SalesPerformanceService } = await import('./sales-performance.service');
+    const data = await SalesPerformanceService.getTeamPerformance(from, to);
+    const company = await resolveCompanyDocHeader(requireTenantId());
+    const periodLabel = `${data.period.from} to ${data.period.to}`;
+
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet('Sales Performance');
+    const nextRow = addExcelCompanyLetterhead(
+      workbook,
+      sheet,
+      company,
+      `${company.name} — Team Sales Performance`,
+      'J'
+    );
+    sheet.getCell(`A${nextRow}`).value = `Period: ${periodLabel}`;
+
+    sheet.addRow([]);
+    sheet.addRow([
+      'Team invoiced',
+      data.summary.invoiced,
+      'Collected',
+      data.summary.collected,
+      'Outstanding',
+      data.summary.outstanding,
+    ]);
+    sheet.addRow([
+      'Company invoiced',
+      data.summary.companyInvoiced ?? 0,
+      'House / unassigned',
+      data.summary.houseInvoiced ?? 0,
+      'Salespeople',
+      data.summary.salesPeople,
+    ]);
+
+    const headerRow = sheet.addRow([
+      'Rank',
+      'Sales person',
+      'Email',
+      'Orders',
+      'Order value (KES)',
+      'Invoiced (KES)',
+      'Collected (KES)',
+      'Outstanding (KES)',
+      'Target (KES)',
+      'Achievement %',
+    ]);
+    headerRow.font = { bold: true };
+
+    for (const person of data.performers) {
+      sheet.addRow([
+        person.rank,
+        person.name,
+        person.email,
+        person.orderCount,
+        Math.round(person.orderValue),
+        Math.round(person.invoiced),
+        Math.round(person.collected),
+        Math.round(person.outstanding),
+        person.monthlyTarget > 0 ? Math.round(person.monthlyTarget) : '',
+        person.achievementPercent ?? '',
+      ]);
+    }
+
+    sheet.columns = [
+      { width: 8 },
+      { width: 24 },
+      { width: 28 },
+      { width: 10 },
+      { width: 16 },
+      { width: 16 },
+      { width: 16 },
+      { width: 16 },
+      { width: 14 },
+      { width: 14 },
+    ];
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    return Buffer.from(buffer);
+  }
+
+  static async generateSalesPerformancePDF(from?: string, to?: string): Promise<Buffer> {
+    const { SalesPerformanceService } = await import('./sales-performance.service');
+    const data = await SalesPerformanceService.getTeamPerformance(from, to);
+    const company = await resolveCompanyDocHeader(requireTenantId());
+    const periodLabel = `${data.period.from} to ${data.period.to}`;
+    const fmt = (n: number) =>
+      Math.round(n).toLocaleString('en-KE', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+
+    const rows = data.performers.map((person) => ({
+      rank: String(person.rank),
+      name: person.name,
+      orders: String(person.orderCount),
+      invoiced: fmt(person.invoiced),
+      collected: fmt(person.collected),
+      target:
+        person.monthlyTarget > 0
+          ? `${fmt(person.monthlyTarget)}${person.achievementPercent != null ? ` (${person.achievementPercent}%)` : ''}`
+          : '—',
+    }));
+
+    return this.generateTabularReportPDF({
+      company,
+      docType: 'SALES PERFORMANCE',
+      title: `${company.name} — Team Sales Performance`,
+      subtitle: `Period: ${periodLabel} · Team invoiced KES ${fmt(data.summary.invoiced)} · Collected KES ${fmt(data.summary.collected)} · Outstanding KES ${fmt(data.summary.outstanding)}`,
+      columns: [
+        { key: 'rank', label: '#', width: 24 },
+        { key: 'name', label: 'Sales Person', width: 100 },
+        { key: 'orders', label: 'Orders', width: 44 },
+        { key: 'invoiced', label: 'Invoiced', width: 62, align: 'right' as const },
+        { key: 'collected', label: 'Collected', width: 62, align: 'right' as const },
+        { key: 'target', label: 'Target', width: 72 },
+      ],
+      rows,
+      footer: `${data.summary.salesPeople} salespeople · Company invoiced KES ${fmt(data.summary.companyInvoiced ?? 0)}`,
+    });
+  }
+
   static async generateProductsSoldPDF(query: {
     startDate?: string;
     endDate?: string;
