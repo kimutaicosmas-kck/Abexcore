@@ -41,8 +41,7 @@ import {
   PageToolbar,
   ConfirmDialog,
   getApiErrorMessage,
-  FilterBar,
-  FilterField,
+  PanelFilters,
   ActionChip,
   ActionChipLink,
 } from '../components/ui';
@@ -62,6 +61,10 @@ import {
   toMonthInput,
 } from '../utils/salesDate';
 import { SalesOrder, SalesQuotation, SalesStats } from '../types';
+import {
+  SalesOrderPeriod,
+  SalesOrderPeriodSelect,
+} from '../components/sales/SalesPeriodSelect';
 
 const COMPANY_TABS = ['Sales Orders', 'Quotations'];
 const MY_BOOK_TABS = ['My Orders', 'Quotations'];
@@ -148,6 +151,7 @@ export function SalesPage() {
   const [orderDate, setOrderDate] = useState(() => todayDateInput());
   const [orderFrom, setOrderFrom] = useState('');
   const [orderTo, setOrderTo] = useState('');
+  const [orderPeriod, setOrderPeriod] = useState<SalesOrderPeriod>('today');
   const [orderModalOpen, setOrderModalOpen] = useState(false);
   const [quotationModalOpen, setQuotationModalOpen] = useState(false);
   const [editingQuotationId, setEditingQuotationId] = useState<string | undefined>();
@@ -418,13 +422,51 @@ export function SalesPage() {
 
   const goToTab = (index: number) => setActiveTab(index);
 
-  const applyMonthFilter = (monthKey: string) => {
+  const applyMonthFilter = (monthKey: string, period?: SalesOrderPeriod) => {
     const bounds = monthBounds(monthKey);
     if (!bounds) return;
     setOrderDate('');
     setOrderFrom(bounds.from);
     setOrderTo(bounds.to);
     setOrderPage(1);
+    if (period) setOrderPeriod(period);
+    else if (monthKey === thisMonthKey) setOrderPeriod('this_month');
+    else if (monthKey === lastMonthKey) setOrderPeriod('last_month');
+    else setOrderPeriod('month');
+  };
+
+  const applyOrderPeriod = (period: SalesOrderPeriod) => {
+    setOrderPeriod(period);
+    setOrderPage(1);
+    switch (period) {
+      case 'today':
+        setOrderDate(todayStr);
+        setOrderFrom('');
+        setOrderTo('');
+        break;
+      case 'this_month':
+        applyMonthFilter(thisMonthKey, 'this_month');
+        break;
+      case 'last_month':
+        applyMonthFilter(lastMonthKey, 'last_month');
+        break;
+      case 'all':
+        setOrderDate('');
+        setOrderFrom('');
+        setOrderTo('');
+        break;
+      case 'month':
+        setOrderDate('');
+        if (!orderFrom) applyMonthFilter(thisMonthKey, 'month');
+        break;
+      case 'day':
+        setOrderFrom('');
+        setOrderTo('');
+        setOrderDate((current) => current || todayStr);
+        break;
+      default:
+        break;
+    }
   };
 
   const applyOrderFilters = (opts: {
@@ -439,12 +481,28 @@ export function SalesPage() {
       if (opts.date) {
         setOrderFrom('');
         setOrderTo('');
+        setOrderPeriod(opts.date === todayStr ? 'today' : 'day');
       }
     }
     if (opts.from !== undefined) setOrderFrom(opts.from);
     if (opts.to !== undefined) setOrderTo(opts.to);
+    if (opts.from && opts.to) {
+      const monthKey = opts.from.slice(0, 7);
+      if (monthKey === thisMonthKey && opts.to === todayStr) setOrderPeriod('this_month');
+      else if (monthKey === lastMonthKey) setOrderPeriod('last_month');
+      else setOrderPeriod('month');
+    } else if (opts.date === '') {
+      setOrderPeriod('all');
+    }
     if (opts.status !== undefined) setOrderStatus(opts.status);
     setOrderPage(1);
+  };
+
+  const clearOrderFilters = () => {
+    setOrderSearch('');
+    setOrderStatus('');
+    setOrderSalesPersonId('');
+    applyOrderPeriod('today');
   };
 
   const todayStr = todayDateInput();
@@ -857,134 +915,93 @@ export function SalesPage() {
 
       {activeTab === 0 && (
         <DataPanel className="min-w-0 max-w-full">
-          <FilterBar
-            activeFilters={[orderStatus, !myBook ? orderSalesPersonId : '', orderDate, orderFrom].filter(Boolean).length}
+          <PanelFilters
+            activeFilters={
+              [orderStatus, !myBook ? orderSalesPersonId : '', orderPeriod !== 'today' ? orderPeriod : '']
+                .filter(Boolean).length
+            }
           >
-            <FilterField span="full" pinned>
-              <Input
-                placeholder={myBook ? 'Search my orders…' : 'Search orders…'}
-                value={orderSearch}
-                onChange={(e) => { setOrderSearch(e.target.value); setOrderPage(1); }}
-              />
-            </FilterField>
-            <FilterField>
-              <Select
-                options={ORDER_STATUS_OPTIONS}
-                value={orderStatus}
-                onChange={(e) => { setOrderStatus(e.target.value); setOrderPage(1); }}
-              />
-            </FilterField>
+            <Input
+              placeholder={myBook ? 'Search my orders…' : 'Search orders…'}
+              className="flex-1 min-w-[200px] max-w-sm"
+              value={orderSearch}
+              onChange={(e) => { setOrderSearch(e.target.value); setOrderPage(1); }}
+            />
+            <Select
+              options={ORDER_STATUS_OPTIONS}
+              value={orderStatus}
+              onChange={(e) => { setOrderStatus(e.target.value); setOrderPage(1); }}
+              className="w-36"
+              aria-label="Status"
+            />
             {!myBook && (
-              <FilterField>
-                <Select
-                  options={salesPersonFilterOptions}
-                  value={orderSalesPersonId}
-                  onChange={(e) => {
-                    setOrderSalesPersonId(e.target.value);
-                    setOrderPage(1);
-                  }}
-                  aria-label="Sales person"
-                />
-              </FilterField>
+              <Select
+                options={salesPersonFilterOptions}
+                value={orderSalesPersonId}
+                onChange={(e) => {
+                  setOrderSalesPersonId(e.target.value);
+                  setOrderPage(1);
+                }}
+                className="w-44"
+                aria-label="Sales person"
+              />
             )}
-            <FilterField>
+            <SalesOrderPeriodSelect
+              value={orderPeriod}
+              onChange={applyOrderPeriod}
+              className="w-40"
+            />
+            {orderPeriod === 'month' && (
               <Input
                 type="month"
                 aria-label="Sale month"
                 value={selectedMonthKey}
-                onChange={(e) => applyMonthFilter(e.target.value)}
+                onChange={(e) => applyMonthFilter(e.target.value, 'month')}
+                className="w-40"
               />
-            </FilterField>
-            <FilterField>
+            )}
+            {orderPeriod === 'day' && (
               <Input
                 type="date"
                 aria-label="Sale date"
                 value={orderDate}
                 onChange={(e) => {
-                  setOrderDate(e.target.value);
+                  const date = e.target.value;
+                  setOrderDate(date);
                   setOrderFrom('');
                   setOrderTo('');
                   setOrderPage(1);
+                  setOrderPeriod(date === todayStr ? 'today' : 'day');
                 }}
+                className="w-40"
               />
-            </FilterField>
-            <FilterField>
-              <Button
-                type="button"
-                size="sm"
-                variant={orderDate === todayStr ? 'primary' : 'secondary'}
-                onClick={() => {
-                  setOrderDate(todayStr);
-                  setOrderFrom('');
-                  setOrderTo('');
-                  setOrderPage(1);
-                }}
-              >
-                Today
-              </Button>
-            </FilterField>
-            <FilterField>
-              <Button
-                type="button"
-                size="sm"
-                variant={hasMonthRange && isThisMonth ? 'primary' : 'secondary'}
-                onClick={() => applyMonthFilter(thisMonthKey)}
-              >
-                This month
-              </Button>
-            </FilterField>
-            <FilterField>
-              <Button
-                type="button"
-                size="sm"
-                variant={hasMonthRange && isLastMonth ? 'primary' : 'secondary'}
-                onClick={() => applyMonthFilter(lastMonthKey)}
-              >
-                Last month
-              </Button>
-            </FilterField>
-            <FilterField>
-              <Button
-                type="button"
-                size="sm"
-                variant={!orderDate && !orderFrom ? 'primary' : 'secondary'}
-                onClick={() => {
-                  setOrderDate('');
-                  setOrderFrom('');
-                  setOrderTo('');
-                  setOrderPage(1);
-                }}
-              >
-                All dates
-              </Button>
-            </FilterField>
-            <FilterField>
-              <Button
-                type="button"
-                size="sm"
-                variant="secondary"
-                loading={ordersExporting === 'pdf'}
-                disabled={ordersLoading || ordersExporting !== null}
-                onClick={() => void exportOrdersList('pdf')}
-              >
-                <FileText className="h-4 w-4 mr-1.5" />
-                Export PDF
-              </Button>
-            </FilterField>
-            <FilterField>
-              <Button
-                type="button"
-                size="sm"
-                variant="secondary"
-                loading={ordersExporting === 'excel'}
-                disabled={ordersLoading || ordersExporting !== null}
-                onClick={() => void exportOrdersList('excel')}
-              >
-                <FileSpreadsheet className="h-4 w-4 mr-1.5" />
-                Export Excel
-              </Button>
-            </FilterField>
-          </FilterBar>
+            )}
+            <Button type="button" variant="secondary" size="sm" onClick={clearOrderFilters}>
+              Clear
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              loading={ordersExporting === 'pdf'}
+              disabled={ordersLoading || ordersExporting !== null}
+              onClick={() => void exportOrdersList('pdf')}
+            >
+              <FileText className="h-4 w-4 mr-1.5" />
+              PDF
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              loading={ordersExporting === 'excel'}
+              disabled={ordersLoading || ordersExporting !== null}
+              onClick={() => void exportOrdersList('excel')}
+            >
+              <FileSpreadsheet className="h-4 w-4 mr-1.5" />
+              Excel
+            </Button>
+          </PanelFilters>
           {statusFeedback && (
             <div className="px-4 pt-3">
               <Alert variant={statusFeedback.variant}>{statusFeedback.text}</Alert>
@@ -1060,22 +1077,21 @@ export function SalesPage() {
 
       {activeTab === 1 && (
         <DataPanel className="min-w-0 max-w-full">
-          <FilterBar activeFilters={quoteStatus ? 1 : 0}>
-            <FilterField span="full" pinned>
-              <Input
-                placeholder="Search quotations…"
-                value={quoteSearch}
-                onChange={(e) => { setQuoteSearch(e.target.value); setQuotePage(1); }}
-              />
-            </FilterField>
-            <FilterField span="full" className="sm:max-w-xs">
-              <Select
-                options={QUOTE_STATUS_OPTIONS}
-                value={quoteStatus}
-                onChange={(e) => { setQuoteStatus(e.target.value); setQuotePage(1); }}
-              />
-            </FilterField>
-          </FilterBar>
+          <PanelFilters activeFilters={quoteStatus ? 1 : 0}>
+            <Input
+              placeholder="Search quotations…"
+              className="flex-1 min-w-[200px] max-w-sm"
+              value={quoteSearch}
+              onChange={(e) => { setQuoteSearch(e.target.value); setQuotePage(1); }}
+            />
+            <Select
+              options={QUOTE_STATUS_OPTIONS}
+              value={quoteStatus}
+              onChange={(e) => { setQuoteStatus(e.target.value); setQuotePage(1); }}
+              className="w-40"
+              aria-label="Quotation status"
+            />
+          </PanelFilters>
           {(quotations?.data?.length || 0) === 0 && !quotesLoading ? (
             <div className="p-6">
               <EmptyState

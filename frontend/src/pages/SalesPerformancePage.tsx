@@ -9,9 +9,8 @@ import {
   Card,
   DataPanel,
   EmptyState,
-  FilterBar,
-  FilterField,
   Input,
+  PanelFilters,
   PageToolbar,
   StatCard,
   StatGrid,
@@ -31,6 +30,10 @@ import {
 } from '../utils/salesDate';
 import { downloadFile } from '../utils/download';
 import { SalesTargetsPanel } from './SalesTargetsPage';
+import {
+  SalesPerfPeriod,
+  SalesPerfPeriodSelect,
+} from '../components/sales/SalesPeriodSelect';
 
 function todayDateInput(date = new Date()) {
   return toLocalDateInput(date);
@@ -259,18 +262,39 @@ export function SalesPerformancePage() {
 
   const [from, setFrom] = useState(() => startOfMonth());
   const [to, setTo] = useState(() => todayStr);
+  const [perfPeriod, setPerfPeriod] = useState<SalesPerfPeriod>('this_month');
   const [exporting, setExporting] = useState<'excel' | 'pdf' | null>(null);
 
   const selectedMonthKey = from.slice(0, 7);
-  const isThisMonth = selectedMonthKey === thisMonthKey && to === todayStr;
-  const isLastMonth = selectedMonthKey === lastMonthKey;
 
   const applyMonthFilter = (monthKey: string) => {
     const bounds = monthBounds(monthKey);
     if (!bounds) return;
     setFrom(bounds.from);
     setTo(bounds.to);
+    if (monthKey === thisMonthKey && bounds.to === todayStr) setPerfPeriod('this_month');
+    else if (monthKey === lastMonthKey) setPerfPeriod('last_month');
+    else setPerfPeriod('custom');
   };
+
+  const applyPerfPeriod = (period: SalesPerfPeriod) => {
+    setPerfPeriod(period);
+    switch (period) {
+      case 'this_month':
+        setFrom(startOfMonth());
+        setTo(todayStr);
+        break;
+      case 'last_month':
+        applyMonthFilter(lastMonthKey);
+        break;
+      case 'custom':
+        break;
+      default:
+        break;
+    }
+  };
+
+  const clearPerfFilters = () => applyPerfPeriod('this_month');
 
   const exportReport = async (format: 'excel' | 'pdf') => {
     setExporting(format);
@@ -320,81 +344,69 @@ export function SalesPerformancePage() {
 
       {canViewPerformance && activeTabName === 'Performance' && (
         <DataPanel className="min-w-0 max-w-full">
-          <FilterBar activeFilters={[from !== startOfMonth() || to !== todayStr ? 1 : 0].filter(Boolean).length}>
-            <FilterField>
-              <Input
-                type="month"
-                aria-label="Performance month"
-                value={selectedMonthKey}
-                onChange={(e) => applyMonthFilter(e.target.value)}
-              />
-            </FilterField>
-            <FilterField>
-              <Input
-                type="date"
-                aria-label="From date"
-                value={from}
-                onChange={(e) => setFrom(e.target.value)}
-              />
-            </FilterField>
-            <FilterField>
-              <Input
-                type="date"
-                aria-label="To date"
-                value={to}
-                onChange={(e) => setTo(e.target.value)}
-              />
-            </FilterField>
-            <FilterField>
-              <Button
-                type="button"
-                size="sm"
-                variant={isThisMonth ? 'primary' : 'secondary'}
-                onClick={() => {
-                  setFrom(startOfMonth());
-                  setTo(todayStr);
-                }}
-              >
-                This month
-              </Button>
-            </FilterField>
-            <FilterField>
-              <Button
-                type="button"
-                size="sm"
-                variant={isLastMonth ? 'primary' : 'secondary'}
-                onClick={() => applyMonthFilter(lastMonthKey)}
-              >
-                Last month
-              </Button>
-            </FilterField>
-            <FilterField>
-              <Button
-                type="button"
-                size="sm"
-                variant="secondary"
-                loading={exporting === 'pdf'}
-                disabled={exporting !== null}
-                onClick={() => void exportReport('pdf')}
-              >
-                <FileText className="h-4 w-4 mr-1.5" />
-                Export PDF
-              </Button>
-            </FilterField>
-            <FilterField>
-              <Button
-                type="button"
-                size="sm"
-                variant="secondary"
-                loading={exporting === 'excel'}
-                disabled={exporting !== null}
-                onClick={() => void exportReport('excel')}
-              >
-                <FileSpreadsheet className="h-4 w-4 mr-1.5" />
-                Export Excel
-              </Button>
-            </FilterField>
-          </FilterBar>
+          <PanelFilters activeFilters={perfPeriod !== 'this_month' ? 1 : 0}>
+            <SalesPerfPeriodSelect
+              value={perfPeriod}
+              onChange={applyPerfPeriod}
+              className="w-44"
+            />
+            {perfPeriod === 'custom' && (
+              <>
+                <Input
+                  type="month"
+                  aria-label="Performance month"
+                  value={selectedMonthKey}
+                  onChange={(e) => applyMonthFilter(e.target.value)}
+                  className="w-40"
+                />
+                <Input
+                  type="date"
+                  aria-label="From date"
+                  value={from}
+                  onChange={(e) => {
+                    setFrom(e.target.value);
+                    setPerfPeriod('custom');
+                  }}
+                  className="w-40"
+                />
+                <Input
+                  type="date"
+                  aria-label="To date"
+                  value={to}
+                  onChange={(e) => {
+                    setTo(e.target.value);
+                    setPerfPeriod('custom');
+                  }}
+                  className="w-40"
+                />
+              </>
+            )}
+            <Button type="button" variant="secondary" size="sm" onClick={clearPerfFilters}>
+              Clear
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              loading={exporting === 'pdf'}
+              disabled={exporting !== null}
+              onClick={() => void exportReport('pdf')}
+            >
+              <FileText className="h-4 w-4 mr-1.5" />
+              PDF
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              loading={exporting === 'excel'}
+              disabled={exporting !== null}
+              onClick={() => void exportReport('excel')}
+            >
+              <FileSpreadsheet className="h-4 w-4 mr-1.5" />
+              Excel
+            </Button>
+          </PanelFilters>
           {summaryData && (
             <p className="px-4 pb-2 text-xs text-slate-500 border-b border-border/60">
               Comparing {formatMonthLabel(selectedMonthKey)} ({formatDate(from)} – {formatDate(to)}).
