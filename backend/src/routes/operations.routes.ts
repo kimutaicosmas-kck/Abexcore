@@ -300,14 +300,18 @@ router.get(
   validate(salesStatsQuerySchema, 'query'),
   asyncHandler(async (req: AuthRequest, res: Response) => {
     const bookOwnerId = isSalesBookOwner(req.user!.roleName) ? req.user!.id : undefined;
-    const { date, salesPersonId, status, search } = getQuery<{
+    const { date, from, to, salesPersonId, status, search } = getQuery<{
       date?: string;
+      from?: string;
+      to?: string;
       salesPersonId?: string;
       status?: string;
       search?: string;
     }>(req.query);
     const data = await SalesService.getStats(bookOwnerId, {
       date,
+      from,
+      to,
       salesPersonId: bookOwnerId ? undefined : salesPersonId,
       status,
       search,
@@ -333,13 +337,15 @@ router.get(
   authorizeAny('sales:read', 'finance:read', 'finance:create', 'delivery:read', 'delivery:create'),
   validate(salesListQuerySchema, 'query'),
   asyncHandler(async (req: AuthRequest, res: Response) => {
-    const { page, limit, search, status, salesPersonId, date } = getQuery<{
+    const { page, limit, search, status, salesPersonId, date, from, to } = getQuery<{
       page: number;
       limit: number;
       search?: string;
       status?: string;
       salesPersonId?: string;
       date?: string;
+      from?: string;
+      to?: string;
     }>(req.query);
     const skip = (page - 1) * limit;
 
@@ -347,6 +353,8 @@ router.get(
       status,
       salesPersonId,
       date,
+      from,
+      to,
       search,
       bookOwnerId: isSalesBookOwner(req.user!.roleName) ? req.user!.id : undefined,
       includeDate: true,

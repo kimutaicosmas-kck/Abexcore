@@ -52,7 +52,14 @@ import { SalesOrderReassignForm } from '../components/forms/SalesOrderReassignFo
 import { QuotationForm } from '../components/forms/QuotationForm';
 import { useAuth } from '../contexts/AuthContext';
 import { canManageSalesTargets, isSalesBookOwner } from '../utils/salesTargets';
-import { isSalesOrderReassignableToday } from '../utils/salesDate';
+import {
+  formatMonthLabel,
+  isSalesOrderReassignableToday,
+  monthBounds,
+  previousMonthInput,
+  toLocalDateInput,
+  toMonthInput,
+} from '../utils/salesDate';
 import { SalesOrder, SalesQuotation, SalesStats } from '../types';
 
 const COMPANY_TABS = ['Sales Orders', 'Quotations'];
@@ -98,10 +105,7 @@ const NEXT_STATUS: Record<string, { status: string; label: string }> = {
 };
 
 function todayDateInput(date = new Date()) {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  const d = String(date.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
+  return toLocalDateInput(date);
 }
 
 function canCancelOrder(status: string, isSalesOfficer: boolean): boolean {
@@ -141,6 +145,8 @@ export function SalesPage() {
   const [orderSalesPersonId, setOrderSalesPersonId] = useState('');
   const [quoteStatus, setQuoteStatus] = useState('');
   const [orderDate, setOrderDate] = useState(() => todayDateInput());
+  const [orderFrom, setOrderFrom] = useState('');
+  const [orderTo, setOrderTo] = useState('');
   const [orderModalOpen, setOrderModalOpen] = useState(false);
   const [quotationModalOpen, setQuotationModalOpen] = useState(false);
   const [editingQuotationId, setEditingQuotationId] = useState<string | undefined>();
@@ -234,6 +240,8 @@ export function SalesPage() {
     queryKey: [
       'sales-stats',
       orderDate || 'live',
+      orderFrom || '',
+      orderTo || '',
       orderSalesPersonId || 'all',
       orderStatus || 'all',
       orderSearch || '',
@@ -242,6 +250,8 @@ export function SalesPage() {
       operationsApi
         .stats({
           date: orderDate || undefined,
+          from: orderFrom || undefined,
+          to: orderTo || undefined,
           salesPersonId: orderSalesPersonId || undefined,
           status: orderStatus || undefined,
           search: orderSearch || undefined,
@@ -251,7 +261,7 @@ export function SalesPage() {
   });
 
   const { data: orders, isLoading: ordersLoading } = useQuery({
-    queryKey: ['sales-orders', orderPage, orderSearch, orderStatus, orderDate, orderSalesPersonId],
+    queryKey: ['sales-orders', orderPage, orderSearch, orderStatus, orderDate, orderFrom, orderTo, orderSalesPersonId],
     queryFn: () =>
       operationsApi
         .salesOrders({
@@ -260,6 +270,8 @@ export function SalesPage() {
           search: orderSearch || undefined,
           status: orderStatus || undefined,
           date: orderDate || undefined,
+          from: orderFrom || undefined,
+          to: orderTo || undefined,
           salesPersonId: orderSalesPersonId || undefined,
         })
         .then((r) => r.data),
@@ -385,22 +397,53 @@ export function SalesPage() {
 
   const goToTab = (index: number) => setActiveTab(index);
 
-  const applyOrderFilters = (opts: { date?: string; status?: string }) => {
+  const applyMonthFilter = (monthKey: string) => {
+    const bounds = monthBounds(monthKey);
+    if (!bounds) return;
+    setOrderDate('');
+    setOrderFrom(bounds.from);
+    setOrderTo(bounds.to);
+    setOrderPage(1);
+  };
+
+  const applyOrderFilters = (opts: {
+    date?: string;
+    status?: string;
+    from?: string;
+    to?: string;
+  }) => {
     setActiveTab(0);
-    if (opts.date !== undefined) setOrderDate(opts.date);
+    if (opts.date !== undefined) {
+      setOrderDate(opts.date);
+      if (opts.date) {
+        setOrderFrom('');
+        setOrderTo('');
+      }
+    }
+    if (opts.from !== undefined) setOrderFrom(opts.from);
+    if (opts.to !== undefined) setOrderTo(opts.to);
     if (opts.status !== undefined) setOrderStatus(opts.status);
     setOrderPage(1);
   };
 
   const todayStr = todayDateInput();
+  const thisMonthKey = toMonthInput();
+  const lastMonthKey = previousMonthInput();
+  const selectedMonthKey = orderFrom ? orderFrom.slice(0, 7) : '';
+  const isThisMonth = selectedMonthKey === thisMonthKey;
+  const isLastMonth = selectedMonthKey === lastMonthKey;
+  const hasMonthRange = !!(orderFrom && orderTo && !orderDate);
   const statPrefix = myBook ? 'My ' : '';
-  const focusDate = orderDate || stats?.focusDate || todayStr;
-  const isFocusToday = focusDate === todayStr;
+  const focusDate = orderDate || (!hasMonthRange ? stats?.focusDate : undefined) || todayStr;
+  const isFocusToday = !orderDate || orderDate === todayStr;
   const daySalesTitle = isFocusToday
     ? `${statPrefix}Today's sales`
     : `${statPrefix}Sales · ${formatDate(focusDate)}`;
-  const monthSalesTitle = `${statPrefix}This month sales`;
-  const monthOrdersTitle = `${statPrefix}Orders this month`;
+  const monthLabel = hasMonthRange
+    ? formatMonthLabel(selectedMonthKey)
+    : 'This month';
+  const monthSalesTitle = `${statPrefix}${hasMonthRange && !isThisMonth ? monthLabel : 'This month'} sales`;
+  const monthOrdersTitle = `${statPrefix}Orders ${hasMonthRange && !isThisMonth ? `· ${monthLabel}` : 'this month'}`;
   const successfulOrdersTitle = `${statPrefix}Successful orders`;
   const allTimeTitle = `${statPrefix}All-time sales`;
 
@@ -688,21 +731,43 @@ export function SalesPage() {
             value={formatCurrency(stats.todaySales)}
             icon={<DollarSign className="h-5 w-5 text-white" />}
             color="from-emerald-500 to-emerald-700"
-            onClick={() => applyOrderFilters({ date: focusDate, status: '' })}
+            onClick={() =>
+              applyOrderFilters(
+                hasMonthRange
+                  ? { date: '', from: orderFrom, to: orderTo, status: '' }
+                  : { date: focusDate, status: '' }
+              )
+            }
           />
           <StatCard
             title={monthSalesTitle}
             value={formatCurrency(stats.successfulMonthSales ?? 0)}
             icon={<Receipt className="h-5 w-5 text-white" />}
             color="from-sky-500 to-sky-700"
-            onClick={() => applyOrderFilters({ date: '', status: 'COMPLETED' })}
+            onClick={() => {
+              const bounds = monthBounds(hasMonthRange ? selectedMonthKey : thisMonthKey);
+              applyOrderFilters({
+                date: '',
+                from: bounds?.from || '',
+                to: bounds?.to || '',
+                status: 'COMPLETED',
+              });
+            }}
           />
           <StatCard
             title={monthOrdersTitle}
             value={stats.ordersThisMonth}
             icon={<ShoppingCart className="h-5 w-5 text-white" />}
             color="from-indigo-500 to-indigo-700"
-            onClick={() => applyOrderFilters({ date: '', status: '' })}
+            onClick={() => {
+              const bounds = monthBounds(hasMonthRange ? selectedMonthKey : thisMonthKey);
+              applyOrderFilters({
+                date: '',
+                from: bounds?.from || '',
+                to: bounds?.to || '',
+                status: '',
+              });
+            }}
             className="hidden sm:flex"
           />
           <StatCard
@@ -772,7 +837,7 @@ export function SalesPage() {
       {activeTab === 0 && (
         <DataPanel className="min-w-0 max-w-full">
           <FilterBar
-            activeFilters={[orderStatus, !myBook ? orderSalesPersonId : '', orderDate].filter(Boolean).length}
+            activeFilters={[orderStatus, !myBook ? orderSalesPersonId : '', orderDate, orderFrom].filter(Boolean).length}
           >
             <FilterField span="full" pinned>
               <Input
@@ -803,10 +868,23 @@ export function SalesPage() {
             )}
             <FilterField>
               <Input
+                type="month"
+                aria-label="Sale month"
+                value={selectedMonthKey}
+                onChange={(e) => applyMonthFilter(e.target.value)}
+              />
+            </FilterField>
+            <FilterField>
+              <Input
                 type="date"
                 aria-label="Sale date"
                 value={orderDate}
-                onChange={(e) => { setOrderDate(e.target.value); setOrderPage(1); }}
+                onChange={(e) => {
+                  setOrderDate(e.target.value);
+                  setOrderFrom('');
+                  setOrderTo('');
+                  setOrderPage(1);
+                }}
               />
             </FilterField>
             <FilterField>
@@ -816,6 +894,8 @@ export function SalesPage() {
                 variant={orderDate === todayStr ? 'primary' : 'secondary'}
                 onClick={() => {
                   setOrderDate(todayStr);
+                  setOrderFrom('');
+                  setOrderTo('');
                   setOrderPage(1);
                 }}
               >
@@ -826,9 +906,31 @@ export function SalesPage() {
               <Button
                 type="button"
                 size="sm"
-                variant={!orderDate ? 'primary' : 'secondary'}
+                variant={hasMonthRange && isThisMonth ? 'primary' : 'secondary'}
+                onClick={() => applyMonthFilter(thisMonthKey)}
+              >
+                This month
+              </Button>
+            </FilterField>
+            <FilterField>
+              <Button
+                type="button"
+                size="sm"
+                variant={hasMonthRange && isLastMonth ? 'primary' : 'secondary'}
+                onClick={() => applyMonthFilter(lastMonthKey)}
+              >
+                Last month
+              </Button>
+            </FilterField>
+            <FilterField>
+              <Button
+                type="button"
+                size="sm"
+                variant={!orderDate && !orderFrom ? 'primary' : 'secondary'}
                 onClick={() => {
                   setOrderDate('');
+                  setOrderFrom('');
+                  setOrderTo('');
                   setOrderPage(1);
                 }}
               >
@@ -876,10 +978,10 @@ export function SalesPage() {
               <EmptyState
                 title={myBook ? 'No orders in your book yet' : 'No sales orders found'}
                 description={
-                  orderDate
+                  orderDate || hasMonthRange
                     ? myBook
-                      ? 'No orders for this date. Pick another day or choose All dates.'
-                      : 'No sales orders for this date. Pick another day or choose All dates.'
+                      ? 'No orders for this period. Pick another month or choose All dates.'
+                      : 'No sales orders for this period. Pick another month or choose All dates.'
                     : myBook
                       ? 'Create a sales order to get started — it will appear here automatically.'
                       : 'Create a sales order or convert an approved quotation.'

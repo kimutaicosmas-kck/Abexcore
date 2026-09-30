@@ -1002,6 +1002,16 @@ export const salesListQuerySchema = paginationSchema.extend({
     (v) => (v === '' || v === undefined ? undefined : v),
     z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional()
   ),
+  /** Inclusive range start `YYYY-MM-DD` (takes priority over `date`). */
+  from: z.preprocess(
+    (v) => (v === '' || v === undefined ? undefined : v),
+    z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional()
+  ),
+  /** Inclusive range end `YYYY-MM-DD`. */
+  to: z.preprocess(
+    (v) => (v === '' || v === undefined ? undefined : v),
+    z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional()
+  ),
 });
 
 /** KPI cards — same dimension filters as the sales order list (no pagination). */
@@ -1016,6 +1026,14 @@ export const salesStatsQuerySchema = z.object({
     z.union([z.literal('unassigned'), z.string().uuid()]).optional()
   ),
   date: z.preprocess(
+    (v) => (v === '' || v === undefined ? undefined : v),
+    z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional()
+  ),
+  from: z.preprocess(
+    (v) => (v === '' || v === undefined ? undefined : v),
+    z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional()
+  ),
+  to: z.preprocess(
     (v) => (v === '' || v === undefined ? undefined : v),
     z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional()
   ),

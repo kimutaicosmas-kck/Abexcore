@@ -84,13 +84,15 @@ export class SalesService {
     bookOwnerId?: string,
     opts?: {
       date?: string;
+      from?: string;
+      to?: string;
       salesPersonId?: string;
       status?: string;
       search?: string;
     }
   ) {
     const { salesOrderInDateRange } = await import('../utils/salesDate');
-    const { parseLocalDateInput, toLocalDateKey } = await import('../utils/date');
+    const { dateRangeFromInputs, parseLocalDateInput, toLocalDateKey } = await import('../utils/date');
     const { sumInvoicedSales } = await import('../utils/finance-metrics');
     const { buildSalesOrdersWhere } = await import('../utils/sales-list-where');
 
@@ -105,11 +107,12 @@ export class SalesService {
     const invoiceOrderWhere = hasScope ? scope : undefined;
 
     const focusDay = opts?.date ? parseLocalDateInput(opts.date) : null;
-    const now = focusDay || new Date();
-    const monthStart = startOfDay(new Date(now.getFullYear(), now.getMonth(), 1));
-    const dayStart = startOfDay(now);
-    const dayEnd = endOfDay(now);
-    const monthEnd = endOfDay(new Date(now.getFullYear(), now.getMonth() + 1, 0));
+    const periodRange = dateRangeFromInputs(opts?.from, opts?.to);
+    const now = focusDay || periodRange?.lte || new Date();
+    const monthStart = periodRange?.gte ?? startOfDay(new Date(now.getFullYear(), now.getMonth(), 1));
+    const monthEnd = periodRange?.lte ?? endOfDay(new Date(now.getFullYear(), now.getMonth() + 1, 0));
+    const dayStart = startOfDay(focusDay || new Date());
+    const dayEnd = endOfDay(focusDay || new Date());
 
     const withScope = (...extra: Prisma.SalesOrderWhereInput[]): Prisma.SalesOrderWhereInput =>
       hasScope || extra.length > 0 ? { AND: [scope, ...extra] } : { AND: extra };

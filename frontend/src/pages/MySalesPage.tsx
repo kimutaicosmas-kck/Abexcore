@@ -29,8 +29,9 @@ import {
   EmptyState,
 } from '../components/ui';
 import { MySalesDashboard } from '../types';
+import { monthBounds, previousMonthInput, toMonthInput } from '../utils/salesDate';
 
-type PeriodPreset = 'today' | 'week' | 'month' | 'custom';
+type PeriodPreset = 'today' | 'week' | 'month' | 'last_month' | 'custom';
 
 function localDateInput(date = new Date()) {
   const y = date.getFullYear();
@@ -93,6 +94,15 @@ export function MySalesPage() {
     if (preset === 'week') {
       setFrom(localDateInput(startOfWeek(now)));
       setTo(localDateInput(now));
+      return;
+    }
+
+    if (preset === 'last_month') {
+      const bounds = monthBounds(previousMonthInput(now));
+      if (bounds) {
+        setFrom(bounds.from);
+        setTo(bounds.to);
+      }
       return;
     }
 
@@ -261,6 +271,7 @@ export function MySalesPage() {
                   { id: 'today' as const, label: 'Today' },
                   { id: 'week' as const, label: 'This week' },
                   { id: 'month' as const, label: 'This month' },
+                  { id: 'last_month' as const, label: 'Last month' },
                 ] as const
               ).map((preset) => (
                 <Button
@@ -273,7 +284,26 @@ export function MySalesPage() {
                 </Button>
               ))}
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <Input
+                label="Month"
+                type="month"
+                value={from.slice(0, 7)}
+                onChange={(e) => {
+                  const bounds = monthBounds(e.target.value);
+                  if (!bounds) return;
+                  setFrom(bounds.from);
+                  setTo(bounds.to);
+                  setPeriodPreset(
+                    e.target.value === toMonthInput()
+                      ? 'month'
+                      : e.target.value === previousMonthInput()
+                        ? 'last_month'
+                        : 'custom'
+                  );
+                  setPage(1);
+                }}
+              />
               <Input
                 label="From"
                 type="date"

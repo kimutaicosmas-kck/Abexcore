@@ -45,6 +45,32 @@ export function dayRangeFromInput(dateStr: string): { gte: Date; lte: Date } | n
   return { gte: startOfDay(day), lte: endOfDay(day) };
 }
 
+/** Inclusive local range from optional `YYYY-MM-DD` bounds. */
+export function dateRangeFromInputs(
+  from?: string,
+  to?: string
+): { gte: Date; lte: Date } | null {
+  const start = from ? dayRangeFromInput(from) : null;
+  const end = to ? dayRangeFromInput(to) : null;
+  if (!start && !end) return null;
+  const gte = start?.gte ?? end!.gte;
+  const lte = end?.lte ?? start!.lte;
+  if (gte.getTime() > lte.getTime()) return { gte: lte, lte: gte };
+  return { gte, lte };
+}
+
+/** First and last local day of `YYYY-MM`. */
+export function monthRangeFromInput(monthStr: string): { gte: Date; lte: Date } | null {
+  const match = /^(\d{4})-(\d{2})$/.exec(monthStr.trim());
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  if (month < 1 || month > 12) return null;
+  const start = new Date(year, month - 1, 1);
+  if (start.getFullYear() !== year || start.getMonth() !== month - 1) return null;
+  return { gte: startOfDay(start), lte: endOfMonth(start) };
+}
+
 export function startOfMonth(date: Date): Date {
   return new Date(date.getFullYear(), date.getMonth(), 1);
 }

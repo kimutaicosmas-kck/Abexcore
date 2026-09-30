@@ -74,6 +74,16 @@ describe('Sales schema validation', () => {
     const result = salesListQuerySchema.safeParse({ page: 1, limit: 15, status: 'CONFIRMED', search: 'SO' });
     expect(result.success).toBe(true);
   });
+
+  it('accepts a previous-month date range', () => {
+    const result = salesListQuerySchema.safeParse({
+      page: 1,
+      limit: 15,
+      from: '2026-08-01',
+      to: '2026-08-31',
+    });
+    expect(result.success).toBe(true);
+  });
 });
 
 describe('Delivery schema validation', () => {

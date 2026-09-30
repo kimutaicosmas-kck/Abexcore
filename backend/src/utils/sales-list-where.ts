@@ -1,7 +1,7 @@
 import { Prisma } from '@prisma/client';
 import { SALES_PERSON_ROLE_NAMES } from '../config/rolePermissions';
 import { salesPersonOrderFilter } from '../services/my-sales.service';
-import { dayRangeFromInput } from './date';
+import { dateRangeFromInputs, dayRangeFromInput } from './date';
 
 /** Orders with no sales officer (null) or attributed to a non-sales role (admin / house). */
 export function houseSalesOrderFilter(): Prisma.SalesOrderWhereInput {
@@ -50,6 +50,8 @@ export async function buildSalesOrdersWhere(opts: {
   status?: string;
   salesPersonId?: string;
   date?: string;
+  from?: string;
+  to?: string;
   search?: string;
   /** Force book to this user (sales officers). */
   bookOwnerId?: string;
@@ -71,8 +73,13 @@ export async function buildSalesOrdersWhere(opts: {
     appendAnd(where, salesOrderSearchFilter(opts.search.trim()));
   }
 
-  if (opts.includeDate && opts.date) {
-    const range = dayRangeFromInput(opts.date);
+  if (opts.includeDate) {
+    const range =
+      opts.from || opts.to
+        ? dateRangeFromInputs(opts.from, opts.to)
+        : opts.date
+          ? dayRangeFromInput(opts.date)
+          : null;
     if (range) {
       const { salesOrderInDateRange } = await import('./salesDate');
       appendAnd(where, salesOrderInDateRange(range));
