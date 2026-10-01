@@ -1,5 +1,12 @@
 import { Router, Response } from 'express';
-import { authenticate, authorize, AuthRequest, authorizeAny, requireSalesTargetManager } from '../middleware/auth';
+import {
+  authenticate,
+  authorize,
+  AuthRequest,
+  authorizeAny,
+  requireSalesTargetManager,
+  requireSuperAdmin,
+} from '../middleware/auth';
 import { validate } from '../middleware/validate';
 import { asyncHandler, AppError } from '../middleware/errorHandler';
 import { auditLog } from '../middleware/auditLog';
@@ -10,6 +17,7 @@ import {
   paginationSchema,
   createInvoiceSchema,
   saveInvoiceDraftSchema,
+  updateInvoiceItemsSchema,
   createPaymentSchema,
   createJournalEntrySchema,
   salesByPersonQuerySchema,
@@ -739,6 +747,34 @@ router.patch(
     });
 
     res.json({ success: true, data: invoice });
+  })
+);
+
+router.patch(
+  '/invoices/:id/items',
+  requireSuperAdmin,
+  authorize('finance:update'),
+  validate(updateInvoiceItemsSchema),
+  auditLog('finance', 'update', 'invoice'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const id = getParam(req.params.id);
+    const { items, adjustmentReason } = req.body as {
+      items: { id?: string; description: string; quantity: number; unitPrice: number }[];
+      adjustmentReason: string;
+    };
+
+    const invoice = await prisma.$transaction(async (tx) =>
+      FinanceInvoiceService.updateInvoiceItems(tx, id, items, adjustmentReason)
+    );
+
+    const { creditedAmountForInvoice, withInvoiceBalances } = await import('../utils/invoiceBalance');
+    const credited =
+      invoice.type === 'SALES' ? await creditedAmountForInvoice(prisma, invoice.id) : 0;
+
+    res.json({
+      success: true,
+      data: withInvoiceBalances(invoice, credited),
+    });
   })
 );
 

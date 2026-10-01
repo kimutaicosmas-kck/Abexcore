@@ -27,6 +27,7 @@ import {
   ArrowRight,
   CircleDollarSign,
   Download,
+  Pencil,
 } from 'lucide-react';
 import { financeApi } from '../services/api';
 import {
@@ -51,6 +52,7 @@ import {
 } from '../components/ui';
 import { Modal } from '../components/ui/Modal';
 import { InvoiceForm } from '../components/forms/InvoiceForm';
+import { InvoiceEditForm } from '../components/forms/InvoiceEditForm';
 import { PaymentForm } from '../components/forms/PaymentForm';
 import { JournalEntryForm } from '../components/forms/JournalEntryForm';
 import { ExpensesPanel, type ExpensesPanelHandle } from '../components/finance/ExpensesPanel';
@@ -161,7 +163,7 @@ function isOverdue(inv: Invoice) {
 
 export function FinancePage() {
   const queryClient = useQueryClient();
-  const { hasPermission } = useAuth();
+  const { hasPermission, isSuperAdmin } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState(0);
   const expensesPanelRef = useRef<ExpensesPanelHandle>(null);
@@ -212,6 +214,7 @@ export function FinancePage() {
   const [journalModalOpen, setJournalModalOpen] = useState(false);
   const [selectedInvoiceId, setSelectedInvoiceId] = useState<string | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
+  const [invoiceEditMode, setInvoiceEditMode] = useState(false);
   const [journalDetailOpen, setJournalDetailOpen] = useState(false);
   const [selectedJournal, setSelectedJournal] = useState<Record<string, unknown> | null>(null);
   const [paymentForInvoiceId, setPaymentForInvoiceId] = useState<string | undefined>();
@@ -1522,17 +1525,29 @@ export function FinancePage() {
       {/* Invoice detail */}
       <Modal
         open={detailOpen}
-        onClose={() => { setDetailOpen(false); setSelectedInvoiceId(null); }}
+        onClose={() => {
+          setDetailOpen(false);
+          setSelectedInvoiceId(null);
+          setInvoiceEditMode(false);
+        }}
         title={
-          invoiceDetail
-            ? invoiceDetail.type === 'CREDIT_NOTE'
-              ? `Credit Note ${invoiceDetail.invoiceNumber}`
-              : `Invoice ${invoiceDetail.invoiceNumber}`
-            : 'Invoice Details'
+          invoiceEditMode
+            ? 'Adjust Invoice'
+            : invoiceDetail
+              ? invoiceDetail.type === 'CREDIT_NOTE'
+                ? `Credit Note ${invoiceDetail.invoiceNumber}`
+                : `Invoice ${invoiceDetail.invoiceNumber}`
+              : 'Invoice Details'
         }
         size="xl"
       >
-        {detailLoading ? (
+        {invoiceEditMode && invoiceDetail ? (
+          <InvoiceEditForm
+            invoice={invoiceDetail}
+            onSuccess={() => setInvoiceEditMode(false)}
+            onCancel={() => setInvoiceEditMode(false)}
+          />
+        ) : detailLoading ? (
           <div className="py-12 text-center text-sm text-slate-500">Loading invoice…</div>
         ) : invoiceDetail ? (
           <div className="space-y-6">
@@ -1741,6 +1756,20 @@ export function FinancePage() {
               )}
               {invoiceDetail.status !== 'DRAFT' && (
               <>
+              {isSuperAdmin &&
+                (invoiceDetail.type === 'SALES' || invoiceDetail.type === 'PURCHASE') &&
+                Number(invoiceDetail.paidAmount) === 0 &&
+                (invoiceDetail.payments?.length || 0) === 0 &&
+                invoiceDetail.fiscalStatus !== 'SUBMITTED' &&
+                Number(invoiceDetail.creditedAmount || 0) === 0 && (
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => setInvoiceEditMode(true)}
+                >
+                  <Pencil className="h-4 w-4 mr-1.5" /> Adjust invoice
+                </Button>
+              )}
               <Button
                 variant="secondary"
                 size="sm"

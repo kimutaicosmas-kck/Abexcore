@@ -235,6 +235,164 @@ export class FinanceInvoiceService {
     return tx.invoice.findUnique({ where: { id: invoice.id }, include: { items: true } });
   }
 
+  /** Latest source journal entry that has not been reversed. */
+  static async findActiveSourceJournalEntry(
+    tx: TxClient,
+    sourceType: string,
+    sourceId: string
+  ) {
+    const entries = await tx.journalEntry.findMany({
+      where: { sourceType, sourceId },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true },
+    });
+    for (const entry of entries) {
+      const reversal = await tx.journalEntry.findFirst({
+        where: { reversalOfId: entry.id },
+        select: { id: true },
+      });
+      if (!reversal) return entry;
+    }
+    return null;
+  }
+
+  /** Super-admin adjustment of posted invoice line qty and unit price. */
+  static async updateInvoiceItems(
+    tx: TxClient,
+    invoiceId: string,
+    items: { id?: string; description: string; quantity: number; unitPrice: number }[],
+    adjustmentReason: string
+  ) {
+    const invoice = await tx.invoice.findUnique({
+      where: { id: invoiceId },
+      include: {
+        items: true,
+        payments: { select: { id: true }, take: 1 },
+        paymentAllocations: { select: { id: true }, take: 1 },
+        customer: { select: { id: true, vatStatus: true } },
+      },
+    });
+    if (!invoice) throw new AppError('Invoice not found', 404);
+    if (invoice.status === 'DRAFT') {
+      throw new AppError('Use the draft editor for draft invoices', 400);
+    }
+    if (invoice.type !== 'SALES' && invoice.type !== 'PURCHASE') {
+      throw new AppError('Only sales and purchase invoices can be adjusted this way', 400);
+    }
+    if (
+      Number(invoice.paidAmount) > 0 ||
+      invoice.payments.length > 0 ||
+      invoice.paymentAllocations.length > 0
+    ) {
+      throw new AppError('Cannot adjust invoice after payments have been recorded', 400);
+    }
+    if (invoice.fiscalStatus === 'SUBMITTED') {
+      throw new AppError('Cannot adjust an invoice already submitted to eTIMS', 400);
+    }
+
+    const { creditedAmountForInvoice, resolveSalesInvoiceStatus } = await import(
+      '../utils/invoiceBalance'
+    );
+    if (invoice.type === 'SALES') {
+      const credited = await creditedAmountForInvoice(tx, invoice.id);
+      if (credited > 0.009) {
+        throw new AppError(
+          'Cannot adjust invoice with linked credit notes. Use the returns workflow instead.',
+          400
+        );
+      }
+    }
+
+    const isSalesSide = invoice.type === 'SALES';
+    let vatRate = await getVatRate();
+    if (isSalesSide && invoice.customer) {
+      vatRate = await getCustomerVatRate(invoice.customer);
+    }
+
+    const keyedTotal = items.reduce(
+      (sum, item) => sum + item.quantity * item.unitPrice,
+      0
+    );
+    const purchaseTax = calcTax(keyedTotal, vatRate);
+    const { subtotal, taxAmount, totalAmount } = isSalesSide
+      ? splitInclusiveAmount(keyedTotal, vatRate)
+      : {
+          subtotal: keyedTotal,
+          taxAmount: purchaseTax,
+          totalAmount: keyedTotal + purchaseTax,
+        };
+
+    const mappedItems = items.map((item) => ({
+      description: item.description.trim(),
+      quantity: item.quantity,
+      unitPrice: roundMoney(item.unitPrice),
+      taxRate: vatRate,
+      totalPrice: roundMoney(item.quantity * item.unitPrice),
+    }));
+
+    const adjustmentNote = `[Adjusted ${new Date().toISOString().slice(0, 10)}] ${adjustmentReason}`;
+    const notes = invoice.notes ? `${invoice.notes}\n${adjustmentNote}` : adjustmentNote;
+
+    const sourceType = isSalesSide ? 'SALES_INVOICE' : 'PURCHASE_INVOICE';
+    const journalEntry = await FinanceInvoiceService.findActiveSourceJournalEntry(
+      tx,
+      sourceType,
+      invoice.id
+    );
+    if (journalEntry) {
+      await AccountingService.reverseJournalEntry(
+        tx,
+        journalEntry.id,
+        `Invoice adjustment ${invoice.invoiceNumber}`
+      );
+    }
+
+    await tx.invoiceItem.deleteMany({ where: { invoiceId: invoice.id } });
+
+    const nextStatus = isSalesSide
+      ? resolveSalesInvoiceStatus(
+          { ...invoice, totalAmount, paidAmount: invoice.paidAmount },
+          0
+        )
+      : invoice.status === 'OVERDUE'
+        ? 'OVERDUE'
+        : 'UNPAID';
+
+    const updated = await tx.invoice.update({
+      where: { id: invoice.id },
+      data: {
+        subtotal,
+        taxAmount,
+        totalAmount,
+        status: nextStatus,
+        notes,
+        items: { create: mappedItems },
+      },
+      include: { customer: true, supplier: true, items: true, payments: true },
+    });
+
+    if (isSalesSide) {
+      await AccountingService.postSalesInvoice(tx, {
+        id: updated.id,
+        invoiceNumber: updated.invoiceNumber,
+        subtotal: Number(updated.subtotal),
+        taxAmount: Number(updated.taxAmount),
+        totalAmount: Number(updated.totalAmount),
+      });
+      if (invoice.customerId) await syncCustomerCreditUsed(invoice.customerId, tx);
+    } else {
+      await AccountingService.postPurchaseInvoice(tx, {
+        id: updated.id,
+        invoiceNumber: updated.invoiceNumber,
+        subtotal: Number(updated.subtotal),
+        taxAmount: Number(updated.taxAmount),
+        totalAmount: Number(updated.totalAmount),
+      });
+    }
+
+    return updated;
+  }
+
   /**
    * Goods are always delivered with a delivery note. Sales invoices are created
    * from delivery dispatch (`createSalesInvoiceFromDelivery`), not from the order alone.

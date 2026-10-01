@@ -576,6 +576,20 @@ export const createInvoiceSchema = z.object({
   })).min(1),
 });
 
+export const updateInvoiceItemsSchema = z.object({
+  adjustmentReason: z.string().min(1, 'Reason for adjustment is required'),
+  items: z
+    .array(
+      z.object({
+        id: z.string().uuid().optional(),
+        description: z.string().min(1, 'Description is required'),
+        quantity: z.coerce.number().min(0.001),
+        unitPrice: z.coerce.number().min(0),
+      })
+    )
+    .min(1, 'Keep at least one line item'),
+});
+
 const invoiceDraftItemSchema = z.object({
   description: z.string().optional(),
   quantity: z.number().min(0.001).optional(),

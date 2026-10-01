@@ -480,6 +480,7 @@ export const financeApi = {
   updateInvoiceDraft: (id: string, data: object) => api.patch(`/finance/invoices/${id}/draft`, data),
   deleteInvoiceDraft: (id: string) => api.delete(`/finance/invoices/${id}/draft`),
   finalizeInvoice: (id: string, data: object) => api.post(`/finance/invoices/${id}/finalize`, data),
+  updateInvoiceItems: (id: string, data: object) => api.patch(`/finance/invoices/${id}/items`, data),
   createInvoiceFromOrder: (orderId: string) => api.post(`/finance/invoices/from-order/${orderId}`),
   createPurchaseInvoiceFromGrn: (grnId: string) => api.post(`/finance/invoices/from-grn/${grnId}`),
   listPayments: (params?: object) => api.get('/finance/payments', { params }),
