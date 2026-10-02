@@ -489,7 +489,9 @@ function drawDocTableSegment(
   const tableW = columns.reduce((s, c) => s + c.width, 0);
   const tableX = PAGE_LEFT;
   const bodyH = tableBodyHeight(rowHeights, paddingRows);
-  const totalH = TABLE_HEADER_H + bodyH;
+  const footerH =
+    opts.drawFooter && (opts.footerLeft || opts.footerCenter) ? TABLE_FOOTER_H : 0;
+  const totalH = TABLE_HEADER_H + bodyH + footerH;
 
   doc.rect(tableX, segmentY, tableW, totalH).strokeColor(ink.primary).lineWidth(1.2).stroke();
   doc.rect(tableX, segmentY, tableW, TABLE_HEADER_H).fill(ink.primary);
@@ -551,8 +553,16 @@ function drawDocTableSegment(
     rowTop += rowHeights[i];
   }
 
-  if (opts.drawFooter) {
-    const footerY = segmentY + totalH - 16;
+  if (footerH > 0) {
+    const footerTop = segmentY + TABLE_HEADER_H + bodyH;
+    doc
+      .moveTo(tableX, footerTop)
+      .lineTo(tableX + tableW, footerTop)
+      .strokeColor(ink.line)
+      .lineWidth(0.8)
+      .stroke();
+
+    const footerY = footerTop + 4;
     if (opts.footerLeft) {
       doc
         .font('Helvetica-Bold')

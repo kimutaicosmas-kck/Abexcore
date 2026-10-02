@@ -280,20 +280,22 @@ function drawChekimaPaginatedTable(
     y = drawTableRow(doc, y, company, rows[i]);
   }
 
-  y = ensureSpace(doc, y, 18);
+  const FOOTER_ROW_H = 18;
+  y = ensureSpace(doc, y, FOOTER_ROW_H);
   const ink = bindDocInk(doc, company);
+  doc.rect(PAGE_LEFT, y, TABLE_W, FOOTER_ROW_H).strokeColor(ink.line).lineWidth(0.5).stroke();
   doc
     .font('Helvetica-Bold')
     .fontSize(9)
     .fillColor(ink.primary)
-    .text('E.& O.E', PAGE_LEFT + 6, y + 2, { lineBreak: false });
+    .text('E.& O.E', PAGE_LEFT + 6, y + 4, { lineBreak: false });
   doc
     .font('Helvetica-Bold')
     .fontSize(10)
     .fillColor('#b91c1c')
-    .text(`No. ${docNo}`, PAGE_LEFT, y + 2, { width: TABLE_W, align: 'center', lineBreak: false });
+    .text(`No. ${docNo}`, PAGE_LEFT, y + 4, { width: TABLE_W, align: 'center', lineBreak: false });
 
-  return y + 18;
+  return y + FOOTER_ROW_H + 4;
 }
 
 function drawChekimaTradingTotals(
