@@ -88,6 +88,58 @@ function endOfDay(d: Date) {
   return x;
 }
 
+function isBookkeepingCreditNote(notes?: string | null) {
+  return (notes || '').includes('[INVOICE_ADJUSTED]');
+}
+
+/** Payment credits per customer from allocations (primary) and legacy direct invoice payments. */
+async function aggregateCustomerPaymentCredits(
+  companyId: string,
+  customerIds: string[],
+  asOf: Date
+): Promise<Map<string, number>> {
+  const credits = new Map<string, number>();
+  for (const id of customerIds) credits.set(id, 0);
+  if (customerIds.length === 0) return credits;
+
+  const [allocations, legacyPayments] = await Promise.all([
+    prisma.paymentAllocation.findMany({
+      where: {
+        payment: { companyId, paymentDate: { lte: asOf } },
+        invoice: { customerId: { in: customerIds }, type: 'SALES' },
+      },
+      select: {
+        amount: true,
+        invoice: { select: { customerId: true } },
+      },
+    }),
+    prisma.payment.findMany({
+      where: {
+        companyId,
+        paymentDate: { lte: asOf },
+        invoiceId: { not: null },
+        invoice: { customerId: { in: customerIds }, type: 'SALES' },
+        allocations: { none: {} },
+      },
+      select: { amount: true, invoice: { select: { customerId: true } } },
+    }),
+  ]);
+
+  for (const row of allocations) {
+    const customerId = row.invoice?.customerId;
+    if (!customerId) continue;
+    credits.set(customerId, (credits.get(customerId) || 0) + Number(row.amount));
+  }
+
+  for (const pay of legacyPayments) {
+    const customerId = pay.invoice?.customerId;
+    if (!customerId) continue;
+    credits.set(customerId, (credits.get(customerId) || 0) + Number(pay.amount));
+  }
+
+  return credits;
+}
+
 async function loadCustomer(customerId: string, companyId: string) {
   const customer = await prisma.customer.findFirst({
     where: { id: customerId, companyId, deletedAt: null },
@@ -124,6 +176,8 @@ async function computeCustomerAging(
       invoiceDate: { lte: endOfDay(asOf) },
     },
     select: {
+      id: true,
+      type: true,
       invoiceDate: true,
       dueDate: true,
       totalAmount: true,
@@ -131,6 +185,7 @@ async function computeCustomerAging(
     },
   });
 
+  const { creditedAmountForInvoice, computeInvoiceBalanceDue } = await import('../utils/invoiceBalance');
   const aging: StatementAging = {
     current: 0,
     days1_30: 0,
@@ -141,7 +196,14 @@ async function computeCustomerAging(
   };
 
   for (const inv of invoices) {
-    const balance = Math.round((Number(inv.totalAmount) - Number(inv.paidAmount)) * 100) / 100;
+    const credited =
+      inv.type === 'SALES' ? await creditedAmountForInvoice(prisma, inv.id) : 0;
+    const balance = Math.round(
+      computeInvoiceBalanceDue(
+        { ...inv, type: 'SALES', status: 'UNPAID' },
+        credited
+      ) * 100
+    ) / 100;
     if (balance <= 0.001) continue;
 
     const dueBase = inv.dueDate ? new Date(inv.dueDate) : new Date(inv.invoiceDate);
@@ -212,7 +274,7 @@ export class CustomerStatementService {
     for (const id of customerIds) balances.set(id, 0);
 
     if (customerIds.length > 0) {
-      const [invoices, payments] = await Promise.all([
+      const [invoices, paymentCredits] = await Promise.all([
         prisma.invoice.findMany({
           where: {
             companyId,
@@ -220,32 +282,25 @@ export class CustomerStatementService {
             type: { in: ['SALES', 'CREDIT_NOTE', 'DEBIT_NOTE'] },
             invoiceDate: { lte: toDate },
           },
-          select: { customerId: true, type: true, totalAmount: true },
+          select: { customerId: true, type: true, totalAmount: true, notes: true },
         }),
-        prisma.payment.findMany({
-          where: {
-            companyId,
-            paymentDate: { lte: toDate },
-            invoice: { customerId: { in: customerIds }, type: 'SALES' },
-          },
-          select: { amount: true, invoice: { select: { customerId: true } } },
-        }),
+        aggregateCustomerPaymentCredits(companyId, customerIds, toDate),
       ]);
 
       for (const inv of invoices) {
         if (!inv.customerId) continue;
         const amt = Number(inv.totalAmount);
         const current = balances.get(inv.customerId) || 0;
-        balances.set(
-          inv.customerId,
-          inv.type === 'CREDIT_NOTE' ? current - amt : current + amt
-        );
+        if (inv.type === 'CREDIT_NOTE') {
+          if (isBookkeepingCreditNote(inv.notes)) continue;
+          balances.set(inv.customerId, current - amt);
+        } else {
+          balances.set(inv.customerId, current + amt);
+        }
       }
 
-      for (const pay of payments) {
-        const customerId = pay.invoice?.customerId;
-        if (!customerId) continue;
-        balances.set(customerId, (balances.get(customerId) || 0) - Number(pay.amount));
+      for (const [customerId, paid] of paymentCredits) {
+        balances.set(customerId, (balances.get(customerId) || 0) - paid);
       }
     }
 
@@ -315,17 +370,13 @@ export class CustomerStatementService {
       customerId,
       type: { in: ['SALES', 'CREDIT_NOTE', 'DEBIT_NOTE'] },
     };
-    const paymentWhere: Prisma.PaymentWhereInput = {
-      companyId,
-      invoice: { customerId, type: 'SALES' },
-    };
-
     if (toDate) {
       invoiceWhere.invoiceDate = { ...(invoiceWhere.invoiceDate as object), lte: toDate };
-      paymentWhere.paymentDate = { ...(paymentWhere.paymentDate as object), lte: toDate };
     }
 
-    const [invoices, payments] = await Promise.all([
+    const paymentDateFilter = toDate ? { lte: toDate } : undefined;
+
+    const [invoices, allocations, legacyPayments] = await Promise.all([
       prisma.invoice.findMany({
         where: invoiceWhere,
         select: {
@@ -336,13 +387,38 @@ export class CustomerStatementService {
           totalAmount: true,
           paidAmount: true,
           status: true,
+          notes: true,
         },
         orderBy: { invoiceDate: 'asc' },
       }),
-      prisma.payment.findMany({
-        where: paymentWhere,
+      prisma.paymentAllocation.findMany({
+        where: {
+          payment: { companyId, ...(paymentDateFilter ? { paymentDate: paymentDateFilter } : {}) },
+          invoice: { customerId, type: 'SALES' },
+        },
         select: {
-          id: true,
+          amount: true,
+          invoice: { select: { invoiceNumber: true } },
+          payment: {
+            select: {
+              paymentNumber: true,
+              paymentDate: true,
+              method: true,
+              reference: true,
+              bankReference: true,
+            },
+          },
+        },
+        orderBy: { payment: { paymentDate: 'asc' } },
+      }),
+      prisma.payment.findMany({
+        where: {
+          companyId,
+          ...(paymentDateFilter ? { paymentDate: paymentDateFilter } : {}),
+          invoice: { customerId, type: 'SALES' },
+          allocations: { none: {} },
+        },
+        select: {
           paymentNumber: true,
           paymentDate: true,
           amount: true,
@@ -370,6 +446,7 @@ export class CustomerStatementService {
     for (const inv of invoices) {
       const amount = Number(inv.totalAmount);
       if (inv.type === 'CREDIT_NOTE') {
+        if (isBookkeepingCreditNote(inv.notes)) continue;
         raw.push({
           date: inv.invoiceDate,
           type: 'CREDIT_NOTE',
@@ -393,14 +470,19 @@ export class CustomerStatementService {
       }
     }
 
-    for (const pay of payments) {
+    const pushPaymentLine = (pay: {
+      paymentNumber: string;
+      paymentDate: Date;
+      amount: number;
+      method?: string | null;
+      reference?: string | null;
+      bankReference?: string | null;
+      invoiceNumber?: string | null;
+    }) => {
       const methodLabel = formatPaymentMethod(pay.method);
       const txnRef = (pay.reference || pay.bankReference || '').trim();
-      // Reference column: method (+ txn ref when present), e.g. "M-Pesa · THX…" / "Cash"
       const reference = txnRef ? `${methodLabel} · ${txnRef}` : methodLabel;
-      const invoicePart = pay.invoice?.invoiceNumber
-        ? ` for ${pay.invoice.invoiceNumber}`
-        : '';
+      const invoicePart = pay.invoiceNumber ? ` for ${pay.invoiceNumber}` : '';
       raw.push({
         date: pay.paymentDate,
         type: 'PAYMENT',
@@ -409,6 +491,26 @@ export class CustomerStatementService {
         debit: 0,
         credit: Number(pay.amount),
         paymentMethod: methodLabel,
+      });
+    };
+
+    for (const alloc of allocations) {
+      pushPaymentLine({
+        ...alloc.payment,
+        amount: Number(alloc.amount),
+        invoiceNumber: alloc.invoice?.invoiceNumber || null,
+      });
+    }
+
+    for (const pay of legacyPayments) {
+      pushPaymentLine({
+        paymentNumber: pay.paymentNumber,
+        paymentDate: pay.paymentDate,
+        amount: Number(pay.amount),
+        method: pay.method,
+        reference: pay.reference,
+        bankReference: pay.bankReference,
+        invoiceNumber: pay.invoice?.invoiceNumber || null,
       });
     }
 
@@ -486,6 +588,7 @@ export class CustomerStatementService {
         invoiceDate: invoiceDateFilter,
       },
       select: {
+        id: true,
         invoiceNumber: true,
         type: true,
         invoiceDate: true,
@@ -497,14 +600,25 @@ export class CustomerStatementService {
       orderBy: [{ dueDate: 'asc' }, { invoiceDate: 'asc' }],
     });
 
-    const open = invoices
-      .map((inv) => {
-        const invoiceTotal = Number(inv.totalAmount);
-        const paidAmount = Number(inv.paidAmount);
-        const balanceDue = Math.round((invoiceTotal - paidAmount) * 100) / 100;
-        return { inv, invoiceTotal, paidAmount, balanceDue };
-      })
-      .filter((row) => row.balanceDue > 0.001);
+    const { creditedAmountForInvoice, computeInvoiceBalanceDue } = await import('../utils/invoiceBalance');
+
+    const open = (
+      await Promise.all(
+        invoices.map(async (inv) => {
+          const invoiceTotal = Number(inv.totalAmount);
+          const paidAmount = Number(inv.paidAmount);
+          const credited =
+            inv.type === 'SALES' ? await creditedAmountForInvoice(prisma, inv.id) : 0;
+          const balanceDue = Math.round(
+            computeInvoiceBalanceDue(
+              { ...inv, type: inv.type, totalAmount: invoiceTotal, paidAmount, status: inv.status },
+              credited
+            ) * 100
+          ) / 100;
+          return { inv, invoiceTotal, paidAmount, balanceDue };
+        })
+      )
+    ).filter((row) => row.balanceDue > 0.001);
 
     let running = 0;
     const lines: StatementLine[] = open.map(({ inv, invoiceTotal, paidAmount, balanceDue }) => {

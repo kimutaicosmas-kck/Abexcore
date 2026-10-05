@@ -228,6 +228,9 @@ export function PaymentForm({ onSuccess, onCancel, invoiceId: preselectedId }: P
       queryClient.invalidateQueries({ queryKey: ['finance-overview'] });
       queryClient.invalidateQueries({ queryKey: ['payments'] });
       queryClient.invalidateQueries({ queryKey: ['bank-reconciliation'] });
+      queryClient.invalidateQueries({ queryKey: ['customer-balance-summary'] });
+      queryClient.invalidateQueries({ queryKey: ['customers'] });
+      queryClient.invalidateQueries({ queryKey: ['customer-statement'] });
       onSuccess();
     },
   });
