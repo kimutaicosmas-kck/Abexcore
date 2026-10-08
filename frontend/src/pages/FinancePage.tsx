@@ -54,6 +54,7 @@ import { Modal } from '../components/ui/Modal';
 import { InvoiceForm } from '../components/forms/InvoiceForm';
 import { InvoiceEditForm } from '../components/forms/InvoiceEditForm';
 import { PaymentForm } from '../components/forms/PaymentForm';
+import { PaymentEditForm } from '../components/forms/PaymentEditForm';
 import { JournalEntryForm } from '../components/forms/JournalEntryForm';
 import { ExpensesPanel, type ExpensesPanelHandle } from '../components/finance/ExpensesPanel';
 import { useAuth } from '../contexts/AuthContext';
@@ -218,6 +219,7 @@ export function FinancePage() {
   const [journalDetailOpen, setJournalDetailOpen] = useState(false);
   const [selectedJournal, setSelectedJournal] = useState<Record<string, unknown> | null>(null);
   const [paymentForInvoiceId, setPaymentForInvoiceId] = useState<string | undefined>();
+  const [editingPaymentId, setEditingPaymentId] = useState<string | null>(null);
   const [cashFlowDays, setCashFlowDays] = useState('30');
 
   const canCreate = hasPermission('finance:create');
@@ -704,6 +706,27 @@ export function FinancePage() {
       render: (val: unknown) => <span className="font-semibold text-emerald-700">{formatCurrency(val as number)}</span>,
     },
     { key: 'reference', label: 'Reference', render: (val: unknown) => (val as string) || '—' },
+    ...(canUpdate
+      ? [
+          {
+            key: 'actions',
+            label: '',
+            render: (_: unknown, row: Record<string, unknown>) => {
+              const pay = row as unknown as Payment;
+              if (pay.isReconciled) return null;
+              return (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setEditingPaymentId(pay.id)}
+                >
+                  <Pencil className="h-4 w-4 mr-1" /> Edit
+                </Button>
+              );
+            },
+          },
+        ]
+      : []),
   ];
 
   const PAY_PERIOD_OPTIONS = [
@@ -1518,6 +1541,21 @@ export function FinancePage() {
         />
       </Modal>
 
+      <Modal
+        open={Boolean(editingPaymentId)}
+        onClose={() => setEditingPaymentId(null)}
+        title="Edit Payment"
+        size="lg"
+      >
+        {editingPaymentId && (
+          <PaymentEditForm
+            paymentId={editingPaymentId}
+            onSuccess={() => setEditingPaymentId(null)}
+            onCancel={() => setEditingPaymentId(null)}
+          />
+        )}
+      </Modal>
+
       <Modal open={journalModalOpen} onClose={() => setJournalModalOpen(false)} title="Post Journal Entry" size="xl">
         <JournalEntryForm onSuccess={() => { setJournalModalOpen(false); setActiveTab(3); }} onCancel={() => setJournalModalOpen(false)} />
       </Modal>
@@ -1707,12 +1745,23 @@ export function FinancePage() {
                 ) : (
                   <div className="space-y-2">
                     {invoiceDetail.payments!.map((p) => (
-                      <div key={p.id} className="flex justify-between text-sm py-1.5 border-b border-slate-100 last:border-0">
+                      <div key={p.id} className="flex justify-between items-start gap-3 text-sm py-1.5 border-b border-slate-100 last:border-0">
                         <div>
                           <p className="font-medium">{p.paymentNumber}</p>
                           <p className="text-xs text-slate-500">{formatDate(p.paymentDate)} · {(p.method || '').replace(/_/g, ' ')}</p>
                         </div>
-                        <span className="font-semibold text-emerald-700">{formatCurrency(Number(p.amount))}</span>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className="font-semibold text-emerald-700">{formatCurrency(Number(p.amount))}</span>
+                          {canUpdate && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => setEditingPaymentId(p.id)}
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
+                        </div>
                       </div>
                     ))}
                   </div>

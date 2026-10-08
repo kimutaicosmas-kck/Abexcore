@@ -705,4 +705,278 @@ export class FinancePaymentService {
       },
     });
   }
+
+  static async updatePayment(
+    tx: TxClient,
+    paymentId: string,
+    opts: {
+      paymentDate?: Date | string | null;
+      method?: 'CASH' | 'BANK_TRANSFER' | 'CHEQUE' | 'MPESA' | 'CARD' | 'CREDIT';
+      reference?: string;
+      notes?: string;
+      adjustmentReason: string;
+      allocations: { invoiceId: string; amount: number }[];
+    }
+  ) {
+    const payment = await tx.payment.findUnique({
+      where: { id: paymentId },
+      include: {
+        allocations: { include: { invoice: true } },
+        invoice: true,
+        statementLine: { select: { id: true } },
+        mpesaTransaction: { select: { id: true } },
+      },
+    });
+    if (!payment) throw new AppError('Payment not found', 404);
+    if (payment.isReconciled) {
+      throw new AppError('Unreconcile this payment before editing it', 400);
+    }
+    if (payment.statementLine || payment.mpesaTransaction) {
+      throw new AppError('Unlink bank or M-Pesa records before editing this payment', 400);
+    }
+
+    const oldAllocations =
+      payment.allocations.length > 0
+        ? payment.allocations.map((a) => ({
+            invoiceId: a.invoiceId,
+            amount: Number(a.amount),
+            invoice: a.invoice,
+          }))
+        : payment.invoiceId
+          ? [
+              {
+                invoiceId: payment.invoiceId,
+                amount: Number(payment.amount),
+                invoice: payment.invoice!,
+              },
+            ]
+          : [];
+
+    if (oldAllocations.length === 0) {
+      throw new AppError('Payment has no invoice allocations to adjust', 400);
+    }
+
+    const allocations = opts.allocations.map((a) => ({
+      invoiceId: a.invoiceId,
+      amount: Number(a.amount),
+    }));
+    const invoiceIds = allocations.map((a) => a.invoiceId);
+    if (new Set(invoiceIds).size !== invoiceIds.length) {
+      throw new AppError('Each invoice can only appear once in a payment', 400);
+    }
+
+    const invoices = await tx.invoice.findMany({ where: { id: { in: invoiceIds } } });
+    if (invoices.length !== invoiceIds.length) {
+      throw new AppError('One or more invoices were not found', 404);
+    }
+
+    const invoiceById = new Map(invoices.map((inv) => [inv.id, inv]));
+    const companyId = invoices[0]!.companyId;
+    if (invoices.some((inv) => inv.companyId !== companyId)) {
+      throw new AppError('All invoices in a payment must belong to the same company', 400);
+    }
+
+    const customerIds = new Set(
+      invoices.map((inv) => inv.customerId).filter((id): id is string => Boolean(id))
+    );
+    if (customerIds.size > 1) {
+      throw new AppError('Select invoices for one customer only', 400);
+    }
+    const supplierIds = new Set(
+      invoices.map((inv) => inv.supplierId).filter((id): id is string => Boolean(id))
+    );
+    if (supplierIds.size > 1) {
+      throw new AppError('Select invoices for one supplier only', 400);
+    }
+
+    const oldCustomerIds = new Set(
+      oldAllocations.map((a) => a.invoice.customerId).filter((id): id is string => Boolean(id))
+    );
+    const oldSupplierIds = new Set(
+      oldAllocations.map((a) => a.invoice.supplierId).filter((id): id is string => Boolean(id))
+    );
+    if (customerIds.size && oldCustomerIds.size && [...customerIds][0] !== [...oldCustomerIds][0]) {
+      throw new AppError('Payment must stay with the same customer', 400);
+    }
+    if (supplierIds.size && oldSupplierIds.size && [...supplierIds][0] !== [...oldSupplierIds][0]) {
+      throw new AppError('Payment must stay with the same supplier', 400);
+    }
+
+    const { creditedAmountForInvoice, resolveSalesInvoiceStatus } = await import(
+      '../utils/invoiceBalance'
+    );
+    const { parseLocalDateInput } = await import('../utils/date');
+
+    for (const alloc of oldAllocations) {
+      const invoice = await tx.invoice.findUnique({ where: { id: alloc.invoiceId } });
+      if (!invoice) continue;
+      const paidAmount = Math.max(0, Number(invoice.paidAmount) - alloc.amount);
+      await tx.invoice.update({
+        where: { id: alloc.invoiceId },
+        data: { paidAmount },
+      });
+      const refreshed = await tx.invoice.findUnique({ where: { id: alloc.invoiceId } });
+      if (!refreshed) continue;
+      const credited =
+        refreshed.type === 'SALES' ? await creditedAmountForInvoice(tx, refreshed.id) : 0;
+      const invStatus =
+        refreshed.type === 'SALES'
+          ? resolveSalesInvoiceStatus(refreshed, credited)
+          : paidAmount >= Number(refreshed.totalAmount)
+            ? 'PAID'
+            : paidAmount > 0.009
+              ? 'PARTIAL'
+              : 'UNPAID';
+      await tx.invoice.update({
+        where: { id: alloc.invoiceId },
+        data: { status: invStatus },
+      });
+    }
+
+    await tx.paymentAllocation.deleteMany({ where: { paymentId } });
+
+    for (const alloc of allocations) {
+      const invoice = invoiceById.get(alloc.invoiceId)!;
+      const credited =
+        invoice.type === 'SALES' ? await creditedAmountForInvoice(tx, invoice.id) : 0;
+      const balance =
+        Number(invoice.totalAmount) - Number(invoice.paidAmount) - credited;
+      if (alloc.amount > balance + 0.01) {
+        throw new AppError(
+          `Payment for ${invoice.invoiceNumber} exceeds balance (KES ${balance.toFixed(2)})`,
+          400
+        );
+      }
+    }
+
+    const totalAmount = allocations.reduce((sum, a) => sum + a.amount, 0);
+    const invoiceType = invoices[0]!.type;
+    const method = opts.method || payment.method;
+    let paymentDate = payment.paymentDate;
+    if (opts.paymentDate) {
+      if (opts.paymentDate instanceof Date) {
+        paymentDate = opts.paymentDate;
+      } else {
+        const parsed = parseLocalDateInput(String(opts.paymentDate));
+        if (!parsed) throw new AppError('Invalid payment date', 400);
+        paymentDate = parsed;
+      }
+    }
+
+    const primaryInvoiceId = allocations.length === 1 ? allocations[0]!.invoiceId : null;
+    await tx.payment.update({
+      where: { id: paymentId },
+      data: {
+        amount: totalAmount,
+        method,
+        reference: opts.reference !== undefined ? opts.reference : payment.reference,
+        notes: opts.notes !== undefined ? opts.notes : payment.notes,
+        paymentDate,
+        invoiceId: primaryInvoiceId,
+      },
+    });
+
+    for (const alloc of allocations) {
+      await tx.paymentAllocation.create({
+        data: {
+          paymentId,
+          invoiceId: alloc.invoiceId,
+          amount: alloc.amount,
+        },
+      });
+
+      const invoice = invoiceById.get(alloc.invoiceId)!;
+      const refreshed = await tx.invoice.findUnique({ where: { id: invoice.id } });
+      if (!refreshed) continue;
+      const paidAmount = Number(refreshed.paidAmount) + alloc.amount;
+      let invStatus: 'PAID' | 'PARTIAL' | 'UNPAID' =
+        paidAmount >= Number(refreshed.totalAmount) ? 'PAID' : 'PARTIAL';
+
+      if (refreshed.type === 'SALES') {
+        const credited = await creditedAmountForInvoice(tx, refreshed.id);
+        invStatus = resolveSalesInvoiceStatus(
+          { ...refreshed, paidAmount },
+          credited
+        ) as 'PAID' | 'PARTIAL' | 'UNPAID';
+      }
+
+      await tx.invoice.update({
+        where: { id: refreshed.id },
+        data: { paidAmount, status: invStatus },
+      });
+    }
+
+    const paymentEntries = await tx.journalEntry.findMany({
+      where: {
+        sourceId: payment.id,
+        sourceType: { in: ['PAYMENT', 'SUPPLIER_PAYMENT'] },
+      },
+    });
+    for (const entry of paymentEntries) {
+      const alreadyReversed = await tx.journalEntry.findFirst({
+        where: { reversalOfId: entry.id },
+      });
+      if (!alreadyReversed) {
+        await AccountingService.reverseJournalEntry(tx, entry.id, opts.adjustmentReason);
+      }
+    }
+
+    const invoiceLabels = allocations
+      .map((a) => invoiceById.get(a.invoiceId)?.invoiceNumber)
+      .filter(Boolean)
+      .join(', ');
+
+    if (invoiceType === 'SALES') {
+      await AccountingService.postPayment(
+        tx,
+        {
+          id: payment.id,
+          paymentNumber: payment.paymentNumber,
+          amount: totalAmount,
+          method,
+        },
+        invoiceLabels
+      );
+      const customerId = invoices.find((inv) => inv.customerId)?.customerId;
+      if (customerId) await syncCustomerCreditUsed(customerId, tx);
+    } else if (invoiceType === 'PURCHASE') {
+      await AccountingService.postSupplierPayment(
+        tx,
+        {
+          id: payment.id,
+          paymentNumber: payment.paymentNumber,
+          amount: totalAmount,
+          method,
+        },
+        invoiceLabels
+      );
+    }
+
+    return tx.payment.findUniqueOrThrow({
+      where: { id: paymentId },
+      include: {
+        invoice: {
+          select: {
+            id: true,
+            invoiceNumber: true,
+            invoiceDate: true,
+            customer: { select: { name: true } },
+            supplier: { select: { name: true } },
+          },
+        },
+        allocations: {
+          include: {
+            invoice: {
+              select: {
+                id: true,
+                invoiceNumber: true,
+                customer: { select: { name: true } },
+                supplier: { select: { name: true } },
+              },
+            },
+          },
+        },
+      },
+    });
+  }
 }

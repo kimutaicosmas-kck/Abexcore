@@ -683,6 +683,35 @@ export const createPaymentSchema = z
     }
   });
 
+export const updatePaymentSchema = z
+  .object({
+    paymentDate: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD')
+      .optional(),
+    method: z.enum(['CASH', 'BANK_TRANSFER', 'CHEQUE', 'MPESA', 'CARD', 'CREDIT']).optional(),
+    reference: z.string().optional(),
+    notes: z.string().optional(),
+    adjustmentReason: z.string().min(1, 'Reason for adjustment is required'),
+    allocations: z
+      .array(
+        z.object({
+          invoiceId: z.string().uuid(),
+          amount: z.number().min(0.01),
+        })
+      )
+      .min(1),
+  })
+  .superRefine((data, ctx) => {
+    if (data.method === 'MPESA' && !(data.reference && data.reference.length >= 6)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'M-Pesa payments require a transaction reference code',
+        path: ['reference'],
+      });
+    }
+  });
+
 export const createExpenseSchema = z.object({
   expenseDate: z.string().optional(),
   categoryAccountId: z.string().uuid(),

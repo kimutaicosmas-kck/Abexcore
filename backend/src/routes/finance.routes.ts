@@ -19,6 +19,7 @@ import {
   saveInvoiceDraftSchema,
   updateInvoiceItemsSchema,
   createPaymentSchema,
+  updatePaymentSchema,
   createJournalEntrySchema,
   salesByPersonQuerySchema,
   productsSoldQuerySchema,
@@ -2075,6 +2076,113 @@ router.post(
     if (!taxPin) throw new AppError('taxPin is required', 400);
     const data = await KraEtimsService.validatePin(taxPin);
     res.json({ success: true, data });
+  })
+);
+
+router.get(
+  '/payments/:id',
+  authorize('finance:read'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const id = getParam(req.params.id);
+    const payment = await prisma.payment.findUnique({
+      where: { id },
+      include: {
+        invoice: {
+          select: {
+            id: true,
+            invoiceNumber: true,
+            invoiceDate: true,
+            totalAmount: true,
+            paidAmount: true,
+            status: true,
+            type: true,
+            customer: { select: { id: true, name: true } },
+            supplier: { select: { id: true, name: true } },
+          },
+        },
+        allocations: {
+          include: {
+            invoice: {
+              select: {
+                id: true,
+                invoiceNumber: true,
+                invoiceDate: true,
+                totalAmount: true,
+                paidAmount: true,
+                status: true,
+                type: true,
+                customer: { select: { id: true, name: true } },
+                supplier: { select: { id: true, name: true } },
+              },
+            },
+          },
+        },
+        statementLine: { select: { id: true } },
+        mpesaTransaction: { select: { id: true } },
+      },
+    });
+    if (!payment) throw new AppError('Payment not found', 404);
+
+    const { creditedAmountForInvoice, withInvoiceBalances } = await import('../utils/invoiceBalance');
+    const allocationRows =
+      payment.allocations.length > 0
+        ? payment.allocations
+        : payment.invoice
+          ? [
+              {
+                id: payment.id,
+                paymentId: payment.id,
+                invoiceId: payment.invoice.id,
+                amount: payment.amount,
+                createdAt: payment.createdAt,
+                invoice: payment.invoice,
+              },
+            ]
+          : [];
+
+    const allocations = await Promise.all(
+      allocationRows.map(async (row) => {
+        const inv = row.invoice;
+        const credited =
+          inv.type === 'SALES' ? await creditedAmountForInvoice(prisma, inv.id) : 0;
+        return {
+          ...row,
+          invoice: withInvoiceBalances(inv, credited),
+        };
+      })
+    );
+
+    res.json({
+      success: true,
+      data: {
+        ...payment,
+        allocations,
+      },
+    });
+  })
+);
+
+router.patch(
+  '/payments/:id',
+  authorize('finance:update'),
+  validate(updatePaymentSchema),
+  auditLog('finance', 'update', 'payment'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const id = getParam(req.params.id);
+    const { paymentDate, method, reference, notes, adjustmentReason, allocations } = req.body;
+
+    const payment = await prisma.$transaction(async (tx) =>
+      FinancePaymentService.updatePayment(tx, id, {
+        paymentDate,
+        method,
+        reference,
+        notes,
+        adjustmentReason,
+        allocations,
+      })
+    );
+
+    res.json({ success: true, data: payment });
   })
 );
 
