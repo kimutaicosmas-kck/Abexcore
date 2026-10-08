@@ -275,6 +275,71 @@ router.get(
 );
 
 router.get(
+  '/reports/aging',
+  authorizeAny('customers:read', 'finance:read', 'reports:read'),
+  validate(customerBalanceSummaryQuerySchema, 'query'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const { asOf, includeZero, salesPersonId } = getQuery<{
+      asOf?: string;
+      includeZero?: boolean;
+      salesPersonId?: string;
+    }>(req.query);
+    const salesFilter = await resolveBalanceSummarySalesFilter(req, salesPersonId);
+    const data = await CustomerStatementService.getAgingReport(asOf, {
+      includeZero,
+      ...salesFilter,
+    });
+    res.json({ success: true, data });
+  })
+);
+
+router.get(
+  '/reports/aging/pdf',
+  authorizeAny('customers:read', 'finance:read', 'reports:read'),
+  validate(customerBalanceSummaryQuerySchema, 'query'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const { asOf, includeZero, salesPersonId } = getQuery<{
+      asOf?: string;
+      includeZero?: boolean;
+      salesPersonId?: string;
+    }>(req.query);
+    const salesFilter = await resolveBalanceSummarySalesFilter(req, salesPersonId);
+    const report = await CustomerStatementService.getAgingReport(asOf, {
+      includeZero,
+      ...salesFilter,
+    });
+    const { ExportService } = await import('../services/export.service');
+    const pdf = await ExportService.generateCustomerAgingReportPDF(report);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', 'attachment; filename="customer-aging-report.pdf"');
+    res.send(pdf);
+  })
+);
+
+router.get(
+  '/reports/aging/excel',
+  authorizeAny('customers:read', 'finance:read', 'reports:read'),
+  validate(customerBalanceSummaryQuerySchema, 'query'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const { asOf, includeZero, salesPersonId } = getQuery<{
+      asOf?: string;
+      includeZero?: boolean;
+      salesPersonId?: string;
+    }>(req.query);
+    const salesFilter = await resolveBalanceSummarySalesFilter(req, salesPersonId);
+    const report = await CustomerStatementService.getAgingReport(asOf, {
+      includeZero,
+      ...salesFilter,
+    });
+    const { ExportService } = await import('../services/export.service');
+    const excel = await ExportService.generateCustomerAgingReportExcel(report);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', 'attachment; filename="customer-aging-report.xlsx"');
+    res.send(excel);
+  })
+);
+
+router.get(
   '/reports/vat-status',
   authorizeAny('customers:read', 'reports:read', 'finance:read'),
   validate(vatStatusReportQuery, 'query'),

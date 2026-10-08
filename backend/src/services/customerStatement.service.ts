@@ -239,6 +239,34 @@ export type CustomerBalanceSummaryResult = {
   salesPersonName?: string | null;
 };
 
+export type CustomerAgingReportRow = {
+  id: string;
+  code: string;
+  name: string;
+  current: number;
+  days1_30: number;
+  days31_60: number;
+  days61_90: number;
+  days90Plus: number;
+  total: number;
+};
+
+export type CustomerAgingReportResult = {
+  asOf: string;
+  currency: string;
+  customerCount: number;
+  totals: {
+    current: number;
+    days1_30: number;
+    days31_60: number;
+    days61_90: number;
+    days90Plus: number;
+    total: number;
+  };
+  customers: CustomerAgingReportRow[];
+  salesPersonName?: string | null;
+};
+
 export class CustomerStatementService {
   /**
    * FULL — ledger of invoices + payments (running balance).
@@ -335,6 +363,188 @@ export class CustomerStatementService {
       currency: 'KES',
       customerCount: rows.length,
       totalBalance,
+      customers: rows,
+      ...(salesPersonName !== undefined ? { salesPersonName } : {}),
+    };
+  }
+
+  /** Accounts receivable aging by customer (Current, 1–30, 31–60, 61–90, >90). */
+  static async getAgingReport(
+    asOf?: string,
+    opts?: { includeZero?: boolean; salesPersonId?: string | null; includeUnassigned?: boolean }
+  ): Promise<CustomerAgingReportResult> {
+    const companyId = requireTenantId();
+    const toRange = asOf ? dayRangeFromInput(asOf) : null;
+    const toDate = toRange?.lte ? endOfDay(toRange.lte) : endOfDay(new Date());
+    const asOfDay = startOfDay(toDate);
+
+    const customerWhere: Prisma.CustomerWhereInput = {
+      companyId,
+      deletedAt: null,
+      isActive: true,
+    };
+    if (opts?.salesPersonId === null) {
+      customerWhere.salesPersonId = null;
+    } else if (opts?.salesPersonId) {
+      customerWhere.OR = [{ salesPersonId: opts.salesPersonId }, { salesPersonId: null }];
+    }
+
+    const customers = await prisma.customer.findMany({
+      where: customerWhere,
+      select: { id: true, code: true, name: true },
+      orderBy: { name: 'asc' },
+    });
+
+    const customerIds = customers.map((c) => c.id);
+    const agingByCustomer = new Map<
+      string,
+      Omit<CustomerAgingReportRow, 'name' | 'code'>
+    >();
+    for (const c of customers) {
+      agingByCustomer.set(c.id, {
+        id: c.id,
+        current: 0,
+        days1_30: 0,
+        days31_60: 0,
+        days61_90: 0,
+        days90Plus: 0,
+        total: 0,
+      });
+    }
+
+    if (customerIds.length > 0) {
+      const invoices = await prisma.invoice.findMany({
+        where: {
+          companyId,
+          customerId: { in: customerIds },
+          type: { in: ['SALES', 'DEBIT_NOTE'] },
+          status: { notIn: ['PAID', 'REFUNDED'] },
+          invoiceDate: { lte: toDate },
+        },
+        select: {
+          id: true,
+          customerId: true,
+          type: true,
+          invoiceDate: true,
+          dueDate: true,
+          totalAmount: true,
+          paidAmount: true,
+        },
+      });
+
+      const salesIds = invoices.filter((inv) => inv.type === 'SALES').map((inv) => inv.id);
+      const creditByInvoice = new Map<string, number>();
+      if (salesIds.length > 0) {
+        const creditNotes = await prisma.invoice.findMany({
+          where: {
+            type: 'CREDIT_NOTE',
+            originalInvoiceId: { in: salesIds },
+          },
+          select: { originalInvoiceId: true, totalAmount: true, notes: true },
+        });
+        for (const cn of creditNotes) {
+          if (!cn.originalInvoiceId || isBookkeepingCreditNote(cn.notes)) continue;
+          creditByInvoice.set(
+            cn.originalInvoiceId,
+            (creditByInvoice.get(cn.originalInvoiceId) || 0) + Number(cn.totalAmount || 0)
+          );
+        }
+      }
+
+      const { computeInvoiceBalanceDue } = await import('../utils/invoiceBalance');
+
+      for (const inv of invoices) {
+        if (!inv.customerId) continue;
+        const credited = inv.type === 'SALES' ? creditByInvoice.get(inv.id) || 0 : 0;
+        const balance = Math.round(
+          computeInvoiceBalanceDue(
+            {
+              id: inv.id,
+              type: inv.type,
+              totalAmount: inv.totalAmount,
+              paidAmount: inv.paidAmount,
+              status: 'UNPAID',
+            },
+            credited
+          ) * 100
+        ) / 100;
+        if (balance <= 0.001) continue;
+
+        const bucket = agingByCustomer.get(inv.customerId);
+        if (!bucket) continue;
+
+        const dueBase = inv.dueDate ? new Date(inv.dueDate) : new Date(inv.invoiceDate);
+        dueBase.setHours(0, 0, 0, 0);
+        const daysPastDue = Math.floor((asOfDay.getTime() - dueBase.getTime()) / 86400000);
+
+        if (daysPastDue <= 0) bucket.current += balance;
+        else if (daysPastDue <= 30) bucket.days1_30 += balance;
+        else if (daysPastDue <= 60) bucket.days31_60 += balance;
+        else if (daysPastDue <= 90) bucket.days61_90 += balance;
+        else bucket.days90Plus += balance;
+
+        bucket.total += balance;
+      }
+    }
+
+    const round2 = (n: number) => Math.round(n * 100) / 100;
+
+    let rows: CustomerAgingReportRow[] = customers.map((c) => {
+      const bucket = agingByCustomer.get(c.id)!;
+      return {
+        id: c.id,
+        code: c.code,
+        name: c.name,
+        current: round2(bucket.current),
+        days1_30: round2(bucket.days1_30),
+        days31_60: round2(bucket.days31_60),
+        days61_90: round2(bucket.days61_90),
+        days90Plus: round2(bucket.days90Plus),
+        total: round2(bucket.total),
+      };
+    });
+
+    if (!opts?.includeZero) {
+      rows = rows.filter((r) => r.total > 0.001);
+    }
+
+    const totals = rows.reduce(
+      (acc, row) => ({
+        current: acc.current + row.current,
+        days1_30: acc.days1_30 + row.days1_30,
+        days31_60: acc.days31_60 + row.days31_60,
+        days61_90: acc.days61_90 + row.days61_90,
+        days90Plus: acc.days90Plus + row.days90Plus,
+        total: acc.total + row.total,
+      }),
+      { current: 0, days1_30: 0, days31_60: 0, days61_90: 0, days90Plus: 0, total: 0 }
+    );
+
+    let salesPersonName: string | null | undefined;
+    if (opts?.salesPersonId === null) {
+      salesPersonName = 'Unassigned';
+    } else if (opts?.salesPersonId) {
+      const salesPerson = await prisma.user.findFirst({
+        where: { id: opts.salesPersonId, companyId },
+        select: { firstName: true, lastName: true },
+      });
+      salesPersonName = salesPerson
+        ? `${salesPerson.firstName} ${salesPerson.lastName}`.trim()
+        : null;
+    }
+
+    return {
+      asOf: toDate.toISOString(),
+      currency: 'KES',
+      customerCount: rows.length,
+      totals: {
+        current: round2(totals.current),
+        days1_30: round2(totals.days1_30),
+        days31_60: round2(totals.days31_60),
+        days61_90: round2(totals.days61_90),
+        days90Plus: round2(totals.days90Plus),
+        total: round2(totals.total),
+      },
       customers: rows,
       ...(salesPersonName !== undefined ? { salesPersonName } : {}),
     };

@@ -136,6 +136,11 @@ export function CustomersPage() {
   const [balanceSummarySalesPerson, setBalanceSummarySalesPerson] = useState('');
   const [balanceSummaryExporting, setBalanceSummaryExporting] = useState<'pdf' | 'excel' | null>(null);
   const [balanceSummaryExportError, setBalanceSummaryExportError] = useState<string | null>(null);
+  const [agingReportOpen, setAgingReportOpen] = useState(false);
+  const [agingReportAsOf, setAgingReportAsOf] = useState(() => new Date().toISOString().slice(0, 10));
+  const [agingReportSalesPerson, setAgingReportSalesPerson] = useState('');
+  const [agingReportExporting, setAgingReportExporting] = useState<'pdf' | 'excel' | null>(null);
+  const [agingReportExportError, setAgingReportExportError] = useState<string | null>(null);
 
   const [compPage, setCompPage] = useState(1);
   const [compSearch, setCompSearch] = useState('');
@@ -263,6 +268,40 @@ export function CustomersPage() {
         customers: { id: string; code: string; name: string; balance: number }[];
       }),
     enabled: balanceSummaryOpen,
+  });
+
+  const { data: agingReport, isLoading: agingReportLoading, refetch: refetchAgingReport } = useQuery({
+    queryKey: ['customer-aging-report', agingReportAsOf, agingReportSalesPerson],
+    queryFn: () =>
+      customersApi.agingReport({
+        asOf: agingReportAsOf || undefined,
+        salesPersonId: agingReportSalesPerson || undefined,
+      }).then((r) => r.data.data as {
+        asOf: string;
+        currency: string;
+        customerCount: number;
+        totals: {
+          current: number;
+          days1_30: number;
+          days31_60: number;
+          days61_90: number;
+          days90Plus: number;
+          total: number;
+        };
+        salesPersonName?: string | null;
+        customers: {
+          id: string;
+          code: string;
+          name: string;
+          current: number;
+          days1_30: number;
+          days31_60: number;
+          days61_90: number;
+          days90Plus: number;
+          total: number;
+        }[];
+      }),
+    enabled: agingReportOpen,
   });
 
   const { data: complaintsRes, isLoading: compLoading } = useQuery({
@@ -405,6 +444,26 @@ export function CustomersPage() {
       setBalanceSummaryExportError(err instanceof Error ? err.message : 'Export failed');
     } finally {
       setBalanceSummaryExporting(null);
+    }
+  };
+
+  const exportAgingReport = async (format: 'pdf' | 'excel') => {
+    setAgingReportExportError(null);
+    setAgingReportExporting(format);
+    const ext = format === 'pdf' ? 'pdf' : 'xlsx';
+    try {
+      await downloadFile(
+        `/customers/reports/aging/${format}`,
+        `customer-aging-report.${ext}`,
+        {
+          asOf: agingReportAsOf || undefined,
+          salesPersonId: agingReportSalesPerson || undefined,
+        }
+      );
+    } catch (err) {
+      setAgingReportExportError(err instanceof Error ? err.message : 'Export failed');
+    } finally {
+      setAgingReportExporting(null);
     }
   };
 
@@ -655,6 +714,10 @@ export function CustomersPage() {
             <Button size="sm" variant="secondary" onClick={() => setBalanceSummaryOpen(true)}>
               <FileText className="h-4 w-4 mr-1.5" />
               Balance summary
+            </Button>
+            <Button size="sm" variant="secondary" onClick={() => setAgingReportOpen(true)}>
+              <FileSpreadsheet className="h-4 w-4 mr-1.5" />
+              Aging report
             </Button>
           </>
         )}
@@ -1217,6 +1280,114 @@ export function CustomersPage() {
             </div>
           ) : (
             <EmptyState title="No balance data" />
+          )}
+        </div>
+      </Modal>
+
+      <Modal
+        open={agingReportOpen}
+        onClose={() => setAgingReportOpen(false)}
+        title="Customer aging report"
+        size="xl"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-slate-600">
+            Outstanding receivables by customer, bucketed by days past due (Current, 1–30, 31–60, 61–90, &gt;90).
+          </p>
+          <PanelFilters className="!px-0 pt-0">
+            <Input
+              label="As at date"
+              type="date"
+              value={agingReportAsOf}
+              onChange={(e) => setAgingReportAsOf(e.target.value)}
+              className="w-44"
+            />
+            {!isSalesOfficer && (
+              <div className="w-52">
+                <label className="block text-xs font-medium text-slate-600 mb-1">Sales person</label>
+                <Select
+                  options={salesPersonFilterOptions}
+                  value={agingReportSalesPerson}
+                  onChange={(e) => setAgingReportSalesPerson(e.target.value)}
+                />
+              </div>
+            )}
+            <Button variant="secondary" size="sm" onClick={() => refetchAgingReport()}>
+              Refresh
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              loading={agingReportExporting === 'pdf'}
+              disabled={!!agingReportExporting || agingReportLoading}
+              onClick={() => exportAgingReport('pdf')}
+            >
+              <Download className="h-4 w-4 mr-1" />
+              PDF
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              loading={agingReportExporting === 'excel'}
+              disabled={!!agingReportExporting || agingReportLoading}
+              onClick={() => exportAgingReport('excel')}
+            >
+              <FileSpreadsheet className="h-4 w-4 mr-1" />
+              Excel
+            </Button>
+          </PanelFilters>
+          {agingReportExportError && <Alert variant="error">{agingReportExportError}</Alert>}
+          {agingReport?.salesPersonName && (
+            <p className="text-sm font-medium text-primary-800">
+              Showing customers for: {agingReport.salesPersonName}
+            </p>
+          )}
+          {agingReportLoading ? (
+            <p className="text-sm text-slate-500 py-8 text-center">Loading aging report…</p>
+          ) : agingReport ? (
+            <div className="rounded-xl border border-primary-100 overflow-hidden">
+              <div className="table-scroll-x">
+                <table className="w-full text-sm min-w-[720px]">
+                  <thead>
+                    <tr className="bg-primary-50/80 text-xs font-semibold uppercase tracking-wide text-primary-800 border-b border-primary-100">
+                      <th className="px-3 py-2 text-left">Customer</th>
+                      <th className="px-3 py-2 text-right">Current</th>
+                      <th className="px-3 py-2 text-right">1 - 30</th>
+                      <th className="px-3 py-2 text-right">31 - 60</th>
+                      <th className="px-3 py-2 text-right">61 - 90</th>
+                      <th className="px-3 py-2 text-right">&gt; 90</th>
+                      <th className="px-3 py-2 text-right">Total</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {agingReport.customers.map((row) => (
+                      <tr key={row.id}>
+                        <td className="px-3 py-2 font-medium text-slate-900 uppercase">{row.name}</td>
+                        <td className="px-3 py-2 text-right tabular-nums">{formatCurrency(row.current)}</td>
+                        <td className="px-3 py-2 text-right tabular-nums">{formatCurrency(row.days1_30)}</td>
+                        <td className="px-3 py-2 text-right tabular-nums">{formatCurrency(row.days31_60)}</td>
+                        <td className="px-3 py-2 text-right tabular-nums">{formatCurrency(row.days61_90)}</td>
+                        <td className="px-3 py-2 text-right tabular-nums">{formatCurrency(row.days90Plus)}</td>
+                        <td className="px-3 py-2 text-right tabular-nums font-semibold">{formatCurrency(row.total)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="bg-slate-50 border-t border-slate-200 font-bold">
+                      <td className="px-3 py-3">Total ({agingReport.customerCount} customers)</td>
+                      <td className="px-3 py-3 text-right tabular-nums">{formatCurrency(agingReport.totals.current)}</td>
+                      <td className="px-3 py-3 text-right tabular-nums">{formatCurrency(agingReport.totals.days1_30)}</td>
+                      <td className="px-3 py-3 text-right tabular-nums">{formatCurrency(agingReport.totals.days31_60)}</td>
+                      <td className="px-3 py-3 text-right tabular-nums">{formatCurrency(agingReport.totals.days61_90)}</td>
+                      <td className="px-3 py-3 text-right tabular-nums">{formatCurrency(agingReport.totals.days90Plus)}</td>
+                      <td className="px-3 py-3 text-right tabular-nums">{formatCurrency(agingReport.totals.total)}</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </div>
+          ) : (
+            <EmptyState title="No aging data" />
           )}
         </div>
       </Modal>

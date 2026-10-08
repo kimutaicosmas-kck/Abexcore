@@ -30,6 +30,7 @@ import {
 import type {
   CustomerStatementResult,
   CustomerBalanceSummaryResult,
+  CustomerAgingReportResult,
   VatCustomerReportResult,
 } from './customerStatement.service';
 import type { VendorStatementResult } from './vendorStatement.service';
@@ -2927,6 +2928,183 @@ export class ExportService {
     sheet.addRow(['Total', report.totalBalance]).font = { bold: true };
     sheet.getColumn(2).numFmt = '#,##0.00';
     sheet.columns = [{ width: 48 }, { width: 16 }];
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    return Buffer.from(buffer);
+  }
+
+  static async generateCustomerAgingReportPDF(
+    report: CustomerAgingReportResult
+  ): Promise<Buffer> {
+    const company = await resolveCompanyDocHeader(requireTenantId());
+    const fmt = (n: number) =>
+      n.toLocaleString('en-KE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const asAtLabel = new Date(report.asOf).toLocaleDateString('en-KE', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    });
+
+    const columns = [
+      { label: 'Current', key: 'current' as const, width: 58 },
+      { label: '1 - 30', key: 'days1_30' as const, width: 58 },
+      { label: '31 - 60', key: 'days31_60' as const, width: 58 },
+      { label: '61 - 90', key: 'days61_90' as const, width: 58 },
+      { label: '> 90', key: 'days90Plus' as const, width: 58 },
+      { label: 'TOTAL', key: 'total' as const, width: 68 },
+    ];
+
+    return new Promise((resolve, reject) => {
+      const doc = new PDFDocument({ margin: 36, size: 'A4', layout: 'landscape', bufferPages: true });
+      const chunks: Buffer[] = [];
+      doc.on('data', (chunk) => chunks.push(chunk));
+      doc.on('end', () => resolve(Buffer.concat(chunks)));
+      doc.on('error', reject);
+
+      const pageWidth = doc.page.width;
+      const left = 36;
+      const right = pageWidth - 36;
+      const nameWidth = 170;
+      const tableWidth = columns.reduce((sum, col) => sum + col.width, 0);
+      const tableLeft = right - tableWidth;
+
+      doc.font('Helvetica-Bold').fontSize(13).fillColor('#0f172a');
+      doc.text(company.name.toUpperCase(), left, 36, { width: pageWidth - 72, align: 'center' });
+      doc.moveDown(0.3);
+      doc.fontSize(11).text('Customer Aging Report (Values in Home Currency)', {
+        width: pageWidth - 72,
+        align: 'center',
+      });
+      doc.font('Helvetica').fontSize(9).fillColor('#475569');
+      doc.text(`As at ${asAtLabel}`, { width: pageWidth - 72, align: 'center' });
+      if (report.salesPersonName) {
+        doc.text(`Sales person: ${report.salesPersonName}`, { width: pageWidth - 72, align: 'center' });
+      }
+      doc.moveDown(0.8);
+
+      const headerY = doc.y;
+      doc.font('Helvetica-Bold').fontSize(8).fillColor('#0f172a');
+      doc.text('Customer', left, headerY, { width: nameWidth });
+      let colX = tableLeft;
+      for (const col of columns) {
+        doc.text(col.label, colX, headerY, { width: col.width, align: 'right' });
+        colX += col.width;
+      }
+      doc.moveDown(0.2);
+      doc.moveTo(left, doc.y).lineTo(right, doc.y).strokeColor('#cbd5e1').stroke();
+      doc.moveDown(0.35);
+
+      let y = doc.y;
+      doc.font('Helvetica').fontSize(8).fillColor('#0f172a');
+      for (const row of report.customers) {
+        if (y > 520) {
+          doc.addPage({ layout: 'landscape' });
+          y = 36;
+        }
+        doc.text(row.name.toUpperCase(), left, y, { width: nameWidth, lineGap: 0.5 });
+        const lineH = doc.heightOfString(row.name.toUpperCase(), { width: nameWidth });
+        colX = tableLeft;
+        for (const col of columns) {
+          doc.text(fmt(row[col.key]), colX, y, { width: col.width, align: 'right' });
+          colX += col.width;
+        }
+        y += Math.max(lineH, 12) + 2;
+      }
+
+      y += 6;
+      if (y > 520) {
+        doc.addPage({ layout: 'landscape' });
+        y = 36;
+      }
+      doc.moveTo(left, y).lineTo(right, y).strokeColor('#cbd5e1').stroke();
+      y += 8;
+      doc.font('Helvetica-Bold').fontSize(8);
+      doc.text('TOTAL', left, y, { width: nameWidth });
+      colX = tableLeft;
+      for (const col of columns) {
+        doc.text(fmt(report.totals[col.key]), colX, y, { width: col.width, align: 'right' });
+        colX += col.width;
+      }
+
+      doc.end();
+    });
+  }
+
+  static async generateCustomerAgingReportExcel(
+    report: CustomerAgingReportResult
+  ): Promise<Buffer> {
+    const company = await resolveCompanyDocHeader(requireTenantId());
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet('Customer Aging');
+    const asAt = new Date(report.asOf).toLocaleDateString('en-KE');
+
+    const nextRow = addExcelCompanyLetterhead(
+      workbook,
+      sheet,
+      company,
+      `${company.name} — Customer Aging Report`,
+      'H'
+    );
+    sheet.getCell(`A${nextRow}`).value = `As at ${asAt}`;
+    if (report.salesPersonName) {
+      sheet.getCell(`A${nextRow + 1}`).value = `Sales person: ${report.salesPersonName}`;
+    }
+
+    const headerRow = sheet.addRow([
+      'Customer',
+      'Current',
+      '1 - 30',
+      '31 - 60',
+      '61 - 90',
+      '> 90',
+      'TOTAL',
+    ]);
+    headerRow.font = { bold: true };
+    headerRow.alignment = { horizontal: 'center' };
+    headerRow.getCell(1).alignment = { horizontal: 'left' };
+
+    for (const row of report.customers) {
+      const dataRow = sheet.addRow([
+        row.name.toUpperCase(),
+        row.current,
+        row.days1_30,
+        row.days31_60,
+        row.days61_90,
+        row.days90Plus,
+        row.total,
+      ]);
+      dataRow.getCell(1).alignment = { horizontal: 'left' };
+      for (let i = 2; i <= 7; i++) {
+        dataRow.getCell(i).numFmt = '#,##0.00';
+        dataRow.getCell(i).alignment = { horizontal: 'right' };
+      }
+    }
+
+    const totalRow = sheet.addRow([
+      'TOTAL',
+      report.totals.current,
+      report.totals.days1_30,
+      report.totals.days31_60,
+      report.totals.days61_90,
+      report.totals.days90Plus,
+      report.totals.total,
+    ]);
+    totalRow.font = { bold: true };
+    totalRow.getCell(1).alignment = { horizontal: 'left' };
+    for (let i = 2; i <= 7; i++) {
+      totalRow.getCell(i).numFmt = '#,##0.00';
+      totalRow.getCell(i).alignment = { horizontal: 'right' };
+    }
+
+    sheet.columns = [
+      { width: 42 },
+      { width: 14 },
+      { width: 14 },
+      { width: 14 },
+      { width: 14 },
+      { width: 14 },
+      { width: 16 },
+    ];
 
     const buffer = await workbook.xlsx.writeBuffer();
     return Buffer.from(buffer);
