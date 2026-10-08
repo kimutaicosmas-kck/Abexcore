@@ -3,6 +3,7 @@ import { dayRangeFromInput, paymentPeriodRange, type PaymentPeriodPreset } from 
 
 export type InvoiceListFilters = {
   search?: string;
+  customerId?: string;
   type?: string;
   status?: string;
   vatStatus?: 'VAT' | 'NON_VAT';
@@ -53,6 +54,9 @@ function invoiceDateWhere(filters: InvoiceListFilters): Prisma.InvoiceWhereInput
 export function buildInvoiceListWhere(filters: InvoiceListFilters = {}): Prisma.InvoiceWhereInput {
   const and: Prisma.InvoiceWhereInput[] = [];
 
+  if (filters.customerId) {
+    and.push({ customerId: filters.customerId });
+  }
   if (filters.type) {
     and.push({ type: filters.type as Prisma.EnumInvoiceTypeFilter['equals'] });
   }

@@ -437,21 +437,32 @@ router.get(
   asyncHandler(async (req: AuthRequest, res: Response) => {
     await InvoiceMaintenanceService.markOverdueInvoices();
 
-    const { page, limit, search, type, status, vatStatus, period, from, to, cursor } = getQuery<{
-      page: number;
-      limit: number;
-      search?: string;
-      type?: string;
-      status?: string;
-      vatStatus?: 'VAT' | 'NON_VAT';
-      period?: 'this_week' | 'last_week' | 'this_month' | 'last_month';
-      from?: string;
-      to?: string;
-      cursor?: string;
-    }>(req.query);
+    const { page, limit, search, customerId, type, status, vatStatus, period, from, to, cursor } =
+      getQuery<{
+        page: number;
+        limit: number;
+        search?: string;
+        customerId?: string;
+        type?: string;
+        status?: string;
+        vatStatus?: 'VAT' | 'NON_VAT';
+        period?: 'this_week' | 'last_week' | 'this_month' | 'last_month';
+        from?: string;
+        to?: string;
+        cursor?: string;
+      }>(req.query);
 
     const { buildInvoiceListWhere } = await import('../utils/invoiceListWhere');
-    const where = buildInvoiceListWhere({ search, type, status, vatStatus, period, from, to });
+    const where = buildInvoiceListWhere({
+      search,
+      customerId,
+      type,
+      status,
+      vatStatus,
+      period,
+      from,
+      to,
+    });
 
     const invoiceInclude = {
       customer: true,

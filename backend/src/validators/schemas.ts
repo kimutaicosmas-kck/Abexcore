@@ -1250,6 +1250,10 @@ export const createVehicleSchema = z.object({
 });
 
 export const financeListQuerySchema = paginationSchema.extend({
+  customerId: z.preprocess(
+    (v) => (v === '' || v === undefined ? undefined : v),
+    z.string().uuid().optional()
+  ),
   type: z.preprocess(
     (v) => (v === '' || v === undefined ? undefined : v),
     z.enum(['SALES', 'PURCHASE', 'CREDIT_NOTE', 'DEBIT_NOTE']).optional()

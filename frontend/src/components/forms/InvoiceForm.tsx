@@ -230,14 +230,14 @@ export function InvoiceForm({
     queryKey: ['credit-note-source-invoices', customerId],
     queryFn: () =>
       financeApi
-        .invoices({ type: 'SALES', limit: 200 })
+        .invoices({ type: 'SALES', customerId, limit: 100 })
         .then((r) => r.data.data as Invoice[]),
     enabled: isCreditNote && Boolean(customerId),
+    retry: false,
   });
 
   const creditableInvoices = (customerInvoicesData || []).filter(
     (inv) =>
-      inv.customer?.id === customerId &&
       inv.status !== 'DRAFT' &&
       inv.status !== 'REFUNDED' &&
       (inv.balanceDue ?? Number(inv.totalAmount) - Number(inv.paidAmount)) > 0.009
