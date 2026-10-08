@@ -1285,6 +1285,7 @@ router.get(
       prisma.payment.count({ where }),
     ]);
 
+    const { isPaymentEditable } = await import('../utils/paymentEdit');
     const data = rows.map((p) => {
       const invoiceDate = p.invoice?.invoiceDate ? new Date(p.invoice.invoiceDate) : null;
       const paidOn = new Date(p.paymentDate);
@@ -1294,6 +1295,7 @@ router.get(
         ...p,
         paidSameWeekAsInvoice,
         paidSameMonthAsInvoice,
+        editable: isPaymentEditable(p),
       };
     });
 
@@ -2152,11 +2154,22 @@ router.get(
       })
     );
 
+    const { isPaymentEditable, paymentEditBlockedReason } = await import('../utils/paymentEdit');
+    const editBlockedReason =
+      paymentEditBlockedReason(payment) ||
+      (payment.statementLine
+        ? 'This payment is linked to a bank statement line. Unmatch it before editing.'
+        : payment.mpesaTransaction
+          ? 'This payment is linked to an M-Pesa transaction and cannot be edited here.'
+          : null);
+
     res.json({
       success: true,
       data: {
         ...payment,
         allocations,
+        editable: isPaymentEditable(payment) && !payment.statementLine && !payment.mpesaTransaction,
+        editBlockedReason,
       },
     });
   })

@@ -1533,6 +1533,8 @@ model Payment {
   reconciledAt  DateTime?     @map("reconciled_at")
   bankReference String?       @map("bank_reference")
   reconciledById String?      @map("reconciled_by_id")
+  /** Set when a payment is adjusted; blocks further edits (fraud control). */
+  adjustedAt    DateTime?     @map("adjusted_at")
   createdAt     DateTime      @default(now()) @map("created_at")
 
   invoice Invoice? @relation(fields: [invoiceId], references: [id])

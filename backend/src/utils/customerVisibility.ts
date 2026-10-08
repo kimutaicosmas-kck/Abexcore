@@ -1,21 +1,19 @@
 import type { Prisma } from '@prisma/client';
 import { isSalesBookOwner } from '../config/rolePermissions';
 
-/** Shared pool — visible to every user with customers module access. */
+/** Customers with no assigned sales officer (managers only). */
 export function unassignedCustomerWhere(): Prisma.CustomerWhereInput {
   return { salesPersonId: null };
 }
 
-/** Sales officer personal book plus the shared unassigned pool. */
+/** Customers owned by one sales officer only — no shared unassigned pool. */
 export function salesBookCustomerFilter(salesPersonId: string): Prisma.CustomerWhereInput {
-  return {
-    OR: [{ salesPersonId }, unassignedCustomerWhere()],
-  };
+  return { salesPersonId };
 }
 
 /**
  * Customer list visibility for users with customers:read.
- * Unassigned customers are always included for every role.
+ * Sales officers see only customers assigned to them; managers see all or filter.
  */
 export function customerModuleListFilter(
   roleName: string | null | undefined,
@@ -31,9 +29,7 @@ export function customerModuleListFilter(
   }
 
   if (opts?.salesPersonId) {
-    return {
-      OR: [{ salesPersonId: opts.salesPersonId }, unassignedCustomerWhere()],
-    };
+    return { salesPersonId: opts.salesPersonId };
   }
 
   return {};
@@ -52,7 +48,6 @@ export function canAccessCustomerRecord(
   roleName: string | null | undefined,
   userId: string
 ): boolean {
-  if (customer.salesPersonId === null) return true;
   if (!isSalesBookOwner(roleName)) return true;
   return customer.salesPersonId === userId;
 }

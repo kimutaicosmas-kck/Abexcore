@@ -728,8 +728,10 @@ export class FinancePaymentService {
       },
     });
     if (!payment) throw new AppError('Payment not found', 404);
-    if (payment.isReconciled) {
-      throw new AppError('Unreconcile this payment before editing it', 400);
+    const { paymentEditBlockedReason } = await import('../utils/paymentEdit');
+    const editBlocked = paymentEditBlockedReason(payment);
+    if (editBlocked) {
+      throw new AppError(editBlocked, 400);
     }
     if (payment.statementLine || payment.mpesaTransaction) {
       throw new AppError('Unlink bank or M-Pesa records before editing this payment', 400);
@@ -873,6 +875,7 @@ export class FinancePaymentService {
         notes: opts.notes !== undefined ? opts.notes : payment.notes,
         paymentDate,
         invoiceId: primaryInvoiceId,
+        adjustedAt: new Date(),
       },
     });
 

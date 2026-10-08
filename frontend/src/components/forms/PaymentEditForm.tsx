@@ -6,6 +6,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { financeApi } from '../../services/api';
 import { Button, Input, Select, Alert, formatCurrency } from '../ui';
 import { getApiErrorMessage } from '../../utils/apiError';
+import { paymentEditBlockedReason } from '../../utils/paymentEdit';
 import { Invoice, Payment } from '../../types';
 
 const paymentEditSchema = z
@@ -25,6 +26,10 @@ type PaymentEditFormData = z.infer<typeof paymentEditSchema>;
 
 type PaymentWithAllocations = Payment & {
   notes?: string | null;
+  createdAt?: string;
+  adjustedAt?: string | null;
+  editable?: boolean;
+  editBlockedReason?: string | null;
   isReconciled?: boolean;
   statementLine?: { id: string } | null;
   mpesaTransaction?: { id: string } | null;
@@ -173,13 +178,14 @@ export function PaymentEditForm({ paymentId, onSuccess, onCancel }: PaymentEditF
     return <Alert variant="error">{getApiErrorMessage(error)}</Alert>;
   }
 
-  const blockedReason = payment.isReconciled
-    ? 'This payment is bank-reconciled. Unreconcile it before editing.'
-    : payment.statementLine
+  const blockedReason =
+    payment.editBlockedReason ||
+    paymentEditBlockedReason(payment) ||
+    (payment.statementLine
       ? 'This payment is linked to a bank statement line. Unmatch it before editing.'
       : payment.mpesaTransaction
         ? 'This payment is linked to an M-Pesa transaction and cannot be edited here.'
-        : null;
+        : null);
 
   const amountError =
     totalAllocated <= 0.009 ? 'Enter amounts for the selected invoices' : null;

@@ -88,7 +88,6 @@ export function CustomerSearchSelect({
         if (salesPersonFilterMode === 'order') {
           if (salesPersonId) {
             params.salesPersonId = salesPersonId;
-            params.includeUnassigned = true;
           } else {
             params.salesPersonId = 'none';
           }
@@ -96,7 +95,6 @@ export function CustomerSearchSelect({
           params.salesPersonId = 'none';
         } else if (salesPersonId) {
           params.salesPersonId = salesPersonId;
-          params.includeUnassigned = true;
         }
       }
       return customersApi.list(params).then((r) => r.data.data as Customer[]);

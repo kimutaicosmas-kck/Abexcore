@@ -110,7 +110,7 @@ async function resolveBalanceSummarySalesFilter(
   querySalesPersonId?: string
 ): Promise<{ salesPersonId?: string | null; includeUnassigned?: boolean }> {
   if (isSalesBookOwner(req.user!.roleName)) {
-    return { salesPersonId: req.user!.id, includeUnassigned: true };
+    return { salesPersonId: req.user!.id };
   }
   if (querySalesPersonId === 'none') {
     return { salesPersonId: null };

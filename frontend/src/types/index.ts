@@ -452,7 +452,11 @@ export interface Payment {
   method?: string;
   reference?: string;
   paymentDate: string;
+  createdAt?: string;
+  adjustedAt?: string | null;
   isReconciled?: boolean;
+  editable?: boolean;
+  editBlockedReason?: string | null;
   /** True when payment date is in the same calendar week as the invoice date. */
   paidSameWeekAsInvoice?: boolean;
   /** True when payment date is in the same calendar month as the invoice date. */

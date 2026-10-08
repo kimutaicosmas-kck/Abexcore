@@ -60,6 +60,7 @@ import { ExpensesPanel, type ExpensesPanelHandle } from '../components/finance/E
 import { useAuth } from '../contexts/AuthContext';
 import { downloadFile } from '../utils/download';
 import { getApiErrorMessage } from '../utils/apiError';
+import { isPaymentEditable } from '../utils/paymentEdit';
 import { FinanceStats, FinanceOverview, Invoice, Payment } from '../types';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, Title, Tooltip, Legend, Filler);
@@ -713,7 +714,7 @@ export function FinancePage() {
             label: '',
             render: (_: unknown, row: Record<string, unknown>) => {
               const pay = row as unknown as Payment;
-              if (pay.isReconciled) return null;
+              if (pay.editable === false || !isPaymentEditable(pay)) return null;
               return (
                 <Button
                   size="sm"
@@ -1752,7 +1753,7 @@ export function FinancePage() {
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
                           <span className="font-semibold text-emerald-700">{formatCurrency(Number(p.amount))}</span>
-                          {canUpdate && (
+                          {canUpdate && isPaymentEditable(p) && (
                             <Button
                               size="sm"
                               variant="ghost"
