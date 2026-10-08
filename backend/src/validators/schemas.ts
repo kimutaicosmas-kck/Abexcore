@@ -556,25 +556,37 @@ export const saveQuotationDraftSchema = z
     }
   });
 
-export const createInvoiceSchema = z.object({
-  type: z.enum(['SALES', 'PURCHASE', 'CREDIT_NOTE', 'DEBIT_NOTE']).default('SALES'),
-  customerId: z.string().uuid().optional(),
-  supplierId: z.string().uuid().optional(),
-  salesOrderId: z.string().uuid().optional(),
-  dueDate: z.string().optional(),
-  /** Customer's PO / LPO number — included on the sales invoice document. */
-  customerPoNumber: z.preprocess(
-    (v) => (typeof v === 'string' && v.trim() === '' ? undefined : v),
-    z.string().trim().max(100).optional()
-  ),
-  notes: z.string().optional(),
-  items: z.array(z.object({
-    description: z.string(),
-    quantity: z.number().min(0.001),
-    unitPrice: z.number().min(0),
-    taxRate: z.number().min(0).optional(),
-  })).min(1),
-});
+export const createInvoiceSchema = z
+  .object({
+    type: z.enum(['SALES', 'PURCHASE', 'CREDIT_NOTE', 'DEBIT_NOTE']).default('SALES'),
+    customerId: z.string().uuid().optional(),
+    supplierId: z.string().uuid().optional(),
+    salesOrderId: z.string().uuid().optional(),
+    /** Required for CREDIT_NOTE — the sales invoice being credited. */
+    originalInvoiceId: z.string().uuid().optional(),
+    dueDate: z.string().optional(),
+    /** Customer's PO / LPO number — included on the sales invoice document. */
+    customerPoNumber: z.preprocess(
+      (v) => (typeof v === 'string' && v.trim() === '' ? undefined : v),
+      z.string().trim().max(100).optional()
+    ),
+    notes: z.string().optional(),
+    items: z.array(z.object({
+      description: z.string(),
+      quantity: z.number().min(0.001),
+      unitPrice: z.number().min(0),
+      taxRate: z.number().min(0).optional(),
+    })).min(1),
+  })
+  .superRefine((data, ctx) => {
+    if (data.type === 'CREDIT_NOTE' && !data.originalInvoiceId) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Credit note must be linked to a sales invoice',
+        path: ['originalInvoiceId'],
+      });
+    }
+  });
 
 export const updateInvoiceItemsSchema = z.object({
   adjustmentReason: z.string().min(1, 'Reason for adjustment is required'),
@@ -602,6 +614,7 @@ export const saveInvoiceDraftSchema = z
     type: z.enum(['SALES', 'PURCHASE', 'CREDIT_NOTE', 'DEBIT_NOTE']).default('SALES'),
     customerId: z.string().uuid().optional(),
     supplierId: z.string().uuid().optional(),
+    originalInvoiceId: z.string().uuid().optional(),
     dueDate: z.string().optional(),
     customerPoNumber: z.preprocess(
       (v) => (typeof v === 'string' && v.trim() === '' ? undefined : v),
@@ -617,7 +630,8 @@ export const saveInvoiceDraftSchema = z
     const hasNotes = Boolean(data.notes?.trim());
     const hasDueDate = Boolean(data.dueDate);
     const hasPo = Boolean(data.customerPoNumber?.trim());
-    if (!hasParty && !hasItem && !hasNotes && !hasDueDate && !hasPo) {
+    const hasLinkedInvoice = Boolean(data.originalInvoiceId);
+    if (!hasParty && !hasItem && !hasNotes && !hasDueDate && !hasPo && !hasLinkedInvoice) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: 'Add invoice details before saving a draft',

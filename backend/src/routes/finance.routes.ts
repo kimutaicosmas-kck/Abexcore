@@ -620,6 +620,7 @@ router.post(
       type = 'SALES',
       customerId,
       supplierId,
+      originalInvoiceId,
       dueDate,
       customerPoNumber,
       notes,
@@ -628,6 +629,7 @@ router.post(
       type?: 'SALES' | 'PURCHASE' | 'CREDIT_NOTE' | 'DEBIT_NOTE';
       customerId?: string;
       supplierId?: string;
+      originalInvoiceId?: string;
       dueDate?: string;
       customerPoNumber?: string;
       notes?: string;
@@ -659,6 +661,7 @@ router.post(
         type,
         customerId: isSalesSide ? customerId : undefined,
         supplierId: !isSalesSide ? supplierId : undefined,
+        originalInvoiceId: type === 'CREDIT_NOTE' ? originalInvoiceId : undefined,
         dueDate: dueDate ? new Date(dueDate) : undefined,
         customerPoNumber: type === 'SALES' ? customerPoNumber : undefined,
         notes,
@@ -693,6 +696,7 @@ router.patch(
       type = existing.type,
       customerId,
       supplierId,
+      originalInvoiceId,
       dueDate,
       customerPoNumber,
       notes,
@@ -701,6 +705,7 @@ router.patch(
       type?: 'SALES' | 'PURCHASE' | 'CREDIT_NOTE' | 'DEBIT_NOTE';
       customerId?: string;
       supplierId?: string;
+      originalInvoiceId?: string;
       dueDate?: string;
       customerPoNumber?: string;
       notes?: string;
@@ -734,6 +739,7 @@ router.patch(
           type,
           customerId: isSalesSide ? customerId ?? null : null,
           supplierId: !isSalesSide ? supplierId ?? null : null,
+          originalInvoiceId: type === 'CREDIT_NOTE' ? originalInvoiceId ?? null : null,
           dueDate: dueDate ? new Date(dueDate) : null,
           customerPoNumber: type === 'SALES' ? customerPoNumber ?? null : null,
           notes,
@@ -827,6 +833,7 @@ router.post(
       supplierId,
       salesOrderId,
       purchaseOrderId,
+      originalInvoiceId,
       dueDate,
       customerPoNumber,
       items,
@@ -859,6 +866,15 @@ router.post(
         };
 
     const invoice = await prisma.$transaction(async (tx) => {
+      if (type === 'CREDIT_NOTE' && originalInvoiceId) {
+        await FinanceInvoiceService.validateCreditNoteOriginalInvoice(tx, {
+          originalInvoiceId,
+          customerId,
+          creditTotal: totalAmount,
+          companyId: requireTenantId(),
+        });
+      }
+
       let resolvedCustomerPo = customerPoNumber as string | undefined;
       let salesInvoiceDate: Date | undefined;
       if (type === 'SALES' && salesOrderId) {
@@ -882,7 +898,10 @@ router.post(
         );
       }
 
-      const invoiceNumber = await nextInvoiceNumber(tx, type === 'SALES' ? 'INV' : 'PINV');
+      const invoiceNumber = await nextInvoiceNumber(
+        tx,
+        FinanceInvoiceService.invoiceNumberPrefix(type)
+      );
       await tx.invoiceItem.deleteMany({ where: { invoiceId: id } });
       const inv = await tx.invoice.update({
         where: { id },
@@ -893,6 +912,7 @@ router.post(
           supplierId,
           salesOrderId,
           purchaseOrderId,
+          originalInvoiceId: type === 'CREDIT_NOTE' ? originalInvoiceId : null,
           customerPoNumber: type === 'SALES' ? resolvedCustomerPo : undefined,
           ...(salesInvoiceDate ? { invoiceDate: salesInvoiceDate } : {}),
           dueDate: dueDate
@@ -938,6 +958,13 @@ router.post(
           taxAmount: Number(inv.taxAmount),
           totalAmount: Number(inv.totalAmount),
         });
+        if (originalInvoiceId) {
+          await FinanceInvoiceService.applyManualCreditNote(tx, {
+            creditNoteId: inv.id,
+            originalInvoiceId,
+            creditTotal: Number(inv.totalAmount),
+          });
+        }
         if (customerId) await syncCustomerCreditUsed(customerId, tx);
       }
 
@@ -969,6 +996,7 @@ router.post(
       supplierId,
       salesOrderId,
       purchaseOrderId,
+      originalInvoiceId,
       dueDate,
       customerPoNumber,
       items,
@@ -1002,6 +1030,15 @@ router.post(
         };
 
     const invoice = await prisma.$transaction(async (tx) => {
+      if (type === 'CREDIT_NOTE' && originalInvoiceId) {
+        await FinanceInvoiceService.validateCreditNoteOriginalInvoice(tx, {
+          originalInvoiceId,
+          customerId,
+          creditTotal: totalAmount,
+          companyId: requireTenantId(),
+        });
+      }
+
       let resolvedCustomerPo = customerPoNumber as string | undefined;
       let salesInvoiceDate: Date | undefined;
       if (type === 'SALES' && salesOrderId) {
@@ -1025,7 +1062,10 @@ router.post(
         );
       }
 
-      const invoiceNumber = await nextInvoiceNumber(tx, type === 'SALES' ? 'INV' : 'PINV');
+      const invoiceNumber = await nextInvoiceNumber(
+        tx,
+        FinanceInvoiceService.invoiceNumberPrefix(type)
+      );
       const inv = await tx.invoice.create({
         data: injectTenantData({
           invoiceNumber,
@@ -1034,6 +1074,7 @@ router.post(
           supplierId,
           salesOrderId,
           purchaseOrderId,
+          originalInvoiceId: type === 'CREDIT_NOTE' ? originalInvoiceId : undefined,
           customerPoNumber: type === 'SALES' ? resolvedCustomerPo : undefined,
           ...(salesInvoiceDate ? { invoiceDate: salesInvoiceDate } : {}),
           dueDate: dueDate
@@ -1078,6 +1119,13 @@ router.post(
           taxAmount: Number(inv.taxAmount),
           totalAmount: Number(inv.totalAmount),
         });
+        if (originalInvoiceId) {
+          await FinanceInvoiceService.applyManualCreditNote(tx, {
+            creditNoteId: inv.id,
+            originalInvoiceId,
+            creditTotal: Number(inv.totalAmount),
+          });
+        }
         if (customerId) await syncCustomerCreditUsed(customerId, tx);
       }
 

@@ -22,15 +22,26 @@ const invoiceItemSchema = z.object({
   unitPrice: z.coerce.number().min(0),
 });
 
-const invoiceSchema = z.object({
-  type: z.enum(['SALES', 'PURCHASE', 'CREDIT_NOTE', 'DEBIT_NOTE']),
-  customerId: z.string().optional(),
-  supplierId: z.string().optional(),
-  dueDate: z.string().optional(),
-  customerPoNumber: z.string().max(100).optional(),
-  notes: z.string().optional(),
-  items: z.array(invoiceItemSchema).min(1, 'Add at least one item'),
-});
+const invoiceSchema = z
+  .object({
+    type: z.enum(['SALES', 'PURCHASE', 'CREDIT_NOTE', 'DEBIT_NOTE']),
+    customerId: z.string().optional(),
+    supplierId: z.string().optional(),
+    originalInvoiceId: z.string().optional(),
+    dueDate: z.string().optional(),
+    customerPoNumber: z.string().max(100).optional(),
+    notes: z.string().optional(),
+    items: z.array(invoiceItemSchema).min(1, 'Add at least one item'),
+  })
+  .superRefine((data, ctx) => {
+    if (data.type === 'CREDIT_NOTE' && !data.originalInvoiceId) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Select the sales invoice to credit',
+        path: ['originalInvoiceId'],
+      });
+    }
+  });
 
 type InvoiceFormData = z.infer<typeof invoiceSchema>;
 
@@ -57,6 +68,8 @@ function toInvoiceDraftPayload(data: InvoiceFormData) {
     type: data.type,
     customerId: isCustomerType ? data.customerId || undefined : undefined,
     supplierId: !isCustomerType ? data.supplierId || undefined : undefined,
+    originalInvoiceId:
+      data.type === 'CREDIT_NOTE' ? data.originalInvoiceId || undefined : undefined,
     dueDate: data.dueDate || undefined,
     customerPoNumber: data.customerPoNumber || undefined,
     notes: data.notes || undefined,
@@ -74,6 +87,7 @@ function invoiceHasDraftContent(data: InvoiceFormData) {
   const isCustomerType = data.type === 'SALES' || data.type === 'CREDIT_NOTE';
   return (
     (isCustomerType ? Boolean(data.customerId) : Boolean(data.supplierId)) ||
+    Boolean(data.originalInvoiceId) ||
     data.items.some((item) => Boolean(item.description?.trim())) ||
     Boolean(data.notes?.trim()) ||
     Boolean(data.dueDate) ||
@@ -138,6 +152,7 @@ export function InvoiceForm({
       type: existingDraft.type as InvoiceFormData['type'],
       customerId: existingDraft.customer?.id || '',
       supplierId: existingDraft.supplier?.id || '',
+      originalInvoiceId: existingDraft.originalInvoice?.id || '',
       dueDate: formatDueDate(existingDraft.dueDate),
       customerPoNumber: existingDraft.customerPoNumber || '',
       notes: existingDraft.notes || '',
@@ -206,8 +221,47 @@ export function InvoiceForm({
   const { fields, append, remove } = useFieldArray({ control, name: 'items' });
   const invoiceType = watch('type');
   const customerId = watch('customerId');
+  const originalInvoiceId = watch('originalInvoiceId');
   const items = watch('items');
   const isCustomerType = invoiceType === 'SALES' || invoiceType === 'CREDIT_NOTE';
+  const isCreditNote = invoiceType === 'CREDIT_NOTE';
+
+  const { data: customerInvoicesData, isLoading: customerInvoicesLoading } = useQuery({
+    queryKey: ['credit-note-source-invoices', customerId],
+    queryFn: () =>
+      financeApi
+        .invoices({ type: 'SALES', limit: 200 })
+        .then((r) => r.data.data as Invoice[]),
+    enabled: isCreditNote && Boolean(customerId),
+  });
+
+  const creditableInvoices = (customerInvoicesData || []).filter(
+    (inv) =>
+      inv.customer?.id === customerId &&
+      inv.status !== 'DRAFT' &&
+      inv.status !== 'REFUNDED' &&
+      (inv.balanceDue ?? Number(inv.totalAmount) - Number(inv.paidAmount)) > 0.009
+  );
+
+  const invoiceOptions = [
+    { value: '', label: customerInvoicesLoading ? 'Loading invoices…' : 'Select sales invoice…' },
+    ...creditableInvoices.map((inv) => {
+      const balance = inv.balanceDue ?? Number(inv.totalAmount) - Number(inv.paidAmount);
+      return {
+        value: inv.id,
+        label: `${inv.invoiceNumber} · balance KES ${balance.toLocaleString('en-KE', { minimumFractionDigits: 2 })}`,
+      };
+    }),
+  ];
+
+  const selectedSourceInvoice = creditableInvoices.find((inv) => inv.id === originalInvoiceId);
+
+  useEffect(() => {
+    if (!isCreditNote || !originalInvoiceId) return;
+    if (selectedSourceInvoice) return;
+    if (customerInvoicesLoading) return;
+    setValue('originalInvoiceId', '', { shouldValidate: true });
+  }, [customerInvoicesLoading, isCreditNote, originalInvoiceId, selectedSourceInvoice, setValue]);
 
   const companyVatRate = useVatRate();
   const vatCustomer = selectedCustomer || existingDraft?.customer;
@@ -233,6 +287,8 @@ export function InvoiceForm({
         ...data,
         customerId: isCustomerType ? data.customerId || undefined : undefined,
         supplierId: !isCustomerType ? data.supplierId || undefined : undefined,
+        originalInvoiceId:
+          data.type === 'CREDIT_NOTE' ? data.originalInvoiceId || undefined : undefined,
       };
       if (draftId) {
         return financeApi.finalizeInvoice(draftId, payload);
@@ -300,7 +356,12 @@ export function InvoiceForm({
           <CustomerSearchSelect
             label="Customer *"
             value={customerId || ''}
-            onChange={(id) => setValue('customerId', id, { shouldValidate: true })}
+            onChange={(id) => {
+              setValue('customerId', id, { shouldValidate: true });
+              if (isCreditNote) {
+                setValue('originalInvoiceId', '', { shouldValidate: true });
+              }
+            }}
             onCustomerSelect={setSelectedCustomer}
             onSearchTextChange={setCustomerSearch}
             initialSearchText={customerSearch}
@@ -308,6 +369,30 @@ export function InvoiceForm({
             autoFocus={invoiceType === 'CREDIT_NOTE'}
             placeholder="Search customer by name or code…"
           />
+          {isCreditNote && customerId && (
+            <div className="mt-3">
+              <Select
+                label="Sales invoice to credit *"
+                options={invoiceOptions}
+                {...register('originalInvoiceId')}
+                error={errors.originalInvoiceId?.message}
+              />
+              {creditableInvoices.length === 0 && !customerInvoicesLoading && (
+                <p className="mt-1 text-xs text-amber-700">
+                  No open sales invoices with a balance due for this customer.
+                </p>
+              )}
+              {selectedSourceInvoice && (
+                <p className="mt-1 text-xs text-slate-600">
+                  Max credit: KES{' '}
+                  {(selectedSourceInvoice.balanceDue ??
+                    Number(selectedSourceInvoice.totalAmount) -
+                      Number(selectedSourceInvoice.paidAmount)
+                  ).toLocaleString('en-KE', { minimumFractionDigits: 2 })}
+                </p>
+              )}
+            </div>
+          )}
         </div>
       )}
 

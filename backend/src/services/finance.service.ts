@@ -470,6 +470,53 @@ export class FinanceInvoiceService {
 
     return inv;
   }
+
+  /** Validate a manual credit note links to an open sales invoice with sufficient balance. */
+  static async validateCreditNoteOriginalInvoice(
+    tx: TxClient,
+    opts: { originalInvoiceId: string; customerId?: string; creditTotal: number; companyId: string }
+  ) {
+    const original = await tx.invoice.findFirst({
+      where: {
+        id: opts.originalInvoiceId,
+        companyId: opts.companyId,
+        type: 'SALES',
+        status: { notIn: ['DRAFT', 'REFUNDED'] },
+      },
+    });
+    if (!original) throw new AppError('Original sales invoice not found', 404);
+    if (opts.customerId && original.customerId !== opts.customerId) {
+      throw new AppError('Credit note customer must match the linked sales invoice', 400);
+    }
+
+    const { creditedAmountForInvoice, computeInvoiceBalanceDue } = await import(
+      '../utils/invoiceBalance'
+    );
+    const credited = await creditedAmountForInvoice(tx, original.id);
+    const balanceDue = computeInvoiceBalanceDue(original, credited);
+    if (opts.creditTotal > balanceDue + 0.01) {
+      throw new AppError(
+        `Credit note amount exceeds invoice balance (KES ${balanceDue.toFixed(2)})`,
+        400
+      );
+    }
+    return original;
+  }
+
+  /** Apply a posted manual credit note against its original sales invoice. */
+  static async applyManualCreditNote(
+    tx: TxClient,
+    opts: { creditNoteId: string; originalInvoiceId: string; creditTotal: number }
+  ) {
+    const { applyCreditNoteToOriginalInvoice } = await import('../utils/invoiceBalance');
+    await applyCreditNoteToOriginalInvoice(tx, opts);
+  }
+
+  static invoiceNumberPrefix(type: 'SALES' | 'PURCHASE' | 'CREDIT_NOTE' | 'DEBIT_NOTE') {
+    if (type === 'SALES') return 'INV' as const;
+    if (type === 'CREDIT_NOTE') return 'CN' as const;
+    return 'PINV' as const;
+  }
 }
 
 export class FinancePaymentService {
