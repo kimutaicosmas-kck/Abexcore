@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Search, FileBarChart } from 'lucide-react';
+import { Search, FileBarChart, FileSpreadsheet, FileText } from 'lucide-react';
 import { financeApi } from '../../services/api';
 import {
   FINANCE_REPORT_CATALOG,
@@ -11,6 +11,7 @@ import {
 } from '../../config/financeReportCatalog';
 import { Alert, Button, Input, formatCurrency } from '../ui';
 import { getApiErrorMessage } from '../../utils/apiError';
+import { downloadFile } from '../../utils/download';
 
 function todayInput() {
   const d = new Date();
@@ -49,6 +50,33 @@ export function FinanceReportsPanel() {
   const [asOf, setAsOf] = useState(todayInput());
   const [accountCode, setAccountCode] = useState('1200');
   const [runKey, setRunKey] = useState<string | null>(null);
+  const [exporting, setExporting] = useState<'pdf' | 'excel' | null>(null);
+  const [exportError, setExportError] = useState<string | null>(null);
+
+  const reportQueryParams = (def: FinanceReportDefinition): Record<string, string | undefined> => ({
+    start: def.usesAsOf ? undefined : start,
+    end: def.usesAsOf ? undefined : end,
+    asOf: def.usesAsOf ? asOf : undefined,
+    accountCode: def.needsAccountCode ? accountCode : undefined,
+  });
+
+  const handleExport = async (format: 'pdf' | 'excel') => {
+    if (!selected) return;
+    setExporting(format);
+    setExportError(null);
+    const ext = format === 'pdf' ? 'pdf' : 'xlsx';
+    const path =
+      format === 'pdf'
+        ? financeApi.moduleReportPdfPath(selected.id)
+        : financeApi.moduleReportExcelPath(selected.id);
+    try {
+      await downloadFile(path, `${selected.id}.${ext}`, reportQueryParams(selected));
+    } catch {
+      setExportError('Export failed. Check dates and try again.');
+    } finally {
+      setExporting(null);
+    }
+  };
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -65,13 +93,9 @@ export function FinanceReportsPanel() {
       if (!runKey) throw new Error('No report');
       const id = runKey.split('|')[0]!;
       const def = getFinanceReportById(id);
+      if (!def) throw new Error('Unknown report');
       return financeApi
-        .moduleReport(id, {
-          start: def?.usesAsOf ? undefined : start,
-          end: def?.usesAsOf ? undefined : end,
-          asOf: def?.usesAsOf ? asOf : undefined,
-          accountCode: def?.needsAccountCode ? accountCode : undefined,
-        })
+        .moduleReport(id, reportQueryParams(def))
         .then((r) => r.data.data as ReportPayload);
     },
     enabled: Boolean(runKey),
@@ -147,9 +171,8 @@ export function FinanceReportsPanel() {
 
       <div className="lg:col-span-8 rounded-xl border border-slate-200 bg-white p-4 flex flex-col min-h-[480px]">
         {!selected ? (
-          <div className="flex flex-1 flex-col items-center justify-center text-slate-500 gap-2">
+          <div className="flex flex-1 flex-col items-center justify-center text-slate-500">
             <FileBarChart className="h-10 w-10 text-slate-300" />
-            <p className="text-sm">Select a report from the list (QuickBooks-style catalog).</p>
           </div>
         ) : (
           <>
@@ -158,13 +181,35 @@ export function FinanceReportsPanel() {
                 <h3 className="text-lg font-semibold text-slate-900">{selected.name}</h3>
                 <p className="text-xs text-slate-500 mt-0.5">{selected.id}</p>
               </div>
-              <Button
-                size="sm"
-                loading={isFetching}
-                onClick={() => setRunKey(`${selected.id}|${Date.now()}`)}
-              >
-                Run report
-              </Button>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  size="sm"
+                  loading={isFetching}
+                  onClick={() => setRunKey(`${selected.id}|${Date.now()}`)}
+                >
+                  Run report
+                </Button>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  loading={exporting === 'pdf'}
+                  disabled={Boolean(exporting && exporting !== 'pdf')}
+                  onClick={() => handleExport('pdf')}
+                >
+                  <FileText className="h-3.5 w-3.5 mr-1 inline" />
+                  PDF
+                </Button>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  loading={exporting === 'excel'}
+                  disabled={Boolean(exporting && exporting !== 'excel')}
+                  onClick={() => handleExport('excel')}
+                >
+                  <FileSpreadsheet className="h-3.5 w-3.5 mr-1 inline" />
+                  Excel
+                </Button>
+              </div>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
@@ -187,6 +232,11 @@ export function FinanceReportsPanel() {
               )}
             </div>
 
+            {exportError && (
+              <Alert variant="error" className="mb-3">
+                {exportError}
+              </Alert>
+            )}
             {isError && <Alert variant="error">{getApiErrorMessage(error)}</Alert>}
             {data?.notice && (
               <Alert variant="warning" className="mb-3">

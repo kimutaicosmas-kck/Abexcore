@@ -3357,4 +3357,136 @@ export class ExportService {
       doc.end();
     });
   }
+
+  static async generateFinanceModuleReportExcel(
+    report: import('./finance-module-reports.service').FinanceModuleReportResult
+  ): Promise<Buffer> {
+    const company = await resolveCompanyDocHeader(requireTenantId());
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet('Report');
+    const mergeCol = report.columns.length > 6 ? 'J' : 'G';
+    const nextRow = addExcelCompanyLetterhead(
+      workbook,
+      sheet,
+      company,
+      `${company.name} — ${report.title}`,
+      mergeCol
+    );
+    let rowIdx = nextRow;
+    if (report.period?.asOf) {
+      sheet.getCell(`A${rowIdx}`).value = `As of: ${report.period.asOf}`;
+      rowIdx += 1;
+    } else if (report.period?.start || report.period?.end) {
+      sheet.getCell(`A${rowIdx}`).value = `Period: ${report.period.start || '…'} to ${report.period.end || '…'}`;
+      rowIdx += 1;
+    }
+    if (report.notice) {
+      sheet.getCell(`A${rowIdx}`).value = report.notice;
+      rowIdx += 1;
+    }
+
+    const headerRow = sheet.addRow(report.columns.map((c) => c.label));
+    headerRow.font = { bold: true };
+
+    for (const dataRow of report.rows) {
+      sheet.addRow(
+        report.columns.map((col) => {
+          const v = dataRow[col.key];
+          return v == null ? '' : v;
+        })
+      );
+    }
+
+    if (report.summary && Object.keys(report.summary).length > 0) {
+      sheet.addRow([]);
+      for (const [key, value] of Object.entries(report.summary)) {
+        sheet.addRow([key, value]);
+      }
+    }
+
+    sheet.columns = report.columns.map(() => ({ width: 18 }));
+    const buffer = await workbook.xlsx.writeBuffer();
+    return Buffer.from(buffer);
+  }
+
+  static async generateFinanceModuleReportPDF(
+    report: import('./finance-module-reports.service').FinanceModuleReportResult
+  ): Promise<Buffer> {
+    const company = await resolveCompanyDocHeader(requireTenantId());
+    const landscape = report.columns.length > 4;
+    const pageWidth = landscape ? 800 : 515;
+
+    return new Promise((resolve, reject) => {
+      const doc = new PDFDocument({
+        margin: 40,
+        size: 'A4',
+        layout: landscape ? 'landscape' : 'portrait',
+      });
+      const chunks: Buffer[] = [];
+      doc.on('data', (c) => chunks.push(c));
+      doc.on('end', () => resolve(Buffer.concat(chunks)));
+      doc.on('error', reject);
+
+      doc.font('Helvetica-Bold').fontSize(14).fillColor(DOC_BLUE).text(company.name.toUpperCase(), 40, 36);
+      doc.font('Helvetica').fontSize(9).fillColor(DOC_BLUE).text(company.contactLine || '', 40, doc.y + 2);
+      doc.moveDown(0.8);
+      doc.font('Helvetica-Bold').fontSize(11).fillColor(DOC_BLUE).text(report.title, 40);
+      doc.moveDown(0.3);
+      doc.font('Helvetica').fontSize(9).fillColor('#475569');
+      if (report.period?.asOf) {
+        doc.text(`As of ${report.period.asOf}`);
+      } else if (report.period?.start || report.period?.end) {
+        doc.text(`Period ${report.period.start || '…'} to ${report.period.end || '…'}`);
+      }
+      if (report.notice) {
+        doc.moveDown(0.2);
+        doc.text(report.notice);
+      }
+      doc.moveDown(0.6);
+
+      const colCount = Math.max(report.columns.length, 1);
+      const colWidth = Math.floor((pageWidth - 40) / colCount);
+
+      const drawHeader = () => {
+        const y = doc.y;
+        doc.font('Helvetica-Bold').fontSize(8).fillColor('#ffffff');
+        doc.rect(40, y - 2, pageWidth, 16).fill(DOC_BLUE);
+        report.columns.forEach((col, i) => {
+          doc.text(col.label, 40 + i * colWidth + 4, y + 2, {
+            width: colWidth - 8,
+            lineBreak: false,
+          });
+        });
+        doc.moveDown(0.65);
+      };
+
+      drawHeader();
+      doc.font('Helvetica').fontSize(8).fillColor('#0f172a');
+
+      for (const dataRow of report.rows) {
+        if (doc.y > (landscape ? 520 : 740)) {
+          doc.addPage();
+          drawHeader();
+        }
+        const y = doc.y;
+        report.columns.forEach((col, i) => {
+          const raw = dataRow[col.key];
+          const text = raw == null || raw === '' ? '—' : String(raw);
+          doc.text(text, 40 + i * colWidth + 4, y, { width: colWidth - 8, lineBreak: false });
+        });
+        doc.moveDown(0.55);
+      }
+
+      if (report.summary && Object.keys(report.summary).length > 0) {
+        doc.moveDown(0.5);
+        doc.font('Helvetica-Bold').fontSize(9).fillColor(DOC_BLUE).text('Summary');
+        doc.font('Helvetica').fontSize(8).fillColor('#0f172a');
+        for (const [key, value] of Object.entries(report.summary)) {
+          doc.text(`${key}: ${String(value)}`);
+        }
+      }
+
+      doc.end();
+    });
+  }
 }

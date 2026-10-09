@@ -2,14 +2,14 @@ import prisma from '../config/database';
 import { AppError } from '../middleware/errorHandler';
 import { AccountingService } from './accounting.service';
 import { FinancialReportsService } from './financial-reports.service';
-import { endOfDay, startOfMonth, subMonths } from '../utils/date';
+import { endOfDay, parseLocalDateInput, startOfMonth, subMonths } from '../utils/date';
+import { requireTenantId } from '../utils/tenant';
 
 function subYears(date: Date, years: number) {
   const d = new Date(date);
   d.setFullYear(d.getFullYear() - years);
   return d;
 }
-import { requireTenantId } from '../utils/tenant';
 
 export type FinanceModuleReportResult = {
   reportId: string;
@@ -787,6 +787,32 @@ export class FinanceModuleReportsService {
   private static async incomeTaxDetail(opts: ReportOpts) {
     return this.incomeTaxSummary(opts);
   }
+}
+
+export function parseModuleReportQuery(query: {
+  start?: string;
+  end?: string;
+  asOf?: string;
+  accountCode?: string;
+}): ReportOpts {
+  const startRaw = query.start?.trim();
+  const endRaw = query.end?.trim();
+  const asOfRaw = query.asOf?.trim();
+  const accountCode = query.accountCode?.trim() || undefined;
+
+  const start = startRaw ? parseLocalDateInput(startRaw) || undefined : undefined;
+  const end = endRaw ? parseLocalDateInput(endRaw) || undefined : undefined;
+  const asOf = asOfRaw ? parseLocalDateInput(asOfRaw) || undefined : undefined;
+  if (startRaw && !start) throw new AppError('Invalid start date', 400);
+  if (endRaw && !end) throw new AppError('Invalid end date', 400);
+  if (asOfRaw && !asOf) throw new AppError('Invalid as-of date', 400);
+
+  return {
+    start,
+    end: end ? endOfDay(end) : undefined,
+    asOf: asOf ? endOfDay(asOf) : undefined,
+    accountCode,
+  };
 }
 
 export const FINANCE_MODULE_REPORT_IDS = [
