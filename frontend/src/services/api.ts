@@ -487,6 +487,8 @@ export const financeApi = {
   listPayments: (params?: object) => api.get('/finance/payments', { params }),
   getPayment: (id: string) => api.get(`/finance/payments/${id}`),
   updatePayment: (id: string, data: object) => api.patch(`/finance/payments/${id}`, data),
+  moduleReport: (reportId: string, params?: object) =>
+    api.get(`/finance/reports/module/${reportId}`, { params }),
   payments: (data: object) => api.post('/finance/payments', data),
   accounts: () => api.get('/finance/accounts'),
   journalEntries: (params?: object) => api.get('/finance/journal-entries', { params }),

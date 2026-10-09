@@ -35,6 +35,7 @@ import {
 import prisma from '../config/database';
 import {
   dayRangeFromInput,
+  endOfDay,
   generateNumber,
   isSameLocalMonth,
   isSameLocalWeek,
@@ -1918,6 +1919,36 @@ router.post(
     );
 
     res.status(201).json({ success: true, data: entry });
+  })
+);
+
+router.get(
+  '/reports/module/:reportId',
+  authorizeAny('finance:read', 'reports:read'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const reportId = getParam(req.params.reportId);
+    const { parseLocalDateInput } = await import('../utils/date');
+    const startRaw = typeof req.query.start === 'string' ? req.query.start : undefined;
+    const endRaw = typeof req.query.end === 'string' ? req.query.end : undefined;
+    const asOfRaw = typeof req.query.asOf === 'string' ? req.query.asOf : undefined;
+    const accountCode =
+      typeof req.query.accountCode === 'string' ? req.query.accountCode.trim() : undefined;
+
+    const start = startRaw ? parseLocalDateInput(startRaw) || undefined : undefined;
+    const end = endRaw ? parseLocalDateInput(endRaw) || undefined : undefined;
+    const asOf = asOfRaw ? parseLocalDateInput(asOfRaw) || undefined : undefined;
+    if (startRaw && !start) throw new AppError('Invalid start date', 400);
+    if (endRaw && !end) throw new AppError('Invalid end date', 400);
+    if (asOfRaw && !asOf) throw new AppError('Invalid as-of date', 400);
+
+    const { FinanceModuleReportsService } = await import('../services/finance-module-reports.service');
+    const data = await FinanceModuleReportsService.run(reportId, {
+      start: start ? start : undefined,
+      end: end ? endOfDay(end) : undefined,
+      asOf: asOf ? endOfDay(asOf) : undefined,
+      accountCode,
+    });
+    res.json({ success: true, data });
   })
 );
 

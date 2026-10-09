@@ -57,6 +57,7 @@ import { PaymentForm } from '../components/forms/PaymentForm';
 import { PaymentEditForm } from '../components/forms/PaymentEditForm';
 import { JournalEntryForm } from '../components/forms/JournalEntryForm';
 import { ExpensesPanel, type ExpensesPanelHandle } from '../components/finance/ExpensesPanel';
+import { FinanceReportsPanel } from '../components/finance/FinanceReportsPanel';
 import { useAuth } from '../contexts/AuthContext';
 import { downloadFile } from '../utils/download';
 import { getApiErrorMessage } from '../utils/apiError';
@@ -87,7 +88,7 @@ const AGING_BUCKETS = [
   { key: 'days90Plus' as const, label: '90+ days', sub: 'Critical', color: 'bg-rose-700', variant: 'danger' as const },
 ];
 
-const tabs = ['Invoices', 'Payments', 'Expenses', 'Journals', 'Accounts', 'Reconciliation'];
+const tabs = ['Invoices', 'Payments', 'Expenses', 'Journals', 'Accounts', 'Reconciliation', 'Reports'];
 
 const TYPE_FILTER = [
   { value: '', label: 'All types' },
@@ -1331,7 +1332,13 @@ export function FinancePage() {
         </>
       )}
 
-      {(collection || overview) && (
+      {activeTab === 6 && (
+        <DataPanel>
+          <FinanceReportsPanel />
+        </DataPanel>
+      )}
+
+      {(collection || overview) && activeTab !== 6 && (
         <div id="finance-collection-rate" className="grid grid-cols-1 lg:grid-cols-3 gap-4 scroll-mt-4">
           <Card
             title="Collection rate (due cohort)"
