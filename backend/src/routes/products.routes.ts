@@ -13,12 +13,40 @@ import { acceptExcelUpload } from '../middleware/excelImport';
 import { compressProductImage } from '../utils/image';
 import { AccountingService } from '../services/accounting.service';
 import { injectTenantData, mergeTenantWhere, requireTenantId } from '../utils/tenant';
-import { attachProductCatalogStock } from '../utils/stock';
+import { attachProductCatalogStock, isMeaningfulUnitCost } from '../utils/stock';
+import type { Prisma } from '@prisma/client';
 import { ExcelImportService } from '../services/excel-import.service';
 import { ProductionService } from '../services/production.service';
 
 const router = Router();
 router.use(authenticate);
+
+async function syncProductInventoryUnitCost(
+  tx: Prisma.TransactionClient,
+  productId: string,
+  unitCost: number,
+  companyId: string
+) {
+  if (!Number.isFinite(unitCost) || unitCost < 0) return;
+  await tx.stockLevel.updateMany({
+    where: {
+      productId,
+      warehouse: { companyId, type: 'finished_goods', deletedAt: null },
+    },
+    data: { unitCost },
+  });
+  await tx.product.update({
+    where: { id: productId },
+    data: { manufacturingCost: unitCost },
+  });
+}
+
+function parseOptionalInventoryUnitCost(value: unknown): number | null {
+  if (value === undefined || value === null || value === '') return null;
+  const n = Number(value);
+  if (!Number.isFinite(n) || n < 0) return null;
+  return n;
+}
 
 const productService = createCrudService('product', ['name', 'sku', 'barcode'], {
   category: { select: { id: true, name: true } },
@@ -454,7 +482,7 @@ router.post(
   validate(createProductSchema),
   auditLog('products', 'create', 'product'),
   asyncHandler(async (req: AuthRequest, res: Response) => {
-    const { initialQuantity, warehouseId, ...productData } = req.body;
+    const { initialQuantity, warehouseId, inventoryUnitCost, ...productData } = req.body;
     const barcode = normalizeProductBarcode(productData.barcode);
     const existing = await prisma.product.findFirst({ where: { sku: productData.sku } });
     if (existing) throw new AppError('Part number already exists', 409);
@@ -494,7 +522,16 @@ router.post(
           if (!warehouse) throw new AppError('Invalid finished goods warehouse', 400);
         }
 
-        const unitCost = Number(product.sellingPrice || 0);
+        const parsedCost = parseOptionalInventoryUnitCost(inventoryUnitCost);
+        const unitCost =
+          parsedCost ??
+          (Number(productData.manufacturingCost || 0) || Number(product.sellingPrice || 0));
+        if (parsedCost != null) {
+          await tx.product.update({
+            where: { id: product.id },
+            data: { manufacturingCost: parsedCost },
+          });
+        }
         await tx.stockLevel.create({
           data: {
             warehouseId: targetWarehouseId,
@@ -565,8 +602,11 @@ router.put(
     const {
       initialQuantity,
       warehouseId,
+      inventoryUnitCost,
       ...productFields
     } = req.body as Record<string, unknown>;
+    const companyId = requireTenantId();
+    const costToSync = parseOptionalInventoryUnitCost(inventoryUnitCost);
     const patch = { ...productFields };
     if ('barcode' in patch) {
       const barcode = normalizeProductBarcode(patch.barcode);
@@ -593,27 +633,39 @@ router.put(
         },
       });
 
-      const catalogCost = Number(
-        updated.sellingPrice || updated.distributorPrice || updated.retailPrice || 0
-      );
-      if (catalogCost > 0) {
-        await tx.stockLevel.updateMany({
-          where: { productId: id, unitCost: { lt: 0.01 } },
-          data: { unitCost: catalogCost },
-        });
-      }
-
-      if (desiredQty == null || Number.isNaN(desiredQty)) {
-        if (catalogCost > 0) {
-          return tx.product.findUniqueOrThrow({
-            where: { id },
-            include: {
-              category: { select: { id: true, name: true } },
-              stockLevels: { include: { warehouse: { select: { id: true, name: true, code: true } } } },
-            },
+      if (costToSync != null) {
+        await syncProductInventoryUnitCost(tx, id, costToSync, companyId);
+      } else {
+        const catalogCost = Number(
+          updated.manufacturingCost ||
+            updated.sellingPrice ||
+            updated.distributorPrice ||
+            updated.retailPrice ||
+            0
+        );
+        if (isMeaningfulUnitCost(catalogCost)) {
+          await tx.stockLevel.updateMany({
+            where: { productId: id, unitCost: { lt: 0.01 } },
+            data: { unitCost: catalogCost },
           });
         }
-        return updated;
+      }
+
+      const loadProduct = () =>
+        tx.product.findUniqueOrThrow({
+          where: { id },
+          include: {
+            category: { select: { id: true, name: true } },
+            stockLevels: {
+              include: {
+                warehouse: { select: { id: true, name: true, code: true, type: true } },
+              },
+            },
+          },
+        });
+
+      if (desiredQty == null || Number.isNaN(desiredQty)) {
+        return loadProduct();
       }
 
       let targetWarehouseId = typeof warehouseId === 'string' && warehouseId ? warehouseId : undefined;
@@ -648,16 +700,19 @@ router.put(
       const currentQty = Number(existing?.quantity || 0);
       const diff = desiredQty - currentQty;
       if (diff === 0) {
-        return tx.product.findUniqueOrThrow({
-          where: { id },
-          include: {
-            category: { select: { id: true, name: true } },
-            stockLevels: { include: { warehouse: { select: { id: true, name: true, code: true } } } },
-          },
-        });
+        return loadProduct();
       }
 
-      const unitCost = Number(existing?.unitCost || updated.sellingPrice || updated.distributorPrice || 0);
+      const unitCost =
+        costToSync ??
+        (isMeaningfulUnitCost(existing?.unitCost)
+          ? Number(existing!.unitCost)
+          : Number(
+              updated.manufacturingCost ||
+                updated.sellingPrice ||
+                updated.distributorPrice ||
+                0
+            ));
       if (existing) {
         await tx.stockLevel.update({
           where: { id: existing.id },
@@ -702,16 +757,13 @@ router.put(
         }
       }
 
-      return tx.product.findUniqueOrThrow({
-        where: { id },
-        include: {
-          category: { select: { id: true, name: true } },
-          stockLevels: { include: { warehouse: { select: { id: true, name: true, code: true } } } },
-        },
-      });
+      return loadProduct();
     });
 
-    res.json({ success: true, data });
+    res.json({
+      success: true,
+      data: attachProductCatalogStock(data as Parameters<typeof attachProductCatalogStock>[0]),
+    });
   })
 );
 

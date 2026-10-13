@@ -151,6 +151,8 @@ export const createProductSchema = z.object({
   minStockLevel: z.coerce.number().int().min(0).optional(),
   initialQuantity: z.coerce.number().int().min(0).optional(),
   warehouseId: z.string().uuid().optional(),
+  /** Updates stock-level unit cost in finished-goods warehouses (Inventory valuation). */
+  inventoryUnitCost: z.coerce.number().min(0).optional(),
 });
 
 export const updateProductSchema = createProductSchema

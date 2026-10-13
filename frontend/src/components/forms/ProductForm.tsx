@@ -22,6 +22,7 @@ const productSchema = z.object({
   sellingPrice: z.coerce.number().min(0).optional(),
   distributorPrice: z.coerce.number().min(0).optional(),
   retailPrice: z.coerce.number().min(0).optional(),
+  inventoryUnitCost: z.coerce.number().min(0).optional(),
   minStockLevel: z.coerce.number().int().min(0).optional(),
   initialQuantity: z.coerce.number().int().min(0).optional(),
   warehouseId: z.string().optional(),
@@ -109,6 +110,9 @@ export function ProductForm({ product, onSuccess, onCancel }: ProductFormProps) 
           sellingPrice: Number(product.sellingPrice),
           distributorPrice: Number(product.distributorPrice),
           retailPrice: Number(product.retailPrice),
+          inventoryUnitCost: Number(
+            product.unitCost ?? product.manufacturingCost ?? 0
+          ),
           minStockLevel: product.minStockLevel,
           description: product.description || '',
           isActive: product.isActive,
@@ -232,6 +236,17 @@ export function ProductForm({ product, onSuccess, onCancel }: ProductFormProps) 
         <Input label="Selling Price (KES)" type="number" step="0.01" {...register('sellingPrice')} />
         <Input label="Distributor Price (KES)" type="number" step="0.01" {...register('distributorPrice')} />
         <Input label="Retail Price (KES)" type="number" step="0.01" {...register('retailPrice')} />
+        <div>
+          <Input
+            label="Inventory unit cost (KES)"
+            type="number"
+            step="0.01"
+            {...register('inventoryUnitCost')}
+          />
+          <p className="mt-1 text-xs text-slate-500">
+            Syncs to Inventory stock levels (valuation). This is not the customer selling price.
+          </p>
+        </div>
         <NumberInput
           label={isEdit ? 'Opening / on-hand quantity' : 'Opening stock quantity'}
           min={0}
