@@ -4,18 +4,30 @@ import { enrichStockLevelForDisplay, isLowStock, sumStockQuantities } from '../u
 
 export class ProductService {
   static async getStats() {
+    const companyId = requireTenantId();
+    const fgWarehouses = await prisma.warehouse.findMany({
+      where: { companyId, isActive: true, deletedAt: null, type: 'finished_goods' },
+      select: { id: true },
+    });
+    const fgWarehouseIds = fgWarehouses.map((w) => w.id);
+
     const [total, active, categoryCounts, totalStock] = await Promise.all([
-      prisma.product.count({ where: { deletedAt: null } }),
-      prisma.product.count({ where: { deletedAt: null, isActive: true } }),
+      prisma.product.count({ where: { deletedAt: null, companyId } }),
+      prisma.product.count({ where: { deletedAt: null, isActive: true, companyId } }),
       prisma.product.groupBy({
         by: ['categoryId'],
-        where: { deletedAt: null },
+        where: { deletedAt: null, companyId },
         _count: { id: true },
       }),
-      prisma.stockLevel.aggregate({
-        where: mergeTenantWarehouseWhere({ productId: { not: null } }),
-        _sum: { quantity: true },
-      }),
+      fgWarehouseIds.length === 0
+        ? Promise.resolve({ _sum: { quantity: null } })
+        : prisma.stockLevel.aggregate({
+            where: mergeTenantWarehouseWhere(
+              { productId: { not: null }, warehouseId: { in: fgWarehouseIds } },
+              companyId
+            ),
+            _sum: { quantity: true },
+          }),
     ]);
 
     const categoryIds = categoryCounts.map((c) => c.categoryId);

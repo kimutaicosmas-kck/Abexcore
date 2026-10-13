@@ -12,7 +12,8 @@ import { productImageUpload } from '../middleware/upload';
 import { acceptExcelUpload } from '../middleware/excelImport';
 import { compressProductImage } from '../utils/image';
 import { AccountingService } from '../services/accounting.service';
-import { injectTenantData, requireTenantId } from '../utils/tenant';
+import { injectTenantData, mergeTenantWhere, requireTenantId } from '../utils/tenant';
+import { attachProductCatalogStock } from '../utils/stock';
 import { ExcelImportService } from '../services/excel-import.service';
 import { ProductionService } from '../services/production.service';
 
@@ -21,7 +22,11 @@ router.use(authenticate);
 
 const productService = createCrudService('product', ['name', 'sku', 'barcode'], {
   category: { select: { id: true, name: true } },
-  stockLevels: { include: { warehouse: { select: { id: true, name: true, code: true } } } },
+  stockLevels: {
+    include: {
+      warehouse: { select: { id: true, name: true, code: true, type: true } },
+    },
+  },
 });
 
 router.get(
@@ -78,7 +83,10 @@ router.get(
     if (isActive !== undefined) where.isActive = isActive;
 
     const result = await productService.list({ page, limit, search, sortBy, sortOrder, where });
-    res.json({ success: true, ...result });
+    const data = (result.data as Record<string, unknown>[]).map((row) =>
+      attachProductCatalogStock(row as Parameters<typeof attachProductCatalogStock>[0])
+    );
+    res.json({ success: true, data, pagination: result.pagination });
   })
 );
 
@@ -223,7 +231,7 @@ router.get(
   authorize('products:read'),
   asyncHandler(async (_req: AuthRequest, res: Response) => {
     const warehouses = await prisma.warehouse.findMany({
-      where: { isActive: true, deletedAt: null, type: 'finished_goods' },
+      where: mergeTenantWhere({ isActive: true, deletedAt: null, type: 'finished_goods' }),
       select: { id: true, code: true, name: true },
       orderBy: { name: 'asc' },
     });
@@ -246,7 +254,7 @@ router.get(
     const skip = (page - 1) * limit;
 
     const fgWarehouses = await prisma.warehouse.findMany({
-      where: { isActive: true, deletedAt: null, type: 'finished_goods' },
+      where: mergeTenantWhere({ isActive: true, deletedAt: null, type: 'finished_goods' }),
       select: { id: true },
     });
     const warehouseIds = fgWarehouses.map((w) => w.id);
@@ -426,7 +434,8 @@ router.get(
   '/:id',
   authorizeProductPicker,
   asyncHandler(async (req: AuthRequest, res: Response) => {
-    const data = await productService.getById(getParam(req.params.id));
+    const row = await productService.getById(getParam(req.params.id));
+    const data = attachProductCatalogStock(row as Parameters<typeof attachProductCatalogStock>[0]);
     res.json({ success: true, data });
   })
 );

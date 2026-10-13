@@ -34,6 +34,54 @@ export function sumStockQuantities(levels: { quantity: unknown }[] | undefined |
   return levels.reduce((sum, sl) => sum + toStockQty(sl.quantity), 0);
 }
 
+export function sumReservedQuantities(
+  levels: { reservedQty?: unknown }[] | undefined | null
+): number {
+  if (!levels?.length) return 0;
+  return levels.reduce((sum, sl) => sum + toStockQty(sl.reservedQty), 0);
+}
+
+/** Finished-goods warehouse levels only — matches Inventory and Available tabs. */
+export function finishedGoodsStockLevels<
+  T extends { warehouse?: { type?: string | null } | null },
+>(levels: T[] | undefined | null): T[] {
+  if (!levels?.length) return [];
+  return levels.filter((sl) => sl.warehouse?.type === 'finished_goods');
+}
+
+/** On-hand, reserved, cost, and value aligned with inventory stock-level rows. */
+export function attachProductCatalogStock<
+  P extends {
+    stockLevels?: Array<{
+      quantity: unknown;
+      reservedQty?: unknown;
+      unitCost?: unknown;
+      warehouse?: { type?: string | null } | null;
+    }>;
+    sellingPrice?: unknown;
+    distributorPrice?: unknown;
+    retailPrice?: unknown;
+    manufacturingCost?: unknown;
+  },
+>(product: P) {
+  const fgLevels = finishedGoodsStockLevels(product.stockLevels);
+  const onHand = sumStockQuantities(fgLevels);
+  const reservedQty = sumReservedQuantities(fgLevels);
+  const unitCost = weightedStockUnitCost(fgLevels, productCatalogUnitCost(product));
+  const inventoryValue = fgLevels.reduce((sum, level) => {
+    const line = enrichStockLevelForDisplay({ ...level, product });
+    return sum + line.lineValue;
+  }, 0);
+  return {
+    ...product,
+    onHand,
+    reservedQty,
+    availableQty: Math.max(0, onHand - reservedQty),
+    unitCost,
+    inventoryValue,
+  };
+}
+
 /** Weighted average unit cost from stock levels; falls back when no stock. */
 export function weightedStockUnitCost(
   levels: { quantity: unknown; unitCost?: unknown }[] | undefined | null,

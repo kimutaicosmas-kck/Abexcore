@@ -185,6 +185,7 @@ export function ProductsPage() {
   };
 
   const products = (productsRes?.data as Product[]) || [];
+  const catalogFiltersActive = Boolean(search || category || isActive);
 
   const columns = [
     {
@@ -210,6 +211,31 @@ export function ProductsPage() {
       key: 'sellingPrice',
       label: 'Selling Price',
       render: (val: unknown) => formatCurrency(val as number),
+    },
+    {
+      key: 'onHand',
+      label: 'On Hand',
+      render: (_: unknown, row: Record<string, unknown>) => {
+        const p = row as unknown as Product;
+        const qty = p.onHand ?? 0;
+        return (
+          <span className={`tabular-nums font-medium ${qty > 0 ? 'text-slate-900' : 'text-slate-400'}`}>
+            {qty.toLocaleString()}
+          </span>
+        );
+      },
+    },
+    {
+      key: 'unitCost',
+      label: 'Unit Cost',
+      render: (_: unknown, row: Record<string, unknown>) => {
+        const p = row as unknown as Product;
+        return (
+          <span className="tabular-nums text-slate-700">
+            {formatCurrency(Number(p.unitCost ?? 0))}
+          </span>
+        );
+      },
     },
     {
       key: 'isActive',
@@ -335,7 +361,7 @@ export function ProductsPage() {
 
   return (
     <div className="space-y-4">
-      {canManageProducts && stats && activeTabName !== 'Available' && (
+      {canManageProducts && stats && activeTabName !== 'Available' && !catalogFiltersActive && (
         <StatGrid>
           <StatCard
             title="Total Products"
@@ -360,7 +386,7 @@ export function ProductsPage() {
             className="hidden sm:flex"
           />
           <StatCard
-            title="FG in Stock"
+            title="FG Units (All SKUs)"
             value={stats.finishedGoodsQty.toLocaleString()}
             icon={<Package className="h-5 w-5 text-white" />}
             color={STAT_ROW_5[3]}
@@ -385,7 +411,14 @@ export function ProductsPage() {
 
       {activeTabName === 'Catalog' && canManageProducts && (
         <DataPanel>
-          <FilterBar activeFilters={[category, status].filter(Boolean).length}>
+          {catalogFiltersActive && productsRes?.pagination && (
+            <p className="px-4 pt-4 text-xs text-slate-500">
+              Showing {productsRes.pagination.total.toLocaleString()} matching product
+              {productsRes.pagination.total === 1 ? '' : 's'}. On-hand and unit cost match Inventory
+              (finished-goods warehouses). Clear filters to see company-wide summary cards.
+            </p>
+          )}
+          <FilterBar activeFilters={[category, isActive].filter(Boolean).length}>
             <FilterField span="full" pinned>
               <form
                 className="min-w-0"
@@ -571,6 +604,20 @@ export function ProductsPage() {
                 <div>
                   <p className="text-slate-500">Min Stock</p>
                   <p className="font-semibold">{productDetail.minStockLevel}</p>
+                </div>
+                <div>
+                  <p className="text-slate-500">On Hand (FG)</p>
+                  <p className="font-semibold">{(productDetail.onHand ?? 0).toLocaleString()}</p>
+                </div>
+                <div>
+                  <p className="text-slate-500">Unit Cost</p>
+                  <p className="font-semibold">{formatCurrency(Number(productDetail.unitCost ?? 0))}</p>
+                </div>
+                <div>
+                  <p className="text-slate-500">Stock Value</p>
+                  <p className="font-semibold">
+                    {formatCurrency(Number(productDetail.inventoryValue ?? 0))}
+                  </p>
                 </div>
                 <div>
                   <p className="text-slate-500">Status</p>

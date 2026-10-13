@@ -253,6 +253,12 @@ export interface Product {
   minStockLevel: number;
   isActive: boolean;
   stockLevels?: StockLevel[];
+  /** Sum of on-hand qty in finished-goods warehouses (matches Inventory). */
+  onHand?: number;
+  reservedQty?: number;
+  availableQty?: number;
+  unitCost?: number;
+  inventoryValue?: number;
 }
 
 export interface ProductStats {
