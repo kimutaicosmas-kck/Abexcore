@@ -1,5 +1,6 @@
 /** Payments may be corrected once within this window after recording. */
-export const PAYMENT_EDIT_WINDOW_MS = 48 * 60 * 60 * 1000;
+export const PAYMENT_EDIT_WINDOW_DAYS = 14;
+export const PAYMENT_EDIT_WINDOW_MS = PAYMENT_EDIT_WINDOW_DAYS * 24 * 60 * 60 * 1000;
 
 export type PaymentEditFields = {
   createdAt: Date | string;
@@ -19,7 +20,7 @@ export function paymentEditBlockedReason(payment: PaymentEditFields): string | n
     return 'Invalid payment record date.';
   }
   if (Date.now() - created > PAYMENT_EDIT_WINDOW_MS) {
-    return 'Payments can only be edited within 48 hours of recording.';
+    return `Payments can only be edited within ${PAYMENT_EDIT_WINDOW_DAYS} days of recording.`;
   }
   return null;
 }
