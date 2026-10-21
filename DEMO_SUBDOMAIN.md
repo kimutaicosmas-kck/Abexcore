@@ -1,5 +1,20 @@
 # Demo subdomain (`demo.abexcore.co.ke`) on the same VPS
 
+Production stays in **`~/Abexcore`**. The demo hostname routes to port **8081** on the host.
+
+**Which app on demo?**
+
+| App | Folder | Guide |
+|-----|--------|--------|
+| **MTE ERP** (Chekima test system) | `~/MTE_ERP` | `MTE_ERP` repo → `DEPLOY_DEMO_ABEXCORE.md` |
+| **AbexCore ERP** (clone for UAT) | `~/Abexcore-demo` | This file, `.env.demo.example` |
+
+Only one stack should bind **127.0.0.1:8081** at a time.
+
+---
+
+## AbexCore ERP demo clone
+
 Production stays in **`~/Abexcore`**. Demo runs in a **separate folder**, **separate Docker project**, **separate MySQL volume**, and **separate upload files**. The only shared resource is the **server** (and production **Caddy** routes HTTPS to demo on port **8081**).
 
 ## DNS (Hostnali)
