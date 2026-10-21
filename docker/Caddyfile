@@ -1,8 +1,8 @@
-# Demo/UAT — app stack in ~/Abexcore-demo on host port 8081 (see DEMO_SUBDOMAIN.md)
+# MTE ERP demo — container mte-demo-web on shared Docker network demo_edge (see DEMO_SUBDOMAIN.md)
 demo.abexcore.co.ke {
-	@sse path /api/v1/realtime/events
+	@sse path /api/events/*
 	handle @sse {
-		reverse_proxy host.docker.internal:8081 {
+		reverse_proxy mte-demo-web:80 {
 			flush_interval -1
 			transport http {
 				read_timeout 24h
@@ -13,7 +13,7 @@ demo.abexcore.co.ke {
 	}
 	handle {
 		encode gzip
-		reverse_proxy host.docker.internal:8081
+		reverse_proxy mte-demo-web:80
 	}
 }
 

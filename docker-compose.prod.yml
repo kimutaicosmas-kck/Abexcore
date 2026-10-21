@@ -21,8 +21,6 @@ services:
     image: caddy:2-alpine
     container_name: erp-caddy
     restart: unless-stopped
-    extra_hosts:
-      - 'host.docker.internal:host-gateway'
     ports:
       - '80:80'
       - '443:443'
@@ -33,6 +31,14 @@ services:
     depends_on:
       frontend:
         condition: service_started
+    networks:
+      - default
+      - demo_edge
+
+networks:
+  demo_edge:
+    external: true
+    name: demo_edge
 
 volumes:
   caddy_data:
