@@ -1,0 +1,31 @@
+# Demo / UAT on the SAME VPS as production — isolated DB, volumes, and ports.
+# Do NOT use docker-compose.prod.yml (no second Caddy on 80/443).
+#
+#   cd ~/Abexcore-demo
+#   cp .env.demo.example .env   # edit secrets + URLs
+#   docker compose -p abexcore-demo \
+#     -f docker-compose.yml -f docker-compose.demo.yml \
+#     --env-file .env up -d --build
+#
+# Production Caddy proxies demo.abexcore.co.ke → 127.0.0.1:8081 (see docker/Caddyfile).
+
+services:
+  mysql:
+    container_name: erp-demo-mysql
+    ports:
+      - '127.0.0.1:3308:3306'
+
+  redis:
+    container_name: erp-demo-redis
+    ports:
+      - '127.0.0.1:6380:6379'
+
+  backend:
+    container_name: erp-demo-backend
+    environment:
+      CLUSTER_WORKERS: ${CLUSTER_WORKERS:-2}
+
+  frontend:
+    container_name: erp-demo-frontend
+    ports:
+      - '127.0.0.1:8081:80'

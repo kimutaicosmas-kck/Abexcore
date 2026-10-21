@@ -1,3 +1,22 @@
+# Demo/UAT — app stack in ~/Abexcore-demo on host port 8081 (see DEMO_SUBDOMAIN.md)
+demo.abexcore.co.ke {
+	@sse path /api/v1/realtime/events
+	handle @sse {
+		reverse_proxy host.docker.internal:8081 {
+			flush_interval -1
+			transport http {
+				read_timeout 24h
+				write_timeout 24h
+				dial_timeout 10s
+			}
+		}
+	}
+	handle {
+		encode gzip
+		reverse_proxy host.docker.internal:8081
+	}
+}
+
 abexcore.co.ke, www.abexcore.co.ke {
 	# Long-lived SSE must not be gzip-buffered; flush immediately.
 	@sse path /api/v1/realtime/events
