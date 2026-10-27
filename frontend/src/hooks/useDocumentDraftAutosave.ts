@@ -7,7 +7,7 @@ interface UseDocumentDraftAutosaveOptions<T extends FieldValues> {
   watch: UseFormWatch<T>;
   getValues: UseFormGetValues<T>;
   draftId?: string;
-  onDraftId: (id: string) => void;
+  onDraftId: (id: string | undefined) => void;
   saveDraft: SaveDraftFn<T>;
   isMeaningful: (values: T) => boolean;
   enabled?: boolean;

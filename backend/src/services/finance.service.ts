@@ -476,15 +476,38 @@ export class FinanceInvoiceService {
     tx: TxClient,
     opts: { originalInvoiceId: string; customerId?: string; creditTotal: number; companyId: string }
   ) {
-    const original = await tx.invoice.findFirst({
-      where: {
-        id: opts.originalInvoiceId,
-        companyId: opts.companyId,
-        type: 'SALES',
-        status: { notIn: ['DRAFT', 'REFUNDED'] },
-      },
+    const byId = await tx.invoice.findFirst({
+      where: { id: opts.originalInvoiceId, companyId: opts.companyId },
+      select: { id: true, invoiceNumber: true, type: true, status: true, customerId: true },
     });
-    if (!original) throw new AppError('Original sales invoice not found', 404);
+    if (!byId) {
+      throw new AppError(
+        'Sales invoice not found. Select the invoice again from the list or discard the draft and retry.',
+        404
+      );
+    }
+    if (byId.type !== 'SALES') {
+      throw new AppError(
+        `${byId.invoiceNumber} is not a sales invoice and cannot be credited this way.`,
+        400
+      );
+    }
+    if (byId.status === 'DRAFT') {
+      throw new AppError(
+        `${byId.invoiceNumber} is still a draft. Post the sales invoice first, then create the credit note.`,
+        400
+      );
+    }
+    if (byId.status === 'REFUNDED') {
+      throw new AppError(`${byId.invoiceNumber} has been fully refunded.`, 400);
+    }
+
+    const original = await tx.invoice.findFirst({
+      where: { id: opts.originalInvoiceId, companyId: opts.companyId },
+    });
+    if (!original) {
+      throw new AppError('Original sales invoice not found', 404);
+    }
     if (opts.customerId && original.customerId !== opts.customerId) {
       throw new AppError('Credit note customer must match the linked sales invoice', 400);
     }

@@ -520,6 +520,7 @@ export interface Invoice {
     notes?: string | null;
     createdAt?: string;
   }[];
+  originalInvoiceId?: string | null;
   originalInvoice?: {
     id: string;
     invoiceNumber: string;

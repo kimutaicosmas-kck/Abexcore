@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { isAxiosError } from 'axios';
 import { useFieldArray, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -54,6 +55,33 @@ const invoiceTypeOptions = [
 
 const INVOICE_DRAFT_STORAGE_KEY = 'abexcore:invoice-draft-id';
 
+function invoiceDraftStorageKey(type: InvoiceFormData['type']) {
+  return `${INVOICE_DRAFT_STORAGE_KEY}:${type}`;
+}
+
+function isNotFoundError(err: unknown): boolean {
+  return isAxiosError(err) && err.response?.status === 404;
+}
+
+/** Draft PATCH/finalize failed because the stored id is missing or already posted. */
+function isStaleInvoiceDraftError(err: unknown): boolean {
+  if (isNotFoundError(err)) return true;
+  if (!isAxiosError(err) || err.response?.status !== 400) return false;
+  const msg = String(err.response?.data?.message ?? '').toLowerCase();
+  return (
+    msg.includes('only draft') ||
+    msg.includes('can be finalized') ||
+    msg.includes('can be updated this way')
+  );
+}
+
+function clearInvoiceDraftSessionStorage() {
+  sessionStorage.removeItem(INVOICE_DRAFT_STORAGE_KEY);
+  for (const t of ['SALES', 'PURCHASE', 'CREDIT_NOTE', 'DEBIT_NOTE'] as const) {
+    sessionStorage.removeItem(invoiceDraftStorageKey(t));
+  }
+}
+
 interface InvoiceFormProps {
   onSuccess: () => void;
   onCancel: () => void;
@@ -107,9 +135,16 @@ export function InvoiceForm({
   defaultType = 'SALES',
 }: InvoiceFormProps) {
   const queryClient = useQueryClient();
-  const [draftId, setDraftId] = useState(
-    () => initialDraftId || readStoredDraftId(INVOICE_DRAFT_STORAGE_KEY)
-  );
+  const draftStorageKey = useMemo(() => invoiceDraftStorageKey(defaultType), [defaultType]);
+  const [draftId, setDraftId] = useState(() => {
+    if (initialDraftId) return initialDraftId;
+    const scoped = readStoredDraftId(draftStorageKey);
+    if (scoped) return scoped;
+    if (defaultType === 'SALES') {
+      return readStoredDraftId(INVOICE_DRAFT_STORAGE_KEY);
+    }
+    return undefined;
+  });
   const [draftSavedAt, setDraftSavedAt] = useState<Date | null>(null);
   const [draftRestored, setDraftRestored] = useState(Boolean(initialDraftId));
   const [draftDiscarded, setDraftDiscarded] = useState(false);
@@ -117,16 +152,6 @@ export function InvoiceForm({
   const hydratedDraftIdRef = useRef<string | undefined>(undefined);
   const [customerSearch, setCustomerSearch] = useState('');
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
-
-  const { data: suppliersData } = useQuery({
-    queryKey: ['suppliers'],
-    queryFn: () => inventoryApi.suppliers({ limit: 100 }).then((r) => r.data.data as Supplier[]),
-  });
-
-  const supplierOptions = [
-    { value: '', label: 'Select supplier...' },
-    ...(suppliersData || []).map((s) => ({ value: s.id, label: `${s.code} - ${s.name}` })),
-  ];
 
   const { register, control, handleSubmit, watch, reset, getValues, setValue, formState: { errors } } =
     useForm<InvoiceFormData>({
@@ -137,11 +162,38 @@ export function InvoiceForm({
       },
     });
 
-  const { data: existingDraft, isLoading: draftLoading } = useQuery({
+  const releaseStaleDraftId = useCallback(
+    (lostId?: string) => {
+      clearInvoiceDraftSessionStorage();
+      setDraftId(undefined);
+      setDraftRestored(false);
+      setDraftSavedAt(null);
+      hydratedDraftIdRef.current = undefined;
+      if (lostId) {
+        queryClient.removeQueries({ queryKey: ['invoice-draft', lostId] });
+      }
+    },
+    [queryClient]
+  );
+
+  const { data: existingDraft, isLoading: draftLoading, isError: draftLoadFailed } = useQuery({
     queryKey: ['invoice-draft', draftId],
     queryFn: () => financeApi.getInvoice(draftId!).then((r) => r.data.data as Invoice),
     enabled: Boolean(draftId),
+    retry: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   });
+
+  useEffect(() => {
+    if (!draftLoadFailed || !draftId) return;
+    releaseStaleDraftId(draftId);
+  }, [draftLoadFailed, draftId, releaseStaleDraftId]);
+
+  useEffect(() => {
+    if (!existingDraft || existingDraft.status === 'DRAFT') return;
+    releaseStaleDraftId(existingDraft.id);
+  }, [existingDraft, releaseStaleDraftId]);
 
   useEffect(() => {
     if (!existingDraft || existingDraft.status !== 'DRAFT') return;
@@ -152,7 +204,8 @@ export function InvoiceForm({
       type: existingDraft.type as InvoiceFormData['type'],
       customerId: existingDraft.customer?.id || '',
       supplierId: existingDraft.supplier?.id || '',
-      originalInvoiceId: existingDraft.originalInvoice?.id || '',
+      originalInvoiceId:
+        existingDraft.originalInvoice?.id || existingDraft.originalInvoiceId || '',
       dueDate: formatDueDate(existingDraft.dueDate),
       customerPoNumber: existingDraft.customerPoNumber || '',
       notes: existingDraft.notes || '',
@@ -174,14 +227,25 @@ export function InvoiceForm({
   const saveDraft = useCallback(
     async (data: InvoiceFormData, currentDraftId?: string) => {
       const payload = toInvoiceDraftPayload(data);
-      const response = currentDraftId
-        ? await financeApi.updateInvoiceDraft(currentDraftId, payload)
-        : await financeApi.saveInvoiceDraft(payload);
-      setDraftSavedAt(new Date());
-      queryClient.invalidateQueries({ queryKey: ['invoices'] });
-      return { id: response.data.data.id as string };
+      try {
+        const response = currentDraftId
+          ? await financeApi.updateInvoiceDraft(currentDraftId, payload)
+          : await financeApi.saveInvoiceDraft(payload);
+        setDraftSavedAt(new Date());
+        return { id: response.data.data.id as string };
+      } catch (err) {
+        if (currentDraftId && isStaleInvoiceDraftError(err)) {
+          releaseStaleDraftId(currentDraftId);
+          const response = await financeApi.saveInvoiceDraft(payload);
+          setDraftSavedAt(new Date());
+          const newId = response.data.data.id as string;
+          sessionStorage.setItem(draftStorageKey, newId);
+          return { id: newId };
+        }
+        throw err;
+      }
     },
-    [queryClient]
+    [draftStorageKey, releaseStaleDraftId]
   );
 
   const { clearStoredDraft } = useDocumentDraftAutosave({
@@ -191,8 +255,8 @@ export function InvoiceForm({
     onDraftId: setDraftId,
     saveDraft,
     isMeaningful: invoiceHasDraftContent,
-    storageKey: INVOICE_DRAFT_STORAGE_KEY,
-    enabled: !draftLoading && !draftDiscarded,
+    storageKey: draftStorageKey,
+    enabled: !draftLoading && !draftDiscarded && !draftLoadFailed,
   });
 
   const discardDraft = useCallback(async () => {
@@ -208,7 +272,7 @@ export function InvoiceForm({
       setDraftDiscarded(true);
       hydratedDraftIdRef.current = undefined;
       reset({
-        type: 'SALES',
+        type: defaultType,
         items: [{ description: '', quantity: 1, unitPrice: 0 }],
       });
       queryClient.invalidateQueries({ queryKey: ['invoices'] });
@@ -216,7 +280,7 @@ export function InvoiceForm({
     } finally {
       setDiscarding(false);
     }
-  }, [clearStoredDraft, draftId, onCancel, queryClient, reset]);
+  }, [clearStoredDraft, defaultType, draftId, onCancel, queryClient, reset]);
 
   const { fields, append, remove } = useFieldArray({ control, name: 'items' });
   const invoiceType = watch('type');
@@ -225,12 +289,25 @@ export function InvoiceForm({
   const items = watch('items');
   const isCustomerType = invoiceType === 'SALES' || invoiceType === 'CREDIT_NOTE';
   const isCreditNote = invoiceType === 'CREDIT_NOTE';
+  const needsSupplier = invoiceType === 'PURCHASE' || invoiceType === 'DEBIT_NOTE';
+
+  const { data: suppliersData } = useQuery({
+    queryKey: ['suppliers'],
+    queryFn: () => inventoryApi.suppliers({ limit: 100 }).then((r) => r.data.data as Supplier[]),
+    enabled: needsSupplier,
+    retry: false,
+  });
+
+  const supplierOptions = [
+    { value: '', label: 'Select supplier...' },
+    ...(suppliersData || []).map((s) => ({ value: s.id, label: `${s.code} - ${s.name}` })),
+  ];
 
   const { data: customerInvoicesData, isLoading: customerInvoicesLoading } = useQuery({
     queryKey: ['credit-note-source-invoices', customerId],
     queryFn: () =>
       financeApi
-        .invoices({ type: 'SALES', customerId, limit: 100 })
+        .invoices({ type: 'SALES', customerId, limit: 500 })
         .then((r) => r.data.data as Invoice[]),
     enabled: isCreditNote && Boolean(customerId),
     retry: false,
@@ -290,8 +367,28 @@ export function InvoiceForm({
         originalInvoiceId:
           data.type === 'CREDIT_NOTE' ? data.originalInvoiceId || undefined : undefined,
       };
-      if (draftId) {
-        return financeApi.finalizeInvoice(draftId, payload);
+      let activeDraftId = draftId;
+      if (activeDraftId) {
+        try {
+          const saved = await saveDraft(data, activeDraftId);
+          activeDraftId = saved.id;
+          setDraftId(activeDraftId);
+          try {
+            return await financeApi.finalizeInvoice(activeDraftId, payload);
+          } catch (finalizeErr) {
+            if (isStaleInvoiceDraftError(finalizeErr)) {
+              releaseStaleDraftId(activeDraftId);
+              return financeApi.createInvoice(payload);
+            }
+            throw finalizeErr;
+          }
+        } catch (err) {
+          if (isStaleInvoiceDraftError(err)) {
+            releaseStaleDraftId(activeDraftId);
+            return financeApi.createInvoice(payload);
+          }
+          throw err;
+        }
       }
       return financeApi.createInvoice(payload);
     },
@@ -329,6 +426,13 @@ export function InvoiceForm({
           onDiscard={discardDraft}
           discarding={discarding}
         />
+      )}
+
+      {draftLoadFailed && (
+        <Alert variant="warning">
+          A saved draft could not be loaded (it may have been posted or removed). Continue with a
+          fresh credit note and save again.
+        </Alert>
       )}
 
       {mutation.isError && (
