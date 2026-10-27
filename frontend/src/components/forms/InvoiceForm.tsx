@@ -303,11 +303,16 @@ export function InvoiceForm({
     ...(suppliersData || []).map((s) => ({ value: s.id, label: `${s.code} - ${s.name}` })),
   ];
 
-  const { data: customerInvoicesData, isLoading: customerInvoicesLoading } = useQuery({
+  const {
+    data: customerInvoicesData,
+    isLoading: customerInvoicesLoading,
+    isError: customerInvoicesFailed,
+    error: customerInvoicesError,
+  } = useQuery({
     queryKey: ['credit-note-source-invoices', customerId],
     queryFn: () =>
       financeApi
-        .invoices({ type: 'SALES', customerId, limit: 500 })
+        .invoices({ type: 'SALES', customerId, limit: 100 })
         .then((r) => r.data.data as Invoice[]),
     enabled: isCreditNote && Boolean(customerId),
     retry: false,
@@ -481,7 +486,15 @@ export function InvoiceForm({
                 {...register('originalInvoiceId')}
                 error={errors.originalInvoiceId?.message}
               />
-              {creditableInvoices.length === 0 && !customerInvoicesLoading && (
+              {customerInvoicesFailed && (
+                <p className="mt-1 text-xs text-red-700">
+                  Could not load sales invoices: {getApiErrorMessage(customerInvoicesError)}. Refresh
+                  the page or try again.
+                </p>
+              )}
+              {creditableInvoices.length === 0 &&
+                !customerInvoicesLoading &&
+                !customerInvoicesFailed && (
                 <p className="mt-1 text-xs text-amber-700">
                   No open sales invoices with a balance due for this customer.
                 </p>

@@ -1281,6 +1281,8 @@ export const createVehicleSchema = z.object({
 });
 
 export const financeListQuerySchema = paginationSchema.extend({
+  /** Credit-note picker and exports may need more rows than the default list cap. */
+  limit: z.coerce.number().int().min(1).max(500).default(20),
   customerId: z.preprocess(
     (v) => (v === '' || v === undefined ? undefined : v),
     z.string().uuid().optional()
