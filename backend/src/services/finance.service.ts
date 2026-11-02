@@ -517,6 +517,12 @@ export class FinanceInvoiceService {
     );
     const credited = await creditedAmountForInvoice(tx, original.id);
     const balanceDue = computeInvoiceBalanceDue(original, credited);
+    if (balanceDue <= 0.009) {
+      throw new AppError(
+        `${byId.invoiceNumber} has no remaining balance to credit. Choose another invoice or discard this draft.`,
+        400
+      );
+    }
     if (opts.creditTotal > balanceDue + 0.01) {
       throw new AppError(
         `Credit note amount exceeds invoice balance (KES ${balanceDue.toFixed(2)})`,

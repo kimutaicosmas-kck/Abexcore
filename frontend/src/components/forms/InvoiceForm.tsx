@@ -153,10 +153,12 @@ export function InvoiceForm({
 }: InvoiceFormProps) {
   const queryClient = useQueryClient();
   const draftStorageKey = useMemo(() => invoiceDraftStorageKey(defaultType), [defaultType]);
-  const isCreditNoteForm = defaultType === 'CREDIT_NOTE';
+  /** New credit note from Finance → no browser draft id (direct post). */
+  const isNewCreditNoteEntry = defaultType === 'CREDIT_NOTE' && !initialDraftId;
   const [draftId, setDraftId] = useState(() => {
-    if (isCreditNoteForm) return initialDraftId;
+    if (isNewCreditNoteEntry) return undefined;
     if (initialDraftId) return initialDraftId;
+    if (defaultType === 'CREDIT_NOTE') return initialDraftId;
     const scoped = readStoredDraftId(draftStorageKey);
     if (scoped) return scoped;
     if (defaultType === 'SALES') {
@@ -166,12 +168,10 @@ export function InvoiceForm({
   });
 
   useEffect(() => {
-    if (!isCreditNoteForm) return;
+    if (!isNewCreditNoteEntry) return;
     clearInvoiceDraftSessionStorage();
-    if (!initialDraftId) {
-      setDraftId(undefined);
-    }
-  }, [initialDraftId, isCreditNoteForm]);
+    setDraftId(undefined);
+  }, [isNewCreditNoteEntry]);
   const [draftSavedAt, setDraftSavedAt] = useState<Date | null>(null);
   const [draftRestored, setDraftRestored] = useState(Boolean(initialDraftId));
   const [draftDiscarded, setDraftDiscarded] = useState(false);
@@ -206,7 +206,7 @@ export function InvoiceForm({
   const { data: existingDraft, isLoading: draftLoading, isError: draftLoadFailed } = useQuery({
     queryKey: ['invoice-draft', draftId],
     queryFn: () => financeApi.getInvoice(draftId!).then((r) => r.data.data as Invoice),
-    enabled: Boolean(draftId) && !isCreditNoteForm,
+    enabled: Boolean(draftId),
     retry: false,
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
@@ -334,9 +334,16 @@ export function InvoiceForm({
   useEffect(() => {
     if (!isCreditNote || !originalInvoiceId) return;
     if (selectedSourceInvoice) return;
-    if (customerInvoicesLoading) return;
+    if (customerInvoicesLoading || customerInvoicesFailed) return;
     setValue('originalInvoiceId', '', { shouldValidate: true });
-  }, [customerInvoicesLoading, isCreditNote, originalInvoiceId, selectedSourceInvoice, setValue]);
+  }, [
+    customerInvoicesFailed,
+    customerInvoicesLoading,
+    isCreditNote,
+    originalInvoiceId,
+    selectedSourceInvoice,
+    setValue,
+  ]);
 
   const companyVatRate = useVatRate();
   const vatCustomer = selectedCustomer || existingDraft?.customer;
@@ -360,6 +367,26 @@ export function InvoiceForm({
     mutationFn: async (data: InvoiceFormData) => {
       const payload = toFinalizePayload(data);
       if (data.type === 'CREDIT_NOTE') {
+        if (draftId) {
+          try {
+            const saved = await saveDraft(data, draftId);
+            try {
+              return await financeApi.finalizeInvoice(saved.id, payload);
+            } catch (finalizeErr) {
+              if (isStaleInvoiceDraftError(finalizeErr)) {
+                releaseStaleDraftId(saved.id);
+                return financeApi.createInvoice(payload);
+              }
+              throw finalizeErr;
+            }
+          } catch (err) {
+            if (isStaleInvoiceDraftError(err)) {
+              releaseStaleDraftId(draftId);
+              return financeApi.createInvoice(payload);
+            }
+            throw err;
+          }
+        }
         return financeApi.createInvoice(payload);
       }
       let activeDraftId = draftId;
@@ -406,7 +433,7 @@ export function InvoiceForm({
     isMeaningful: invoiceHasDraftContent,
     storageKey: draftStorageKey,
     enabled:
-      !isCreditNoteForm &&
+      !isNewCreditNoteEntry &&
       !draftLoading &&
       !draftDiscarded &&
       !draftLoadFailed &&
@@ -438,7 +465,7 @@ export function InvoiceForm({
   }, [clearStoredDraft, defaultType, draftId, onCancel, queryClient, reset]);
 
   const handleCancel = () => {
-    if (isCreditNoteForm) {
+    if (isNewCreditNoteEntry) {
       onCancel();
       return;
     }
@@ -454,8 +481,10 @@ export function InvoiceForm({
           <FormActions
             onCancel={handleCancel}
             submitLabel={
-              isCreditNoteForm
-                ? 'Create Credit Note'
+              isCreditNote
+                ? draftId
+                  ? 'Save Credit Note'
+                  : 'Create Credit Note'
                 : draftId
                   ? 'Save Invoice'
                   : 'Create Invoice'
@@ -468,7 +497,7 @@ export function InvoiceForm({
         <div className="p-3 rounded-lg bg-slate-50 text-slate-600 text-sm">Loading draft…</div>
       ) : (
         <FormDraftNotice
-          show={!isCreditNoteForm && Boolean(draftId || draftSavedAt || draftRestored)}
+          show={!isNewCreditNoteEntry && Boolean(draftId || draftSavedAt || draftRestored)}
           draftSavedAt={draftSavedAt}
           draftRestored={draftRestored}
           onDiscard={discardDraft}

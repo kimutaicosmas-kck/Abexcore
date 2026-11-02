@@ -206,6 +206,7 @@ export function FinancePage() {
   }) => {
     if (opts?.draftId) {
       setEditingInvoiceId(opts.draftId);
+      setInvoiceFormDefaultType(opts.defaultType ?? 'SALES');
     } else {
       setEditingInvoiceId(undefined);
       setInvoiceFormDefaultType(opts?.defaultType ?? 'SALES');
@@ -578,7 +579,17 @@ export function FinancePage() {
                 <Button
                   variant="secondary"
                   size="sm"
-                  onClick={() => openInvoiceModal({ draftId: inv.id })}
+                  onClick={() =>
+                    openInvoiceModal({
+                      draftId: inv.id,
+                      defaultType:
+                        inv.type === 'PURCHASE' ||
+                        inv.type === 'CREDIT_NOTE' ||
+                        inv.type === 'DEBIT_NOTE'
+                          ? inv.type
+                          : 'SALES',
+                    })
+                  }
                 >
                   Continue
                 </Button>
@@ -1513,7 +1524,9 @@ export function FinancePage() {
         }}
         title={
           editingInvoiceId
-            ? 'Continue Invoice'
+            ? invoiceFormDefaultType === 'CREDIT_NOTE'
+              ? 'Continue Credit Note'
+              : 'Continue Invoice'
             : invoiceFormDefaultType === 'CREDIT_NOTE'
               ? 'Create Credit Note'
               : 'Create Invoice'
@@ -1791,7 +1804,15 @@ export function FinancePage() {
                     size="sm"
                     onClick={() => {
                       setDetailOpen(false);
-                      openInvoiceModal({ draftId: invoiceDetail.id });
+                      openInvoiceModal({
+                        draftId: invoiceDetail.id,
+                        defaultType:
+                          invoiceDetail.type === 'PURCHASE' ||
+                          invoiceDetail.type === 'CREDIT_NOTE' ||
+                          invoiceDetail.type === 'DEBIT_NOTE'
+                            ? invoiceDetail.type
+                            : 'SALES',
+                      });
                     }}
                   >
                     Continue
