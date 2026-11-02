@@ -15,12 +15,16 @@ export type InvoiceBalanceFields = {
  */
 export async function creditedAmountForInvoice(
   tx: TxClient,
-  invoiceId: string
+  invoiceId: string,
+  opts?: { excludeCreditNoteId?: string }
 ): Promise<number> {
   const notes = await tx.invoice.findMany({
     where: {
       originalInvoiceId: invoiceId,
       type: 'CREDIT_NOTE',
+      /** Draft credit notes do not reduce AR until posted. */
+      status: { not: 'DRAFT' },
+      ...(opts?.excludeCreditNoteId ? { id: { not: opts.excludeCreditNoteId } } : {}),
     },
     select: { totalAmount: true, notes: true },
   });
@@ -80,6 +84,7 @@ export async function enrichInvoicesWithBalances<T extends InvoiceBalanceFields>
       where: {
         type: 'CREDIT_NOTE',
         originalInvoiceId: { in: salesIds },
+        status: { not: 'DRAFT' },
       },
       select: { originalInvoiceId: true, totalAmount: true, notes: true },
     });

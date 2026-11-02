@@ -160,8 +160,8 @@ async function paymentIdsByInvoiceTiming(
         AND (
           (
             i.id IS NOT NULL
-            AND YEAR(p.payment_date) = YEAR(i.invoice_date)
-            AND MONTH(p.payment_date) = MONTH(i.invoice_date)
+        AND YEAR(p.payment_date) = YEAR(i.invoice_date)
+        AND MONTH(p.payment_date) = MONTH(i.invoice_date)
           )
           OR (
             ai.id IS NOT NULL
@@ -197,8 +197,8 @@ async function paymentIdsByInvoiceTiming(
         AND (
           (
             i.id IS NOT NULL
-            AND YEAR(i.invoice_date) = YEAR(CURDATE())
-            AND MONTH(i.invoice_date) = MONTH(CURDATE())
+        AND YEAR(i.invoice_date) = YEAR(CURDATE())
+        AND MONTH(i.invoice_date) = MONTH(CURDATE())
           )
           OR (
             ai.id IS NOT NULL
@@ -441,18 +441,18 @@ router.get(
 
     const { page, limit, search, customerId, type, status, vatStatus, period, from, to, cursor } =
       getQuery<{
-        page: number;
-        limit: number;
-        search?: string;
+      page: number;
+      limit: number;
+      search?: string;
         customerId?: string;
-        type?: string;
-        status?: string;
+      type?: string;
+      status?: string;
         vatStatus?: 'VAT' | 'NON_VAT';
         period?: 'this_week' | 'last_week' | 'this_month' | 'last_month';
         from?: string;
         to?: string;
-        cursor?: string;
-      }>(req.query);
+      cursor?: string;
+    }>(req.query);
 
     const { buildInvoiceListWhere } = await import('../utils/invoiceListWhere');
     const where = buildInvoiceListWhere({
@@ -885,6 +885,7 @@ router.post(
           customerId,
           creditTotal: totalAmount,
           companyId: requireTenantId(),
+          excludeCreditNoteId: id,
         });
       }
 

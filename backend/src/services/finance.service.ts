@@ -474,7 +474,14 @@ export class FinanceInvoiceService {
   /** Validate a manual credit note links to an open sales invoice with sufficient balance. */
   static async validateCreditNoteOriginalInvoice(
     tx: TxClient,
-    opts: { originalInvoiceId: string; customerId?: string; creditTotal: number; companyId: string }
+    opts: {
+      originalInvoiceId: string;
+      customerId?: string;
+      creditTotal: number;
+      companyId: string;
+      /** When finalizing a draft CN, do not count that draft against balance. */
+      excludeCreditNoteId?: string;
+    }
   ) {
     const byId = await tx.invoice.findFirst({
       where: { id: opts.originalInvoiceId, companyId: opts.companyId },
@@ -515,7 +522,9 @@ export class FinanceInvoiceService {
     const { creditedAmountForInvoice, computeInvoiceBalanceDue } = await import(
       '../utils/invoiceBalance'
     );
-    const credited = await creditedAmountForInvoice(tx, original.id);
+    const credited = await creditedAmountForInvoice(tx, original.id, {
+      excludeCreditNoteId: opts.excludeCreditNoteId,
+    });
     const balanceDue = computeInvoiceBalanceDue(original, credited);
     if (balanceDue <= 0.009) {
       throw new AppError(
