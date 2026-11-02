@@ -78,8 +78,9 @@ export function useDocumentDraftAutosave<T extends FieldValues>({
 
   useEffect(() => {
     return () => {
+      if (!enabled || !draftIdRef.current) return;
       const values = getValues();
-      if (enabled && isMeaningful(values)) {
+      if (isMeaningful(values)) {
         void persist(values, true);
       }
     };

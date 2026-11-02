@@ -90,6 +90,16 @@ interface InvoiceFormProps {
   defaultType?: InvoiceFormData['type'];
 }
 
+function buildInvoiceLineItems(data: InvoiceFormData) {
+  return data.items
+    .filter((item) => item.description?.trim())
+    .map((item) => ({
+      description: item.description.trim(),
+      quantity: Number(item.quantity),
+      unitPrice: Number(item.unitPrice),
+    }));
+}
+
 function toInvoiceDraftPayload(data: InvoiceFormData) {
   const isCustomerType = data.type === 'SALES' || data.type === 'CREDIT_NOTE';
   return {
@@ -101,14 +111,13 @@ function toInvoiceDraftPayload(data: InvoiceFormData) {
     dueDate: data.dueDate || undefined,
     customerPoNumber: data.customerPoNumber || undefined,
     notes: data.notes || undefined,
-    items: data.items
-      .filter((item) => item.description?.trim())
-      .map((item) => ({
-        description: item.description.trim(),
-        quantity: item.quantity,
-        unitPrice: item.unitPrice,
-      })),
+    items: buildInvoiceLineItems(data),
   };
+}
+
+/** Posted invoice / finalize — same normalized shape the API validates. */
+function toFinalizePayload(data: InvoiceFormData) {
+  return toInvoiceDraftPayload(data);
 }
 
 function invoiceHasDraftContent(data: InvoiceFormData) {
@@ -248,17 +257,6 @@ export function InvoiceForm({
     [draftStorageKey, releaseStaleDraftId]
   );
 
-  const { clearStoredDraft } = useDocumentDraftAutosave({
-    watch,
-    getValues,
-    draftId,
-    onDraftId: setDraftId,
-    saveDraft,
-    isMeaningful: invoiceHasDraftContent,
-    storageKey: draftStorageKey,
-    enabled: !draftLoading && !draftDiscarded && !draftLoadFailed,
-  });
-
   const discardDraft = useCallback(async () => {
     setDiscarding(true);
     try {
@@ -365,13 +363,7 @@ export function InvoiceForm({
 
   const mutation = useMutation({
     mutationFn: async (data: InvoiceFormData) => {
-      const payload = {
-        ...data,
-        customerId: isCustomerType ? data.customerId || undefined : undefined,
-        supplierId: !isCustomerType ? data.supplierId || undefined : undefined,
-        originalInvoiceId:
-          data.type === 'CREDIT_NOTE' ? data.originalInvoiceId || undefined : undefined,
-      };
+      const payload = toFinalizePayload(data);
       let activeDraftId = draftId;
       if (activeDraftId) {
         try {
@@ -398,16 +390,35 @@ export function InvoiceForm({
       return financeApi.createInvoice(payload);
     },
     onSuccess: () => {
-      clearStoredDraft();
+      clearInvoiceDraftSessionStorage();
       setDraftId(undefined);
       queryClient.invalidateQueries({ queryKey: ['invoices'] });
       queryClient.invalidateQueries({ queryKey: ['finance-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['credit-note-source-invoices'] });
       onSuccess();
     },
   });
 
+  const { clearStoredDraft } = useDocumentDraftAutosave({
+    watch,
+    getValues,
+    draftId,
+    onDraftId: setDraftId,
+    saveDraft,
+    isMeaningful: invoiceHasDraftContent,
+    storageKey: draftStorageKey,
+    enabled:
+      !draftLoading &&
+      !draftDiscarded &&
+      !draftLoadFailed &&
+      !mutation.isPending &&
+      !mutation.isSuccess,
+  });
+
   const handleCancel = () => {
-    void saveDraft(getValues(), draftId).finally(onCancel);
+    void saveDraft(getValues(), draftId)
+      .catch(() => undefined)
+      .finally(onCancel);
   };
 
   return (

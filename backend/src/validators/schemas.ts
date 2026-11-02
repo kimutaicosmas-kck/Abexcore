@@ -558,27 +558,55 @@ export const saveQuotationDraftSchema = z
     }
   });
 
+const optionalUuidField = z.preprocess(
+  (v) => (v === '' || v === undefined || v === null ? undefined : v),
+  z.string().uuid().optional()
+);
+
+const invoiceLineItemSchema = z.object({
+  description: z.string().trim().min(1, 'Description is required'),
+  quantity: z.coerce.number().min(0.001),
+  unitPrice: z.coerce.number().min(0),
+  taxRate: z.coerce.number().min(0).optional(),
+});
+
+const invoiceDraftLineItemSchema = z.object({
+  description: z.preprocess(
+    (v) => (typeof v === 'string' ? v : v == null ? undefined : String(v)),
+    z.string().optional()
+  ),
+  quantity: z.preprocess((v) => {
+    if (v === '' || v === undefined || v === null) return undefined;
+    const n = Number(v);
+    return Number.isFinite(n) && n >= 0.001 ? n : undefined;
+  }, z.number().min(0.001).optional()),
+  unitPrice: z.preprocess((v) => {
+    if (v === '' || v === undefined || v === null) return undefined;
+    const n = Number(v);
+    return Number.isFinite(n) && n >= 0 ? n : undefined;
+  }, z.number().min(0).optional()),
+  taxRate: z.coerce.number().min(0).optional(),
+});
+
 export const createInvoiceSchema = z
   .object({
     type: z.enum(['SALES', 'PURCHASE', 'CREDIT_NOTE', 'DEBIT_NOTE']).default('SALES'),
-    customerId: z.string().uuid().optional(),
-    supplierId: z.string().uuid().optional(),
-    salesOrderId: z.string().uuid().optional(),
+    customerId: optionalUuidField,
+    supplierId: optionalUuidField,
+    salesOrderId: optionalUuidField,
     /** Required for CREDIT_NOTE — the sales invoice being credited. */
-    originalInvoiceId: z.string().uuid().optional(),
-    dueDate: z.string().optional(),
+    originalInvoiceId: optionalUuidField,
+    dueDate: z.preprocess(
+      (v) => (v === '' || v === undefined || v === null ? undefined : v),
+      z.string().optional()
+    ),
     /** Customer's PO / LPO number — included on the sales invoice document. */
     customerPoNumber: z.preprocess(
       (v) => (typeof v === 'string' && v.trim() === '' ? undefined : v),
       z.string().trim().max(100).optional()
     ),
     notes: z.string().optional(),
-    items: z.array(z.object({
-      description: z.string(),
-      quantity: z.number().min(0.001),
-      unitPrice: z.number().min(0),
-      taxRate: z.number().min(0).optional(),
-    })).min(1),
+    items: z.array(invoiceLineItemSchema).min(1, 'Add at least one line item'),
   })
   .superRefine((data, ctx) => {
     if (data.type === 'CREDIT_NOTE' && !data.originalInvoiceId) {
@@ -604,26 +632,22 @@ export const updateInvoiceItemsSchema = z.object({
     .min(1, 'Keep at least one line item'),
 });
 
-const invoiceDraftItemSchema = z.object({
-  description: z.string().optional(),
-  quantity: z.number().min(0.001).optional(),
-  unitPrice: z.number().min(0).optional(),
-  taxRate: z.number().min(0).optional(),
-});
-
 export const saveInvoiceDraftSchema = z
   .object({
     type: z.enum(['SALES', 'PURCHASE', 'CREDIT_NOTE', 'DEBIT_NOTE']).default('SALES'),
-    customerId: z.string().uuid().optional(),
-    supplierId: z.string().uuid().optional(),
-    originalInvoiceId: z.string().uuid().optional(),
-    dueDate: z.string().optional(),
+    customerId: optionalUuidField,
+    supplierId: optionalUuidField,
+    originalInvoiceId: optionalUuidField,
+    dueDate: z.preprocess(
+      (v) => (v === '' || v === undefined || v === null ? undefined : v),
+      z.string().optional()
+    ),
     customerPoNumber: z.preprocess(
       (v) => (typeof v === 'string' && v.trim() === '' ? undefined : v),
       z.string().trim().max(100).optional()
     ),
     notes: z.string().optional(),
-    items: z.array(invoiceDraftItemSchema).optional(),
+    items: z.array(invoiceDraftLineItemSchema).optional(),
   })
   .superRefine((data, ctx) => {
     const isCustomerType = data.type === 'SALES' || data.type === 'CREDIT_NOTE';
