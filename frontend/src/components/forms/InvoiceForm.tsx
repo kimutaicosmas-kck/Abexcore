@@ -35,6 +35,14 @@ const invoiceSchema = z
     items: z.array(invoiceItemSchema).min(1, 'Add at least one item'),
   })
   .superRefine((data, ctx) => {
+    const isCustomerDoc = data.type === 'SALES' || data.type === 'CREDIT_NOTE';
+    if (isCustomerDoc && !data.customerId?.trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Select a customer',
+        path: ['customerId'],
+      });
+    }
     if (data.type === 'CREDIT_NOTE' && !data.originalInvoiceId) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
@@ -145,7 +153,9 @@ export function InvoiceForm({
 }: InvoiceFormProps) {
   const queryClient = useQueryClient();
   const draftStorageKey = useMemo(() => invoiceDraftStorageKey(defaultType), [defaultType]);
+  const isCreditNoteForm = defaultType === 'CREDIT_NOTE';
   const [draftId, setDraftId] = useState(() => {
+    if (isCreditNoteForm) return initialDraftId;
     if (initialDraftId) return initialDraftId;
     const scoped = readStoredDraftId(draftStorageKey);
     if (scoped) return scoped;
@@ -154,6 +164,14 @@ export function InvoiceForm({
     }
     return undefined;
   });
+
+  useEffect(() => {
+    if (!isCreditNoteForm) return;
+    clearInvoiceDraftSessionStorage();
+    if (!initialDraftId) {
+      setDraftId(undefined);
+    }
+  }, [initialDraftId, isCreditNoteForm]);
   const [draftSavedAt, setDraftSavedAt] = useState<Date | null>(null);
   const [draftRestored, setDraftRestored] = useState(Boolean(initialDraftId));
   const [draftDiscarded, setDraftDiscarded] = useState(false);
@@ -188,7 +206,7 @@ export function InvoiceForm({
   const { data: existingDraft, isLoading: draftLoading, isError: draftLoadFailed } = useQuery({
     queryKey: ['invoice-draft', draftId],
     queryFn: () => financeApi.getInvoice(draftId!).then((r) => r.data.data as Invoice),
-    enabled: Boolean(draftId),
+    enabled: Boolean(draftId) && !isCreditNoteForm,
     retry: false,
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
@@ -341,6 +359,9 @@ export function InvoiceForm({
   const mutation = useMutation({
     mutationFn: async (data: InvoiceFormData) => {
       const payload = toFinalizePayload(data);
+      if (data.type === 'CREDIT_NOTE') {
+        return financeApi.createInvoice(payload);
+      }
       let activeDraftId = draftId;
       if (activeDraftId) {
         try {
@@ -385,6 +406,7 @@ export function InvoiceForm({
     isMeaningful: invoiceHasDraftContent,
     storageKey: draftStorageKey,
     enabled:
+      !isCreditNoteForm &&
       !draftLoading &&
       !draftDiscarded &&
       !draftLoadFailed &&
@@ -416,6 +438,10 @@ export function InvoiceForm({
   }, [clearStoredDraft, defaultType, draftId, onCancel, queryClient, reset]);
 
   const handleCancel = () => {
+    if (isCreditNoteForm) {
+      onCancel();
+      return;
+    }
     void saveDraft(getValues(), draftId)
       .catch(() => undefined)
       .finally(onCancel);
@@ -427,7 +453,13 @@ export function InvoiceForm({
         footer={
           <FormActions
             onCancel={handleCancel}
-            submitLabel={draftId ? 'Save Invoice' : 'Create Invoice'}
+            submitLabel={
+              isCreditNoteForm
+                ? 'Create Credit Note'
+                : draftId
+                  ? 'Save Invoice'
+                  : 'Create Invoice'
+            }
             loading={mutation.isPending}
           />
         }
@@ -436,7 +468,7 @@ export function InvoiceForm({
         <div className="p-3 rounded-lg bg-slate-50 text-slate-600 text-sm">Loading draft…</div>
       ) : (
         <FormDraftNotice
-          show={Boolean(draftId || draftSavedAt || draftRestored)}
+          show={!isCreditNoteForm && Boolean(draftId || draftSavedAt || draftRestored)}
           draftSavedAt={draftSavedAt}
           draftRestored={draftRestored}
           onDiscard={discardDraft}

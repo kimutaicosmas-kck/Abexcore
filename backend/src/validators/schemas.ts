@@ -609,6 +609,14 @@ export const createInvoiceSchema = z
     items: z.array(invoiceLineItemSchema).min(1, 'Add at least one line item'),
   })
   .superRefine((data, ctx) => {
+    const isCustomerDoc = data.type === 'SALES' || data.type === 'CREDIT_NOTE';
+    if (isCustomerDoc && !data.customerId) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Customer is required',
+        path: ['customerId'],
+      });
+    }
     if (data.type === 'CREDIT_NOTE' && !data.originalInvoiceId) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
