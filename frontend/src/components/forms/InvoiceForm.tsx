@@ -257,29 +257,6 @@ export function InvoiceForm({
     [draftStorageKey, releaseStaleDraftId]
   );
 
-  const discardDraft = useCallback(async () => {
-    setDiscarding(true);
-    try {
-      if (draftId) {
-        await financeApi.deleteInvoiceDraft(draftId);
-      }
-      clearStoredDraft();
-      setDraftId(undefined);
-      setDraftSavedAt(null);
-      setDraftRestored(false);
-      setDraftDiscarded(true);
-      hydratedDraftIdRef.current = undefined;
-      reset({
-        type: defaultType,
-        items: [{ description: '', quantity: 1, unitPrice: 0 }],
-      });
-      queryClient.invalidateQueries({ queryKey: ['invoices'] });
-      onCancel();
-    } finally {
-      setDiscarding(false);
-    }
-  }, [clearStoredDraft, defaultType, draftId, onCancel, queryClient, reset]);
-
   const { fields, append, remove } = useFieldArray({ control, name: 'items' });
   const invoiceType = watch('type');
   const customerId = watch('customerId');
@@ -414,6 +391,29 @@ export function InvoiceForm({
       !mutation.isPending &&
       !mutation.isSuccess,
   });
+
+  const discardDraft = useCallback(async () => {
+    setDiscarding(true);
+    try {
+      if (draftId) {
+        await financeApi.deleteInvoiceDraft(draftId);
+      }
+      clearStoredDraft();
+      setDraftId(undefined);
+      setDraftSavedAt(null);
+      setDraftRestored(false);
+      setDraftDiscarded(true);
+      hydratedDraftIdRef.current = undefined;
+      reset({
+        type: defaultType,
+        items: [{ description: '', quantity: 1, unitPrice: 0 }],
+      });
+      queryClient.invalidateQueries({ queryKey: ['invoices'] });
+      onCancel();
+    } finally {
+      setDiscarding(false);
+    }
+  }, [clearStoredDraft, defaultType, draftId, onCancel, queryClient, reset]);
 
   const handleCancel = () => {
     void saveDraft(getValues(), draftId)
